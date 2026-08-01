@@ -650,11 +650,29 @@ lo trata como error.
 crux usage --days=90
 ```
 
-Mide qué skills se invocan de verdad contra el catálogo instalado, y separa las
+Mide qué skills se usan de verdad contra el catálogo instalado, y separa las
 que nunca se usan. No es una lista de borrado: una skill de incidencias sin usar
 es una buena noticia. Lo que hay que mirar es la que existe hace meses, cubre
 algo frecuente y aun así nadie invoca — casi siempre es que su descripción no se
 activa cuando debería.
+
+Cuenta **dos señales, y no las suma**:
+
+| Columna | Qué es |
+| ------- | ------ |
+| `llamada` | La skill invocada por su nombre |
+| `script` | Rastro de sus scripts en comandos: el procedimiento seguido a mano |
+
+La segunda existe porque la primera mentía. Quien sigue el procedimiento sin
+llamar a la skill aparecía con cero: la puerta de calidad figuraba con 2
+invocaciones mientras se pasaba en cuatro propuestas seguidas, y **cuatro skills
+del kernel salían como muertas estando en uso**. Y no se suman porque no son la
+misma unidad — `script` es una cota superior, ya que incluye lo que ejecutan los
+tests.
+
+Lo que sigue sin medir: **si el procedimiento se siguió entero**. Ejecutar el
+script de la puerta no dice que se pasaran sus ocho puertas. Eso no lo ve
+ninguna métrica local, y conviene recordarlo antes de sacar conclusiones.
 
 Distingue **no tener datos** de **no tener uso**, que es la forma fácil de
 mentir con esta métrica.

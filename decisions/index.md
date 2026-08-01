@@ -107,4 +107,34 @@
   - Un catálogo no dice en qué orden se usan las cosas; una secuencia sí.
   - Si el uso no sube en las próximas semanas, el problema no era la
     descubribilidad y habrá que buscar otra causa.
+  - **Corregido por ADR-006**: la medición que motivó este ADR solo contaba
+    invocaciones por nombre, no la ejecución de los scripts de cada skill. El
+    problema existía, pero era menor que el número.
 - **Reversibility**: alta. Es una skill y un bloque de texto en las plantillas.
+
+### ADR-006: El uso de una skill se mide también por sus scripts
+
+- **Date**: 2026-08-02
+- **Status**: Accepted
+- **Context**: `crux usage` contaba solo las invocaciones formales de una skill
+  por su nombre. Pero quien sigue el procedimiento a mano ejecuta sus scripts
+  sin llamarla, y entonces aparece con cero. Medido sobre una sesión real: la
+  puerta de calidad figuraba con 2 invocaciones mientras se pasaba en cuatro
+  propuestas seguidas, y su clasificador se había ejecutado 28 veces. Cuatro
+  skills del kernel —`code-health`, `skill-audit`, `render-loop`,
+  `visual-diff`— salían como muertas y se estaban usando.
+- **Decision**: el informe cuenta dos señales y **no las suma**: `llamada`, la
+  skill invocada por su nombre, y `script`, el rastro de sus scripts en
+  comandos. Una skill con rastro de script deja de contarse entre las que nadie
+  usa. Se descartan las menciones precedidas de un verbo de lectura, porque
+  abrir un fichero no es ejecutarlo.
+- **Consequences**:
+  - Sumarlas habría mentido igual, solo que al alza: no son la misma unidad, y
+    `script` es una cota superior porque incluye las ejecuciones desde tests.
+  - **Invalida parcialmente la premisa de ADR-005.** Aquella lectura de "apenas
+    se invocan" se hizo con un instrumento que solo veía una de las dos
+    señales. La conclusión sobre la descubribilidad sigue siendo razonable, pero
+    la magnitud del problema era menor de lo que el número decía.
+  - Sigue sin medir adherencia al procedimiento: un agente puede ejecutar el
+    script y saltarse la mitad de los pasos. Eso no lo ve ninguna métrica local.
+- **Reversibility**: alta. Es una función en `bin/usage.mjs`.

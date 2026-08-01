@@ -65,10 +65,32 @@ function catalogo() {
   return out
 }
 
+// Los scripts de una skill son la otra cara de su uso: quien sigue el
+// procedimiento a mano los ejecuta sin llamar a la skill por su nombre, y
+// contando solo las llamadas esa skill sale como muerta. Pasó con la puerta de
+// calidad: cero invocaciones mientras se pasaba en cuatro propuestas seguidas.
+function scriptsDelCatalogo() {
+  const out = new Map()
+  const kernel = join(CRUX_HOME, 'skills')
+  if (!existsSync(kernel)) return out
+  for (const skill of readdirSync(kernel)) {
+    const dir = join(kernel, skill, 'scripts')
+    if (!existsSync(dir)) continue
+    for (const s of readdirSync(dir)) out.set(s, skill)
+  }
+  return out
+}
+
+// Un nombre de script aparece en muchos comandos que no lo ejecutan: leerlo,
+// copiarlo, buscar dentro. Se descarta cuando lo precede un verbo de lectura.
+const VERBO_DE_LECTURA = /\b(cat|sed|awk|grep|head|tail|less|ls|wc|chmod|cp|mv|rm|find|diff|git|shellcheck|vim|nano)\s+(-\S+\s+)*\S*$/
+
 function invocaciones(desde) {
   const cuenta = new Map()
+  const porScript = new Map()
+  const scripts = scriptsDelCatalogo()
   let ficheros = 0
-  if (!existsSync(TRANSCRIPTS)) return { cuenta, ficheros }
+  if (!existsSync(TRANSCRIPTS)) return { cuenta, porScript, ficheros }
 
   for (const proyecto of readdirSync(TRANSCRIPTS)) {
     const dir = join(TRANSCRIPTS, proyecto)
@@ -82,14 +104,24 @@ function invocaciones(desde) {
       for (const m of texto.matchAll(/"name"\s*:\s*"Skill"\s*,\s*"input"\s*:\s*\{\s*"skill"\s*:\s*"([^"]+)"/g)) {
         cuenta.set(m[1], (cuenta.get(m[1]) || 0) + 1)
       }
+      if (!scripts.size) continue
+      for (const m of texto.matchAll(/"name"\s*:\s*"Bash"\s*,\s*"input"\s*:\s*\{[^}]*?"command"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
+        const cmd = m[1]
+        for (const [script, skill] of scripts) {
+          for (const h of cmd.matchAll(new RegExp(script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))) {
+            if (VERBO_DE_LECTURA.test(cmd.slice(0, h.index))) continue
+            porScript.set(skill, (porScript.get(skill) || 0) + 1)
+          }
+        }
+      }
     }
   }
-  return { cuenta, ficheros }
+  return { cuenta, porScript, ficheros }
 }
 
 const desde = Date.now() - days * 24 * 3600 * 1000
 const cat = catalogo()
-const { cuenta, ficheros } = invocaciones(desde)
+const { cuenta, porScript, ficheros } = invocaciones(desde)
 
 console.log(`uso de skills — últimos ${days} días · ${ficheros} sesiones revisadas\n`)
 
@@ -97,31 +129,39 @@ if (!ficheros) {
   console.log('No hay transcripciones en el periodo. Sin datos, no sin uso.\n')
   process.exit(0)
 }
-if (!cuenta.size) {
+if (!cuenta.size && !porScript.size) {
   console.log('Ninguna invocación encontrada. Puede que el formato de las')
   console.log('transcripciones haya cambiado: compruébalo antes de concluir')
   console.log('que no se usa ninguna skill.\n')
   process.exit(0)
 }
 
-const usadas = [...cuenta.entries()].sort((a, b) => b[1] - a[1])
+const nombres = new Set([...cuenta.keys(), ...porScript.keys()])
+const usadas = [...nombres]
+  .map(n => [n, cuenta.get(n) || 0, porScript.get(n) || 0])
+  .sort((a, b) => (b[1] + b[2]) - (a[1] + a[2]))
 
 console.log('Usadas:\n')
-console.log('  veces  origen        skill')
-for (const [nombre, n] of usadas) {
-  const origen = cat.get(nombre) || '(no instalada)'
-  console.log(`  ${String(n).padStart(5)}  ${origen.padEnd(13)} ${nombre}`)
+console.log("  llamada  script  origen           skill")
+for (const [nombre, n, s] of usadas) {
+  const origen = cat.get(nombre) || '(de otra fuente)'
+  console.log(`  ${String(n).padStart(7)}  ${String(s || '').padStart(6)}  ${origen.padEnd(16)} ${nombre}`)
 }
+console.log('\n  "llamada" es la skill invocada por su nombre. "script" es el rastro de')
+console.log('  sus scripts en comandos: el procedimiento seguido a mano. No se suman —')
+console.log('  no son la misma unidad, y el segundo es una cota superior porque')
+console.log('  incluye las ejecuciones desde tests.')
 
 const huerfanas = usadas.filter(([n]) => !cat.has(n)).map(([n]) => n)
 if (huerfanas.length) {
-  console.log('\nInvocadas pero ausentes del catálogo:\n')
+  console.log('\nInvocadas y ausentes de este catálogo:\n')
   for (const n of huerfanas) console.log(`  ${n}`)
-  console.log('\n  O se renombraron, o son de otra fuente. Si el nombre viejo se sigue')
-  console.log('  invocando, merece la pena dejar el alias o corregir la referencia.')
+  console.log('\n  Probablemente vengan del propio agente o de un plugin, y entonces no')
+  console.log('  hay nada que arreglar: crux solo conoce sus dos catálogos. Si en')
+  console.log('  cambio es un nombre tuyo que se renombró, corrige la referencia.')
 }
 
-const nunca = [...cat.entries()].filter(([n]) => !cuenta.has(n))
+const nunca = [...cat.entries()].filter(([n]) => !cuenta.has(n) && !porScript.has(n))
 if (nunca.length) {
   console.log(`\nSin usar en el periodo (${nunca.length} de ${cat.size}):\n`)
   const porOrigen = new Map()

@@ -520,3 +520,34 @@ test_el_hook_recuerda_el_ciclo_en_la_rama_principal() {
 
   unset -f _guard
 }
+
+test_usage_cuenta_el_procedimiento_seguido_a_mano() {
+  sandbox >/dev/null
+  local kernel="$SB/kernel" trans="$SB/trans/proj"
+  mkdir -p "$kernel/skills/conscript/scripts" "$kernel/skills/sinscript" "$trans"
+  touch "$kernel/skills/conscript/scripts/medir.sh"
+
+  # Una skill cuyo script se ejecuta pero a la que nunca se llama por su nombre:
+  # el informe la daba por muerta, y es justo la que más se estaba usando.
+  {
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash skills/conscript/scripts/medir.sh"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash medir.sh --otra-vez"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat skills/conscript/scripts/medir.sh"}}]}}\n'
+  } > "$trans/s.jsonl"
+
+  # La ruta se resuelve antes de aplicar la asignación de delante, así que sale
+  # del kernel real; el CRUX_HOME de mentira es solo el catálogo que va a leer.
+  local usage="$CRUX_HOME/bin/usage.mjs" out
+  out="$(CRUX_HOME="$kernel" CRUX_PROJECTS_DIR="$SB/vacio" CRUX_TRANSCRIPTS="$SB/trans" \
+    node "$usage" 2>&1)"
+
+  assert_contains "$out" "conscript" "la skill sale como usada aunque nadie la llamara por su nombre"
+
+  # 2 ejecuciones, no 3: leer el script no es usarlo.
+  local fila; fila="$(printf '%s' "$out" | grep conscript | head -1)"
+  assert_contains "$fila" "2" "leer el fichero no cuenta como ejecutarlo"
+
+  local muertas; muertas="$(printf '%s' "$out" | sed -n '/Sin usar/,$p')"
+  assert_not_contains "$muertas" "conscript" "y no se la cuenta entre las muertas"
+  assert_contains "$muertas" "sinscript" "la que de verdad no se usa sigue apareciendo"
+}
