@@ -11,7 +11,7 @@ Para bootstrap de un proyecto nuevo: `/crux-init <project>`.
 ## TLDR — lo que tiene que saber un agente
 
 1. **Tres capas**: kernel (`crux`), proyecto (`<project>-docs`), repo (punteros generados).
-2. **Layout**: repos hermanos en `~/Proyectos/<project>/`, uno de ellos es `<project>-docs/`.
+2. **Layout**: repos hermanos dentro de una carpeta por proyecto, y uno de ellos es `<project>-docs/`. La raíz que contiene los proyectos la fija cada máquina, no el estándar.
 3. **Doc específica de un repo** vive en `<project>-docs/repos/<repo>/`. Nunca en `<repo>/docs/`.
 4. **Doc transversal** vive en `<project>-docs/{architecture,conventions,operations}/` (universales) o `<project>-docs/topics/<tema>/` (del dominio del proyecto).
 5. **`crux.json`** en cada docs repo declara versión, perfil y repos. Nada se hardcodea en scripts.
@@ -207,15 +207,22 @@ romperse.
 
 ### 1. Layout en filesystem
 
-- La carpeta padre del proyecto se llama como el proyecto, en kebab-case.
+- La carpeta del proyecto se llama como el proyecto, en kebab-case.
 - Los repos son hermanos directos dentro de ella.
 - El docs repo se llama `<project>-docs` y es uno de esos hermanos.
 
-Es obligatorio porque hace que la referencia relativa funcione siempre: cada
-repo apunta a `../<project>-docs/` y el agente lo resuelve sin configuración.
+Lo obligatorio es **la relación entre las carpetas**, no dónde estén: es lo que
+hace que la referencia relativa funcione siempre. Cada repo apunta a
+`../<project>-docs/` y el agente lo resuelve sin configuración.
 
-El kernel es la excepción: `crux` no es un proyecto, no tiene hermanos y vive
-en `~/Proyectos/crux/`.
+**La raíz que contiene los proyectos la fija cada máquina**, y por defecto es
+el directorio donde está clonado el kernel: si `crux` vive en `/opt/dev/crux`,
+los proyectos van en `/opt/dev`. Se puede cambiar al instalar
+(`install.sh --projects-dir`), y queda escrita en `~/.crux/config` para que la
+lean también los hooks y los comandos que recorren todos los proyectos.
+
+El kernel es la excepción al layout: `crux` no es un proyecto y no tiene
+hermanos, vive directamente en la raíz.
 
 ### 2. Punteros de contexto
 

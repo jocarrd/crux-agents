@@ -19,8 +19,12 @@ git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 ```
 
 Eso deja las skills disponibles en Claude Code (`/<nombre>`) y en Codex
-(`/<nombre>`), y registra la ruta del kernel en `~/.crux/config` para que
-ningún proyecto tenga que saber dónde vive.
+(`/<nombre>`), y registra en `~/.crux/config` dónde vive el kernel y cuál es la
+raíz de proyectos.
+
+**Dónde clones el kernel decide dónde viven tus proyectos**: si lo pones en
+`/opt/dev/crux`, la raíz es `/opt/dev`. Se cambia con
+`install.sh --projects-dir <ruta>`.
 
 ## Comandos
 

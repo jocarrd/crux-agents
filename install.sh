@@ -4,7 +4,12 @@
 #   ~/Proyectos/crux/install.sh                          instala
 #   ~/Proyectos/crux/install.sh --remote '<plantilla>'    instala fijando el
 #                                                        remoto habitual
+#   ~/Proyectos/crux/install.sh --projects-dir <ruta>    fija la raíz de proyectos
 #   ~/Proyectos/crux/install.sh --dry-run                enseña qué haría
+#
+# La raíz de proyectos es, por defecto, el directorio donde has clonado el
+# kernel: si crux está en /opt/dev/crux, tus proyectos van en /opt/dev. Se puede
+# cambiar, pero conviene que el kernel viva con ellos.
 #
 # No toca los docs repos de ningún proyecto: para eso están `crux link` y
 # `crux upgrade`.
@@ -17,10 +22,12 @@ source "$CRUX_HOME/lib/skills.sh"
 
 export CRUX_DRY_RUN=0
 REMOTE_DEFECTO=""
+RAIZ_PROYECTOS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) export CRUX_DRY_RUN=1; shift ;;
     --remote)  REMOTE_DEFECTO="$2"; shift 2 ;;
+    --projects-dir) RAIZ_PROYECTOS="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -45,8 +52,13 @@ EOF
   elif [[ -n "$anterior" ]]; then
     echo "$anterior" >> "$HOME/.crux/config"
   fi
+  # Se deja escrita para que la lean también los hooks y los scripts de node,
+  # que no pasan por lib/common.sh.
+  echo "CRUX_PROJECTS_DIR=\"${RAIZ_PROYECTOS:-$(dirname "$CRUX_HOME")}\"" >> "$HOME/.crux/config"
 fi
 ok "config en ~/.crux/config"
+info "raíz de proyectos: ${RAIZ_PROYECTOS:-$(dirname "$CRUX_HOME")}"
+[[ -z "$RAIZ_PROYECTOS" ]] && info "(deducida de dónde está el kernel; cámbiala con --projects-dir)"
 
 # --- 2. Comando en el PATH ---------------------------------------------------
 

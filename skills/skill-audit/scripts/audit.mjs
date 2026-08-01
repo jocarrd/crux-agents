@@ -11,10 +11,25 @@
 //      promoción más obvia y la más invisible: nadie ve las dos a la vez.
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 
-const ROOT = process.argv[2] || join(homedir(), 'Proyectos')
+// La raíz de proyectos no se asume: sale de la config de la máquina o del sitio
+// donde está instalado el kernel, que siempre vive dentro de ella.
+function raizProyectos() {
+  if (process.env.CRUX_PROJECTS_DIR) return process.env.CRUX_PROJECTS_DIR
+  try {
+    const cfg = readFileSync(join(homedir(), '.crux', 'config'), 'utf8')
+    const m = cfg.match(/^CRUX_PROJECTS_DIR="?([^"\n]+)"?/m)
+    if (m) return m[1]
+    const k = cfg.match(/^CRUX_HOME="?([^"\n]+)"?/m)
+    if (k) return dirname(k[1])
+  } catch {}
+  if (process.env.CRUX_HOME) return dirname(process.env.CRUX_HOME)
+  return join(homedir(), 'Proyectos')
+}
+
+const ROOT = process.argv[2] || raizProyectos()
 
 const STOP = new Set(`de la el en y a los las del un una para con por que se su al lo como más o
 usa cuando the of and to in for when a is it this that use uses using skill
@@ -83,7 +98,7 @@ if (!projects.length) {
 // contenido técnico ya está depurado de nombres propios. Sin esto, el informe
 // propone una y otra vez promover lo que ya está promovido.
 const kernelSkills = (() => {
-  const dir = join(process.env.CRUX_HOME || join(homedir(), 'Proyectos', 'crux'), 'skills')
+  const dir = join(process.env.CRUX_HOME || join(ROOT, 'crux'), 'skills')
   return existsSync(dir) ? readdirSync(dir).filter(n => statSync(join(dir, n)).isDirectory()) : []
 })()
 

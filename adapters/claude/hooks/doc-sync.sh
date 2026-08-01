@@ -4,22 +4,34 @@
 # Si el agente tocó ficheros que la documentación del repo menciona, se lo
 # recuerda antes de cerrar. Silencioso mientras no haya nada que verificar.
 #
-# Layout asumido: ~/Proyectos/<project>/<repo>/ con <project>-docs hermano.
+# La raíz de proyectos sale de la configuración, no de una carpeta asumida: en
+# una máquina con otra convención este hook no fallaba, simplemente no hacía
+# nada, y el sistema parecía vigilado sin estarlo.
 
 set -u
 
+raiz="${CRUX_PROJECTS_DIR:-}"
+if [[ -z "$raiz" && -f "$HOME/.crux/config" ]]; then
+  raiz="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+  if [[ -z "$raiz" ]]; then
+    kernel="$(grep -E '^CRUX_HOME=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+    [[ -n "$kernel" ]] && raiz="$(dirname "$kernel")"
+  fi
+fi
+[[ -n "$raiz" ]] || exit 0
+
 cwd="$(pwd)"
-case "$cwd" in
-  */Proyectos/*/*)
-    rel="${cwd#*/Proyectos/}"
-    project="${rel%%/*}"
-    rest="${rel#*/}"
-    repo="${rest%%/*}"
-    ;;
+case "$cwd/" in
+  "$raiz"/*/*/*) ;;
   *) exit 0 ;;
 esac
 
-docs_root="$HOME/Proyectos/$project/$project-docs"
+rel="${cwd#"$raiz"/}"
+project="${rel%%/*}"
+rest="${rel#*/}"
+repo="${rest%%/*}"
+
+docs_root="$raiz/$project/$project-docs"
 [[ -d "$docs_root/repos/$repo" ]] || exit 0
 
 cd "$cwd" 2>/dev/null || exit 0

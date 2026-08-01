@@ -74,7 +74,10 @@ git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 `--remote` es opcional y fija el remoto habitual de esta máquina, para no
 repetirlo en cada proyecto nuevo. Eso hace cuatro cosas:
 
-1. Registra dónde vive el kernel en `~/.crux/config`.
+1. Registra dónde vive el kernel y **cuál es la raíz de proyectos** en
+   `~/.crux/config`. La raíz es, por defecto, el directorio donde clonaste el
+   kernel: si lo pones en `/opt/dev/crux`, tus proyectos van en `/opt/dev`. El
+   instalador lo dice en voz alta, y se cambia con `--projects-dir`.
 2. Pone el comando `crux` en `~/.local/bin`.
 3. Enlaza las skills para Claude Code y genera los prompts para Codex.
 4. Escribe el contexto global de Codex en `~/.codex/AGENTS.md`.

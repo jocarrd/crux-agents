@@ -12,11 +12,27 @@
 // reportar cero como si fuera un dato.
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 
 const HOME = homedir()
-const CRUX_HOME = process.env.CRUX_HOME || join(HOME, 'Proyectos', 'crux')
+// La raíz de proyectos no se asume: sale de la config de la máquina o del sitio
+// donde está instalado el kernel, que siempre vive dentro de ella.
+function raizProyectos() {
+  if (process.env.CRUX_PROJECTS_DIR) return process.env.CRUX_PROJECTS_DIR
+  try {
+    const cfg = readFileSync(join(homedir(), '.crux', 'config'), 'utf8')
+    const m = cfg.match(/^CRUX_PROJECTS_DIR="?([^"\n]+)"?/m)
+    if (m) return m[1]
+    const k = cfg.match(/^CRUX_HOME="?([^"\n]+)"?/m)
+    if (k) return dirname(k[1])
+  } catch {}
+  if (process.env.CRUX_HOME) return dirname(process.env.CRUX_HOME)
+  return join(homedir(), 'Proyectos')
+}
+
+const PROYECTOS = raizProyectos()
+const CRUX_HOME = process.env.CRUX_HOME || join(PROYECTOS, 'crux')
 const TRANSCRIPTS = process.env.CRUX_TRANSCRIPTS || join(HOME, '.claude', 'projects')
 
 const args = process.argv.slice(2)
@@ -31,7 +47,7 @@ function catalogo() {
       if (statSync(join(kernel, n)).isDirectory()) out.set(n, 'kernel')
     }
   }
-  const proyectos = join(HOME, 'Proyectos')
+  const proyectos = PROYECTOS
   if (existsSync(proyectos)) {
     for (const p of readdirSync(proyectos)) {
       const dir = join(proyectos, p)

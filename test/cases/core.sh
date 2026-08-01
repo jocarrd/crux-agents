@@ -585,3 +585,58 @@ test_link_no_pelea_con_el_formateador_del_repo() {
   assert_eq "$formateado" "$(cat "$repo/CLAUDE.md")" \
     "no revierte el formateo: si no, link y el formateador se pelean sin fin"
 }
+
+test_la_raiz_de_proyectos_no_se_asume() {
+  sandbox >/dev/null
+  # Un kernel instalado en una ruta que no es ~/Proyectos: su padre es la raíz.
+  local raiz="$SB/dev"
+  mkdir -p "$raiz/crux"
+  cp -r "$CRUX_HOME/lib" "$CRUX_HOME/VERSION" "$raiz/crux/"
+
+  local deducida
+  deducida="$(CRUX_PROJECTS_DIR= CRUX_HOME="$raiz/crux" HOME="$SB/vacio" \
+    bash -c 'source "$1/lib/common.sh"; projects_root' _ "$raiz/crux")"
+  assert_eq "$raiz" "$deducida" "la raíz sale del sitio donde vive el kernel"
+
+  # Lo declarado gana sobre lo deducido.
+  mkdir -p "$SB/otro/.crux"
+  printf 'CRUX_PROJECTS_DIR="/donde/sea"\n' > "$SB/otro/.crux/config"
+  deducida="$(CRUX_PROJECTS_DIR= CRUX_HOME="$raiz/crux" HOME="$SB/otro" \
+    bash -c 'source "$1/lib/common.sh"; projects_root' _ "$raiz/crux")"
+  assert_eq "/donde/sea" "$deducida" "lo declarado en la config manda"
+}
+
+test_el_hook_de_deriva_funciona_fuera_de_la_ruta_habitual() {
+  sandbox >/dev/null
+  local raiz="$SB/workspace"
+  local repo="$raiz/proj/api"
+  mkdir -p "$repo/src" "$raiz/proj/proj-docs/repos/api"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  printf 'export const x = 1\n' > "$repo/src/util.ts"
+  git -C "$repo" add -A
+  git -C "$repo" commit -qm init
+  # La documentación menciona el fichero, y el fichero se modifica sin commitear.
+  printf 'El helper vive en `src/util.ts`.\n' > "$raiz/proj/proj-docs/repos/api/README.md"
+  printf 'export const x = 2\n' > "$repo/src/util.ts"
+
+  local out
+  out="$(cd "$repo" && CRUX_PROJECTS_DIR="$raiz" bash "$CRUX_HOME/adapters/claude/hooks/doc-sync.sh" 2>&1)"
+  assert_contains "$out" "sync discipline" "avisa aunque la raíz no sea la habitual"
+  assert_contains "$out" "src/util.ts" "y dice qué fichero lo provoca"
+}
+
+test_las_herramientas_de_inventario_respetan_la_raiz() {
+  sandbox >/dev/null
+  local raiz="$SB/mis-cosas"
+  mkdir -p "$raiz/uno/uno-docs/.claude/skills/project/algo"
+  printf '{"crux":"0.1.0","project":"uno","profile":"multi-repo","repos":[],"sections":[]}\n' \
+    > "$raiz/uno/uno-docs/crux.json"
+  printf -- '---\nname: algo\ndescription: Hace algo. Usa cuando toque.\n---\n# algo\n' \
+    > "$raiz/uno/uno-docs/.claude/skills/project/algo/SKILL.md"
+
+  local out
+  out="$(CRUX_PROJECTS_DIR="$raiz" node "$CRUX_HOME/skills/skill-audit/scripts/audit.mjs" 2>&1)"
+  assert_contains "$out" "1 proyectos" "encuentra el proyecto fuera de la ruta habitual"
+}

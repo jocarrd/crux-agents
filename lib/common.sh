@@ -76,6 +76,28 @@ json_has() {
   json_get "$1" "$2" >/dev/null 2>&1
 }
 
+# --- Raíz de los proyectos ---------------------------------------------------
+#
+# No se asume una carpeta concreta: la pista más fiable es que el propio kernel
+# vive dentro de la raíz, así que su padre la identifica sin configurar nada.
+# Sin esto, en una máquina con otra convención los comandos que recorren todos
+# los proyectos no fallan: reportan cero, que es peor porque parece un dato.
+
+projects_root() {
+  if [[ -n "${CRUX_PROJECTS_DIR:-}" ]]; then
+    echo "$CRUX_PROJECTS_DIR"; return
+  fi
+  if [[ -f "$HOME/.crux/config" ]]; then
+    local declarado
+    declarado="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+    [[ -n "$declarado" ]] && { echo "$declarado"; return; }
+  fi
+  local home
+  home="$(crux_home)"
+  [[ -n "$home" && -d "$(dirname "$home")" ]] && { dirname "$home"; return; }
+  echo "$HOME/Proyectos"
+}
+
 # --- Localización del docs repo ----------------------------------------------
 
 find_docs_repo() {

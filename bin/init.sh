@@ -29,7 +29,7 @@ VISIBILITY="private"
 LANGUAGE="es"
 REMOTE_TMPL=""
 REMOTE=1
-PARENT="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
+PARENT="$(projects_root)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

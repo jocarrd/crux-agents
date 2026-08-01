@@ -19,7 +19,7 @@ PROJECT="${1:-}"
 shift
 
 FROM=""
-PARENT="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
+PARENT="$(projects_root)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from)   FROM="$2"; shift 2 ;;
