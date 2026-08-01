@@ -30,6 +30,7 @@ ningún proyecto tenga que saber dónde vive.
 | `crux adopt` | Registra un docs repo que ya existe bajo el estándar |
 | `crux add-repo <repo>` | Registra un repo nuevo en un proyecto adoptado |
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
+| `crux workspace` | Espacios aislados —worktree, puertos, base de datos— para trabajar en paralelo |
 | `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
 
@@ -77,7 +78,7 @@ crux/
 ├── STANDARD.md      el estándar completo — léelo si vas a tocar algo
 ├── VERSION
 ├── install.sh       una vez por máquina
-├── bin/             init, adopt, add-repo, link, doctor, upgrade
+├── bin/             init, adopt, add-repo, link, workspace, doctor, upgrade
 ├── lib/             verificadores de paths y utilidades comunes
 ├── templates/       docs-repo/ y code-repo/
 ├── profiles/        multi-repo, client-repo

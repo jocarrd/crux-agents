@@ -76,7 +76,13 @@ perfil y los enlaces markdown. Si aparecen enlaces rotos:
   El estándar prohíbe enlazar fuera del docs repo porque esos enlaces se
   rompen con cualquier reorganización y terminan mintiendo.
 
-### 4. Presentar el balance al usuario
+### 4. Frontera de las skills, si tocaste alguna
+
+Si en la sesión se creó o cambió una skill, decídelo ahora en caliente:
+¿patrón o adaptador? Es el momento en que se sabe. Cada cierto número de
+cierres, pasa además la revisión completa con `/skill-audit`.
+
+### 5. Presentar el balance al usuario
 
 Un resumen estructurado por las cuatro categorías, con lo encontrado en cada
 una, y confirmación por cada elemento. Si no hay nada, dilo tal cual: sesión
@@ -85,7 +91,7 @@ sin nada que durabilizar.
 **El usuario confirma o veta cada elemento.** No se promueve nada
 unilateralmente.
 
-### 5. Escribir y commitear
+### 6. Escribir y commitear
 
 Un commit por categoría, no uno gigante:
 
@@ -96,7 +102,7 @@ Un commit por categoría, no uno gigante:
 
 Push de cada repo afectado.
 
-### 6. Reporte final
+### 7. Reporte final
 
 Qué se escribió y dónde, qué se corrigió, qué repos se pushearon. Si queda
 trabajo sin commitear a propósito, dilo explícitamente en vez de callarlo.

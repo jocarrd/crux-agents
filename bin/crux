@@ -18,6 +18,7 @@ crux — kernel del sistema de trabajo con agentes
   crux adopt [dir]      registra un docs repo que ya existe
   crux add-repo <repo>  registra un repo nuevo en el proyecto
   crux link [dir]       genera y verifica los punteros de los repos de código
+  crux workspace ...    espacios aislados para trabajar en paralelo
   crux doctor [dir]     verifica la conformidad con el estándar
   crux upgrade [dir]    re-materializa el kernel a la versión actual
   crux version          versión del kernel y su ruta
@@ -35,6 +36,7 @@ case "$cmd" in
   adopt)   exec bash "$CRUX_HOME/bin/adopt.sh" "$@" ;;
   add-repo) exec bash "$CRUX_HOME/bin/add-repo.sh" "$@" ;;
   link)    exec bash "$CRUX_HOME/bin/link.sh" "$@" ;;
+  workspace) exec bash "$CRUX_HOME/bin/workspace.sh" "$@" ;;
   doctor)  exec bash "$CRUX_HOME/bin/doctor.sh" "$@" ;;
   upgrade) exec bash "$CRUX_HOME/bin/upgrade.sh" "$@" ;;
   version) echo "crux $(crux_version) — $CRUX_HOME" ;;

@@ -312,6 +312,19 @@ credenciales y nombres. Con dos guardas:
 
 `/skill-audit` aplica este test de forma periódica y al crear una skill nueva.
 
+### El ciclo de desarrollo
+
+Tres skills sostienen el trabajo del día a día, y se usan en este orden:
+
+1. **`/workspace`** — antes de empezar, si va a haber trabajo en paralelo sobre
+   el mismo repo. Aísla ficheros **y runtime**: sin lo segundo, dos tareas
+   simultáneas se corrompen los datos en silencio.
+2. **`/ship`** — antes de commitear. Cadena de puertas donde cualquiera aborta:
+   sanidad, diff, correctitud, simplificación, regresión, validación real solo
+   si el cambio toca superficie observable, deriva de la documentación, commit.
+3. **`/end-session`** — antes de cerrar. Lo que deba sobrevivir a la sesión se
+   escribe en git, se verifica la conformidad y se commitea.
+
 ---
 
 ## Comandos
@@ -322,6 +335,7 @@ credenciales y nombres. Con dos guardas:
 | `crux adopt` | `/crux-adopt` | Registra un docs repo que ya existe |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
+| `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | `/crux-upgrade` | Re-materializa el kernel a la versión actual |
 
