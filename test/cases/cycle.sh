@@ -380,3 +380,33 @@ HOOK
   assert_exit 0 "una rama de trabajo pasa sin problema" \
     bash -c 'echo "refs/heads/ws/x a refs/heads/ws/x b" | bash "$1" origin url' _ "$hook"
 }
+
+test_el_titulo_de_la_propuesta_sale_del_primer_commit() {
+  sandbox >/dev/null
+  local repo="$SB/titulos"
+  mkdir -p "$repo"
+  git -C "$repo" init -q -b main
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  echo base > "$repo/f.txt"; git -C "$repo" add -A; git -C "$repo" commit -qm "init"
+
+  git init -q --bare "$SB/remoto.git"
+  git -C "$repo" remote add origin "$SB/remoto.git"
+  git -C "$repo" push -q origin main
+
+  git -C "$repo" checkout -q -b ws/tarea
+  echo uno > "$repo/a.txt"; git -C "$repo" add -A
+  git -C "$repo" commit -qm "feat: lo que se fue a hacer"
+  echo dos > "$repo/b.txt"; git -C "$repo" add -A
+  git -C "$repo" commit -qm "chore: remate menor"
+
+  # La rama ya subida: es el estado real cuando se calcula el título, porque el
+  # push ocurre antes de abrir la propuesta. Con --not --remotes aquí no queda
+  # nada y el título se iba al último commit.
+  git -C "$repo" push -q origin ws/tarea
+
+  local primero
+  primero="$(git -C "$repo" log --format='%s' "origin/main..ws/tarea" | tail -1)"
+  assert_eq "feat: lo que se fue a hacer" "$primero" \
+    "el título es lo que se fue a hacer, aunque la rama ya esté subida"
+}

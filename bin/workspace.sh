@@ -287,14 +287,23 @@ cmd_finish() {
   git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
   ok "$branch subida ($commits commits)"
 
+  local base
+  base="$(git -C "$path" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+
   local cuerpo
   cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
-    "$(git -C "$path" log --format='- %s' "$branch" --not --remotes)" "${head:0:8}")"
+    "$(git -C "$path" log --format='- %s' "$base..$branch")" "${head:0:8}")"
 
   local url_pr=""
   if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+    # Contra la rama base, no contra --remotes: para cuando se calcula el título
+    # la rama ya está subida, así que --remotes la excluiría entera y el título
+    # se quedaría vacío.
+    local primero
+    primero="$(git -C "$path" log --format='%s' "$base..$branch" | tail -1)"
+    [[ -n "$primero" ]] || primero="$(git -C "$path" log -1 --format=%s "$branch")"
     url_pr="$(cd "$path" && gh pr create \
-      --title "${titulo:-$(git log -1 --format=%s "$branch")}" \
+      --title "${titulo:-$primero}" \
       --body "$cuerpo" 2>/dev/null || true)"
   fi
 
