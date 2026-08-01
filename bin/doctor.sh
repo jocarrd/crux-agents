@@ -46,6 +46,7 @@ done
 PROJECT="$(json_get "$CONFIG" project 2>/dev/null || echo "?")"
 PROFILE="$(json_get "$CONFIG" profile 2>/dev/null || echo "?")"
 DECLARED="$(json_get "$CONFIG" crux 2>/dev/null || echo "?")"
+LANG_DECLARADO="$(json_get "$CONFIG" language 2>/dev/null || echo "es")"
 KERNEL="$(crux_version)"
 
 [[ -f "$CRUX_HOME/profiles/$PROFILE.json" ]] || fail "perfil desconocido: $PROFILE"
@@ -175,6 +176,14 @@ while IFS= read -r skill_md; do
   desc="$(awk '/^---$/{n++; next} n==1 && /^description:/{p=1} n==1 && p && /^[a-z_]+:/ && !/^description:/{p=0} n==1 && p{print} n>=2{exit}' "$skill_md" | tr '\n' ' ')"
   echo "$desc" | grep -qiE '\b(usa|use|úsala|usar|invoca)\b' \
     || note "skill '$name': la descripción no dice cuándo usarla — no se activará sola"
+
+  # La descripción decide la activación, así que tiene que estar en el idioma en
+  # que se pide el trabajo. Una mezcla activa peor justo donde más duele.
+  if [[ "$LANG_DECLARADO" == "es" ]]; then
+    n_en="$(echo "$desc" | grep -oiwE 'the|when|this|with|your|after|before|that|from|which' | wc -l)"
+    n_es="$(echo "$desc" | grep -oiwE 'cuando|para|que|con|desde|antes|después|del|las|los|una' | wc -l)"
+    [[ "$n_en" -gt "$n_es" ]] && note "skill '$name': la descripción parece estar en inglés y el proyecto declara español"
+  fi
 done < <(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | sort)
 [[ $skills -gt 0 ]] && section_ok "skills del proyecto: $skills"
 

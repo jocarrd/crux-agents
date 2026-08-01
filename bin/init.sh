@@ -3,7 +3,7 @@
 #
 #   crux init <project> [--description "..."] [--repos a,b,c]
 #                       [--profile multi-repo] [--visibility private]
-#                       [--no-remote]
+#                       [--language es] [--no-remote]
 #
 # Determinista: el resultado sale de templates/, no de que un agente reproduzca
 # ficheros a mano. Dos ejecuciones dan el mismo árbol.
@@ -22,6 +22,7 @@ DESCRIPTION="Documentación transversal de $PROJECT."
 REPOS=""
 PROFILE="multi-repo"
 VISIBILITY="private"
+LANGUAGE="es"
 REMOTE=1
 PARENT="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
 
@@ -31,6 +32,7 @@ while [[ $# -gt 0 ]]; do
     --repos)       REPOS="$2"; shift 2 ;;
     --profile)     PROFILE="$2"; shift 2 ;;
     --visibility)  VISIBILITY="$2"; shift 2 ;;
+    --language)    LANGUAGE="$2"; shift 2 ;;
     --no-remote)   REMOTE=0; shift ;;
     --parent)      PARENT="$2"; shift 2 ;;
     *) die "opción desconocida: $1" ;;
@@ -128,6 +130,7 @@ cat > "$DOCS/crux.json" <<EOF
   "crux": "$(crux_version)",
   "project": "$PROJECT",
   "profile": "$PROFILE",
+  "language": "${LANGUAGE:-es}",
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [],
   "workspace": {

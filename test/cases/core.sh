@@ -408,3 +408,24 @@ test_el_proyecto_nuevo_nace_sabiendo_que_existe_workspace() {
   assert_contains "$cfg" '"workspace"' "el contrato incluye la sección"
   assert_contains "$cfg" '"portBase"' "con los valores por defecto a la vista"
 }
+
+test_doctor_detecta_una_descripcion_en_otro_idioma() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project chi)"
+  mkdir -p "$docs/.claude/skills/project/mezclada"
+  printf -- '---\nname: mezclada\ndescription: Purge the cache when the CDN is serving stale content after a deploy that changed the static assets.\n---\n\n# mezclada\n' \
+    > "$docs/.claude/skills/project/mezclada/SKILL.md"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "parece estar en inglés" "detecta la descripción en otro idioma"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_el_contrato_declara_el_idioma() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project phi)"
+  assert_contains "$(cat "$docs/crux.json")" '"language": "es"' "por defecto, español"
+
+  local otro; otro="$(new_project phi2 --language en)"
+  assert_contains "$(cat "$otro/crux.json")" '"language": "en"' "se puede declarar otro"
+}

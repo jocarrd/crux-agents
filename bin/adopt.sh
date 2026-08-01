@@ -78,6 +78,7 @@ cat > "$CONFIG" <<EOF
   "crux": "$(crux_version)",
   "project": "$PROJECT",
   "profile": "$PROFILE",
+  "language": "es",
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [$(json_array "${sections[@]:-}")]
 }

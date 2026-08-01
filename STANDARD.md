@@ -61,6 +61,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
   "crux": "0.1.0",
   "project": "acme",
   "profile": "multi-repo",
+  "language": "es",
   "repos": ["Acme", "acme-engine", "acme-cms"],
   "sections": ["architecture", "conventions", "operations", "topics"]
 }
@@ -69,6 +70,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | Campo | Significado |
 | ----- | ----------- |
 | `crux` | Versión del kernel con la que se materializó este proyecto |
+| `language` | Idioma de la documentación y de las descripciones de skills |
 | `project` | Nombre del proyecto, igual que la carpeta padre |
 | `profile` | Perfil aplicado (ver siguiente sección) |
 | `repos` | Repos de código del proyecto, hermanos del docs repo |
@@ -258,6 +260,33 @@ disciplina.
 - Body de 100 caracteres por línea como máximo
 - Sin `Co-Authored-By`
 - Sin emojis, salvo que la voz del fichero lo justifique
+
+---
+
+## Idioma
+
+El estándar no impone un idioma global: impone **coherencia dentro de un
+proyecto**, declarada en `crux.json` con `"language"`.
+
+| Qué | Idioma |
+| --- | ------ |
+| Descripciones de skills | El del proyecto |
+| Cuerpo de skills y documentación | El del proyecto |
+| Nombres de skills, comandos, ficheros, ramas y commits | Inglés |
+| Términos técnicos | Sin traducir: `worktree`, `commit`, `hook`, `deploy` |
+
+**Las descripciones son lo que decide la activación de una skill**, y deben
+contener las palabras con las que aparece el problema. Si el trabajo se pide en
+un idioma y la descripción está en otro, la skill existe pero se activa peor
+justo cuando hace falta. `crux doctor` avisa de la mezcla.
+
+Los nombres van en inglés porque son identificadores, no prosa: `write-tests`,
+`ship`, `workspace`. Y los términos técnicos no se traducen porque traducirlos
+genera ambigüedad, no claridad.
+
+**Un proyecto cuyo código o cuyos interlocutores sean de otro idioma lo declara
+y se escribe entero en ese idioma.** Es una propiedad del proyecto, no una
+decisión que se vuelve a tomar en cada fichero.
 
 ---
 
