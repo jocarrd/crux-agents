@@ -17,6 +17,7 @@ source "$CRUX_HOME/lib/common.sh"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 DOC_SYNC="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
 CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
+COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
 # En un worktree, .git es un fichero y los hooks viven en el directorio común
@@ -67,6 +68,11 @@ cmd_status() {
     else
       info "sin pre-push de crux"
     fi
+    if [[ -f "$(dir_hooks "$docs")/commit-msg" ]]; then
+      ok "commit-msg instalado — los mensajes, en inglés"
+    else
+      info "sin commit-msg de crux"
+    fi
   fi
 }
 
@@ -101,7 +107,8 @@ enganchar() {
 cmd_install() {
   [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD"
+  [[ -f "$COMMIT_MSG" ]] || die "falta $COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -147,11 +154,21 @@ EOF
     chmod +x "$hooks/pre-push"
   }
 
+  # Se copia en vez de invocar al kernel desde el hook: así sigue funcionando
+  # aunque `crux` no esté en el PATH de quien commitea.
+  instalar_commit_msg() {
+    local repo="$1" hooks
+    hooks="$(dir_hooks "$repo")" || return 1
+    cp "$COMMIT_MSG" "$hooks/commit-msg"
+    chmod +x "$hooks/commit-msg"
+  }
+
   local kernel
   kernel="$(crux_home)"
   if [[ -n "$kernel" ]] && git -C "$kernel" rev-parse --git-dir >/dev/null 2>&1; then
     instalar_pre_push "$kernel"
-    ok "pre-push en el kernel — el trabajo entra por propuesta"
+    instalar_commit_msg "$kernel"
+    ok "pre-push y commit-msg en el kernel"
   fi
 
   local docs
@@ -176,7 +193,27 @@ fi
 rm -f /tmp/crux-precommit.$$
 EOF
     chmod +x "$(dir_hooks "$docs")/pre-commit"
-    ok "pre-commit en $(basename "$docs") — bloquea si doctor falla"
+    instalar_commit_msg "$docs"
+    ok "pre-commit y commit-msg en $(basename "$docs")"
+
+    # Los commits de los repos de código son la mayoría, así que ahí es donde
+    # más falta hace. Pero solo si el perfil deja escribir en ellos: en un repo
+    # de cliente no se toca nada, tampoco sus hooks.
+    local perfil escribe raiz repo
+    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo multi-repo)"
+    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo true)"
+    if [[ "$escribe" != "false" ]]; then
+      raiz="$(dirname "$docs")"
+      while IFS= read -r repo; do
+        [[ -n "$repo" ]] || continue
+        git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+        # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
+        # entero por set -e, y los repos siguientes se quedarían sin enganchar.
+        if instalar_commit_msg "$raiz/$repo"; then ok "commit-msg en $repo"; fi
+      done < <(json_get "$docs/crux.json" repos 2>/dev/null)
+    else
+      info "perfil $perfil: no se tocan los repos de código, tampoco sus hooks"
+    fi
   else
     info "sin docs repo en el directorio actual: no se instala el pre-commit"
     info "entra en uno y repite para engancharlo"
@@ -200,8 +237,13 @@ cmd_remove() {
   ok "hooks de crux retirados (el resto queda como estaba)"
 
   local docs
-  if docs="$(find_docs_repo "$PWD" 2>/dev/null)" && [[ -f "$(dir_hooks "$docs")/pre-commit" ]]; then
-    grep -q "crux doctor" "$(dir_hooks "$docs")/pre-commit" && rm "$(dir_hooks "$docs")/pre-commit" && ok "pre-commit retirado"
+  if docs="$(find_docs_repo "$PWD" 2>/dev/null)"; then
+    if [[ -f "$(dir_hooks "$docs")/pre-commit" ]]; then
+      grep -q "crux doctor" "$(dir_hooks "$docs")/pre-commit" && rm "$(dir_hooks "$docs")/pre-commit" && ok "pre-commit retirado"
+    fi
+    if [[ -f "$(dir_hooks "$docs")/commit-msg" ]]; then
+      grep -q "crux hooks install" "$(dir_hooks "$docs")/commit-msg" && rm "$(dir_hooks "$docs")/commit-msg" && ok "commit-msg retirado"
+    fi
   fi
 }
 

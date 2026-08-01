@@ -619,10 +619,18 @@ crux hooks install    # desde el docs repo del proyecto
 crux hooks status
 ```
 
-Instala tres cosas: un aviso de deriva de documentación al cerrar sesión, un
-`pre-commit` que **bloquea el commit si `doctor` no pasa**, y un recordatorio
-del ciclo al empezar a trabajar sobre la rama principal. Un estándar que hay que
-acordarse de comprobar se comprueba a veces.
+Instala cuatro cosas: un aviso de deriva de documentación al cerrar sesión, un
+`pre-commit` que **bloquea el commit si `doctor` no pasa**, un `commit-msg` que
+rechaza los mensajes en español, y un recordatorio del ciclo al empezar a
+trabajar sobre la rama principal. Un estándar que hay que acordarse de
+comprobar se comprueba a veces.
+
+El del idioma es el ejemplo más claro de por qué hace falta un hook y no una
+línea en un documento: la regla estaba escrita desde el primer commit y **los
+27 mensajes del historial del kernel estaban en español**. El `commit-msg` va a
+los repos de código además del docs repo, porque ahí es donde se commitea más
+— salvo con perfil `client-repo`, donde no se toca nada del cliente, tampoco
+sus hooks.
 
 El del ciclo existe por una medición incómoda: la skill que lo describe estaba
 escrita, instalada y con su descripción, y `crux usage` la daba con **cero

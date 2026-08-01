@@ -711,3 +711,36 @@ test_el_kernel_no_referencia_skills_que_no_existen() {
 
   assert_eq "" "$rotas" "toda skill referenciada en el kernel existe"
 }
+
+test_el_hook_rechaza_un_mensaje_de_commit_en_espanol() {
+  sandbox >/dev/null
+  local hook="$CRUX_HOME/adapters/git/commit-msg.sh"
+  local f="$SB/MSG"
+
+  # Del historial real de este repo, escrito antes de que nadie comprobase nada.
+  echo "fix(workspace): el titulo de la propuesta sale del primer commit" > "$f"
+  assert_exit 1 "rechaza un mensaje en español" bash "$hook" "$f"
+
+  echo "fix(workspace): take the proposal title from the first commit" > "$f"
+  assert_exit 0 "deja pasar el mismo mensaje en inglés" bash "$hook" "$f"
+
+  # Una sola pista no basta: un nombre propio no convierte el mensaje en
+  # español, y un hook que se equivoca se desactiva a la semana.
+  echo "feat(stations): add Los Angeles network ids" > "$f"
+  assert_exit 0 "un nombre propio español no dispara el rechazo" bash "$hook" "$f"
+  echo "fix(tz): correct Los Angeles offset" > "$f"
+  assert_exit 0 "ni un topónimo con artículo" bash "$hook" "$f"
+
+  # Lo que va en backticks es código, no idioma.
+  printf 'refactor: rename `esta_lista` and `el_valor` helpers\n' > "$f"
+  assert_exit 0 "los identificadores en backticks no cuentan" bash "$hook" "$f"
+
+  # Las líneas de comentario son de git.
+  printf 'chore: bump deps\n\n# Por favor escribe el mensaje para tu commit\n' > "$f"
+  assert_exit 0 "los comentarios de git tampoco" bash "$hook" "$f"
+
+  echo "feat: la puerta se gradua segun lo que toca el diff" > "$f"
+  local out; out="$(bash "$hook" "$f" 2>&1)"
+  assert_contains "$out" "no-verify" "y dice cómo saltarlo cuando de verdad haga falta"
+  assert_contains "$out" "pistas:" "y enseña por qué lo ha rechazado"
+}

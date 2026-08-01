@@ -332,6 +332,16 @@ proyecto**, declarada en `crux.json` con `"language"`.
 | Nombres de skills, comandos, ficheros, ramas y commits | Inglés |
 | Términos técnicos | Sin traducir: `worktree`, `commit`, `hook`, `deploy` |
 
+Lo de los commits **se verifica**: `crux hooks install` pone un `commit-msg`
+que rechaza los mensajes en español. Esta regla llevaba escrita desde el primer
+día y el historial del kernel estaba entero en español — una regla que nadie
+comprueba es una recomendación.
+
+Es una red para el descuido, no un detector de idioma: exige dos palabras
+funcionales españolas, así que un título casi sin prosa se le escapa y un
+topónimo como "Los Angeles" no lo dispara. `--no-verify` lo salta cuando de verdad
+haga falta.
+
 **Las descripciones son lo que decide la activación de una skill**, y deben
 contener las palabras con las que aparece el problema. Si el trabajo se pide en
 un idioma y la descripción está en otro, la skill existe pero se activa peor

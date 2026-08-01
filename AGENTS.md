@@ -130,7 +130,9 @@ dos veces no vale, aunque el código sea correcto.
 - **El estándar se cambia aquí primero**, y los proyectos se alinean con
   `crux upgrade`. Ningún proyecto inventa su variante.
 - **Idioma**: documentación y descripciones en español; nombres, comandos,
-  ramas y commits en inglés; términos técnicos sin traducir.
+  ramas y **commits en inglés**; términos técnicos sin traducir. Lo del commit
+  lo comprueba el hook `commit-msg` que instala `crux hooks install`: la regla
+  llevaba escrita desde el primer día y el historial estaba entero en español.
 - **Conventional commits**, cuerpo de 100 caracteres por línea, sin
   `Co-Authored-By` y sin emojis.
 - **Sin comentarios que narren lo que el código ya dice.** Solo el porqué que
