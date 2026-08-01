@@ -92,6 +92,23 @@ for repo in "${repos[@]:-}"; do
   [[ -n "$repo" ]] || continue
   render_template "$CRUX_HOME/templates/repo-doc/README.md" "$DOCS/repos/$repo/README.md" \
     "REPO=$repo" "PROJECT=$PROJECT" "DESCRIPTION=Qué hace este repo, en una línea."
+
+  # La fila del índice: de ahí sale la descripción que acaba en el puntero de
+  # cada repo, así que una tabla vacía deja los punteros mudos.
+  node -e '
+    const fs = require("fs");
+    const [file, repo, project] = process.argv.slice(1);
+    const lines = fs.readFileSync(file, "utf8").split("\n");
+    const row = `| \`${repo}/\` | \`${project}/${repo}\` | Qué hace este repo, en una línea |`;
+    const vacia = lines.findIndex((l) => /^\|\s*\|\s*\|\s*\|\s*$/.test(l));
+    if (vacia !== -1) lines[vacia] = row;
+    else {
+      let last = -1;
+      for (let i = 0; i < lines.length; i++) if (/^\|/.test(lines[i])) last = i;
+      if (last !== -1) lines.splice(last + 1, 0, row);
+    }
+    fs.writeFileSync(file, lines.join("\n"));
+  ' "$DOCS/repos/README.md" "$repo" "$PROJECT"
 done
 [[ ${#repos[@]} -gt 0 ]] && ok "${#repos[@]} carpetas en repos/"
 
@@ -112,7 +129,13 @@ cat > "$DOCS/crux.json" <<EOF
   "project": "$PROJECT",
   "profile": "$PROFILE",
   "repos": [$(json_array "${repos[@]:-}")],
-  "sections": []
+  "sections": [],
+  "workspace": {
+    "portBase": 3000,
+    "portsPerSlot": 10,
+    "envFile": ".env.local",
+    "repos": {}
+  }
 }
 EOF
 ok "crux.json escrito"

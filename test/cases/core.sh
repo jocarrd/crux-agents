@@ -376,3 +376,35 @@ test_doctor_detecta_punteros_anteriores_al_bloque() {
   local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
   assert_contains "$out" "anterior al bloque gestionado" "avisa de los punteros desfasados"
 }
+
+test_la_descripcion_del_indice_llega_al_puntero_del_repo() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project psi --repos "web,api")"
+  mkdir -p "$CRUX_PROJECTS_DIR/psi/web" "$CRUX_PROJECTS_DIR/psi/api"
+
+  assert_contains "$(cat "$docs/repos/README.md")" '`web/`' "init rellena la tabla del índice"
+
+  # Editar el índice es lo que hace un humano; el puntero debe seguirlo.
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8")
+      .replace("| `web/` | `psi/web` | Qué hace este repo, en una línea |",
+               "| `web/` | `psi/web` | Front público en Next |"));
+  ' "$docs/repos/README.md"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+
+  assert_contains "$(head -1 "$CRUX_PROJECTS_DIR/psi/web/CLAUDE.md")" "Front público en Next" \
+    "el puntero recoge la descripción del índice"
+  assert_not_contains "$(head -1 "$CRUX_PROJECTS_DIR/psi/api/CLAUDE.md")" "Front público" \
+    "cada repo coge la suya, no la del vecino"
+}
+
+test_el_proyecto_nuevo_nace_sabiendo_que_existe_workspace() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omicron2)"
+  local cfg; cfg="$(cat "$docs/crux.json")"
+  assert_contains "$cfg" '"workspace"' "el contrato incluye la sección"
+  assert_contains "$cfg" '"portBase"' "con los valores por defecto a la vista"
+}
