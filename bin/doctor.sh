@@ -145,14 +145,40 @@ else
   note "sin 'remote' en crux.json — 'crux clone' no podrá traer este proyecto"
 fi
 
-# --- 6. Secciones declaradas -------------------------------------------------
+# --- 6. Visibilidad del docs repo --------------------------------------------
+#
+# Un docs repo público con documentación interna dentro es un incidente, no un
+# descuido de configuración. Solo se puede comprobar donde hay API para
+# preguntarlo; donde no, se dice que no se ha comprobado en vez de callar.
+
+section
+VIS_ESPERADA="$(json_get "$CONFIG" 'remote.visibility' 2>/dev/null || echo "private")"
+origin_docs="$(git -C "$DOCS" remote get-url origin 2>/dev/null || true)"
+
+if [[ "$origin_docs" == *github.com* ]] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  slug="$(echo "$origin_docs" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+  vis_real="$(gh repo view "$slug" --json visibility -q .visibility 2>/dev/null | tr 'A-Z' 'a-z' || echo "")"
+  if [[ -z "$vis_real" ]]; then
+    note "no pude consultar la visibilidad de $slug"
+  elif [[ "$vis_real" == "public" && "$VIS_ESPERADA" != "public" ]]; then
+    fail "el docs repo es PÚBLICO y el contrato espera $VIS_ESPERADA"
+    [[ "$PROFILE" == "client-repo" ]] && err "y contiene documentación de un cliente"
+  elif [[ "$vis_real" != "$VIS_ESPERADA" ]]; then
+    note "visibilidad real '$vis_real', el contrato dice '$VIS_ESPERADA'"
+  fi
+  section_ok "visibilidad: $vis_real"
+else
+  info "visibilidad no comprobada (hace falta gh y un remoto de GitHub)"
+fi
+
+# --- 7. Secciones declaradas -------------------------------------------------
 
 while IFS= read -r sect; do
   [[ -n "$sect" ]] || continue
   [[ -d "$DOCS/$sect" ]] || note "sección declarada sin carpeta: $sect/"
 done < <(json_get "$CONFIG" sections 2>/dev/null || true)
 
-# --- 7. Numeración de los ADRs ----------------------------------------------
+# --- 8. Numeración de los ADRs ----------------------------------------------
 #
 # Dos sesiones en paralelo eligen el mismo "siguiente número" y el conflicto no
 # lo detecta git: son líneas distintas del mismo fichero.
@@ -169,7 +195,7 @@ while IFS= read -r ledger; do
 done < <(find "$DOCS/decisions" "$DOCS/repos" -name "*decisions*.md" -o -name "index.md" 2>/dev/null | grep -E "decisions" | sort -u)
 section_ok "numeración de los ADRs"
 
-# --- 8. Enlaces markdown -----------------------------------------------------
+# --- 9. Enlaces markdown -----------------------------------------------------
 
 if node "$CRUX_HOME/lib/check-doc-paths.mjs" "$DOCS" >/tmp/crux-doctor-paths.$$ 2>&1; then
   ok "enlaces markdown resuelven"
@@ -179,7 +205,7 @@ else
 fi
 rm -f /tmp/crux-doctor-paths.$$
 
-# --- 9. Skills del proyecto --------------------------------------------------
+# --- 10. Skills del proyecto --------------------------------------------------
 
 section
 skills=0

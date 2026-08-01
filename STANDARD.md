@@ -103,6 +103,12 @@ común hay un atajo equivalente: `host`, `owner` y `protocol`.
 puede tener la documentación en tu remoto y el código en el de otra persona.
 Es exactamente lo que ocurre con el perfil `client-repo`.
 
+`visibility` declara si el docs repo debe ser privado o público. Importa
+porque **la visibilidad solo la puede aplicar el kernel donde hay API para
+crearlo**: en el resto de proveedores el repo lo crea una persona, y un docs
+repo público con documentación interna dentro es un incidente, no un descuido
+de configuración. Por eso se declara y `crux doctor` la comprueba donde puede.
+
 `crux adopt` lo deduce del `origin` de lo que ya esté clonado, así que no hay
 que escribirlo a mano. `crux doctor` avisa si lo declarado deja de coincidir
 con la realidad, que es la deriva que hace fallar el clonado en la máquina

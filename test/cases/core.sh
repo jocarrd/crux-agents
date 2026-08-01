@@ -534,3 +534,18 @@ test_init_no_asume_donde_subir_el_repo() {
     "$(git -C "$docs" remote get-url origin)" "y deja el origin configurado"
   assert_contains "$(cat "$docs/crux.json")" "gitlab.empresa.com" "el contrato declara el remoto"
 }
+
+test_init_deja_la_visibilidad_dicha_cuando_no_la_puede_aplicar() {
+  sandbox >/dev/null
+  local out
+  out="$(HOME="$SB/limpio2" bash "$CRUX_HOME/bin/init.sh" tau2 --parent "$CRUX_PROJECTS_DIR" \
+    --remote 'git@gitlab.empresa.com:equipo/{repo}.git' --visibility private 2>&1)"
+
+  # Fuera de GitHub el repo lo crea una persona: si crux no lo dice, se crea
+  # público sin querer y con documentación interna dentro.
+  assert_contains "$out" "como **private**" "dice con qué visibilidad crearlo"
+  assert_contains "$out" "no la puede aplicar crux" "y avisa de que no la controla"
+
+  assert_contains "$(cat "$CRUX_PROJECTS_DIR/tau2/tau2-docs/crux.json")" '"visibility": "private"' \
+    "el contrato guarda la visibilidad prevista, para poder verificarla luego"
+}

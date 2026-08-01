@@ -168,7 +168,8 @@ cat > "$DOCS/crux.json" <<EOF
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [],
   "remote": {
-    "url": "${REMOTE_TMPL:-}"
+    "url": "${REMOTE_TMPL:-}",
+    "visibility": "$VISIBILITY"
   },
   "workspace": {
     "portBase": 3000,
@@ -204,7 +205,8 @@ echo "listo: $DOCS"
 echo
 if [[ "${PENDIENTE_CREAR:-0}" == "1" ]]; then
   echo
-  warn "el repo remoto no existe todavía: créalo en tu proveedor y luego"
+  warn "el repo remoto no existe todavía: créalo en tu proveedor como **$VISIBILITY**"
+  info "la visibilidad no la puede aplicar crux fuera de GitHub: la eliges tú al crearlo"
   info "cd $DOCS && git push -u origin HEAD"
 fi
 
