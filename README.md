@@ -90,6 +90,11 @@ crux/
 └── test/            suite del propio kernel
 ```
 
+El catálogo completo de skills, en `STANDARD.md`.
+
+```
+```
+
 ## Tests
 
 ```bash

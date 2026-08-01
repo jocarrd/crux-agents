@@ -101,3 +101,43 @@ test_ship_distingue_lo_que_necesita_entorno() {
 
   cd "$CRUX_HOME" || return
 }
+
+test_workspace_admite_configuracion_por_repo() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/multi"
+  mkdir -p "$root/front" "$root/back" "$root/multi-docs"
+  for r in front back; do
+    git -C "$root/$r" init -q
+    git -C "$root/$r" config user.email t@t
+    git -C "$root/$r" config user.name t
+    echo x > "$root/$r/f.txt"
+    git -C "$root/$r" add -A
+    git -C "$root/$r" commit -qm init
+  done
+  cat > "$root/multi-docs/crux.json" <<'JSON'
+{"crux":"0.1.0","project":"multi","profile":"multi-repo","repos":["front","back"],"sections":[],
+ "workspace":{"portBase":5000,"portsPerSlot":10,"envFile":".env.local",
+   "env":{"COMUN":"si"},
+   "repos":{
+     "front":{"env":{"PORT":"{{PORT0}}","API":"http://localhost:{{PORT1}}"}},
+     "back":{"env":{"PORT":"{{PORT1}}","DB":"db_{{SLOT}}"},
+             "setup":"echo creada db_{{SLOT}} > $CRUX_PROJECTS_DIR/setup-ran.txt"}}}}
+JSON
+
+  bash "$CRUX_HOME/bin/workspace.sh" new f --repo "$root/front" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$root/back" >/dev/null 2>&1
+
+  local f b
+  f="$(cat "$root/front-ws-f/.env.local")"
+  b="$(cat "$root/back-ws-b/.env.local")"
+
+  assert_contains "$f" "PORT=5000" "el front recibe su puerto"
+  assert_contains "$f" "API=http://localhost:5001" "y sabe dónde está el backend de su slot"
+  assert_contains "$b" "PORT=5011" "el backend en otro slot no colisiona"
+  assert_contains "$b" "DB=db_1" "cada slot tiene su base"
+  assert_contains "$f" "COMUN=si" "las variables comunes se heredan"
+  assert_not_contains "$f" "DB=" "las de otro repo no se cuelan"
+
+  assert_file "$CRUX_PROJECTS_DIR/setup-ran.txt" "el hook de setup se ejecuta"
+}

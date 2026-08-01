@@ -312,6 +312,19 @@ credenciales y nombres. Con dos guardas:
 
 `/skill-audit` aplica este test de forma periódica y al crear una skill nueva.
 
+### Catálogo del kernel
+
+| Skill | Para qué |
+| ----- | -------- |
+| `crux-init`, `crux-doctor`, `add-repo-to-docs` | Gestión del estándar |
+| `promote-to-docs`, `adr`, `end-session` | Que el conocimiento sobreviva |
+| `repo-map` | Orientarse en un repo desconocido o dormido |
+| `workspace`, `ship` | El ciclo de trabajo diario |
+| `write-tests`, `root-cause`, `eval-fixtures` | Calidad y depuración |
+| `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
+| `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback` | Operación |
+| `skill-creator`, `skill-audit` | El propio framework |
+
 ### El ciclo de desarrollo
 
 Tres skills sostienen el trabajo del día a día, y se usan en este orden:

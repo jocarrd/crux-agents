@@ -45,18 +45,42 @@ with_lock() {
 # defecto, que solo reparten puertos.
 
 load_config() {
-  local docs="$1"
+  # load_config <docs-repo> <nombre-del-repo>
+  #
+  # Un proyecto multi-repo no tiene un único juego de variables: el front, el
+  # backend y el panel necesitan cosas distintas. La sección por repo se
+  # solapa sobre la común.
+  local docs="$1" repo="$2"
   PORT_BASE=3000; PORTS_PER_SLOT=10; ENV_FILE=""; ENV_TEMPLATE="{}"
+  SETUP_CMD=""; TEARDOWN_CMD=""
   local cfg="$docs/crux.json"
   [[ -f "$cfg" ]] || return 0
-  PORT_BASE="$(json_get "$cfg" 'workspace.portBase' 2>/dev/null || echo 3000)"
-  PORTS_PER_SLOT="$(json_get "$cfg" 'workspace.portsPerSlot' 2>/dev/null || echo 10)"
-  ENV_FILE="$(json_get "$cfg" 'workspace.envFile' 2>/dev/null || echo "")"
-  ENV_TEMPLATE="$(node -e '
+
+  eval "$(node -e '
     const fs = require("fs");
-    const o = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    process.stdout.write(JSON.stringify((o.workspace || {}).env || {}));
-  ' "$cfg" 2>/dev/null || echo "{}")"
+    const [file, repo] = process.argv.slice(1);
+    const w = (JSON.parse(fs.readFileSync(file, "utf8")).workspace) || {};
+    const r = (w.repos || {})[repo] || {};
+    const env = { ...(w.env || {}), ...(r.env || {}) };
+    const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, "")}'"'"'`;
+    console.log(`PORT_BASE=${Number(w.portBase) || 3000}`);
+    console.log(`PORTS_PER_SLOT=${Number(w.portsPerSlot) || 10}`);
+    console.log(`ENV_FILE=${q(r.envFile || w.envFile || "")}`);
+    console.log(`ENV_TEMPLATE=${q(JSON.stringify(env))}`);
+    console.log(`SETUP_CMD=${q(r.setup || w.setup || "")}`);
+    console.log(`TEARDOWN_CMD=${q(r.teardown || w.teardown || "")}`);
+  ' "$cfg" "$repo" 2>/dev/null)"
+}
+
+substitute() {
+  # substitute <texto> — aplica {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}
+  node -e '
+    const [text, slot, port0, name, branch] = process.argv.slice(1);
+    let v = text.replace(/\{\{SLOT\}\}/g, slot)
+                .replace(/\{\{NAME\}\}/g, name)
+                .replace(/\{\{BRANCH\}\}/g, branch);
+    process.stdout.write(v.replace(/\{\{PORT(\d+)\}\}/g, (_, i) => String(Number(port0) + Number(i))));
+  ' "$1" "$SLOT" "$PORT0" "$WS_NAME" "$WS_BRANCH"
 }
 
 cmd_new() {
@@ -96,9 +120,10 @@ cmd_new() {
   ' "$REGISTRY")"
 
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
-  load_config "$docs"
+  load_config "$docs" "$repo_name"
 
-  local port0=$((PORT_BASE + slot * PORTS_PER_SLOT))
+  SLOT="$slot"; PORT0=$((PORT_BASE + slot * PORTS_PER_SLOT))
+  WS_NAME="$name"; WS_BRANCH="$branch"
 
   git -C "$repo" worktree add ${base:+-b "$branch"} "$path" ${base:-"$branch"} >/dev/null 2>&1 \
     || git -C "$repo" worktree add -b "$branch" "$path" >/dev/null \
@@ -106,24 +131,29 @@ cmd_new() {
 
   ok "worktree $path (rama $branch)"
 
-  # Fichero de entorno derivado del slot
   if [[ -n "$ENV_FILE" && "$ENV_TEMPLATE" != "{}" ]]; then
     node -e '
       const fs = require("fs");
-      const [file, tmplRaw, slot, port0, perSlot, name, branch] = process.argv.slice(1);
-      const tmpl = JSON.parse(tmplRaw);
-      const subst = (v) => {
-        v = String(v).replace(/\{\{SLOT\}\}/g, slot)
-                     .replace(/\{\{NAME\}\}/g, name)
-                     .replace(/\{\{BRANCH\}\}/g, branch);
-        return v.replace(/\{\{PORT(\d+)\}\}/g, (_, i) => String(Number(port0) + Number(i)));
-      };
-      const lines = Object.entries(tmpl).map(([k, v]) => `${k}=${subst(v)}`);
+      const [file, tmplRaw, slot, port0, name, branch] = process.argv.slice(1);
+      const subst = (v) => String(v)
+        .replace(/\{\{SLOT\}\}/g, slot).replace(/\{\{NAME\}\}/g, name)
+        .replace(/\{\{BRANCH\}\}/g, branch)
+        .replace(/\{\{PORT(\d+)\}\}/g, (_, i) => String(Number(port0) + Number(i)));
+      const lines = Object.entries(JSON.parse(tmplRaw)).map(([k, v]) => `${k}=${subst(v)}`);
       fs.writeFileSync(file, lines.join("\n") + "\n");
-    ' "$path/$ENV_FILE" "$ENV_TEMPLATE" "$slot" "$port0" "$PORTS_PER_SLOT" "$name" "$branch"
-    ok "$ENV_FILE con el slot $slot (puertos desde $port0)"
+    ' "$path/$ENV_FILE" "$ENV_TEMPLATE" "$slot" "$PORT0" "$name" "$branch"
+    ok "$ENV_FILE con el slot $slot (puertos desde $PORT0)"
   else
-    info "sin sección workspace en crux.json: solo se reserva el rango de puertos"
+    info "sin configuración de workspace para $repo_name: solo se reserva el rango de puertos"
+  fi
+
+  if [[ -n "$SETUP_CMD" ]]; then
+    local cmd; cmd="$(substitute "$SETUP_CMD")"
+    if ( cd "$path" && eval "$cmd" ); then
+      ok "setup ejecutado"
+    else
+      warn "el setup falló — el espacio existe, pero revisa sus recursos"
+    fi
   fi
 
   node -e '
@@ -135,11 +165,11 @@ cmd_new() {
       ports: [Number(port0), Number(port0) + Number(perSlot) - 1],
     };
     fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n");
-  ' "$REGISTRY" "$name" "$slot" "$repo" "$path" "$branch" "$port0" "$PORTS_PER_SLOT"
+  ' "$REGISTRY" "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT"
 
   echo
   ok "espacio '$name' listo"
-  info "slot $slot · puertos $port0-$((port0 + PORTS_PER_SLOT - 1))"
+  info "slot $slot · puertos $PORT0-$((PORT0 + PORTS_PER_SLOT - 1))"
   info "cd $path"
 }
 
@@ -179,6 +209,20 @@ cmd_rm() {
   if [[ -d "$path" ]]; then
     if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
       die "$path tiene cambios sin commitear — resuélvelos antes de borrarlo"
+    fi
+
+    SLOT="$(node -e '
+      const fs = require("fs");
+      const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(String(r.workspaces[process.argv[2]].slot));
+    ' "$REGISTRY" "$name")"
+    PORT0=0; WS_NAME="$name"; WS_BRANCH="$branch"
+    local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
+    load_config "$docs" "$(basename "$repo")"
+    if [[ -n "$TEARDOWN_CMD" ]]; then
+      ( cd "$path" && eval "$(substitute "$TEARDOWN_CMD")" ) \
+        && ok "teardown ejecutado" \
+        || warn "el teardown falló — revisa si quedaron recursos del slot $SLOT"
     fi
     git -C "$repo" worktree remove "$path" 2>/dev/null || git -C "$repo" worktree remove --force "$path"
     ok "worktree eliminado"
