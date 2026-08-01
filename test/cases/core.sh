@@ -429,3 +429,19 @@ test_el_contrato_declara_el_idioma() {
   local otro; otro="$(new_project phi2 --language en)"
   assert_contains "$(cat "$otro/crux.json")" '"language": "en"' "se puede declarar otro"
 }
+
+test_link_mantiene_el_catalogo_del_kernel_en_el_indice() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omega2)"
+
+  assert_contains "$(cat "$docs/AGENTS.md")" "crux:skills" "el índice nace con el hueco"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  local idx; idx="$(cat "$docs/AGENTS.md")"
+  assert_contains "$idx" "\`end-session\`" "lo rellena con las skills del kernel"
+  assert_contains "$idx" "\`ship\`" "con todas, no con una lista escrita a mano"
+
+  # Regenerar no duplica: es lo que pasa cuando se sustituye mal el bloque.
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  assert_eq "1" "$(grep -c '^<!-- crux:skills -->$' "$docs/AGENTS.md")" "el marcador de apertura sigue siendo único"
+}

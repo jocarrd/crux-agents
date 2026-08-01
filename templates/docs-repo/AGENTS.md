@@ -55,8 +55,11 @@ que se pierda lo aprendido.
 
 ## Skills
 
-Los procedimientos transversales (documentación, decisiones, sesiones,
-verificación) viven en el kernel y están disponibles como `/<nombre>`.
+Los procedimientos transversales viven en el kernel y están disponibles como
+`/<nombre>`. Esta lista la mantiene `crux link`:
+
+<!-- crux:skills -->
+<!-- /crux:skills -->
 
 Las específicas de {{PROJECT}} viven en `.claude/skills/project/` de este repo.
 Cuando aparezcan, se listan aquí con su disparador, para que los agentes que no

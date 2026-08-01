@@ -113,6 +113,32 @@ else
 
 fi
 
+# --- Catálogo del kernel en el índice del proyecto --------------------------
+#
+# La lista de skills transversales se queda obsoleta en cuanto el kernel crece,
+# y un índice que miente es peor que no tenerlo. Si el AGENTS.md marca el hueco,
+# se rellena solo.
+
+if grep -q '<!-- crux:skills -->' "$DOCS/AGENTS.md" 2>/dev/null; then
+  catalogo="$(for d in "$CRUX_HOME"/skills/*/; do
+    n="$(basename "$d")"
+    linea="$(awk '/^---$/{c++; next} c==1 && /^description:/{sub(/^description: /,""); print; exit}' "$d/SKILL.md" 2>/dev/null)"
+    # Un índice se escanea, no se lee: la frase entera lo vuelve ilegible.
+    corta="${linea%%.*}"
+    corta="${corta%%:*}"
+    [[ ${#corta} -gt 78 ]] && corta="${corta:0:75}…"
+    printf -- '- `%s` — %s\n' "$n" "$corta"
+  done)"
+  node -e '
+    const fs = require("fs");
+    const [file, catalogo] = process.argv.slice(1);
+    const src = fs.readFileSync(file, "utf8");
+    const re = /<!-- crux:skills -->[\s\S]*?<!-- \/crux:skills -->/;
+    fs.writeFileSync(file, src.replace(re, `<!-- crux:skills -->\n${catalogo}\n<!-- /crux:skills -->`));
+  ' "$DOCS/AGENTS.md" "$catalogo"
+  ok "catálogo del kernel actualizado en AGENTS.md ($(echo "$catalogo" | wc -l) skills)"
+fi
+
 # --- Skills propias del proyecto --------------------------------------------
 
 echo
