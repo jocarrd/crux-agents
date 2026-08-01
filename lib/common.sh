@@ -139,7 +139,12 @@ render_managed() {
     // Comparación insensible a espacios: muchos repos pasan un formateador que
     // alinea las tablas markdown. Sin esto, el formateador y `crux link` se
     // reescriben el bloque mutuamente en cada pasada, para siempre.
-    const norm = (t) => t.replace(/[ \t]+/g, " ").replace(/ *\n/g, "\n");
+    // Los formateadores alinean columnas con espacios y estiran los guiones de
+    // la línea separadora: hay que neutralizar las dos cosas.
+    const norm = (t) => t
+      .replace(/-{2,}/g, "--")
+      .replace(/[ \t]+/g, " ")
+      .replace(/ *\n/g, "\n");
     const previo = actual.match(re)?.[0];
     if (previo && norm(previo) === norm(bloque[0])) process.exit(2);
     fs.writeFileSync(dst, actual.replace(re, bloque[0]));
