@@ -346,10 +346,10 @@ credenciales y nombres. Con dos guardas:
 | Skill | Para qué |
 | ----- | -------- |
 | `crux-init`, `crux-doctor`, `add-repo-to-docs` | Gestión del estándar |
-| `promote-to-docs`, `adr`, `end-session` | Que el conocimiento sobreviva |
+| `promote-to-docs`, `adr`, `explain-plan`, `end-session` | Decidir y que el conocimiento sobreviva |
 | `repo-map` | Orientarse en un repo desconocido o dormido |
 | `workspace`, `ship` | El ciclo de trabajo diario |
-| `write-tests`, `root-cause`, `eval-fixtures` | Calidad y depuración |
+| `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback` | Operación |
