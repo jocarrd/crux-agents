@@ -90,22 +90,8 @@ fi
 for repo in "${repos[@]:-}"; do
   repo="$(echo "$repo" | tr -d '[:space:]')"
   [[ -n "$repo" ]] || continue
-  mkdir -p "$DOCS/repos/$repo"
-  cat > "$DOCS/repos/$repo/README.md" <<EOF
-# $repo
-
-> Paths relativos a la raíz de \`$repo/\`.
-
-Qué hace este repo, en una línea.
-
-## Documentación
-
-<!-- Añade aquí los ficheros de esta carpeta a medida que aparezcan -->
-
-## Dónde está el código
-
-\`~/Proyectos/$PROJECT/$repo/\`
-EOF
+  render_template "$CRUX_HOME/templates/repo-doc/README.md" "$DOCS/repos/$repo/README.md" \
+    "REPO=$repo" "PROJECT=$PROJECT" "DESCRIPTION=Qué hace este repo, en una línea."
 done
 [[ ${#repos[@]} -gt 0 ]] && ok "${#repos[@]} carpetas en repos/"
 

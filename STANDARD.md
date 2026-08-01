@@ -320,6 +320,7 @@ credenciales y nombres. Con dos guardas:
 | ------- | ----- | -------- |
 | `crux init <project>` | `/crux-init` | Crea el docs repo desde las plantillas |
 | `crux adopt` | `/crux-adopt` | Registra un docs repo que ya existe |
+| `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | `/crux-upgrade` | Re-materializa el kernel a la versión actual |

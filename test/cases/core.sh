@@ -262,3 +262,25 @@ test_el_kernel_no_nombra_proyectos_concretos() {
     "$CRUX_HOME/bin" "$CRUX_HOME/lib" 2>/dev/null | wc -l)"
   assert_eq "0" "$hits" "el kernel está limpio de nombres de proyecto"
 }
+
+test_add_repo_registra_todo_de_una_vez() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project pi --repos "api")"
+  mkdir -p "$CRUX_PROJECTS_DIR/pi/worker"
+
+  bash "$CRUX_HOME/bin/add-repo.sh" worker --description "Procesa la cola." "$docs" >/dev/null 2>&1
+
+  assert_file "$docs/repos/worker/README.md" "crea la carpeta de documentación"
+  assert_contains "$(cat "$docs/crux.json")" '"worker"' "declara el repo en el contrato"
+  assert_contains "$(cat "$docs/repos/README.md")" "worker" "lo registra en el índice"
+  assert_contains "$(cat "$docs/repos/worker/README.md")" "Procesa la cola." "usa la descripción dada"
+  assert_file "$CRUX_PROJECTS_DIR/pi/worker/AGENTS.md" "genera los punteros del repo"
+  assert_exit 0 "el proyecto sigue conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_add_repo_rechaza_duplicados() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rho --repos "api")"
+  assert_exit 1 "no re-declara un repo existente" \
+    bash "$CRUX_HOME/bin/add-repo.sh" api "$docs"
+}
