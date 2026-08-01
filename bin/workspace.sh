@@ -237,9 +237,10 @@ cmd_finish() {
     exit 1
   fi
 
+  # Lo que aún no está en ningún remoto: es lo que va a la propuesta.
   local commits
-  commits="$(git -C "$path" log --oneline "origin/HEAD..$branch" 2>/dev/null | wc -l || echo 0)"
-  [[ "$commits" -eq 0 ]] && commits="$(git -C "$path" log --oneline "$branch" --not --remotes | wc -l)"
+  commits="$(git -C "$path" log --oneline "$branch" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${commits:-0}" -gt 0 ]] || commits=0
   [[ "$commits" -eq 0 ]] && die "no hay nada que proponer en $branch"
 
   # La puerta de calidad deja constancia del commit que verificó. Sin ella, se
