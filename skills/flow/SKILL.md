@@ -108,6 +108,20 @@ Se niega en dos casos, y los dos a propósito:
   **no se abre una propuesta de código que nadie ha revisado**, y la revisión
   deja de depender de que alguien se acuerde.
 
+### 6b. Fusionar, cuando tú lo autorices
+
+```bash
+crux workspace merge <nombre>          # enseña el estado
+crux workspace merge <nombre> --yes    # fusiona
+```
+
+Mira las comprobaciones automáticas, los conflictos y la revisión, y **no
+fusiona sin el flag**. La decisión sigue siendo de una persona; el comando solo
+se asegura de que llega informada.
+
+Si el repo no tiene CI, lo dice: "nada lo bloquea" no es lo mismo que "está
+verificado".
+
 ### 7. Cerrar
 
 ```
@@ -130,6 +144,7 @@ tres meses alguien vuelve a descubrirlo.
 | Tests durante | Los escribes para que pasen, no para que fallen |
 | La puerta | Entra trabajo roto, y se descubre en producción |
 | Proponer | El cambio no se revisa, o se revisa cuando ya está integrado |
+| Fusionar | Entra sin mirar si el CI pasó o si hay conflictos |
 | Cerrar | Lo aprendido muere con la sesión |
 
 Y dos inversiones que cuestan caro:

@@ -4,6 +4,7 @@
 #   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--force]
 #   crux workspace list
 #   crux workspace finish <nombre> [--title "..."]
+#   crux workspace merge <nombre> [--yes]
 #   crux workspace rm <nombre>
 #
 # Un worktree de git aísla los ficheros, pero no el runtime: dos agentes sobre
@@ -53,7 +54,7 @@ load_config() {
   # solapa sobre la común.
   local docs="$1" repo="$2"
   PORT_BASE=3000; PORTS_PER_SLOT=10; ENV_FILE=""; ENV_TEMPLATE="{}"
-  SETUP_CMD=""; TEARDOWN_CMD=""
+  SETUP_CMD=""; TEARDOWN_CMD=""; INSTALAR="true"
   local cfg="$docs/crux.json"
   [[ -f "$cfg" ]] || return 0
 
@@ -70,6 +71,8 @@ load_config() {
     console.log(`ENV_TEMPLATE=${q(JSON.stringify(env))}`);
     console.log(`SETUP_CMD=${q(r.setup || w.setup || "")}`);
     console.log(`TEARDOWN_CMD=${q(r.teardown || w.teardown || "")}`);
+    const inst = r.install !== undefined ? r.install : w.install;
+    console.log(`INSTALAR=${q(inst === false ? "false" : "true")}`);
   ' "$cfg" "$repo" 2>/dev/null)"
 }
 
@@ -173,6 +176,30 @@ cmd_new() {
     ok "$ENV_FILE con el slot $slot (puertos desde $PORT0)"
   else
     info "sin configuración de workspace para $repo_name: solo se reserva el rango de puertos"
+  fi
+
+  # Un worktree comparte el historial pero no los ficheros ignorados, así que
+  # nace sin dependencias instaladas. Sin esto, el primer comando que se ejecuta
+  # en el espacio falla con un error que no dice qué pasa.
+  if [[ "$INSTALAR" != "false" ]]; then
+    local instalar=""
+    if   [[ -f "$path/pnpm-lock.yaml" ]];   then instalar="pnpm install --prefer-offline"
+    elif [[ -f "$path/package-lock.json" ]]; then instalar="npm ci --prefer-offline"
+    elif [[ -f "$path/yarn.lock" ]];        then instalar="yarn install"
+    elif [[ -f "$path/bun.lockb" ]];        then instalar="bun install"
+    elif [[ -f "$path/uv.lock" ]];          then instalar="uv sync"
+    elif [[ -f "$path/poetry.lock" ]];      then instalar="poetry install"
+    elif [[ -f "$path/requirements.txt" ]]; then instalar="pip install -r requirements.txt"
+    elif [[ -f "$path/go.mod" ]];           then instalar="go mod download"
+    elif [[ -f "$path/Cargo.toml" ]];       then instalar="cargo fetch"
+    fi
+    if [[ -n "$instalar" ]]; then
+      if ( cd "$path" && eval "$instalar" >/dev/null 2>&1 ); then
+        ok "dependencias instaladas (${instalar%% *})"
+      else
+        warn "no pude instalar las dependencias: hazlo con '$instalar'"
+      fi
+    fi
   fi
 
   if [[ -n "$SETUP_CMD" ]]; then
@@ -281,6 +308,104 @@ cmd_finish() {
   info "cuando esté integrada: crux workspace rm $name"
 }
 
+cmd_merge() {
+  local name="${1:-}"; shift || true
+  [[ -n "$name" ]] || die "uso: crux workspace merge <nombre> [--yes]"
+
+  local confirmado=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes) confirmado=1; shift ;;
+      *) die "opción desconocida: $1" ;;
+    esac
+  done
+
+  command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
+    || die "hace falta gh autenticado para consultar y fusionar la propuesta"
+
+  registry_init
+  local datos path branch
+  datos="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const w = r.workspaces[process.argv[2]];
+    if (!w) process.exit(2);
+    process.stdout.write([w.path, w.branch].join("\n"));
+  ' "$REGISTRY" "$name")" || die "no existe el espacio '$name'"
+  path="$(echo "$datos" | sed -n 1p)"
+  branch="$(echo "$datos" | sed -n 2p)"
+  [[ -d "$path" ]] || die "el espacio '$name' ya no está en disco"
+
+  local estado
+  estado="$(cd "$path" && gh pr view --json number,title,url,mergeable,reviewDecision,statusCheckRollup 2>/dev/null)" \
+    || die "no hay propuesta abierta para $branch — lanza 'crux workspace finish $name'"
+
+  # Se listan todas las señales antes de decidir: una propuesta puede tener los
+  # checks en verde y estar en conflicto, o al revés.
+  eval "$(node -e '
+    const d = JSON.parse(process.argv[1]);
+    const checks = d.statusCheckRollup || [];
+    const fallan = checks.filter((c) => ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT"].includes(c.conclusion));
+    const enCurso = checks.filter((c) => c.status && c.status !== "COMPLETED");
+    const q = (v) => `"${String(v).replace(/"/g, "")}"`;
+    console.log(`PR_NUM=${d.number}`);
+    console.log(`PR_URL=${q(d.url)}`);
+    console.log(`PR_TITULO=${q(d.title)}`);
+    console.log(`PR_MERGEABLE=${q(d.mergeable)}`);
+    console.log(`PR_REVISION=${q(d.reviewDecision || "sin revisión requerida")}`);
+    console.log(`PR_CHECKS_TOTAL=${checks.length}`);
+    console.log(`PR_CHECKS_FALLAN=${fallan.length}`);
+    console.log(`PR_CHECKS_CURSO=${enCurso.length}`);
+    console.log(`PR_FALLAN_NOMBRES=${q(fallan.map((c) => c.name || c.context).join(", "))}`);
+  ' "$estado")"
+
+  echo "propuesta #$PR_NUM · $PR_TITULO"
+  echo "$PR_URL"
+  echo
+
+  local bloqueado=0
+  local sin_ci=0
+  if [[ "$PR_CHECKS_TOTAL" -eq 0 ]]; then
+    warn "sin comprobaciones automáticas: la única validación es la que pasaste en local"
+    sin_ci=1
+  elif [[ "$PR_CHECKS_CURSO" -gt 0 ]]; then
+    warn "$PR_CHECKS_CURSO comprobaciones aún en curso"
+    bloqueado=1
+  elif [[ "$PR_CHECKS_FALLAN" -gt 0 ]]; then
+    err "$PR_CHECKS_FALLAN comprobaciones fallan: $PR_FALLAN_NOMBRES"
+    bloqueado=1
+  else
+    ok "$PR_CHECKS_TOTAL comprobaciones en verde"
+  fi
+
+  case "$PR_MERGEABLE" in
+    MERGEABLE) ok "sin conflictos" ;;
+    CONFLICTING) err "hay conflictos que resolver"; bloqueado=1 ;;
+    *) warn "estado de fusión desconocido: $PR_MERGEABLE" ;;
+  esac
+
+  [[ "$PR_REVISION" == "CHANGES_REQUESTED" ]] && { err "hay cambios solicitados en la revisión"; bloqueado=1; }
+
+  echo
+  if [[ $bloqueado -eq 1 ]]; then
+    err "no se fusiona: hay algo que resolver antes"
+    exit 1
+  fi
+
+  if [[ $confirmado -eq 0 ]]; then
+    [[ $sin_ci -eq 1 ]] && ok "nada bloquea la fusión, pero no hay red automática detrás" \
+                        || ok "todo en verde"
+    info "para fusionarla: crux workspace merge $name --yes"
+    exit 0
+  fi
+
+  ( cd "$path" && gh pr merge --squash --delete-branch ) || die "no pude fusionar la propuesta"
+  ok "propuesta #$PR_NUM fusionada"
+
+  echo
+  info "el espacio sigue vivo: 'crux workspace rm $name' libera el slot y sus recursos"
+}
+
 cmd_list() {
   registry_init
   node -e '
@@ -351,6 +476,7 @@ case "${1:-}" in
   new)  shift; cmd_new "$@" ;;
   list) shift; cmd_list ;;
   finish) shift; cmd_finish "$@" ;;
+  merge)  shift; cmd_merge "$@" ;;
   rm)   shift; cmd_rm "$@" ;;
-  *) die "uso: crux workspace {new|list|finish|rm}" ;;
+  *) die "uso: crux workspace {new|list|finish|merge|rm}" ;;
 esac

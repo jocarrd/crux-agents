@@ -92,6 +92,26 @@ Se puede forzar con `--force` cuando el cliente lo autoriza expresamente. Que
 haga falta un flag es a propósito: obliga a que sea una decisión, no un
 descuido.
 
+## Cerrar el ciclo
+
+```bash
+crux workspace finish <nombre>          # sube la rama y abre la propuesta
+crux workspace merge <nombre>           # enseña el estado, no fusiona
+crux workspace merge <nombre> --yes     # fusiona, si nada lo bloquea
+```
+
+`finish` se niega si queda algo sin commitear o si el commit no ha pasado la
+puerta de calidad: así no se propone código que nadie ha revisado.
+
+`merge` mira tres cosas antes de dejar fusionar —comprobaciones automáticas,
+conflictos y cambios solicitados en la revisión— y **nunca fusiona sin `--yes`**.
+Que haga falta el flag es el punto: la decisión es de una persona, y el comando
+solo se asegura de que llega informada.
+
+**Si el repo no tiene comprobaciones automáticas, lo dice.** "Nada lo bloquea"
+no es lo mismo que "está verificado": sin CI, la única red es la que pasaste en
+local.
+
 ## Al terminar
 
 `crux workspace rm <nombre>` libera el worktree y el slot. La rama sobrevive a

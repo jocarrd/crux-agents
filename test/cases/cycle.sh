@@ -306,3 +306,46 @@ test_workspace_avisa_si_ya_hay_otra_sesion_en_el_repo() {
   assert_contains "$out" "ya hay trabajo abierto" "avisa de la otra sesión viva"
   assert_contains "$out" "primera" "y dice cuál"
 }
+
+test_workspace_instala_las_dependencias_del_espacio() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/dep"
+  mkdir -p "$root/app"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  # Un lockfile reconocible y un .gitignore que deja node_modules fuera: es la
+  # situación real que hace que un worktree nazca sin dependencias.
+  printf 'lockfileVersion: 1\n' > "$root/app/pnpm-lock.yaml"
+  printf 'node_modules/\n' > "$root/app/.gitignore"
+  printf '{"name":"app"}\n' > "$root/app/package.json"
+  git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  mkdir -p "$root/app/node_modules"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/app" 2>&1)"
+  assert_contains "$out" "dependencias" "detecta el gestor y lo intenta"
+  assert_no_file "$root/app-ws-x/node_modules/.keep" "el worktree no hereda node_modules"
+}
+
+test_diff_scope_entiende_la_arquitectura_por_capas() {
+  sandbox >/dev/null
+  local repo="$SB/capas"
+  mkdir -p "$repo"; cd "$repo" || return
+  git init -q; git config user.email t@t; git config user.name t
+  mkdir -p src/modules/x/domain src/modules/x/infrastructure
+  touch src/modules/x/domain/entidad.ts
+  git add -A
+
+  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "lógica:1" "el dominio es lógica, no 'otros'"
+  assert_contains "$out" "runtime: no" "y la lógica pura no pide levantar el entorno"
+
+  touch src/modules/x/infrastructure/repo.adapter.ts
+  git add -A
+  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "integración:1" "la infraestructura se distingue"
+  assert_contains "$out" "runtime: sí" "y sí pide probar contra el servicio real"
+
+  cd "$CRUX_HOME" || return
+}
