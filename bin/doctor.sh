@@ -102,10 +102,13 @@ WRITES_POINTERS="$(json_get "$CRUX_HOME/profiles/$PROFILE.json" 'pointers.write'
 if [[ "$WRITES_POINTERS" == "true" ]]; then
   for repo in "${declared[@]:-}"; do
     [[ -d "$ROOT/$repo" ]] || continue
-    [[ -f "$ROOT/$repo/AGENTS.md" ]] || note "$repo/ sin AGENTS.md ('crux link')"
-    if [[ -f "$ROOT/$repo/CLAUDE.md" ]] && ! grep -qF "@../$(basename "$DOCS")/CLAUDE.md" "$ROOT/$repo/CLAUDE.md"; then
-      note "$repo/CLAUDE.md no importa la doc transversal"
-    fi
+    for fichero in AGENTS.md CLAUDE.md; do
+      if [[ ! -f "$ROOT/$repo/$fichero" ]]; then
+        note "$repo/ sin $fichero ('crux link')"
+      elif ! grep -qF 'crux:begin' "$ROOT/$repo/$fichero"; then
+        note "$repo/$fichero es anterior al bloque gestionado ('crux link --refresh')"
+      fi
+    done
   done
 else
   # El perfil prohíbe escribir fuera del docs repo: comprobar que nadie lo hizo.
@@ -164,6 +167,14 @@ while IFS= read -r skill_md; do
   grep -qE '^name:'        "$skill_md" || fail "skill sin 'name' en el frontmatter: $name"
   grep -qE '^description:' "$skill_md" || fail "skill sin 'description' en el frontmatter: $name"
   grep -qE '^name: *'"$name"'$' "$skill_md" || note "skill '$name': el 'name' del frontmatter no coincide con el directorio"
+
+  # Una descripción sin situación de uso no se activa cuando toca: la skill
+  # existe pero es invisible.
+  # Solo el frontmatter: si se lee de más, el cuerpo de la skill contamina la
+  # comprobación y esto nunca detecta nada.
+  desc="$(awk '/^---$/{n++; next} n==1 && /^description:/{p=1} n==1 && p && /^[a-z_]+:/ && !/^description:/{p=0} n==1 && p{print} n>=2{exit}' "$skill_md" | tr '\n' ' ')"
+  echo "$desc" | grep -qiE '\b(usa|use|úsala|usar|invoca)\b' \
+    || note "skill '$name': la descripción no dice cuándo usarla — no se activará sola"
 done < <(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | sort)
 [[ $skills -gt 0 ]] && section_ok "skills del proyecto: $skills"
 

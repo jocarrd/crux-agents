@@ -97,6 +97,53 @@ project_root() {
 
 # --- Plantillas --------------------------------------------------------------
 
+render_managed() {
+  # render_managed <origen> <destino> <VAR=valor>...
+  #
+  # Escribe la plantilla respetando lo que el repo haya añadido: si el destino
+  # ya tiene el bloque marcado, solo se sustituye ese bloque. Sin esto, mejorar
+  # el puntero obligaría a pisar el contexto propio de cada repo, y nadie
+  # actualizaría nunca.
+  #
+  # Devuelve: 0 creado, 1 bloque actualizado, 2 sin cambios, 3 existe sin marcadores
+  local src="$1" dst="$2"; shift 2
+  local nuevo
+  nuevo="$(render_to_stdout "$src" "$@")"
+
+  if [[ ! -e "$dst" ]]; then
+    mkdir -p "$(dirname "$dst")"
+    printf '%s\n' "$nuevo" > "$dst"
+    return 0
+  fi
+
+  grep -qF 'crux:begin' "$dst" || return 3
+
+  node -e '
+    const fs = require("fs");
+    const [dst, nuevo] = process.argv.slice(1);
+    const re = /<!-- crux:begin[\s\S]*?crux:end -->/;
+    const bloque = nuevo.match(re);
+    if (!bloque) process.exit(4);
+    const actual = fs.readFileSync(dst, "utf8");
+    if (actual.match(re)?.[0] === bloque[0]) process.exit(2);
+    fs.writeFileSync(dst, actual.replace(re, bloque[0]));
+  ' "$dst" "$nuevo"
+  local code=$?
+  [[ $code -eq 2 ]] && return 2
+  return 1
+}
+
+render_to_stdout() {
+  local src="$1"; shift
+  local content pair key value
+  content="$(cat "$src")"
+  for pair in "$@"; do
+    key="${pair%%=*}"; value="${pair#*=}"
+    content="${content//\{\{$key\}\}/$value}"
+  done
+  printf '%s' "$content"
+}
+
 render_template() {
   # render_template <origen> <destino> <VAR=valor>...
   local src="$1" dst="$2"; shift 2

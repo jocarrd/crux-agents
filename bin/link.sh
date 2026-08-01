@@ -12,7 +12,16 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/skills.sh"
 
-DOCS="$(find_docs_repo "${1:-$PWD}")" || die "no encuentro un docs repo desde ${1:-$PWD}"
+REFRESH=0
+TARGET="$PWD"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --refresh) REFRESH=1; shift ;;
+    *) TARGET="$1"; shift ;;
+  esac
+done
+
+DOCS="$(find_docs_repo "$TARGET")" || die "no encuentro un docs repo desde $TARGET"
 CONFIG="$DOCS/crux.json"
 [[ -f "$CONFIG" ]] || die "falta $CONFIG — ejecuta 'crux adopt' primero"
 
@@ -24,6 +33,27 @@ ROOT="$(dirname "$DOCS")"
 echo "proyecto $PROJECT · perfil $PROFILE"
 echo
 
+# La descripción de una línea de cada repo vive en la tabla de repos/README.md,
+# que es su fuente canónica. Sin ella el puntero pierde lo único que decía de
+# útil sobre el repo.
+tagline_de() {
+  local repo="$1" out
+  out="$(node -e '
+    const fs = require("fs");
+    const [file, repo] = process.argv.slice(1);
+    let out = "";
+    try {
+      for (const l of fs.readFileSync(file, "utf8").split("\n")) {
+        if (!l.startsWith("|")) continue;
+        const c = l.split("|").map((x) => x.trim());
+        if (c[1]?.replace(/[`\/]/g, "") === repo) { out = c[3] || ""; break; }
+      }
+    } catch {}
+    process.stdout.write(out);
+  ' "$DOCS/repos/README.md" "$repo" 2>/dev/null || true)"
+  echo "${out:-parte de $PROJECT}"
+}
+
 # --- Punteros de los repos de código ----------------------------------------
 
 WRITES_POINTERS="$(json_get "$CRUX_HOME/profiles/$PROFILE.json" 'pointers.write' 2>/dev/null || echo "true")"
@@ -32,45 +62,55 @@ if [[ "$WRITES_POINTERS" != "true" ]]; then
   warn "perfil $PROFILE: no se escribe nada fuera del docs repo"
   info "los agentes deben abrir $DOCS_NAME/AGENTS.md explícitamente"
 else
-  created=0; seen=0; missing_import=()
+  created=0; updated=0; seen=0; sin_marcadores=()
   while IFS= read -r repo; do
     [[ -n "$repo" ]] || continue
     repo_dir="$ROOT/$repo"
     [[ -d "$repo_dir" ]] || { warn "declarado en crux.json pero no está en disco: $repo"; continue; }
     seen=$((seen + 1))
 
-    if [[ ! -e "$repo_dir/AGENTS.md" ]]; then
-      render_template "$CRUX_HOME/templates/code-repo/AGENTS.md" "$repo_dir/AGENTS.md" \
-        "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME"
-      ok "creado $repo/AGENTS.md"
-      created=$((created + 1))
-    fi
+    tagline="$(tagline_de "$repo")"
 
-    # No se pisa: el repo puede tener contexto propio debajo del import.
-    import_line="@../$DOCS_NAME/CLAUDE.md"
-    if [[ ! -e "$repo_dir/CLAUDE.md" ]]; then
-      render_template "$CRUX_HOME/templates/code-repo/CLAUDE.md" "$repo_dir/CLAUDE.md" \
-        "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME"
-      ok "creado $repo/CLAUDE.md"
-      created=$((created + 1))
-    elif ! grep -qF "$import_line" "$repo_dir/CLAUDE.md"; then
-      missing_import+=("$repo")
-    fi
+    for fichero in AGENTS.md CLAUDE.md; do
+      # `|| rc=$?` y no `$?` a secas: render_managed devuelve códigos con
+      # significado, y con set -e un retorno distinto de cero fuera de un
+      # condicional aborta el script sin decir nada.
+      rc=0
+      render_managed "$CRUX_HOME/templates/code-repo/$fichero" "$repo_dir/$fichero" \
+        "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME" "TAGLINE=$tagline" || rc=$?
+      case $rc in
+        0) ok "creado $repo/$fichero"; created=$((created + 1)) ;;
+        1) ok "actualizado el bloque de $repo/$fichero"; updated=$((updated + 1)) ;;
+        3) sin_marcadores+=("$repo/$fichero") ;;
+      esac
+    done
   done < <(json_get "$CONFIG" repos 2>/dev/null || true)
+
+  if [[ ${#sin_marcadores[@]} -gt 0 ]]; then
+    echo
+    if [[ $REFRESH -eq 1 ]]; then
+      for f in "${sin_marcadores[@]}"; do
+        repo="${f%%/*}"; fichero="${f##*/}"
+        propio="$(sed '1{/^# /d}' "$ROOT/$f")"
+        render_to_stdout "$CRUX_HOME/templates/code-repo/$fichero" \
+          "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME" "TAGLINE=$(tagline_de "$repo")" > "$ROOT/$f.tmp"
+        printf '\n---\n\n## Contexto propio de %s\n\n%s\n' "$repo" "$propio" >> "$ROOT/$f.tmp"
+        mv "$ROOT/$f.tmp" "$ROOT/$f"
+        ok "$f reescrito con el bloque, contenido previo conservado debajo"
+      done
+    else
+      warn "estos punteros son anteriores al bloque gestionado:"
+      for f in "${sin_marcadores[@]}"; do info "$f"; done
+      info "'crux link --refresh' los reescribe conservando su contenido debajo"
+    fi
+  fi
 
   if [[ $seen -eq 0 ]]; then
     info "ningún repo de código en disco todavía"
-  elif [[ $created -eq 0 ]]; then
-    ok "punteros ya en su sitio ($seen repos)"
+  elif [[ $((created + updated)) -eq 0 && ${#sin_marcadores[@]} -eq 0 ]]; then
+    ok "punteros al día ($seen repos)"
   fi
 
-  if [[ ${#missing_import[@]} -gt 0 ]]; then
-    echo
-    warn "estos CLAUDE.md no importan la doc transversal:"
-    for r in "${missing_import[@]}"; do
-      info "$r/CLAUDE.md — añade al final: @../$DOCS_NAME/CLAUDE.md"
-    done
-  fi
 fi
 
 # --- Skills propias del proyecto --------------------------------------------

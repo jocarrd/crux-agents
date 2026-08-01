@@ -153,15 +153,43 @@ test_link_es_idempotente() {
   assert_eq "$before" "$(cat "$repo/AGENTS.md")" "no pisa lo que el repo ya tenía"
 }
 
-test_link_avisa_si_falta_el_import() {
+test_link_no_pisa_un_puntero_anterior_al_bloque() {
   sandbox >/dev/null
   local docs; docs="$(new_project lambda --repos "api")"
   local repo="$CRUX_PROJECTS_DIR/lambda/api"
   mkdir -p "$repo"
-  echo "# api" > "$repo/CLAUDE.md"
+  printf '# api\n\nContexto propio escrito a mano.\n' > "$repo/CLAUDE.md"
 
   local out; out="$(bash "$CRUX_HOME/bin/link.sh" "$docs" 2>&1)"
-  assert_contains "$out" "no importan la doc transversal" "avisa del import ausente"
+  assert_contains "$out" "anteriores al bloque gestionado" "avisa en vez de pisar"
+  assert_contains "$(cat "$repo/CLAUDE.md")" "Contexto propio escrito a mano" \
+    "no toca el fichero sin que se lo pidan"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" --refresh >/dev/null 2>&1
+  local ahora; ahora="$(cat "$repo/CLAUDE.md")"
+  assert_contains "$ahora" "crux:begin" "con --refresh inserta el bloque"
+  assert_contains "$ahora" "Contexto propio escrito a mano" "y conserva lo que había"
+}
+
+test_link_actualiza_el_bloque_sin_tocar_lo_de_alrededor() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omega --repos "api")"
+  local repo="$CRUX_PROJECTS_DIR/omega/api"
+  mkdir -p "$repo"
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+
+  printf '\n## Notas del repo\n\nAlgo que solo importa aquí.\n' >> "$repo/CLAUDE.md"
+  # Simula que el kernel cambió la plantilla
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace("## Cómo se trabaja aquí", "## Cómo se trabajaba antes"));
+  ' "$repo/CLAUDE.md"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  local ahora; ahora="$(cat "$repo/CLAUDE.md")"
+  assert_contains "$ahora" "## Cómo se trabaja aquí" "el bloque vuelve a la plantilla"
+  assert_contains "$ahora" "Algo que solo importa aquí" "lo de fuera del bloque sobrevive"
 }
 
 test_adopt_registra_un_docs_repo_existente() {
@@ -316,4 +344,35 @@ ADR
   local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
   assert_contains "$out" "ADR duplicado" "detecta la colisión de numeración"
   assert_exit 1 "es error, no aviso" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_doctor_detecta_una_descripcion_que_no_activa() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project tau)"
+  mkdir -p "$docs/.claude/skills/project/muda"
+  printf -- '---\nname: muda\ndescription: Ayuda con los despliegues del sistema.\n---\n\n# muda\n\nUsa esto cuando quieras.\n' \
+    > "$docs/.claude/skills/project/muda/SKILL.md"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "no dice cuándo usarla" "detecta la descripción muda"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+
+  # El "Usa esto" del cuerpo no debe contar: si se lee de más, esto no detecta nada.
+  mkdir -p "$docs/.claude/skills/project/buena"
+  printf -- '---\nname: buena\ndescription: Hace algo concreto. Usa cuando pase X.\n---\n\n# buena\n' \
+    > "$docs/.claude/skills/project/buena/SKILL.md"
+  out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_not_contains "$out" "'buena'" "no marca una descripción que sí dispara"
+}
+
+test_doctor_detecta_punteros_anteriores_al_bloque() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project upsilon --repos "api")"
+  local repo="$CRUX_PROJECTS_DIR/upsilon/api"
+  mkdir -p "$repo"
+  printf '# api\n\nPuntero viejo.\n' > "$repo/CLAUDE.md"
+  printf '# api\n\nPuntero viejo.\n' > "$repo/AGENTS.md"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "anterior al bloque gestionado" "avisa de los punteros desfasados"
 }
