@@ -16,6 +16,7 @@ source "$CRUX_HOME/lib/common.sh"
 
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 DOC_SYNC="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
+CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
 MARK="crux/adapters"
 
 # En un worktree, .git es un fichero y los hooks viven en el directorio común
@@ -69,28 +70,22 @@ cmd_status() {
   fi
 }
 
-cmd_install() {
-  [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
-  chmod +x "$DOC_SYNC"
-
-  mkdir -p "$(dirname "$SETTINGS")"
-  [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
-  cp "$SETTINGS" "$SETTINGS.bak"
-
-  # Se reemplazan las entradas apuntando a un doc-sync anterior (incluidas las
-  # que quedaron rotas al mover el script al kernel) y se deja el resto intacto:
-  # el fichero es del usuario, no nuestro.
+# Reemplaza las entradas que apuntan a una versión anterior del mismo hook
+# (incluidas las que quedaron rotas al mover los scripts al kernel) y deja el
+# resto intacto: el fichero es del usuario, no nuestro.
+enganchar() {
+  # enganchar <evento> <comando> <patrón de lo anterior>
   node -e '
     const fs = require("fs");
-    const [file, cmd] = process.argv.slice(1);
+    const [file, evento, cmd, patron] = process.argv.slice(1);
     const s = JSON.parse(fs.readFileSync(file, "utf8"));
     s.hooks = s.hooks || {};
-    const grupos = (s.hooks.Stop = s.hooks.Stop || []);
-    const esDocSync = (c) => /doc-sync|check-doc-sync/.test(c || "");
+    const grupos = (s.hooks[evento] = s.hooks[evento] || []);
+    const previo = new RegExp(patron);
     let reemplazados = 0;
     for (const g of grupos) {
       g.hooks = (g.hooks || []).map((h) => {
-        if (!esDocSync(h.command)) return h;
+        if (!previo.test(h.command || "")) return h;
         reemplazados++;
         return { ...h, command: cmd };
       });
@@ -100,9 +95,24 @@ cmd_install() {
     }
     fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
     console.log(reemplazados ? `      reemplazadas ${reemplazados} entradas previas` : "      entrada nueva");
-  ' "$SETTINGS" "$DOC_SYNC"
+  ' "$SETTINGS" "$1" "$2" "$3"
+}
 
+cmd_install() {
+  [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
+  [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD"
+
+  mkdir -p "$(dirname "$SETTINGS")"
+  [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
+  cp "$SETTINGS" "$SETTINGS.bak"
+
+  enganchar Stop "$DOC_SYNC" 'doc-sync|check-doc-sync'
   ok "hook de deriva de documentación al cerrar sesión"
+
+  enganchar UserPromptSubmit "$CYCLE_GUARD" 'cycle-guard'
+  ok "hook del ciclo al empezar en la rama principal"
+
   info "copia previa en $SETTINGS.bak"
 
   # Impedir el push directo a la rama principal. La protección de verdad es del
@@ -181,7 +191,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [evento, grupos] of Object.entries(s.hooks || {})) {
       s.hooks[evento] = grupos
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[evento].length) delete s.hooks[evento];
     }

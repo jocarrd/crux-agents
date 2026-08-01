@@ -697,3 +697,17 @@ test_release_verifica_a_quien_consume_el_kernel() {
   assert_exit 1 "sale con error" \
     env CRUX_PROJECTS_DIR="$raiz" bash "$CRUX_HOME/bin/release.sh" 99.0.0
 }
+
+test_el_kernel_no_referencia_skills_que_no_existen() {
+  # Una skill anunciada y ausente no falla: se invoca, no pasa nada y el
+  # procedimiento se da por hecho. Ese silencio es el problema.
+  local rotas=""
+  local ref
+  while IFS= read -r ref; do
+    [[ -d "$CRUX_HOME/skills/$ref" ]] || rotas+="$ref "
+  done < <(grep -rhoE '`/[a-z][a-z0-9-]+`' \
+             "$CRUX_HOME/skills" "$CRUX_HOME"/*.md 2>/dev/null \
+           | tr -d '`/' | sort -u)
+
+  assert_eq "" "$rotas" "toda skill referenciada en el kernel existe"
+}

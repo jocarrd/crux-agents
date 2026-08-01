@@ -76,6 +76,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | `profile` | Perfil aplicado (ver siguiente sección) |
 | `repos` | Repos de código del proyecto, hermanos del docs repo |
 | `sections` | Carpetas opcionales activas |
+| `quality` | Cómo se ejecutan los tests aquí (opcional, ver abajo) |
 
 Ningún script del kernel hardcodea nombres de proyecto ni listas de repos: todo
 sale de aquí. Si el fichero falta, el proyecto no está adoptado y `crux doctor`
@@ -113,6 +114,21 @@ de configuración. Por eso se declara y `crux doctor` la comprueba donde puede.
 que escribirlo a mano. `crux doctor` avisa si lo declarado deja de coincidir
 con la realidad, que es la deriva que hace fallar el clonado en la máquina
 siguiente.
+
+### Los tests
+
+```json
+"quality": {
+  "tests": "pnpm test",
+  "testsFiltered": "pnpm test {filtro}"
+}
+```
+
+Es opcional y lo consume la puerta de calidad. `testsFiltered` recibe en
+`{filtro}` los ficheros o módulos que toca el diff, y sirve para que **la
+primera puerta corra solo lo afectado**: ahí únicamente se pregunta si el rojo
+ya venía de antes, y la suite entera es la puerta de regresión. Sin este campo
+la puerta sigue funcionando, pero dice por dónde filtrar en vez del comando.
 
 ---
 
@@ -420,15 +436,15 @@ Tres skills sostienen el trabajo del día a día, y se usan en este orden:
 | ------- | ----- | -------- |
 | `crux init <project>` | `/crux-init` | Crea el docs repo desde las plantillas |
 | `crux clone <project>` | — | Trae un proyecto entero a una máquina nueva |
-| `crux adopt` | `/crux-adopt` | Registra un docs repo que ya existe |
+| `crux adopt` | — | Registra un docs repo que ya existe |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
-| `crux upgrade` | `/crux-upgrade` | Re-materializa el kernel a la versión actual |
+| `crux upgrade` | — | Re-materializa el kernel a la versión actual |
 | `crux release <ver>` | — | Publica una versión del kernel |
 | `crux doctor --machine` | — | Verifica el entorno de la máquina |
-| `crux hooks install` | — | Engancha el estándar al cierre de sesión y al commit |
+| `crux hooks install` | — | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | — | Mide qué skills se usan realmente |
 
 ---

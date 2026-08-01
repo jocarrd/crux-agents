@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Puerta de calidad antes de commitear: comprobar que los tests ya estaban en verde, leer el diff completo, revisar correctitud, buscar la implementación más simple, volver a pasar los tests, validar en el entorno real solo si el cambio toca superficie observable, revisar si alguna documentación quedó desalineada y commitear. Usa cuando termines un trozo de trabajo y vayas a commitear, o cuando quieras una revisión seria de lo que llevas hecho.
+description: Puerta de calidad antes de commitear, graduada según lo que toca el diff: clasificar el cambio para saber qué puertas aplican, comprobar en verde los tests afectados, leer el diff completo, revisar correctitud, buscar la implementación más simple, pasar la suite entera, validar en el entorno real solo si el cambio toca superficie observable, revisar si alguna documentación quedó desalineada y commitear. Usa cuando termines un trozo de trabajo y vayas a commitear, o cuando quieras una revisión seria de lo que llevas hecho.
 ---
 
 # ship
@@ -8,20 +8,40 @@ description: Puerta de calidad antes de commitear: comprobar que los tests ya es
 Cadena de puertas antes de commitear. Cualquiera puede abortar el proceso: la
 gracia no es pasar por todas, es no seguir cuando una falla.
 
-## Modos
+## 0. Qué puertas hacen falta
 
-**Rápido** — puertas 1 a 5, 7 y 8. Es el de por defecto para cambios acotados.
+**Primero esto, antes de la puerta 1.**
 
-**Completo** — todas, incluida la validación en el entorno real. Para cambios
-que tocan superficie observable, antes de desplegar, o cuando el diff es
-grande.
+```bash
+bash <directorio-de-esta-skill>/scripts/diff-scope.sh
+```
 
-Que exista el modo rápido no es una concesión: **si esto tarda doce minutos
-siempre, dejarás de invocarlo en dos semanas** y la puerta habrá fracasado.
+Clasifica el diff y responde tres cosas: **qué puertas aplican**, **qué tests
+correr en la 1** y **si hace falta levantar el entorno**.
+
+| Lo que toca el diff | Puertas |
+| ------------------- | ------- |
+| Solo texto —documentación, licencias, `.gitignore` | 2, 7, 8 |
+| Código que no se ve desde fuera | 1 a 5, 7, 8 |
+| Superficie observable: interfaz, API, datos, dependencias, integración | todas |
+
+No es una concesión, es aritmética: **si esto cuesta lo mismo para una errata
+que para un cambio de esquema, dejarás de invocarlo en dos semanas** y la
+puerta habrá fracasado. Un cambio de solo documentación no tiene código que
+pueda estar incorrecto ni tests que puedan regresar; hacerle las ocho puertas
+no lo verifica más, solo lo encarece.
+
+Lo decide el clasificador y no tu criterio en el momento: a ojo todo parece
+pequeño, y así es como se salta justo la que hacía falta.
 
 ## 1. Sanidad
 
-Pasa los tests **antes de mirar nada**.
+Pasa los tests **antes de mirar nada** — los afectados por el diff, no la suite
+entera. El clasificador los dice en su línea `tests:`.
+
+Aquí solo se responde a una pregunta: **¿el rojo ya venía de antes?** Para eso
+basta lo afectado. La suite completa es la puerta 5; correrla en las dos es
+pagar la más cara dos veces para responder dos preguntas distintas.
 
 Si ya estaban rojos, no es cosa de tu diff: dilo y para. Es la puerta más
 barata y la que más tiempo ahorra, porque evita depurar durante media hora un
@@ -52,18 +72,15 @@ El orden importa: **simplificar código incorrecto es tirar el trabajo**.
 
 ## 5. Regresión
 
-Tests otra vez, después de los arreglos de las puertas 3 y 4. Los arreglos
-también rompen cosas.
+**Ahora sí, la suite entera**, después de los arreglos de las puertas 3 y 4.
+Los arreglos también rompen cosas, y rompen precisamente lo que no estabas
+mirando: por eso aquí no vale el subconjunto de la puerta 1.
 
 ## 6. Realidad, solo si hace falta
 
-```bash
-bash <directorio-de-esta-skill>/scripts/diff-scope.sh
-```
-
-Clasifica el diff y dice si hace falta levantar el entorno. Levantarlo siempre
-es lo que mata la costumbre; no levantarlo nunca es lo que deja pasar los
-fallos que los tests no ven.
+La puerta 0 ya dijo si aplica. Levantar el entorno siempre es lo que mata la
+costumbre; no levantarlo nunca es lo que deja pasar los fallos que los tests no
+ven.
 
 | Lo que toca el diff | Qué validar |
 | ------------------- | ----------- |
@@ -106,6 +123,10 @@ Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.
 
 ## Anti-patterns
 
+- **Saltarse la puerta 0 y decidir a ojo.** Acaba siempre en el mismo sitio:
+  "esto es pequeño" y la puerta que hacía falta sin pasar.
+- **Pasar las ocho a un cambio de documentación.** No lo verifica más, solo
+  encarece la puerta hasta que dejas de pasarla.
 - **Empezar por la puerta 3.** Sin la 1 no sabes si el rojo es tuyo.
 - **Simplificar antes de verificar.** Puertas 4 después de 3, siempre.
 - **Saltarse la 5 porque "el cambio era pequeño".** Los arreglos rompen cosas.

@@ -113,6 +113,8 @@ PATTERN="${1:-}"
 echo "crux test — $(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
 echo
 
+HOME_LIMPIO="$HOME"; TMPDIR_LIMPIO="${TMPDIR:-/tmp}"; PWD_LIMPIO="$PWD"
+
 for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   [[ -n "$PATTERN" && "$fn" != *"$PATTERN"* ]] && continue
   CURRENT="${fn#test_}"
@@ -122,6 +124,16 @@ for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   # Un caso que cargue un script estricto dejaría 'set -e' activo y mataría la
   # suite en la primera aserción negativa, sin decir por qué.
   set +e; set -uo pipefail
+
+  # Y un caso que exporte HOME o TMPDIR se los lleva al siguiente, que al
+  # borrarse el sandbox se queda apuntando a un directorio que ya no existe.
+  # Eso colgó la suite entera una vez, sin un solo mensaje.
+  if [[ "$HOME" != "$HOME_LIMPIO" || "${TMPDIR:-/tmp}" != "$TMPDIR_LIMPIO" ]]; then
+    _fail "el caso exporta HOME o TMPDIR — pásalos por invocación, no al shell de la suite"
+    HOME="$HOME_LIMPIO"; TMPDIR="$TMPDIR_LIMPIO"
+  fi
+  cd "$PWD_LIMPIO" || exit 1
+
   teardown
   [[ $FAIL -eq $before ]] || true
 done

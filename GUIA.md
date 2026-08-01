@@ -95,7 +95,7 @@ haría sin tocar nada.
 | `crux add-repo <repo>` | Añade un repo al proyecto |
 | `crux link` | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | Espacios aislados para trabajar en paralelo |
-| `crux hooks` | Engancha el estándar al cierre de sesión y al commit |
+| `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | Mide qué skills se usan de verdad |
 | `crux doctor` | Verifica que el proyecto cumple el estándar |
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
@@ -619,9 +619,18 @@ crux hooks install    # desde el docs repo del proyecto
 crux hooks status
 ```
 
-Instala dos cosas: un aviso de deriva de documentación al cerrar sesión, y un
-`pre-commit` que **bloquea el commit si `doctor` no pasa**. Un estándar que hay
-que acordarse de comprobar se comprueba a veces.
+Instala tres cosas: un aviso de deriva de documentación al cerrar sesión, un
+`pre-commit` que **bloquea el commit si `doctor` no pasa**, y un recordatorio
+del ciclo al empezar a trabajar sobre la rama principal. Un estándar que hay que
+acordarse de comprobar se comprueba a veces.
+
+El del ciclo existe por una medición incómoda: la skill que lo describe estaba
+escrita, instalada y con su descripción, y `crux usage` la daba con **cero
+invocaciones en 31 sesiones**. Una descripción compite por atención con otras
+cuarenta; un hook llega solo. Se dispara por **estado** —dónde estás y en qué
+rama—, nunca por lo que diga el prompt: adivinar la intención por palabras
+acaba avisando cuando no toca y callando cuando sí. Y habla una vez por sesión,
+porque el ruido se aprende a ignorar antes que a obedecer.
 
 Un hook que apunta a un fichero inexistente no falla: no hace nada. Y eso es
 peor, porque el sistema parece vigilado y no lo está. Por eso `doctor --machine`

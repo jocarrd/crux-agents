@@ -110,7 +110,11 @@ comprobación que no se ha visto fallar no sirve.
 
 Cada caso corre en un sandbox aislado con los directorios de agentes
 redirigidos: la suite **no toca** `~/.claude`, `~/.codex` ni `~/Proyectos`. Si
-escribes un caso que necesite un `$HOME`, redirígelo tú también.
+escribes un caso que necesite un `$HOME`, **pásalo por invocación**
+(`env HOME=... bash ...`), nunca con `export`: exportarlo se lo lleva el caso
+siguiente, que al borrarse el sandbox se queda apuntando a un directorio
+inexistente. El runner lo detecta y lo reporta como fallo, porque la primera
+vez que pasó colgó la suite entera sin un solo mensaje.
 
 Y calibra contra la realidad: cuando `code-health` se escribió, la primera
 versión daba 248 hallazgos de ruido en un repo real. Un informe que nadie lee

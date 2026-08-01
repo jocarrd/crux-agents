@@ -38,7 +38,7 @@ raíz de proyectos.
 | `crux workspace` | Espacios aislados —worktree, puertos, base de datos—, con propuesta y fusión |
 | `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
-| `crux hooks` | Engancha el estándar al cierre de sesión y al commit |
+| `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | Qué skills se usan de verdad |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
 | `crux release <ver>` | Publica una versión, verificando antes que los proyectos siguen conformes |
@@ -125,7 +125,8 @@ crux vuelva a acoplarse a lo que documenta.
 - **CI** en cada push y propuesta: análisis estático, la suite, instalación en
   limpio y un proyecto creado de principio a fin.
 - **`crux hooks install`** cierra la rama principal: el trabajo entra por
-  propuesta.
+  propuesta. Y recuerda el ciclo al empezar sobre ella, porque medimos que
+  describirlo en una skill no bastaba.
 - **`crux release <ver>`** publica una versión, y antes **verifica que los
   proyectos que consumen el kernel siguen conformes**. Es lo que lo distingue
   de un `git tag`: cambiar el estándar y romper a quien lo usa sin enterarse es

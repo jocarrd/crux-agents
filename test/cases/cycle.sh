@@ -410,3 +410,113 @@ test_el_titulo_de_la_propuesta_sale_del_primer_commit() {
   assert_eq "feat: lo que se fue a hacer" "$primero" \
     "el título es lo que se fue a hacer, aunque la rama ya esté subida"
 }
+
+test_la_puerta_se_gradua_segun_el_diff() {
+  sandbox >/dev/null
+  local repo="$SB/graduada"
+  mkdir -p "$repo/docs" "$repo/src/components" "$repo/src/lib"
+  cd "$repo" || return
+  git init -q; git config user.email t@t; git config user.name t
+
+  touch docs/nota.md; git add -A
+  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "puertas: 2,7,8" "un cambio de solo texto no paga las ocho puertas"
+  assert_contains "$out" "tests: ninguno" "y no tiene tests que correr"
+
+  git reset -q; rm -f docs/nota.md
+  touch src/lib/util.ts; git add -A
+  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "puertas: 1,2,3,4,5,7,8" "el código que no se ve desde fuera se salta la 6"
+
+  touch src/components/Card.tsx; git add -A
+  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "puertas: todas" "si se ve desde fuera, la 6 deja de ser opcional"
+
+  cd "$CRUX_HOME" || return
+}
+
+test_la_puerta_1_corre_solo_lo_afectado() {
+  sandbox >/dev/null
+  local repo="$SB/filtrado"
+  mkdir -p "$repo/src"
+  cd "$repo" || return
+  git init -q; git config user.email t@t; git config user.name t
+
+  # Sin contrato: el kernel no sabe con qué se ejecutan los tests aquí, así que
+  # da el filtro y dice cómo declarar el comando.
+  touch src/geohash.ts; git add -A
+  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "geohash" "sin contrato, al menos dice por dónde filtrar"
+  assert_contains "$out" "quality.tests" "y cómo declarar el comando exacto"
+
+  # Fuera del repo: el contrato se busca hacia arriba, y así no se cuela en el
+  # propio diff que estamos clasificando.
+  cat > "$SB/crux.json" <<'JSON'
+{ "quality": { "tests": "pnpm test", "testsFiltered": "pnpm test {filtro}" } }
+JSON
+  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_contains "$out" "tests: pnpm test geohash" "con contrato, el comando exacto"
+
+  # Solo texto: no hay nada que filtrar y tampoco se propone la suite entera.
+  git reset -q; rm -f src/geohash.ts
+  touch LEEME.md; git add -A
+  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  assert_not_contains "$out" "pnpm test" "un cambio de texto no arrastra la suite"
+
+  cd "$CRUX_HOME" || return
+}
+
+test_el_hook_recuerda_el_ciclo_en_la_rama_principal() {
+  sandbox >/dev/null
+  local hook="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
+  local fakehome="$SB/home"
+  mkdir -p "$fakehome/.crux"
+  echo "CRUX_PROJECTS_DIR=\"$CRUX_PROJECTS_DIR\"" > "$fakehome/.crux/config"
+
+  # El HOME de mentira se pasa a cada invocación, no se exporta: exportarlo se
+  # lo lleva el resto de la suite, y al borrar el sandbox el siguiente caso se
+  # queda sin $HOME.
+  _guard() {
+    (cd "$1" && echo "{\"session_id\":\"$2\"}" \
+      | env HOME="$fakehome" TMPDIR="$SB" bash "$hook")
+  }
+
+  local repo="$CRUX_PROJECTS_DIR/proy/proy-app"
+  mkdir -p "$repo" "$CRUX_PROJECTS_DIR/proy/proy-docs"
+  echo '{"project":"proy"}' > "$CRUX_PROJECTS_DIR/proy/proy-docs/crux.json"
+  git -C "$repo" init -q -b main
+  git -C "$repo" config user.email t@t; git -C "$repo" config user.name t
+  echo x > "$repo/f"; git -C "$repo" add -A; git -C "$repo" commit -qm init
+
+  local out; out="$(_guard "$repo" s1)"
+  assert_contains "$out" "crux workspace new" "en la principal de un repo gestionado, recuerda el ciclo"
+
+  # Repetirlo cada turno lo convierte en ruido, y el ruido se ignora.
+  out="$(_guard "$repo" s1)"
+  assert_eq "" "$out" "no lo repite en la misma sesión"
+  out="$(_guard "$repo" s2)"
+  assert_contains "$out" "crux workspace new" "pero sí en una sesión nueva"
+
+  git -C "$repo" checkout -q -b ws/algo
+  out="$(_guard "$repo" s3)"
+  assert_eq "" "$out" "fuera de la rama principal calla"
+
+  # El docs repo también tiene cerrada su principal: si el aviso no llega ahí,
+  # el bloqueo aparece al hacer push y ya es tarde.
+  local docs="$CRUX_PROJECTS_DIR/proy/proy-docs"
+  git -C "$docs" init -q -b main
+  git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
+  git -C "$docs" add -A; git -C "$docs" commit -qm init
+  out="$(_guard "$docs" s5)"
+  assert_contains "$out" "crux workspace new" "el docs repo también recibe el aviso"
+
+  # Un repo cualquiera que crux no gestiona no es asunto suyo.
+  local ajeno="$SB/ajeno"
+  mkdir -p "$ajeno"; git -C "$ajeno" init -q -b main
+  git -C "$ajeno" config user.email t@t; git -C "$ajeno" config user.name t
+  echo x > "$ajeno/f"; git -C "$ajeno" add -A; git -C "$ajeno" commit -qm init
+  out="$(_guard "$ajeno" s4)"
+  assert_eq "" "$out" "en un repo que no gestiona, callado"
+
+  unset -f _guard
+}
