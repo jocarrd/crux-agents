@@ -564,3 +564,24 @@ test_el_kernel_documenta_su_propio_contexto() {
   done <<< "$citados"
   assert_eq "0" "$faltan" "los tests que cita AGENTS.md existen"
 }
+
+test_link_no_pelea_con_el_formateador_del_repo() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project nu2 --repos "api")"
+  local repo="$CRUX_PROJECTS_DIR/nu2/api"
+  mkdir -p "$repo"
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+
+  # Simula lo que hace un formateador: alinear las columnas de las tablas.
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8")
+      .replace(/\| Momento \| Qué invocar \|/, "| Momento                     | Qué invocar |"));
+  ' "$repo/CLAUDE.md"
+  local formateado; formateado="$(cat "$repo/CLAUDE.md")"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  assert_eq "$formateado" "$(cat "$repo/CLAUDE.md")" \
+    "no revierte el formateo: si no, link y el formateador se pelean sin fin"
+}

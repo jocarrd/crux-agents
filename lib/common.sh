@@ -136,7 +136,12 @@ render_managed() {
     const bloque = nuevo.match(re);
     if (!bloque) process.exit(4);
     const actual = fs.readFileSync(dst, "utf8");
-    if (actual.match(re)?.[0] === bloque[0]) process.exit(2);
+    // Comparación insensible a espacios: muchos repos pasan un formateador que
+    // alinea las tablas markdown. Sin esto, el formateador y `crux link` se
+    // reescriben el bloque mutuamente en cada pasada, para siempre.
+    const norm = (t) => t.replace(/[ \t]+/g, " ").replace(/ *\n/g, "\n");
+    const previo = actual.match(re)?.[0];
+    if (previo && norm(previo) === norm(bloque[0])) process.exit(2);
     fs.writeFileSync(dst, actual.replace(re, bloque[0]));
   ' "$dst" "$nuevo"
   local code=$?
