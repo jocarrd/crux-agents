@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Instalación de crux en una máquina. Idempotente.
 #
-#   ~/Proyectos/crux/install.sh            instala
-#   ~/Proyectos/crux/install.sh --dry-run  enseña qué haría, sin tocar nada
+#   ~/Proyectos/crux/install.sh                          instala
+#   ~/Proyectos/crux/install.sh --remote '<plantilla>'    instala fijando el
+#                                                        remoto habitual
+#   ~/Proyectos/crux/install.sh --dry-run                enseña qué haría
 #
 # No toca los docs repos de ningún proyecto: para eso están `crux link` y
 # `crux upgrade`.
@@ -14,7 +16,14 @@ source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/skills.sh"
 
 export CRUX_DRY_RUN=0
-[[ "${1:-}" == "--dry-run" ]] && export CRUX_DRY_RUN=1
+REMOTE_DEFECTO=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) export CRUX_DRY_RUN=1; shift ;;
+    --remote)  REMOTE_DEFECTO="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
 
 echo "crux $(tr -d '[:space:]' < "$CRUX_HOME/VERSION") — $CRUX_HOME"
 [[ "$CRUX_DRY_RUN" == "1" ]] && warn "dry-run: no se escribe nada"
@@ -24,10 +33,18 @@ echo
 
 if [[ "$CRUX_DRY_RUN" == "0" ]]; then
   mkdir -p "$HOME/.crux"
+  # Se conserva el remoto por defecto si ya estaba: reinstalar no debe borrarlo.
+  anterior=""
+  [[ -f "$HOME/.crux/config" ]] && anterior="$(grep -E '^CRUX_REMOTE=' "$HOME/.crux/config" || true)"
   cat > "$HOME/.crux/config" <<EOF
 # Generado por crux install.sh
 CRUX_HOME="$CRUX_HOME"
 EOF
+  if [[ -n "$REMOTE_DEFECTO" ]]; then
+    echo "CRUX_REMOTE=\"$REMOTE_DEFECTO\"" >> "$HOME/.crux/config"
+  elif [[ -n "$anterior" ]]; then
+    echo "$anterior" >> "$HOME/.crux/config"
+  fi
 fi
 ok "config en ~/.crux/config"
 

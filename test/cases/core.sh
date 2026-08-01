@@ -445,3 +445,92 @@ test_link_mantiene_el_catalogo_del_kernel_en_el_indice() {
   bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
   assert_eq "1" "$(grep -c '^<!-- crux:skills -->$' "$docs/AGENTS.md")" "el marcador de apertura sigue siendo único"
 }
+
+test_clone_no_adivina_de_donde_traer_las_cosas() {
+  sandbox >/dev/null
+  # Sin plantilla ni valor por defecto, se planta en vez de asumir un proveedor.
+  local out
+  out="$(HOME="$SB/home-sin-config" bash "$CRUX_HOME/bin/clone.sh" x --parent "$SB/vacio" 2>&1)"
+  assert_contains "$out" "no sé de dónde traer" "sin remoto no inventa una URL"
+
+  # Con docs repo presente pero sin contrato, tampoco sabe qué más clonar.
+  local conDocs="$SB/con-docs"
+  mkdir -p "$conDocs/x/x-docs"; git init -q "$conDocs/x/x-docs"
+  out="$(bash "$CRUX_HOME/bin/clone.sh" x --parent "$conDocs" 2>&1)"
+  assert_contains "$out" "sin crux.json" "sin contrato no sabe qué repos trae el proyecto"
+}
+
+test_el_remoto_admite_override_por_repo() {
+  sandbox >/dev/null
+  local cfg="$SB/crux.json"
+  cat > "$cfg" <<'JSON'
+{"remote":{"url":"git@github.com:mio/{repo}.git",
+           "repos":{"ajeno":"https://otro-host.com/equipo/ajeno.git"}}}
+JSON
+
+  local propio ajeno
+  propio="$(bash -c 'source "$1/lib/common.sh"; remote_url "$2" propio' _ "$CRUX_HOME" "$cfg")"
+  ajeno="$(bash -c 'source "$1/lib/common.sh"; remote_url "$2" ajeno' _ "$CRUX_HOME" "$cfg")"
+
+  assert_eq "git@github.com:mio/propio.git" "$propio" "lo tuyo sale de la plantilla"
+  assert_eq "https://otro-host.com/equipo/ajeno.git" "$ajeno" "lo ajeno, de su override"
+}
+
+test_el_remoto_se_compone_tambien_con_el_atajo() {
+  sandbox >/dev/null
+  local cfg="$SB/atajo.json"
+  printf '{"remote":{"host":"gitlab.empresa.com","owner":"equipo/sub","protocol":"ssh"}}\n' > "$cfg"
+  local url
+  url="$(bash -c 'source "$1/lib/common.sh"; remote_url "$2" api' _ "$CRUX_HOME" "$cfg")"
+  assert_eq "git@gitlab.empresa.com:equipo/sub/api.git" "$url" "el atajo compone la URL"
+}
+
+test_la_deduccion_no_se_confunde_con_nombres_repetidos() {
+  sandbox >/dev/null
+  local repo="$SB/demo"
+  mkdir -p "$repo"; git init -q "$repo"
+  # El propietario se llama igual que el repo: sustituir todas las apariciones
+  # produciría "git@host:{repo}/{repo}.git", que no sirve para ningún otro repo.
+  git -C "$repo" remote add origin "git@host.com:demo/demo.git"
+
+  local tmpl
+  tmpl="$(bash -c 'source "$1/lib/common.sh"; remote_desde_git "$2"' _ "$CRUX_HOME" "$repo")"
+  assert_eq "git@host.com:demo/{repo}.git" "$tmpl" "solo sustituye la última aparición"
+}
+
+test_doctor_avisa_si_el_remoto_declarado_no_es_el_real() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rho2 --repos "api")"
+  local repo="$CRUX_PROJECTS_DIR/rho2/api"
+  mkdir -p "$repo"; git init -q "$repo"
+  git -C "$repo" remote add origin "git@donde-sea.com:otro/api.git"
+
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8"));
+    o.remote = { url: "git@github.com:mio/{repo}.git" };
+    fs.writeFileSync(f, JSON.stringify(o, null, 2));
+  ' "$docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "el contrato dice" "detecta la divergencia entre contrato y origin"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_init_no_asume_donde_subir_el_repo() {
+  sandbox >/dev/null
+  local out
+  out="$(HOME="$SB/limpio" bash "$CRUX_HOME/bin/init.sh" sigma2 --parent "$CRUX_PROJECTS_DIR" 2>&1)"
+  assert_contains "$out" "no sé dónde subir" "sin --remote no elige proveedor por ti"
+
+  # Con un remoto que no es GitHub: deja el repo listo y dice qué falta.
+  out="$(HOME="$SB/limpio" bash "$CRUX_HOME/bin/init.sh" sigma3 --parent "$CRUX_PROJECTS_DIR" \
+    --remote 'git@gitlab.empresa.com:equipo/{repo}.git' 2>&1)"
+  assert_contains "$out" "no existe todavía" "avisa de que hay que crearlo en el proveedor"
+
+  local docs="$CRUX_PROJECTS_DIR/sigma3/sigma3-docs"
+  assert_eq "git@gitlab.empresa.com:equipo/sigma3-docs.git" \
+    "$(git -C "$docs" remote get-url origin)" "y deja el origin configurado"
+  assert_contains "$(cat "$docs/crux.json")" "gitlab.empresa.com" "el contrato declara el remoto"
+}

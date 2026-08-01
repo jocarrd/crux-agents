@@ -73,12 +73,38 @@ json_array() {
   echo "${out%, }"
 }
 
+# El remoto se deduce de lo que ya hay clonado: la plantilla del docs repo, y un
+# override por cada repo cuyo origin no encaje con ella. Es lo que permite que
+# adopt no pregunte nada y que un proyecto con el código en otra cuenta —el caso
+# de un repo de cliente— quede bien declarado a la primera.
+TMPL="$(remote_desde_git "$DOCS" 2>/dev/null || echo "")"
+overrides=""
+for repo in "${repos[@]:-}"; do
+  [[ -d "$ROOT/$repo/.git" ]] || continue
+  url="$(git -C "$ROOT/$repo" remote get-url origin 2>/dev/null || true)"
+  [[ -n "$url" ]] || continue
+  esperada="${TMPL//\{repo\}/$repo}"
+  [[ "$url" == "$esperada" ]] && continue
+  overrides="$overrides
+      \"$repo\": \"$url\","
+done
+overrides="${overrides%,}"
+
+if [[ -n "$TMPL" ]]; then
+  REMOTE_JSON="  \"remote\": {
+    \"url\": \"$TMPL\"$([[ -n "$overrides" ]] && printf ',\n    "repos": {%s\n    }' "$overrides")
+  },"
+else
+  REMOTE_JSON=""
+fi
+
 cat > "$CONFIG" <<EOF
 {
   "crux": "$(crux_version)",
   "project": "$PROJECT",
   "profile": "$PROFILE",
   "language": "es",
+$REMOTE_JSON
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [$(json_array "${sections[@]:-}")]
 }

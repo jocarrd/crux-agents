@@ -122,14 +122,37 @@ else
 fi
 section_ok "reglas del perfil $PROFILE"
 
-# --- 5. Secciones declaradas -------------------------------------------------
+# --- 5. Remoto declarado frente al real --------------------------------------
+#
+# Deriva silenciosa: todo funciona en esta máquina y el clonado falla en la
+# siguiente, que es cuando menos ganas hay de depurarlo.
+
+section
+if json_has "$CONFIG" 'remote'; then
+  for repo in "${declared[@]:-}"; do
+    [[ -d "$ROOT/$repo/.git" ]] || continue
+    real="$(git -C "$ROOT/$repo" remote get-url origin 2>/dev/null || true)"
+    [[ -n "$real" ]] || continue
+    declarado="$(remote_url "$CONFIG" "$repo" 2>/dev/null || true)"
+    if [[ -z "$declarado" ]]; then
+      note "$repo: sin remoto en el contrato — 'crux clone' no sabrá de dónde traerlo"
+    elif [[ "$declarado" != "$real" ]]; then
+      note "$repo: el contrato dice $declarado y el origin es $real"
+    fi
+  done
+  section_ok "remoto coherente con el contrato"
+else
+  note "sin 'remote' en crux.json — 'crux clone' no podrá traer este proyecto"
+fi
+
+# --- 6. Secciones declaradas -------------------------------------------------
 
 while IFS= read -r sect; do
   [[ -n "$sect" ]] || continue
   [[ -d "$DOCS/$sect" ]] || note "sección declarada sin carpeta: $sect/"
 done < <(json_get "$CONFIG" sections 2>/dev/null || true)
 
-# --- 6. Numeración de los ADRs ----------------------------------------------
+# --- 7. Numeración de los ADRs ----------------------------------------------
 #
 # Dos sesiones en paralelo eligen el mismo "siguiente número" y el conflicto no
 # lo detecta git: son líneas distintas del mismo fichero.
@@ -146,7 +169,7 @@ while IFS= read -r ledger; do
 done < <(find "$DOCS/decisions" "$DOCS/repos" -name "*decisions*.md" -o -name "index.md" 2>/dev/null | grep -E "decisions" | sort -u)
 section_ok "numeración de los ADRs"
 
-# --- 7. Enlaces markdown -----------------------------------------------------
+# --- 8. Enlaces markdown -----------------------------------------------------
 
 if node "$CRUX_HOME/lib/check-doc-paths.mjs" "$DOCS" >/tmp/crux-doctor-paths.$$ 2>&1; then
   ok "enlaces markdown resuelven"
@@ -156,7 +179,7 @@ else
 fi
 rm -f /tmp/crux-doctor-paths.$$
 
-# --- 8. Skills del proyecto --------------------------------------------------
+# --- 9. Skills del proyecto --------------------------------------------------
 
 section
 skills=0

@@ -15,6 +15,7 @@ usage() {
 crux — kernel del sistema de trabajo con agentes
 
   crux init <project>   crea el docs repo de un proyecto nuevo
+  crux clone <project>  trae un proyecto entero a esta máquina
   crux adopt [dir]      registra un docs repo que ya existe
   crux add-repo <repo>  registra un repo nuevo en el proyecto
   crux link [dir]       genera y verifica los punteros de los repos de código
@@ -36,6 +37,7 @@ cmd="${1:-help}"
 
 case "$cmd" in
   init)    exec bash "$CRUX_HOME/bin/init.sh" "$@" ;;
+  clone)   exec bash "$CRUX_HOME/bin/clone.sh" "$@" ;;
   adopt)   exec bash "$CRUX_HOME/bin/adopt.sh" "$@" ;;
   add-repo) exec bash "$CRUX_HOME/bin/add-repo.sh" "$@" ;;
   link)    exec bash "$CRUX_HOME/bin/link.sh" "$@" ;;

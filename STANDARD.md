@@ -71,6 +71,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | ----- | ----------- |
 | `crux` | Versión del kernel con la que se materializó este proyecto |
 | `language` | Idioma de la documentación y de las descripciones de skills |
+| `remote` | De dónde se clonan los repos del proyecto |
 | `project` | Nombre del proyecto, igual que la carpeta padre |
 | `profile` | Perfil aplicado (ver siguiente sección) |
 | `repos` | Repos de código del proyecto, hermanos del docs repo |
@@ -79,6 +80,33 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 Ningún script del kernel hardcodea nombres de proyecto ni listas de repos: todo
 sale de aquí. Si el fichero falta, el proyecto no está adoptado y `crux doctor`
 lo reporta como el primer error.
+
+### El remoto
+
+El kernel no sabe de proveedores. Cada proyecto declara cómo se componen las
+URLs de sus repos:
+
+```json
+"remote": {
+  "url": "git@github.com:jocarrd/{repo}.git",
+  "repos": {
+    "codigo-del-cliente": "https://otro-host.com/su-org/codigo-del-cliente.git"
+  }
+}
+```
+
+`url` es una **plantilla** con `{repo}`. Es el formato primario porque es el
+único que cubre remotos que no siguen la forma `owner/repo`. Para el caso
+común hay un atajo equivalente: `host`, `owner` y `protocol`.
+
+`repos` permite un **override por repo**, y no es un caso raro: un proyecto
+puede tener la documentación en tu remoto y el código en el de otra persona.
+Es exactamente lo que ocurre con el perfil `client-repo`.
+
+`crux adopt` lo deduce del `origin` de lo que ya esté clonado, así que no hay
+que escribirlo a mano. `crux doctor` avisa si lo declarado deja de coincidir
+con la realidad, que es la deriva que hace fallar el clonado en la máquina
+siguiente.
 
 ---
 

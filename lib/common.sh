@@ -26,6 +26,17 @@ crux_version() {
   [[ -f "$home/VERSION" ]] && tr -d '[:space:]' < "$home/VERSION" || echo "unknown"
 }
 
+# --- Requisitos --------------------------------------------------------------
+#
+# Node se usa para leer el contrato. Sin él, los comandos fallaban con un
+# "orden no encontrada" en mitad de la salida, que no dice nada de lo que pasa.
+
+command -v node >/dev/null || {
+  echo "crux necesita node para leer el contrato del proyecto" >&2
+  echo "instálalo y repite; 'crux doctor --machine' comprueba el resto" >&2
+  exit 1
+}
+
 # --- Salida ------------------------------------------------------------------
 
 if [[ -t 1 ]]; then
@@ -157,4 +168,60 @@ render_template() {
   done
   mkdir -p "$(dirname "$dst")"
   printf '%s\n' "$content" > "$dst"
+}
+
+# --- Remoto del proyecto -----------------------------------------------------
+#
+# El kernel no sabe de proveedores. Cada proyecto declara cómo se compone la URL
+# de sus repos, y con eso vale igual para GitHub, GitLab —incluido el self-hosted
+# con puerto—, Bitbucket o Azure DevOps.
+#
+#   "remote": { "url": "git@github.com:jocarrd/{repo}.git" }
+#
+# Atajo equivalente, por comodidad:
+#
+#   "remote": { "host": "gitlab.empresa.com", "owner": "equipo/sub", "protocol": "ssh" }
+
+remote_url() {
+  # remote_url <crux.json> <repo>
+  #
+  # El override por repo existe porque un proyecto puede tener la documentación
+  # en tu remoto y el código en el de otra persona: es el caso de un repo de
+  # cliente, y sin esto el clonado busca donde no está.
+  local cfg="$1" repo="$2"
+  node -e '
+    const fs = require("fs");
+    const [file, repo] = process.argv.slice(1);
+    let r = {};
+    try { r = (JSON.parse(fs.readFileSync(file, "utf8")).remote) || {}; } catch {}
+
+    const propio = (r.repos || {})[repo];
+    if (propio) { process.stdout.write(propio.replace(/\{repo\}/g, repo)); process.exit(0); }
+
+    let tmpl = r.url;
+    if (!tmpl && r.host && r.owner) {
+      tmpl = (r.protocol === "https")
+        ? `https://${r.host}/${r.owner}/{repo}.git`
+        : `git@${r.host}:${r.owner}/{repo}.git`;
+    }
+    if (!tmpl) process.exit(2);
+    process.stdout.write(tmpl.replace(/\{repo\}/g, repo));
+  ' "$cfg" "$repo"
+}
+
+remote_desde_git() {
+  # Deduce la plantilla del origin de un repo ya clonado. Es lo que permite que
+  # adopt no tenga que preguntar por el remoto.
+  local dir="$1" nombre url
+  nombre="$(basename "$dir")"
+  url="$(git -C "$dir" remote get-url origin 2>/dev/null)" || return 1
+  [[ -n "$url" ]] || return 1
+  # Solo la última aparición: si el propietario se llama igual que el repo,
+  # sustituir todas produce una plantilla rota.
+  node -e '
+    const [url, nombre] = process.argv.slice(1);
+    const i = url.lastIndexOf(nombre);
+    if (i === -1) { process.stdout.write(url); process.exit(0); }
+    process.stdout.write(url.slice(0, i) + "{repo}" + url.slice(i + nombre.length));
+  ' "$url" "$nombre"
 }

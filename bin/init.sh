@@ -3,7 +3,11 @@
 #
 #   crux init <project> [--description "..."] [--repos a,b,c]
 #                       [--profile multi-repo] [--visibility private]
-#                       [--language es] [--no-remote]
+#                       [--language es] [--remote <plantilla>] [--no-remote]
+#
+# El remoto no se asume: se declara. `--remote` acepta una plantilla con {repo}
+# —vale para cualquier proveedor— y queda escrito en el contrato, que es de
+# donde lo leerán después `crux clone` y `crux doctor`.
 #
 # Determinista: el resultado sale de templates/, no de que un agente reproduzca
 # ficheros a mano. Dos ejecuciones dan el mismo árbol.
@@ -23,6 +27,7 @@ REPOS=""
 PROFILE="multi-repo"
 VISIBILITY="private"
 LANGUAGE="es"
+REMOTE_TMPL=""
 REMOTE=1
 PARENT="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
 
@@ -33,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --profile)     PROFILE="$2"; shift 2 ;;
     --visibility)  VISIBILITY="$2"; shift 2 ;;
     --language)    LANGUAGE="$2"; shift 2 ;;
+    --remote)      REMOTE_TMPL="$2"; shift 2 ;;
     --no-remote)   REMOTE=0; shift ;;
     --parent)      PARENT="$2"; shift 2 ;;
     *) die "opción desconocida: $1" ;;
@@ -46,25 +52,53 @@ ROOT="$PARENT/$PROJECT"
 DOCS="$ROOT/$PROJECT-docs"
 [[ -e "$DOCS" ]] && die "ya existe $DOCS"
 
+# De dónde sale el remoto, por orden: lo que se pasa, el defecto de la máquina,
+# y si no hay ninguno se dice en vez de adivinar.
+if [[ -z "$REMOTE_TMPL" && -f "$HOME/.crux/config" ]]; then
+  REMOTE_TMPL="$(grep -E '^CRUX_REMOTE=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+fi
+
+if [[ $REMOTE -eq 1 && -z "$REMOTE_TMPL" ]]; then
+  err "no sé dónde subir $PROJECT-docs"
+  info "dilo con --remote 'git@tu-remoto:org/{repo}.git'"
+  info "o fija el habitual en ~/.crux/config:  CRUX_REMOTE=\"git@github.com:tu-usuario/{repo}.git\""
+  info "o crea el proyecto solo en local con --no-remote"
+  exit 1
+fi
+
+URL_DOCS="${REMOTE_TMPL//\{repo\}/$PROJECT-docs}"
+
+# La creación del repo remoto sí depende del proveedor. Se cubre GitHub porque
+# hay CLI oficial; para el resto se deja el repo listo y se dice qué hacer, que
+# son dos clics y no justifica una integración por proveedor.
+CREA_REMOTO=0
 if [[ $REMOTE -eq 1 ]]; then
-  command -v gh >/dev/null || die "gh no está instalado (o usa --no-remote)"
-  gh auth status >/dev/null 2>&1 || die "gh no autenticado"
+  if [[ "$URL_DOCS" == *github.com* ]] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+    CREA_REMOTO=1
+  fi
 fi
 
 echo "creando $PROJECT-docs · perfil $PROFILE"
+[[ $REMOTE -eq 1 ]] && echo "remoto: $URL_DOCS"
 echo
 
 # --- 1. Repo -----------------------------------------------------------------
 
 mkdir -p "$ROOT"
-if [[ $REMOTE -eq 1 ]]; then
+if [[ $CREA_REMOTO -eq 1 ]]; then
   ( cd "$ROOT" && gh repo create "$PROJECT-docs" \
       "--$VISIBILITY" --description "$DESCRIPTION" --clone >/dev/null )
-  ok "repo creado y clonado ($VISIBILITY)"
+  ok "repo creado en el remoto y clonado ($VISIBILITY)"
 else
   mkdir -p "$DOCS"
   ( cd "$DOCS" && git init -q )
-  ok "repo local creado (sin remoto)"
+  if [[ $REMOTE -eq 1 ]]; then
+    ( cd "$DOCS" && git remote add origin "$URL_DOCS" )
+    ok "repo local con origin apuntando a $URL_DOCS"
+    PENDIENTE_CREAR=1
+  else
+    ok "repo local creado (sin remoto)"
+  fi
 fi
 
 # --- 2. Plantillas -----------------------------------------------------------
@@ -133,6 +167,9 @@ cat > "$DOCS/crux.json" <<EOF
   "language": "${LANGUAGE:-es}",
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [],
+  "remote": {
+    "url": "${REMOTE_TMPL:-}"
+  },
   "workspace": {
     "portBase": 3000,
     "portsPerSlot": 10,
@@ -148,7 +185,10 @@ ok "crux.json escrito"
 (
   cd "$DOCS"
   git add -A
-  git -c user.name="${GIT_AUTHOR_NAME:-$(git config user.name || echo crux)}" \
+  # En una máquina recién puesta puede no haber identidad configurada, y el
+  # bootstrap no debería caerse por eso.
+  git -c user.name="${GIT_AUTHOR_NAME:-$(git config user.name 2>/dev/null || echo crux)}" \
+      -c user.email="${GIT_AUTHOR_EMAIL:-$(git config user.email 2>/dev/null || echo crux@localhost)}" \
       commit -q -m "init: scaffold del docs repo bajo el estándar crux"
   [[ $REMOTE -eq 1 ]] && git push -q -u origin HEAD 2>/dev/null || true
 )
@@ -162,6 +202,12 @@ bash "$CRUX_HOME/bin/link.sh" "$DOCS"
 echo
 echo "listo: $DOCS"
 echo
+if [[ "${PENDIENTE_CREAR:-0}" == "1" ]]; then
+  echo
+  warn "el repo remoto no existe todavía: créalo en tu proveedor y luego"
+  info "cd $DOCS && git push -u origin HEAD"
+fi
+
 echo "Siguientes pasos:"
 echo "  1. Coloca los repos de código en $ROOT/ como hermanos del docs repo."
 echo "  2. Para registrar uno nuevo: /add-repo-to-docs <repo>"
