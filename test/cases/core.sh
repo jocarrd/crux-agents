@@ -594,14 +594,14 @@ test_la_raiz_de_proyectos_no_se_asume() {
   cp -r "$CRUX_HOME/lib" "$CRUX_HOME/VERSION" "$raiz/crux/"
 
   local deducida
-  deducida="$(CRUX_PROJECTS_DIR= CRUX_HOME="$raiz/crux" HOME="$SB/vacio" \
+  deducida="$(env -u CRUX_PROJECTS_DIR CRUX_HOME="$raiz/crux" HOME="$SB/vacio" \
     bash -c 'source "$1/lib/common.sh"; projects_root' _ "$raiz/crux")"
   assert_eq "$raiz" "$deducida" "la raíz sale del sitio donde vive el kernel"
 
   # Lo declarado gana sobre lo deducido.
   mkdir -p "$SB/otro/.crux"
   printf 'CRUX_PROJECTS_DIR="/donde/sea"\n' > "$SB/otro/.crux/config"
-  deducida="$(CRUX_PROJECTS_DIR= CRUX_HOME="$raiz/crux" HOME="$SB/otro" \
+  deducida="$(env -u CRUX_PROJECTS_DIR CRUX_HOME="$raiz/crux" HOME="$SB/otro" \
     bash -c 'source "$1/lib/common.sh"; projects_root' _ "$raiz/crux")"
   assert_eq "/donde/sea" "$deducida" "lo declarado en la config manda"
 }
@@ -639,4 +639,61 @@ test_las_herramientas_de_inventario_respetan_la_raiz() {
   local out
   out="$(CRUX_PROJECTS_DIR="$raiz" node "$CRUX_HOME/skills/skill-audit/scripts/audit.mjs" 2>&1)"
   assert_contains "$out" "1 proyectos" "encuentra el proyecto fuera de la ruta habitual"
+}
+
+test_cada_comando_esta_documentado() {
+  # Añadir un comando y olvidar documentarlo ya pasó con `clone`, y no lo vio
+  # nadie hasta que se buscó a mano.
+  local faltan=0
+  for f in "$CRUX_HOME"/bin/*.sh; do
+    local cmd; cmd="$(basename "$f" .sh)"
+    # Los que no son subcomandos del despachador
+    case "$cmd" in machine|release) continue ;; esac
+
+    grep -q "  $cmd)" "$CRUX_HOME/bin/crux" || { echo "      $cmd no está en el despachador"; faltan=$((faltan+1)); }
+    grep -q "crux $cmd" "$CRUX_HOME/bin/crux" || { echo "      $cmd no está en la ayuda"; faltan=$((faltan+1)); }
+    grep -q "crux $cmd" "$CRUX_HOME/README.md" || { echo "      $cmd no está en el README"; faltan=$((faltan+1)); }
+    grep -q "crux $cmd" "$CRUX_HOME/STANDARD.md" || { echo "      $cmd no está en STANDARD.md"; faltan=$((faltan+1)); }
+  done
+  assert_eq "0" "$faltan" "todos los comandos están en el despachador, la ayuda, el README y el estándar"
+}
+
+test_cada_skill_del_kernel_esta_en_el_catalogo() {
+  local faltan=0
+  for d in "$CRUX_HOME"/skills/*/; do
+    local n; n="$(basename "$d")"
+    grep -q "\`$n\`" "$CRUX_HOME/STANDARD.md" || { echo "      $n no aparece en el catálogo"; faltan=$((faltan+1)); }
+  done
+  assert_eq "0" "$faltan" "el catálogo del estándar cubre todas las skills del kernel"
+}
+
+test_release_exige_que_la_version_venga_por_propuesta() {
+  sandbox >/dev/null
+  local out
+
+  out="$(bash "$CRUX_HOME/bin/release.sh" uno.dos 2>&1)"
+  assert_contains "$out" "debe ser semver" "exige semver"
+
+  # El número de versión se sube en VERSION por propuesta; el release solo
+  # etiqueta. Si VERSION no coincide, falta esa propuesta.
+  out="$(bash "$CRUX_HOME/bin/release.sh" 99.0.0 2>&1)"
+  assert_contains "$out" "súbelo a 99.0.0 por propuesta" "no commitea la versión por su cuenta"
+}
+
+test_release_verifica_a_quien_consume_el_kernel() {
+  sandbox >/dev/null
+  # Un consumidor que ha dejado de cumplir el estándar: el release tiene que
+  # detenerse, que es lo que lo distingue de un `git tag`.
+  local raiz="$SB/consumidores"
+  local docs="$raiz/roto/roto-docs"
+  mkdir -p "$docs"
+  printf '{"crux":"0.1.0","project":"roto","profile":"multi-repo","repos":["falta"],"sections":[]}\n' \
+    > "$docs/crux.json"
+
+  local out
+  out="$(CRUX_PROJECTS_DIR="$raiz" bash "$CRUX_HOME/bin/release.sh" 99.0.0 2>&1)"
+  assert_contains "$out" "deja de cumplir el estándar" "detecta al consumidor roto"
+  assert_contains "$out" "no se publica" "y se detiene"
+  assert_exit 1 "sale con error" \
+    env CRUX_PROJECTS_DIR="$raiz" bash "$CRUX_HOME/bin/release.sh" 99.0.0
 }

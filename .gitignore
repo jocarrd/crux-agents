@@ -14,3 +14,6 @@ notes-*.md
 
 # Pruebas del propio kernel
 tmp/
+
+# Marca local de la puerta de calidad
+.crux-ship

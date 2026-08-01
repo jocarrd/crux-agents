@@ -41,6 +41,7 @@ raíz de proyectos.
 | `crux hooks` | Engancha el estándar al cierre de sesión y al commit |
 | `crux usage` | Qué skills se usan de verdad |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
+| `crux release <ver>` | Publica una versión, verificando antes que los proyectos siguen conformes |
 
 Todos existen también como skills: `/crux-init`, `/crux-doctor`, etc.
 
@@ -118,6 +119,20 @@ redirigidos: la suite no toca `~/.claude`, `~/.codex` ni `~/Proyectos`.
 Dos de los casos vigilan el propio kernel: que ninguna skill se ate a un agente
 concreto y que no aparezca el nombre de ningún proyecto. Son los que evitan que
 crux vuelva a acoplarse a lo que documenta.
+
+## Gobernanza
+
+- **CI** en cada push y propuesta: análisis estático, la suite, instalación en
+  limpio y un proyecto creado de principio a fin.
+- **`crux hooks install`** cierra la rama principal: el trabajo entra por
+  propuesta.
+- **`crux release <ver>`** publica una versión, y antes **verifica que los
+  proyectos que consumen el kernel siguen conformes**. Es lo que lo distingue
+  de un `git tag`: cambiar el estándar y romper a quien lo usa sin enterarse es
+  el fallo que un release debe impedir.
+
+El número de versión se sube en `VERSION` por propuesta, como cualquier otro
+cambio. El comando solo etiqueta.
 
 ## Estado
 

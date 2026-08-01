@@ -42,7 +42,8 @@ necesario bash "los comandos del kernel son bash"
 # --- El propio kernel --------------------------------------------------------
 
 echo
-[[ -f "$HOME/.crux/config" ]] && ok "~/.crux/config" || fail "falta ~/.crux/config — ejecuta install.sh"
+[[ -f "$HOME/.crux/config" ]] && ok "config de máquina en \$HOME/.crux/config" \
+  || fail "falta \$HOME/.crux/config — ejecuta install.sh"
 tiene crux && ok "comando crux en el PATH" || note "crux no está en el PATH — añade ~/.local/bin"
 
 skills_enlazadas="$(ls "$HOME/.claude/skills" 2>/dev/null | wc -l)"

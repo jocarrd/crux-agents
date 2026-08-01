@@ -16,7 +16,8 @@
 
 set -euo pipefail
 
-export CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/skills.sh"
 

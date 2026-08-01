@@ -13,6 +13,8 @@ set -uo pipefail
 
 CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export CRUX_HOME
+# Lo leen los comandos que a su vez ejecutan la suite, para no llamarse en bucle.
+export CRUX_IN_TESTS=1
 
 PASS=0; FAIL=0; CURRENT=""; FAILED_CASES=()
 

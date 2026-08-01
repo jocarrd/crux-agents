@@ -82,6 +82,15 @@ el espacio aislado se quedaría sin el contexto del proyecto.
 - **Nombra los espacios por la tarea**, no por su número: `fix-login` te dice
   qué hay dentro dentro de dos días; `ws-3`, no.
 
+## La rama principal está cerrada
+
+`crux hooks install` deja un `pre-push` que **rechaza el push directo a la rama
+principal**. El trabajo entra por propuesta, no por empujón.
+
+Es una red local, no una garantía: un `--no-verify` la salta. La protección de
+verdad es del lado del servidor, y en un repo privado sin plan de pago no está
+disponible. Esto cubre el descuido, que es el caso que ocurre de verdad.
+
 ## Perfiles de cliente
 
 Si el proyecto declara un perfil que prohíbe escribir fuera del docs repo, el

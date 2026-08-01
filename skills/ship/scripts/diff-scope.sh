@@ -21,9 +21,9 @@ while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
     *_test.*|*.test.*|*.spec.*|*/tests/*|*/test/*|*/__tests__/*) tests=$((tests+1)); continue ;;
-    *.md|*.mdx|*.txt|LICENSE|.gitignore) docs=$((docs+1)); continue ;;
     package.json|*/package.json|*lock.json|*lock.yaml|*.lock|go.mod|Cargo.toml|requirements*.txt|pyproject.toml)
       deps=$((deps+1)); continue ;;
+    *.md|*.mdx|*.txt|LICENSE|.gitignore) docs=$((docs+1)); continue ;;
     */migrations/*|*schema.prisma|*.sql) data=$((data+1)); continue ;;
   esac
   case "$f" in

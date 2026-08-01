@@ -426,6 +426,7 @@ Tres skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | `/crux-upgrade` | Re-materializa el kernel a la versión actual |
+| `crux release <ver>` | — | Publica una versión del kernel |
 | `crux doctor --machine` | — | Verifica el entorno de la máquina |
 | `crux hooks install` | — | Engancha el estándar al cierre de sesión y al commit |
 | `crux usage` | — | Mide qué skills se usan realmente |

@@ -349,3 +349,34 @@ test_diff_scope_entiende_la_arquitectura_por_capas() {
 
   cd "$CRUX_HOME" || return
 }
+
+test_el_pre_push_bloquea_la_rama_principal() {
+  sandbox >/dev/null
+  local repo="$SB/protegido"
+  mkdir -p "$repo"
+  git -C "$repo" init -q -b main
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  echo x > "$repo/f.txt"; git -C "$repo" add -A; git -C "$repo" commit -qm init
+
+  # Se comprueba el comportamiento del hook con la entrada que git le pasa.
+  local hook="$repo/.git/hooks/pre-push"
+  mkdir -p "$(dirname "$hook")"
+  sed 's/\$principal/main/g' > "$hook" <<'HOOK'
+#!/usr/bin/env bash
+while read -r _ _ remote_ref _; do
+  [[ "$remote_ref" == "refs/heads/main" ]] || continue
+  echo "push directo a main bloqueado"
+  exit 1
+done
+exit 0
+HOOK
+  chmod +x "$hook"
+
+  local out
+  out="$(echo "refs/heads/main a refs/heads/main b" | bash "$hook" origin url 2>&1)"
+  assert_contains "$out" "bloqueado" "el push a la principal se detiene"
+
+  assert_exit 0 "una rama de trabajo pasa sin problema" \
+    bash -c 'echo "refs/heads/ws/x a refs/heads/ws/x b" | bash "$1" origin url' _ "$hook"
+}

@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Una tanda nueva cancela la anterior de la misma rama: el resultado de un
+# commit que ya no es HEAD no lo mira nadie.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Los scripts del kernel son bash y node, y el runner trae los dos. No se
+      # instala nada: si esto necesitase dependencias, el propio kernel dejaría
+      # de ser instalable en cualquier máquina.
+      - name: Herramientas disponibles
+        run: |
+          bash --version | head -1
+          node --version
+          shellcheck --version | head -2
+
+      - name: Análisis estático de los scripts
+        run: |
+          # SC1091: no seguir los `source` de rutas que se resuelven en tiempo
+          # de ejecución. El resto sí se corrige.
+          shellcheck --severity=warning --exclude=SC1091 \
+            bin/crux bin/*.sh lib/*.sh install.sh \
+            adapters/*/*.sh adapters/claude/hooks/*.sh \
+            skills/*/scripts/*.sh test/run.sh test/cases/*.sh
+
+      - name: Suite del kernel
+        run: ./test/run.sh
+
+      # La suite corre en sandboxes; esto comprueba el camino real de
+      # instalación, que es lo primero que ejecuta cualquiera en una máquina
+      # nueva y lo último que se prueba.
+      - name: Instalación en limpio
+        run: |
+          export HOME="$(mktemp -d)"
+          ./install.sh --projects-dir "$HOME/proyectos"
+          test -f "$HOME/.crux/config"
+          test -x "$HOME/.local/bin/crux"
+          test "$(ls "$HOME/.claude/skills" | wc -l)" -gt 0
+
+      - name: Un proyecto de principio a fin
+        run: |
+          export HOME="$(mktemp -d)"
+          export CRUX_HOME="$PWD"
+          git config --global user.email ci@localhost
+          git config --global user.name ci
+          mkdir -p "$HOME/proyectos/demo/api"
+
+          bash bin/init.sh demo --no-remote --parent "$HOME/proyectos" --repos api
+          bash bin/link.sh "$HOME/proyectos/demo/demo-docs"
+          bash bin/doctor.sh "$HOME/proyectos/demo/demo-docs"
+
+          # El puntero generado tiene que decir cómo se trabaja, no solo dónde
+          # está la documentación: es lo único que lee un agente al entrar.
+          grep -q "Cómo se trabaja aquí" "$HOME/proyectos/demo/api/CLAUDE.md"
+          grep -q "crux:begin" "$HOME/proyectos/demo/api/AGENTS.md"

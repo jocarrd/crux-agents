@@ -5,7 +5,8 @@
 set -euo pipefail
 
 SELF="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-export CRUX_HOME="$(dirname "$SELF")"
+CRUX_HOME="$(dirname "$SELF")"
+export CRUX_HOME
 
 # shellcheck source=lib/common.sh
 source "$CRUX_HOME/lib/common.sh"
@@ -25,6 +26,7 @@ crux — kernel del sistema de trabajo con agentes
   crux doctor [dir]     verifica la conformidad con el estándar
   crux doctor --machine verifica que esta máquina puede con todo
   crux upgrade [dir]    re-materializa el kernel a la versión actual
+  crux release <ver>    publica una versión, verificando a quien la consume
   crux version          versión del kernel y su ruta
 
 Sin argumento de directorio, los comandos operan sobre el docs repo que
@@ -46,6 +48,7 @@ case "$cmd" in
   usage)   exec node "$CRUX_HOME/bin/usage.mjs" "$@" ;;
   doctor)  exec bash "$CRUX_HOME/bin/doctor.sh" "$@" ;;
   upgrade) exec bash "$CRUX_HOME/bin/upgrade.sh" "$@" ;;
+  release) exec bash "$CRUX_HOME/bin/release.sh" "$@" ;;
   version) echo "crux $(crux_version) — $CRUX_HOME" ;;
   help|-h|--help) usage ;;
   *) err "subcomando desconocido: $cmd"; echo; usage; exit 1 ;;
