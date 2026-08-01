@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local notes (no versionar borradores personales)
+SCRATCH.md
+notes-*.md
+
+# Pruebas del propio kernel
+tmp/

@@ -1,0 +1,15 @@
+{
+  "name": "client-repo",
+  "description": "El docs repo es propio, pero el código pertenece a un cliente. No se escribe nada fuera del docs repo.",
+  "pointers": {
+    "write": false,
+    "files": []
+  },
+  "rules": [
+    "No se modifica el repo del cliente para acomodar esta documentación: ni punteros, ni AGENTS.md, ni carpetas del estándar. El agente abre la documentación explícitamente.",
+    "Se registran mediciones, no diagnósticos. No se declara algo como bug ni se concluye qué está mal sin validación del cliente.",
+    "Toda observación lleva evidencia reproducible: fichero y línea, comando o consulta que la demuestra. Sin evidencia no se escribe.",
+    "Se distingue siempre lo medido de lo heredado de documentación previa: los documentos describen la intención del momento en que se escribieron, no el estado actual.",
+    "Las notas de proyecto y las referencias van a git, no a memoria local del agente."
+  ]
+}
