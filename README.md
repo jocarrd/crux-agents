@@ -36,6 +36,8 @@ ningún proyecto tenga que saber dónde vive.
 
 Todos existen también como skills: `/crux-init`, `/crux-doctor`, etc.
 
+Guía completa, de lo sencillo a lo profundo: `GUIA.md`.
+
 ## Las tres capas
 
 | Capa | Qué es | Dónde vive |
@@ -76,6 +78,7 @@ concreto: describe la acción, no quién la ejecuta.
 ```
 crux/
 ├── STANDARD.md      el estándar completo — léelo si vas a tocar algo
+├── GUIA.md          cómo funciona todo, de principio a fin
 ├── VERSION
 ├── install.sh       una vez por máquina
 ├── bin/             init, adopt, add-repo, link, workspace, doctor, upgrade

@@ -1,0 +1,569 @@
+# Guía de crux, de principio a fin
+
+Esta guía explica el sistema completo, de lo más sencillo a lo más profundo.
+No hace falta leerla entera: cada nivel se entiende solo.
+
+- **Nivel 1** — qué es y qué problema resuelve
+- **Nivel 2** — instalarlo y el día a día
+- **Nivel 3** — crear la documentación de un proyecto nuevo
+- **Nivel 4** — adoptar un proyecto que ya existe
+- **Nivel 5** — cómo funciona por dentro
+- **Nivel 6** — el ciclo de desarrollo
+- **Nivel 7** — extenderlo
+- **Nivel 8** — mantenerlo
+
+---
+
+## Nivel 1 — Qué es y qué problema resuelve
+
+### El problema
+
+Una persona, varios proyectos, varios repos por proyecto, varias máquinas y
+muchas sesiones con agentes distintos. Sin disciplina explícita, el
+conocimiento se evapora: queda en la cabeza de alguien, en una conversación
+cerrada, en una memoria local que no sobrevive al cambio de portátil, o en un
+commit que nadie relee.
+
+Y hay un segundo problema, más sutil: **cada proyecto tiende a inventarse su
+propia forma de organizarse**. A los dos proyectos ya no sabes dónde está cada
+cosa, y el agente tampoco.
+
+### La solución en una frase
+
+Un repo llamado `crux` que contiene **el estándar, los procedimientos y las
+herramientas**, y desde el que se fabrican y mantienen los repos de
+documentación de cada proyecto.
+
+### Las tres capas
+
+```
+        crux  (kernel: reglas, plantillas, skills, tooling)
+          ↑            ↑
+    acme-docs    client-docs        ← proyectos, consumidores
+          ↑            ↑
+     repos código  repo cliente       ← reciben punteros generados
+```
+
+Las flechas apuntan **hacia arriba y solo hacia arriba**. El kernel no sabe qué
+proyectos existen: hay un test que falla si algún día menciona uno.
+
+| Capa | Qué contiene | Quién la edita |
+| ---- | ------------ | -------------- |
+| **Kernel** | Estándar, skills transversales, plantillas, comandos | Una vez, para todos |
+| **Proyecto** | Documentación del proyecto y sus skills propias | Por proyecto |
+| **Repo** | Punteros de contexto | Generados, no se editan |
+
+La regla que sostiene el reparto: **si algo cambia cuando cambias de proyecto,
+no es del kernel**.
+
+---
+
+## Nivel 2 — Instalarlo y el día a día
+
+### Instalación, una vez por máquina
+
+```bash
+git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
+~/Proyectos/crux/install.sh
+```
+
+Eso hace cuatro cosas:
+
+1. Registra dónde vive el kernel en `~/.crux/config`.
+2. Pone el comando `crux` en `~/.local/bin`.
+3. Enlaza las skills para Claude Code y genera los prompts para Codex.
+4. Escribe el contexto global de Codex en `~/.codex/AGENTS.md`.
+
+Es idempotente: se puede ejecutar mil veces. Y admite `--dry-run` para ver qué
+haría sin tocar nada.
+
+### Los comandos
+
+| Comando | Qué hace |
+| ------- | -------- |
+| `crux init <proyecto>` | Crea el repo de documentación de un proyecto nuevo |
+| `crux adopt` | Registra un repo de documentación que ya existe |
+| `crux add-repo <repo>` | Añade un repo al proyecto |
+| `crux link` | Genera y verifica los punteros de los repos de código |
+| `crux workspace` | Espacios aislados para trabajar en paralelo |
+| `crux doctor` | Verifica que todo cumple el estándar |
+| `crux upgrade` | Alinea el proyecto con la versión actual del kernel |
+
+Todos funcionan desde cualquier subdirectorio del proyecto: suben por el árbol
+buscando el `crux.json`, igual que hace git con `.git`.
+
+### El día a día, en tres momentos
+
+**Antes de empezar**, si vas a lanzar varias tareas en paralelo sobre el mismo
+repo: `/workspace`.
+
+**Antes de commitear**: `/ship`.
+
+**Antes de cerrar**: `/end-session`.
+
+---
+
+## Nivel 3 — Crear la documentación de un proyecto nuevo
+
+### El comando
+
+```bash
+crux init cocina-sencilla \
+  --description "Recetas de casa, bien explicadas." \
+  --repos "web,api" \
+  --profile multi-repo
+```
+
+O, en conversación con el agente, `/crux-init`, que pregunta lo que falte.
+
+### Qué ocurre exactamente, paso a paso
+
+**1. Crea la carpeta del proyecto y el repo remoto.**
+
+```
+~/Proyectos/cocina-sencilla/
+└── cocina-sencilla-docs/     ← creado en GitHub y clonado
+```
+
+El repo se llama siempre `<proyecto>-docs`. No es un capricho: media convención
+depende de que ese nombre sea predecible.
+
+**2. Materializa la estructura desde las plantillas.**
+
+```
+cocina-sencilla-docs/
+├── README.md              qué es el proyecto y qué repos lo componen
+├── AGENTS.md              el índice canónico para cualquier agente
+├── CLAUDE.md              → symlink a AGENTS.md
+├── crux.json              el contrato con el kernel
+├── .gitignore
+├── decisions/
+│   ├── README.md          cómo se escribe un ADR
+│   └── index.md           el registro de decisiones que cruzan repos
+├── repos/
+│   ├── README.md          la tabla repo → carpeta
+│   ├── web/README.md
+│   └── api/README.md
+└── .claude/skills/project/   vacío, para las skills propias
+```
+
+Sale de `templates/`, con los `{{PLACEHOLDERS}}` sustituidos. **Es
+determinista**: dos ejecuciones producen el mismo árbol, y hay un test que lo
+comprueba. Antes esto era prosa dentro de una skill que un agente reproducía a
+mano, y cada bootstrap salía un poco distinto.
+
+**3. Escribe el contrato.**
+
+```json
+{
+  "crux": "0.1.0",
+  "project": "cocina-sencilla",
+  "profile": "multi-repo",
+  "repos": ["web", "api"],
+  "sections": []
+}
+```
+
+**4. Hace el commit inicial y lo sube.**
+
+**5. Genera los punteros** de los repos de código que ya estén en disco.
+
+**6. Te dice qué hacer después.**
+
+### Lo que NO crea, y por qué
+
+No crea `architecture/`, `conventions/`, `operations/` ni `topics/`. Esas
+carpetas **aparecen cuando el proyecto las necesita**. Un scaffold lleno de
+carpetas vacías enseña a ignorarlas; el suelo mínimo obliga a que cada carpeta
+que exista signifique algo.
+
+### Dónde va cada documento
+
+Tres preguntas, en este orden:
+
+1. ¿Aplica a **cualquier** proyecto multi-repo? → `architecture/`,
+   `conventions/`, `operations/`
+2. ¿Solo a este proyecto, pero cruza varios repos suyos? → `topics/<tema>/`
+3. ¿Solo a un repo? → `repos/<repo>/`
+
+Así nunca aparece una carpeta suelta en la raíz que parece estándar y no lo es.
+
+### Añadir un repo después
+
+```bash
+crux add-repo worker --description "Procesa la cola de imágenes."
+```
+
+En un paso: crea `repos/worker/README.md`, lo declara en `crux.json`, añade su
+fila a la tabla del índice y genera sus punteros. Antes esto incluía editar a
+mano una lista dentro de un script.
+
+---
+
+## Nivel 4 — Adoptar un proyecto que ya existe
+
+Si el proyecto ya tiene documentación, `crux init` no es lo tuyo: es
+`crux adopt`, que **no reescribe nada**.
+
+```bash
+cd ~/Proyectos/mi-proyecto/mi-proyecto-docs
+crux adopt --profile multi-repo
+```
+
+Qué hace:
+
+1. Deduce el nombre del proyecto del nombre de la carpeta.
+2. Detecta los repos que ya tienen carpeta de documentación.
+3. Detecta las secciones opcionales activas.
+4. Escribe el `crux.json` que falta.
+5. Avisa de los hermanos en disco que aún no están declarados.
+6. Lanza `crux doctor` para decirte qué queda por alinear.
+
+Es la puerta de entrada de los proyectos anteriores al kernel.
+
+---
+
+## Nivel 5 — Cómo funciona por dentro
+
+### El contrato: `crux.json`
+
+Es la pieza central. Antes, el script de bootstrap tenía esto escrito dentro:
+
+```bash
+REPOS=(Acme acme-engine acme-cms acme-radar demo-co ...)
+```
+
+Un script del framework conociendo por su nombre los repos de un proyecto. Por
+eso no era reutilizable: para otro proyecto había que editarlo.
+
+Ahora cada proyecto **se declara a sí mismo** y el kernel solo lee. Es el patrón
+de un `package.json`: código genérico, datos en el manifiesto. Y el campo
+`crux` cumple la función de un lockfile — responde a "¿con qué versión del
+estándar se materializó esto?", pregunta que antes no tenía respuesta.
+
+### Cómo se encuentra el kernel a sí mismo
+
+En cascada, tres vías:
+
+1. La variable `CRUX_HOME`, si está.
+2. `~/.crux/config`, que escribió el instalador.
+3. Su propia ruta real, resuelta desde el script en ejecución.
+
+Por eso funciona igual invocado como `crux`, como `bash bin/doctor.sh`, o desde
+un test con el `$HOME` redirigido. Cero rutas absolutas escritas a mano.
+
+### Los perfiles: política como dato, no como prosa
+
+Este es el salto conceptual más importante del diseño.
+
+Las reglas de un proyecto de cliente —no tocar su repo, exigir evidencia, no
+diagnosticar sin validación— vivían como **párrafos en un README**. Un agente
+las lee si las lee, y ningún programa puede comprobarlas.
+
+Ahora son un fichero:
+
+```json
+{ "name": "client-repo", "pointers": { "write": false }, "rules": [...] }
+```
+
+Y ese `write: false` lo consumen dos programas distintos:
+
+- **`crux link`** lo lee y **no escribe** los punteros: el repo del cliente
+  queda literalmente con cero ficheros creados.
+- **`crux doctor`** lo lee y **verifica que nadie escribió**: si aparece un
+  `AGENTS.md` en el repo ajeno, es error con código de salida 1.
+
+Prevención y detección desde el mismo dato. Eso es convertir una norma en una
+garantía.
+
+Perfiles actuales: `multi-repo` (código propio) y `client-repo` (código ajeno).
+
+### Los adaptadores: una fuente, dos agentes
+
+Arquitectura hexagonal, literal. El núcleo es markdown neutro; los adaptadores
+traducen a cada agente:
+
+```
+skills/<nombre>/SKILL.md          ← la ÚNICA fuente
+        │
+        ├─ adapters/claude/  → symlink en ~/.claude/skills/<nombre>
+        └─ adapters/codex/   → stub en ~/.codex/prompts/<nombre>.md
+```
+
+La clave: **el stub de Codex no copia el contenido, apunta al fichero**. Si
+copiara, tendrías dos versiones divergiendo — el mismo problema del `cp` que
+todo esto viene a eliminar. Editas el `SKILL.md` una vez y los dos agentes ven
+el cambio al instante.
+
+De ahí sale una regla dura: **ninguna skill del kernel puede nombrar
+herramientas de un agente concreto**. Se describe *la acción*, no *quién la
+ejecuta*. Y hay un test que lo vigila.
+
+### Qué pasa cuando ejecutas `crux doctor`
+
+```
+bin/crux (dispatcher)
+  └─ resuelve CRUX_HOME desde su ruta real
+  └─ exec bin/doctor.sh
+       └─ carga lib/common.sh
+       └─ find_docs_repo()        sube el árbol buscando crux.json
+       └─ lee el contrato
+       └─ carga profiles/<perfil>.json
+       └─ siete bloques de comprobación
+       └─ exit 0 | 1
+```
+
+Los siete bloques: contrato, estructura obligatoria, repos declarados frente a
+la realidad, reglas del perfil, secciones declaradas, enlaces markdown y
+formato de las skills.
+
+**Errores** rompen el estándar. **Avisos** señalan desalineación que merece una
+decisión, no necesariamente una acción.
+
+---
+
+## Nivel 6 — El ciclo de desarrollo
+
+Tres skills sostienen el día a día.
+
+### `/workspace` — antes de empezar
+
+Un worktree de git aísla los ficheros. **El runtime no.** Es la parte que se
+olvida y la que hace daño: dos tareas en paralelo sobre el mismo repo siguen
+peleándose por el puerto, la base de datos y el `.env`. El conflicto que creías
+haber eliminado reaparece como datos corrompidos — peor que un conflicto de
+merge, porque es silencioso.
+
+```bash
+crux workspace new fix-login
+crux workspace list
+crux workspace rm fix-login
+```
+
+Cada espacio recibe un **slot**: un rango de puertos, una base de datos y un
+fichero de entorno derivados. Se configura en el `crux.json` del proyecto:
+
+```json
+"workspace": {
+  "portBase": 3000,
+  "portsPerSlot": 10,
+  "envFile": ".env.local",
+  "env": {
+    "PORT": "{{PORT0}}",
+    "ENGINE_PORT": "{{PORT1}}",
+    "DATABASE_URL": "postgres://localhost/app_ws{{SLOT}}",
+    "REDIS_URL": "redis://localhost:6379/{{SLOT}}"
+  }
+}
+```
+
+Un registro compartido garantiza que dos espacios no cojan el mismo hueco, y
+los slots liberados se reutilizan.
+
+**Detalle de diseño**: el worktree se crea como **hermano** del repo
+(`<repo>-ws-<nombre>`), no en un directorio aparte. Es deliberado: los punteros
+de contexto son rutas relativas (`../<proyecto>-docs/`), y desde fuera del
+proyecto dejarían de resolver. El agente que trabajara ahí se quedaría sin
+contexto.
+
+Qué aislar, por orden de daño: puertos (falla al arrancar), base de datos (se
+corrompe en silencio), fichero de entorno (invalida lo anterior), volúmenes con
+estado, recursos externos compartidos (aquí normalmente no puedes: no lances en
+paralelo tareas que los toquen).
+
+### `/ship` — antes de commitear
+
+Cadena de puertas donde cualquiera aborta:
+
+```
+1. Sanidad      tests en verde ANTES de mirar nada
+                (si ya estaban rojos, no es tu diff: dilo y para)
+2. Diff         leerlo entero: ¿hace exactamente lo que pretendías?
+3. Correctitud  bugs, casos límite, errores no gestionados
+4. Calidad      ¿hay forma más simple? — después de 3, nunca antes
+5. Regresión    tests otra vez, porque los arreglos rompen cosas
+6. Realidad     levantar el entorno, solo si el diff toca superficie observable
+7. Doc drift    ¿esto invalida alguna documentación?
+8. Commit       conventional commit que explique el porqué
+```
+
+La puerta 6 es la cara. Un script clasifica el diff y decide:
+
+```bash
+bash ~/.claude/skills/ship/scripts/diff-scope.sh
+```
+
+| Lo que toca | Qué validar |
+| ----------- | ----------- |
+| Interfaz | Verlo, en los viewports que importen |
+| API | Llamar a los endpoints, no solo sus tests |
+| Datos | Que la migración aplique **y revierta** |
+| Dependencias | Que arranque desde cero, no desde tu caché |
+
+Dos decisiones de diseño que deciden si esto se usa o se abandona: **la puerta
+6 es condicional** y **hay modo rápido y modo completo**. Si tarda doce minutos
+siempre, dejas de invocarlo en dos semanas y la puerta ha fracasado.
+
+El orden 3 antes que 4 tampoco es casual: **simplificar código incorrecto es
+tirar el trabajo**.
+
+### `/end-session` — antes de cerrar
+
+Cuatro preguntas sobre la sesión —decisiones, gotchas, convenciones,
+preferencias—, cada una con su destino. Luego: higiene de la memoria del
+agente, `crux doctor`, revisión de la frontera de las skills, confirmación del
+usuario elemento a elemento, commits por categoría y reporte final.
+
+Regla que atraviesa todo: **las memorias de tipo `project` y `reference` van a
+git; solo `user` y `feedback` se quedan locales**. Lo primero es del proyecto y
+tiene que sobrevivir al cambio de máquina; lo segundo es sobre la persona.
+
+---
+
+## Nivel 7 — Extenderlo
+
+### La frontera entre kernel y proyecto
+
+La regla vieja era "¿le serviría a otro proyecto?", que se responde con
+imaginación. La nueva se puede aplicar:
+
+> **Tapa todos los nombres propios de la skill. Si el procedimiento sigue
+> teniendo sentido y valor, hay un patrón dentro.**
+
+Se promueve el procedimiento; en el proyecto queda un **adaptador** corto con
+rutas, credenciales y nombres propios.
+
+Ejemplo real: `mobile-native-test` describía cómo probar una app en un Android
+físico. Tapando los nombres propios quedaba el procedimiento entero —adb,
+permisos udev, `screencap`, Fast Refresh, el gotcha de que en algunas capas de
+fabricante los toques no llegan a la app—. Eso subió como `device-loop`. Abajo
+quedó `demo-co-device`: package, deep-link y dispositivo de referencia.
+
+Dos guardas:
+
+- **Regla de las dos ocurrencias.** Se promueve cuando dos proyectos lo
+  necesitan de verdad. Excepción admisible: valor alto demostrado y
+  acoplamiento casi nulo.
+- **Existe el camino inverso.** Si una skill del kernel acumula condicionales
+  por proyecto, no era un patrón: se degrada.
+
+### `/skill-audit`
+
+Automatiza la vigilancia de esa frontera:
+
+```bash
+node ~/.claude/skills/skill-audit/scripts/audit.mjs
+```
+
+Recorre todos los proyectos adoptados y reporta tres cosas:
+
+- **Baja densidad de nombres propios.** Los términos se derivan del `crux.json`
+  de cada proyecto —su nombre y el de sus repos—, así que no hay lista que
+  mantener.
+- **Pares de proyectos distintos que describen lo mismo.** La promoción más
+  obvia y la más invisible: nadie ve las dos skills a la vez.
+- **Las que ya son adaptadores**, excluidas de las candidatas.
+
+Son señales, no veredictos. El script señala, el test decide, la regla de las
+dos ocurrencias frena.
+
+Dos disparadores: **en caliente** al crear una skill —es cuando de verdad se
+sabe— y **en frío** enganchado al cierre de sesión.
+
+### Cómo se promueve una skill, en cinco pasos
+
+1. Separa el procedimiento de los datos: lo que queda al tapar los nombres
+   propios es lo que sube.
+2. Escribe la skill del kernel sin mencionar proyectos ni herramientas de un
+   agente concreto.
+3. Reduce la del proyecto a un adaptador que remita el método al kernel.
+4. **Verifica que la extracción no perdió nada**: ejecútala contra el caso real
+   del proyecto de origen y comprueba que da el mismo resultado. Una skill
+   genérica que ya no resuelve el caso concreto es peor que la específica.
+5. Reinstala el kernel.
+
+### Versionar el estándar
+
+`VERSION` sigue semver:
+
+- **patch** — redacción, arreglos de scripts sin cambio de contrato
+- **minor** — plantillas, skills o comprobaciones nuevas; los proyectos siguen
+  siendo válidos
+- **major** — cambia la estructura obligatoria o el formato de `crux.json`
+
+Cuando el estándar evoluciona se cambia **aquí primero**, y los proyectos se
+alinean con `crux upgrade`. Ningún proyecto inventa su variante.
+
+`crux upgrade` materializa las piezas que falten y actualiza la versión
+declarada. **No sobrescribe contenido existente** salvo `--force`: la
+documentación es del proyecto, las plantillas solo cubren huecos.
+
+---
+
+## Nivel 8 — Mantenerlo
+
+### La suite del propio kernel
+
+```bash
+./test/run.sh            # todos los casos
+./test/run.sh doctor     # los que casan con el patrón
+```
+
+Cada caso corre en un sandbox aislado con los directorios de agentes
+redirigidos: la suite **no toca** `~/.claude`, `~/.codex` ni `~/Proyectos`.
+
+Tres tipos de caso, y el tercero es el interesante:
+
+1. **Funcionales** — init crea la estructura, link es idempotente, upgrade
+   actualiza, workspace reparte slots.
+2. **De detección** — que `doctor` **falle** cuando debe: contrato ausente,
+   enlaces rotos, skill sin frontmatter, escritura en el repo de un cliente.
+3. **Estructurales** — que ninguna skill del kernel nombre un proyecto ni se
+   ate a un agente.
+
+Los del tercer tipo no prueban comportamiento: **protegen la propiedad
+arquitectónica que justifica que este repo exista**. Si dentro de seis meses
+alguien mete una skill con rutas de un proyecto concreto, el test se pone rojo.
+Es lo que impide que crux vuelva a acoplarse a lo que documenta, que es
+exactamente cómo nació el problema la primera vez.
+
+Ese test ya encontró suciedad real tres veces mientras se construía el kernel.
+
+### Qué hacer cuando algo falla
+
+| Síntoma | Causa probable | Arreglo |
+| ------- | -------------- | ------- |
+| `falta crux.json` | El proyecto no está adoptado | `crux adopt` |
+| `materializado con crux X, el kernel es Y` | Estándar desfasado | `crux upgrade` |
+| `<repo>/ sin AGENTS.md` | Repo nuevo sin punteros | `crux link` |
+| `repos/<x>/ no está declarado` | Carpeta huérfana | `crux add-repo`, o bórrala |
+| `enlaces markdown rotos` | Documentación movida | Arreglar, o pasar a backticks |
+| `perfil client-repo: ... no debería existir` | Se escribió en código ajeno | Borrar el fichero |
+| Una skill no aparece en el agente | Instalación desfasada | `~/Proyectos/crux/install.sh` |
+
+### La regla de los enlaces, que sorprende a todo el mundo
+
+Dentro de la documentación **solo se enlazan ficheros del propio repo de
+documentación**. Las referencias a código de un repo hermano van en backticks,
+como texto, sin enlazar.
+
+Por qué: los enlaces se rompen al mover ficheros y, sin un build que los valide,
+terminan mintiendo. Un path en backticks el agente lo resuelve igual y nunca se
+rompe. `crux doctor` verifica los que quedan.
+
+---
+
+## Resumen de una página
+
+- **Instalar**: clonar `crux` y ejecutar `install.sh`. Una vez por máquina.
+- **Proyecto nuevo**: `crux init <nombre>`. Determinista, sale de plantillas.
+- **Proyecto existente**: `crux adopt`. No reescribe nada.
+- **Repo nuevo**: `crux add-repo <nombre>`. Declara, documenta y enlaza.
+- **Trabajo en paralelo**: `crux workspace new <tarea>`. Aísla ficheros y
+  runtime.
+- **Antes de commitear**: `/ship`. Ocho puertas, la cara es condicional.
+- **Antes de cerrar**: `/end-session`. Lo que deba sobrevivir, a git.
+- **Cuando dudes si algo cumple**: `crux doctor`. El estándar se verifica, no se
+  confía.
+- **Cuando el estándar mejore**: cambiarlo aquí, y `crux upgrade` en cada
+  proyecto.
