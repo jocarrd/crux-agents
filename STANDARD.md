@@ -382,7 +382,8 @@ credenciales y nombres. Con dos guardas:
 | `crux-init`, `crux-doctor`, `add-repo-to-docs` | Gestión del estándar |
 | `promote-to-docs`, `adr`, `explain-plan`, `end-session` | Decidir y que el conocimiento sobreviva |
 | `repo-map` | Orientarse en un repo desconocido o dormido |
-| `workspace`, `ship` | El ciclo de trabajo diario |
+| `flow` | **El ciclo completo y su orden** — la entrada por defecto |
+| `workspace`, `ship` | Las piezas del ciclo: aislar y verificar |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
@@ -392,6 +393,8 @@ credenciales y nombres. Con dos guardas:
 ### El ciclo de desarrollo
 
 Tres skills sostienen el trabajo del día a día, y se usan en este orden:
+
+**El orden lo declara `/flow`**, que es lo que un agente lee primero. Resumido:
 
 1. **`/workspace`** — antes de empezar, si va a haber trabajo en paralelo sobre
    el mismo repo. Aísla ficheros **y runtime**: sin lo segundo, dos tareas

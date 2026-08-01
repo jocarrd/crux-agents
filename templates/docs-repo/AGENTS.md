@@ -10,27 +10,25 @@ actual, no todo a ciegas.
 
 ## Cómo se trabaja aquí
 
-Antes de buscar dónde está algo, esto es lo que hay que hacer y cuándo:
+**Ante cualquier tarea de desarrollo, el ciclo es `/flow`**: entender, aislar
+el espacio, planificar, desarrollar, pasar la puerta, proponer y cerrar. Esa
+skill explica el orden y por qué ese orden.
+
+Los pasos, si necesitas ir directo a uno:
 
 | Momento | Qué invocar |
 | ------- | ----------- |
-| Entras a un repo que no conoces | `/repo-map` |
-| Vas a lanzar varias tareas a la vez sobre el mismo repo | `/workspace` |
+| Entras y no conoces el repo | `/repo-map` |
+| Vas a empezar a trabajar | `/workspace` — tu rama y tu entorno, sin pisar a nadie |
+| Antes de tocar código | `/explain-plan` |
 | Algo falla y no sabes por qué | `/root-cause` |
-| Vas a añadir o arreglar comportamiento | `/write-tests` |
-| **Vas a commitear** | **`/ship`** |
-| Se ha tomado una decisión que no queda en el código | `/adr` |
-| Terminas la sesión | `/end-session` |
+| Vas a commitear | `/ship` |
+| Has terminado | `/workspace finish` — sube la rama y abre la propuesta |
+| Cierras la sesión | `/end-session` |
 
 Las dos que más se pasan por alto son `/ship` y `/end-session`, y son las que
 sostienen el resto: la primera evita que entre trabajo roto, la segunda evita
 que se pierda lo aprendido.
-
-> **Cómo carga este contexto cada agente:**
-> - **Claude Code** lo lee como `CLAUDE.md` (symlink a este fichero) y resuelve
->   los `@-import` de los repos hermanos automáticamente.
-> - **Otros agentes** leen este `AGENTS.md`. Cada repo hermano tiene también un
->   `AGENTS.md` que apunta aquí.
 
 ---
 

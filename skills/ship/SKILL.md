@@ -89,6 +89,21 @@ Conventional commit, en imperativo y minúscula, con un cuerpo que explique **el
 porqué** — el qué ya está en el diff. Si el cambio es de varios tipos, son
 varios commits.
 
+## Dejar constancia
+
+Después del commit, anota qué se verificó:
+
+```bash
+printf '%s\n' "$(git rev-parse HEAD)" > .crux-ship
+```
+
+No es burocracia: **`crux workspace finish` lo lee para no abrir una propuesta
+de código que no ha pasado la puerta**. Si el commit cambia después, la marca
+deja de coincidir y hay que volver a pasarla, que es exactamente lo que debe
+ocurrir.
+
+Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.
+
 ## Anti-patterns
 
 - **Empezar por la puerta 3.** Sin la 1 no sabes si el rojo es tuyo.

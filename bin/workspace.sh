@@ -3,6 +3,7 @@
 #
 #   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--force]
 #   crux workspace list
+#   crux workspace finish <nombre> [--title "..."]
 #   crux workspace rm <nombre>
 #
 # Un worktree de git aísla los ficheros, pero no el runtime: dos agentes sobre
@@ -106,6 +107,18 @@ cmd_new() {
 
   [[ -e "$path" ]] && die "ya existe $path"
 
+  # Si otro espacio ya trabaja sobre este repo, decirlo: es la señal de que hay
+  # otra sesión viva y de que conviene repartir por superficie.
+  otros="$(node -e '
+    const fs = require("fs");
+    try {
+      const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const m = Object.entries(r.workspaces || {}).filter(([, w]) => w.repo === process.argv[2]);
+      process.stdout.write(m.map(([n, w]) => `${n} (${w.branch})`).join(", "));
+    } catch {}
+  ' "$REGISTRY" "$repo" 2>/dev/null || true)"
+  [[ -n "$otros" ]] && warn "ya hay trabajo abierto sobre $repo_name: $otros"
+
   registry_init
   with_lock
 
@@ -188,6 +201,85 @@ cmd_new() {
   info "cd $path"
 }
 
+cmd_finish() {
+  local name="${1:-}"; shift || true
+  [[ -n "$name" ]] || die "uso: crux workspace finish <nombre> [--title \"...\"]"
+
+  local titulo=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --title) titulo="$2"; shift 2 ;;
+      *) die "opción desconocida: $1" ;;
+    esac
+  done
+
+  registry_init
+  local datos
+  datos="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const w = r.workspaces[process.argv[2]];
+    if (!w) process.exit(2);
+    process.stdout.write([w.path, w.branch, w.repo].join("\n"));
+  ' "$REGISTRY" "$name")" || die "no existe el espacio '$name'"
+
+  local path branch repo
+  path="$(echo "$datos" | sed -n 1p)"
+  branch="$(echo "$datos" | sed -n 2p)"
+  repo="$(echo "$datos" | sed -n 3p)"
+  [[ -d "$path" ]] || die "el espacio '$name' ya no está en disco"
+
+  # Nada sale de un espacio sin estar commiteado: lo que se queda fuera de git
+  # no llega a la revisión, y ese es el punto de trabajar así.
+  if [[ -n "$(git -C "$path" status --porcelain)" ]]; then
+    err "quedan cambios sin commitear en $path"
+    git -C "$path" status -s | sed 's/^/      /'
+    exit 1
+  fi
+
+  local commits
+  commits="$(git -C "$path" log --oneline "origin/HEAD..$branch" 2>/dev/null | wc -l || echo 0)"
+  [[ "$commits" -eq 0 ]] && commits="$(git -C "$path" log --oneline "$branch" --not --remotes | wc -l)"
+  [[ "$commits" -eq 0 ]] && die "no hay nada que proponer en $branch"
+
+  # La puerta de calidad deja constancia del commit que verificó. Sin ella, se
+  # abriría una propuesta de código que nadie ha revisado, y la revisión pasaría
+  # a depender de que alguien se acuerde.
+  local head verificado
+  head="$(git -C "$path" rev-parse HEAD)"
+  verificado="$(tr -d '[:space:]' < "$path/.crux-ship" 2>/dev/null || echo "")"
+  if [[ "$verificado" != "$head" ]]; then
+    err "este commit no ha pasado la puerta de calidad"
+    [[ -n "$verificado" ]] && info "lo último verificado fue ${verificado:0:8}, y HEAD es ${head:0:8}"
+    info "pasa /ship y repite"
+    exit 1
+  fi
+  ok "puerta de calidad pasada sobre ${head:0:8}"
+
+  git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
+  ok "$branch subida ($commits commits)"
+
+  local cuerpo
+  cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
+    "$(git -C "$path" log --format='- %s' "$branch" --not --remotes)" "${head:0:8}")"
+
+  local url_pr=""
+  if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+    url_pr="$(cd "$path" && gh pr create \
+      --title "${titulo:-$(git log -1 --format=%s "$branch")}" \
+      --body "$cuerpo" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$url_pr" ]]; then
+    ok "propuesta abierta: $url_pr"
+  else
+    info "abre la propuesta en tu proveedor desde la rama $branch"
+  fi
+
+  echo
+  info "cuando esté integrada: crux workspace rm $name"
+}
+
 cmd_list() {
   registry_init
   node -e '
@@ -257,6 +349,7 @@ cmd_rm() {
 case "${1:-}" in
   new)  shift; cmd_new "$@" ;;
   list) shift; cmd_list ;;
+  finish) shift; cmd_finish "$@" ;;
   rm)   shift; cmd_rm "$@" ;;
-  *) die "uso: crux workspace {new|list|rm}" ;;
+  *) die "uso: crux workspace {new|list|finish|rm}" ;;
 esac

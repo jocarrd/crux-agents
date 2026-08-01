@@ -262,3 +262,47 @@ test_workspace_respeta_el_perfil_de_cliente() {
   bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --force >/dev/null 2>&1
   assert_file "$root/vendor-ws-x/f.txt" "con --force sí, cuando el cliente lo autoriza"
 }
+
+test_finish_no_propone_codigo_sin_revisar() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/prop"
+  mkdir -p "$root/app" "$root/prop-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"prop","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/prop-docs/crux.json"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new tarea --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-tarea"
+  echo cambio > "$ws/nuevo.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: algo"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea 2>&1)"
+  assert_contains "$out" "no ha pasado la puerta" "se niega a proponer sin revisión"
+
+  # Con la marca de la puerta, pero de un commit anterior: tampoco vale.
+  git -C "$ws" rev-parse HEAD~0 > "$ws/.crux-ship"
+  echo mas > "$ws/otro.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: mas"
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea 2>&1)"
+  assert_contains "$out" "no ha pasado la puerta" "una marca vieja no cuenta"
+  assert_contains "$out" "lo último verificado" "y dice por qué no cuenta"
+}
+
+test_workspace_avisa_si_ya_hay_otra_sesion_en_el_repo() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/dos"
+  mkdir -p "$root/app"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+
+  bash "$CRUX_HOME/bin/workspace.sh" new primera --repo "$root/app" >/dev/null 2>&1
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new segunda --repo "$root/app" 2>&1)"
+  assert_contains "$out" "ya hay trabajo abierto" "avisa de la otra sesión viva"
+  assert_contains "$out" "primera" "y dice cuál"
+}

@@ -19,17 +19,21 @@ No vive documentación aquí dentro. Si vas a escribirla, va allí.
 
 ## Cómo se trabaja aquí
 
-Los procedimientos del proyecto están en `../{{DOCS}}/AGENTS.md` y en el kernel
-del estándar. Si tu agente no los reconoce como comandos, ábrelos como
-documentos y sigue el procedimiento:
+**Ante cualquier tarea de desarrollo, el ciclo es `flow`**: entender, aislar
+el espacio, planificar, desarrollar, pasar la puerta, proponer y cerrar. Esa
+skill explica el orden y por qué ese orden.
 
-| Momento | Procedimiento |
-| ------- | ------------- |
+Los pasos, si necesitas ir directo a uno:
+
+| Momento | Qué invocar |
+| ------- | ----------- |
 | Entras y no conoces el repo | `repo-map` |
-| Vas a lanzar varias tareas a la vez sobre él | `workspace` |
+| Vas a empezar a trabajar | `workspace` — tu rama y tu entorno, sin pisar a nadie |
+| Antes de tocar código | `explain-plan` |
 | Algo falla y no sabes por qué | `root-cause` |
 | Vas a commitear | `ship` |
-| Terminas la sesión | `end-session` |
+| Has terminado | `workspace finish` — sube la rama y abre la propuesta |
+| Cierras la sesión | `end-session` |
 
 ## Reglas que no se negocian
 
