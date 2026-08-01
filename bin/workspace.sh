@@ -399,8 +399,21 @@ cmd_merge() {
     exit 0
   fi
 
-  ( cd "$path" && gh pr merge --squash --delete-branch ) || die "no pude fusionar la propuesta"
+  # Sin --delete-branch: gh intenta cambiar a la rama base para borrar la local,
+  # y desde un worktree eso falla porque la base ya está usada por otro. La rama
+  # remota se borra aparte.
+  ( cd "$path" && gh pr merge --squash ) || true
+
+  # No se confía en el código de salida: el fallo puede venir de la limpieza
+  # posterior con la fusión ya hecha, y reportar un error entonces sería mentir.
+  local fusionada
+  fusionada="$(cd "$path" && gh pr view --json mergedAt -q '.mergedAt // ""' 2>/dev/null)"
+  [[ -n "$fusionada" ]] || die "la propuesta #$PR_NUM no se fusionó"
   ok "propuesta #$PR_NUM fusionada"
+
+  git -C "$path" push -q origin --delete "$branch" 2>/dev/null \
+    && ok "rama remota borrada" \
+    || info "la rama remota sigue ahí: bórrala desde tu proveedor si quieres"
 
   echo
   info "el espacio sigue vivo: 'crux workspace rm $name' libera el slot y sus recursos"
