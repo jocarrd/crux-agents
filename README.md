@@ -27,6 +27,7 @@ ningún proyecto tenga que saber dónde vive.
 | Comando | Qué hace |
 | ------- | -------- |
 | `crux init <project>` | Crea `~/Proyectos/<project>/<project>-docs` desde las plantillas |
+| `crux clone <project>` | Trae un proyecto entero a una máquina nueva |
 | `crux adopt` | Registra un docs repo que ya existe bajo el estándar |
 | `crux add-repo <repo>` | Registra un repo nuevo en un proyecto adoptado |
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
@@ -40,6 +41,7 @@ ningún proyecto tenga que saber dónde vive.
 Todos existen también como skills: `/crux-init`, `/crux-doctor`, etc.
 
 Guía completa, de lo sencillo a lo profundo: `GUIA.md`.
+Si vas a trabajar **en este repo**, empieza por `AGENTS.md`.
 
 ## Las tres capas
 
@@ -80,11 +82,12 @@ concreto: describe la acción, no quién la ejecuta.
 
 ```
 crux/
+├── AGENTS.md        contexto para trabajar en el kernel (CLAUDE.md → symlink)
 ├── STANDARD.md      el estándar completo — léelo si vas a tocar algo
 ├── GUIA.md          cómo funciona todo, de principio a fin
 ├── VERSION
 ├── install.sh       una vez por máquina
-├── bin/             init, adopt, add-repo, link, workspace, hooks, usage, doctor, upgrade
+├── bin/             init, clone, adopt, add-repo, link, workspace, hooks, usage, doctor, upgrade
 ├── lib/             verificadores de paths y utilidades comunes
 ├── templates/       docs-repo/ y code-repo/
 ├── profiles/        multi-repo, client-repo

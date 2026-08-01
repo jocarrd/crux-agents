@@ -3,6 +3,10 @@
 Esta guía explica el sistema completo, de lo más sencillo a lo más profundo.
 No hace falta leerla entera: cada nivel se entiende solo.
 
+Sirve igual a una persona que a un agente. Si eres un agente y vas a **trabajar
+en este repo** —añadir una skill, tocar un comando—, lee antes `AGENTS.md`: ahí
+están las cuatro reglas que sostienen el kernel y que hay tests vigilando.
+
 - **Nivel 1** — qué es y qué problema resuelve
 - **Nivel 2** — instalarlo y el día a día
 - **Nivel 3** — crear la documentación de un proyecto nuevo
@@ -64,10 +68,11 @@ no es del kernel**.
 
 ```bash
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh
+~/Proyectos/crux/install.sh --remote 'git@github.com:<tu-usuario>/{repo}.git'
 ```
 
-Eso hace cuatro cosas:
+`--remote` es opcional y fija el remoto habitual de esta máquina, para no
+repetirlo en cada proyecto nuevo. Eso hace cuatro cosas:
 
 1. Registra dónde vive el kernel en `~/.crux/config`.
 2. Pone el comando `crux` en `~/.local/bin`.
@@ -82,11 +87,15 @@ haría sin tocar nada.
 | Comando | Qué hace |
 | ------- | -------- |
 | `crux init <proyecto>` | Crea el repo de documentación de un proyecto nuevo |
+| `crux clone <proyecto>` | Trae un proyecto entero a una máquina nueva |
 | `crux adopt` | Registra un repo de documentación que ya existe |
 | `crux add-repo <repo>` | Añade un repo al proyecto |
 | `crux link` | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | Espacios aislados para trabajar en paralelo |
-| `crux doctor` | Verifica que todo cumple el estándar |
+| `crux hooks` | Engancha el estándar al cierre de sesión y al commit |
+| `crux usage` | Mide qué skills se usan de verdad |
+| `crux doctor` | Verifica que el proyecto cumple el estándar |
+| `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
 | `crux upgrade` | Alinea el proyecto con la versión actual del kernel |
 
 Todos funcionan desde cualquier subdirectorio del proyecto: suben por el árbol
@@ -200,6 +209,28 @@ mano una lista dentro de un script.
 
 ---
 
+## Nivel 3b — Cambiar de ordenador
+
+Tres comandos:
+
+```bash
+git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
+~/Proyectos/crux/install.sh --remote 'git@github.com:jocarrd/{repo}.git'
+crux clone acme
+```
+
+`crux clone` trae el docs repo, **lee su contrato** y clona los repos que
+declara. Dos cosas salen de ahí y no de un supuesto: la lista de repos —que en
+una guía escrita a mano se queda desfasada en cuanto añades uno— y **de dónde
+se clona cada uno**.
+
+Después, `crux doctor --machine` dice qué falta en la máquina: herramientas,
+autenticaciones, enlaces rotos. Lo que salga como aviso limita qué skills
+puedes usar; lo que salga como error, rompe algo.
+
+Las credenciales y secretos de cada proyecto siguen siendo trabajo manual, y
+viven en su propia documentación de onboarding.
+
 ## Nivel 4 — Adoptar un proyecto que ya existe
 
 Si el proyecto ya tiene documentación, `crux init` no es lo tuyo: es
@@ -240,6 +271,45 @@ Ahora cada proyecto **se declara a sí mismo** y el kernel solo lee. Es el patr�
 de un `package.json`: código genérico, datos en el manifiesto. Y el campo
 `crux` cumple la función de un lockfile — responde a "¿con qué versión del
 estándar se materializó esto?", pregunta que antes no tenía respuesta.
+
+### El remoto: el kernel no sabe de proveedores
+
+El contrato declara **cómo se componen las URLs** de los repos del proyecto:
+
+```json
+"remote": {
+  "url": "git@github.com:jocarrd/{repo}.git",
+  "repos": { "codigo-del-cliente": "https://otro-host.com/su-org/codigo.git" },
+  "visibility": "private"
+}
+```
+
+La plantilla con `{repo}` es el formato primario porque es el único que cubre
+remotos que no siguen la forma `owner/repo`. El override por repo no es un caso
+raro: **un proyecto puede tener la documentación en tu remoto y el código en el
+de otra persona**, que es justo lo que pasa con el perfil de cliente.
+
+`crux adopt` lo deduce del `origin` de lo que ya esté clonado, así que no se
+escribe a mano. Y `crux doctor` avisa cuando lo declarado deja de coincidir con
+la realidad: esa deriva no molesta en tu máquina y hace fallar el clonado en la
+siguiente.
+
+**La visibilidad importa por un motivo concreto**: solo se puede aplicar donde
+hay API para crear el repo. En el resto de proveedores lo crea una persona, y
+un docs repo público con documentación interna dentro no es un descuido de
+configuración, es un incidente. Por eso se declara, `init` la dice en voz alta
+cuando no puede aplicarla, y `doctor` comprueba la real donde puede.
+
+### El idioma
+
+También es una propiedad declarada, no una costumbre. La regla: descripciones y
+documentación en el idioma del proyecto, nombres e identificadores en inglés,
+términos técnicos sin traducir.
+
+Importa porque **la descripción de una skill decide si se activa**, y debe
+llevar las palabras con las que aparece el problema. Si el trabajo se pide en un
+idioma y la descripción está en otro, la skill existe pero se activa peor justo
+cuando hace falta.
 
 ### Cómo se encuentra el kernel a sí mismo
 
@@ -407,6 +477,16 @@ siempre, dejas de invocarlo en dos semanas y la puerta ha fracasado.
 El orden 3 antes que 4 tampoco es casual: **simplificar código incorrecto es
 tirar el trabajo**.
 
+### Las demás del ciclo
+
+`/write-tests` y `/root-cause` cubren lo que antes no tenía procedimiento:
+elegir qué merece un test y depurar sin proponer el arreglo antes de entender
+el fallo. `/e2e` pone el criterio por delante de la herramienta —un flujo lo
+merece si su rotura te la cuenta un usuario y no un test—. `/code-health` mide
+el conjunto, no el diff, que es lo que se erosiona despacio cuando se genera
+mucho código. Y `/explain-plan` presenta una propuesta para poder pararla a
+tiempo.
+
 ### `/end-session` — antes de cerrar
 
 Cuatro preguntas sobre la sesión —decisiones, gotchas, convenciones,
@@ -529,6 +609,36 @@ exactamente cómo nació el problema la primera vez.
 
 Ese test ya encontró suciedad real tres veces mientras se construía el kernel.
 
+### Que el estándar se cumpla solo
+
+```bash
+crux hooks install    # desde el docs repo del proyecto
+crux hooks status
+```
+
+Instala dos cosas: un aviso de deriva de documentación al cerrar sesión, y un
+`pre-commit` que **bloquea el commit si `doctor` no pasa**. Un estándar que hay
+que acordarse de comprobar se comprueba a veces.
+
+Un hook que apunta a un fichero inexistente no falla: no hace nada. Y eso es
+peor, porque el sistema parece vigilado y no lo está. Por eso `doctor --machine`
+lo trata como error.
+
+### Saber si esto sirve
+
+```bash
+crux usage --days=90
+```
+
+Mide qué skills se invocan de verdad contra el catálogo instalado, y separa las
+que nunca se usan. No es una lista de borrado: una skill de incidencias sin usar
+es una buena noticia. Lo que hay que mirar es la que existe hace meses, cubre
+algo frecuente y aun así nadie invoca — casi siempre es que su descripción no se
+activa cuando debería.
+
+Distingue **no tener datos** de **no tener uso**, que es la forma fácil de
+mentir con esta métrica.
+
 ### Qué hacer cuando algo falla
 
 | Síntoma | Causa probable | Arreglo |
@@ -540,6 +650,9 @@ Ese test ya encontró suciedad real tres veces mientras se construía el kernel.
 | `enlaces markdown rotos` | Documentación movida | Arreglar, o pasar a backticks |
 | `perfil client-repo: ... no debería existir` | Se escribió en código ajeno | Borrar el fichero |
 | Una skill no aparece en el agente | Instalación desfasada | `~/Proyectos/crux/install.sh` |
+| `crux clone` no sabe de dónde traer algo | Sin `remote` en el contrato | Declararlo, o `crux adopt` para deducirlo |
+| Un hook no hace nada | Apunta a un fichero que ya no existe | `crux hooks install` |
+| Falta una herramienta para una skill | — | `crux doctor --machine` |
 
 ### La regla de los enlaces, que sorprende a todo el mundo
 
@@ -556,6 +669,7 @@ rompe. `crux doctor` verifica los que quedan.
 ## Resumen de una página
 
 - **Instalar**: clonar `crux` y ejecutar `install.sh`. Una vez por máquina.
+- **Ordenador nuevo**: `install.sh --remote '...'` y `crux clone <proyecto>`.
 - **Proyecto nuevo**: `crux init <nombre>`. Determinista, sale de plantillas.
 - **Proyecto existente**: `crux adopt`. No reescribe nada.
 - **Repo nuevo**: `crux add-repo <nombre>`. Declara, documenta y enlaza.
@@ -565,5 +679,7 @@ rompe. `crux doctor` verifica los que quedan.
 - **Antes de cerrar**: `/end-session`. Lo que deba sobrevivir, a git.
 - **Cuando dudes si algo cumple**: `crux doctor`. El estándar se verifica, no se
   confía.
+- **Que se cumpla solo**: `crux hooks install` en cada docs repo.
+- **Saber si sirve**: `crux usage`.
 - **Cuando el estándar mejore**: cambiarlo aquí, y `crux upgrade` en cada
   proyecto.

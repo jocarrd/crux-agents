@@ -549,3 +549,18 @@ test_init_deja_la_visibilidad_dicha_cuando_no_la_puede_aplicar() {
   assert_contains "$(cat "$CRUX_PROJECTS_DIR/tau2/tau2-docs/crux.json")" '"visibility": "private"' \
     "el contrato guarda la visibilidad prevista, para poder verificarla luego"
 }
+
+test_el_kernel_documenta_su_propio_contexto() {
+  assert_file "$CRUX_HOME/AGENTS.md" "el kernel tiene contexto para quien venga a tocarlo"
+  assert_symlink "$CRUX_HOME/CLAUDE.md" "AGENTS.md" "y un solo fichero, no dos que divergen"
+
+  # AGENTS.md cita por nombre los tests que vigilan sus reglas duras. Si alguien
+  # renombra uno, la documentación pasa a mentir sin que nadie se entere.
+  local citados faltan=0
+  citados="$(grep -oE 'test_[a-z_]+' "$CRUX_HOME/AGENTS.md" | sort -u)"
+  while IFS= read -r t; do
+    [[ -n "$t" ]] || continue
+    grep -rq "^$t()" "$CRUX_HOME/test/cases/" || { faltan=$((faltan + 1)); echo "      falta: $t"; }
+  done <<< "$citados"
+  assert_eq "0" "$faltan" "los tests que cita AGENTS.md existen"
+}
