@@ -242,3 +242,23 @@ test_code_health_compara_contra_la_linea_base() {
   assert_contains "$out" "línea base" "compara contra ella"
   assert_not_contains "$out" "Sin línea base" "y ya no dice que no la hay"
 }
+
+test_workspace_respeta_el_perfil_de_cliente() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/cli"
+  mkdir -p "$root/vendor" "$root/cli-docs"
+  git -C "$root/vendor" init -q
+  git -C "$root/vendor" config user.email t@t
+  git -C "$root/vendor" config user.name t
+  echo x > "$root/vendor/f.txt"; git -C "$root/vendor" add -A; git -C "$root/vendor" commit -qm init
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' \
+    > "$root/cli-docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" 2>&1)"
+  assert_contains "$out" "no se escribe en vendor" "se niega a crear un worktree en código ajeno"
+  assert_no_file "$root/vendor-ws-x" "y no lo crea"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --force >/dev/null 2>&1
+  assert_file "$root/vendor-ws-x/f.txt" "con --force sí, cuando el cliente lo autoriza"
+}

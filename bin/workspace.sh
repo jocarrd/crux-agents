@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux workspace — espacios de trabajo aislados para trabajar en paralelo.
 #
-#   crux workspace new <nombre> [--repo <dir>] [--base <rama>]
+#   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--force]
 #   crux workspace list
 #   crux workspace rm <nombre>
 #
@@ -87,11 +87,12 @@ cmd_new() {
   local name="${1:-}"; shift || true
   [[ -n "$name" ]] || die "uso: crux workspace new <nombre> [--repo <dir>] [--base <rama>]"
 
-  local repo="$PWD" base=""
+  local repo="$PWD" base="" FORZAR=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) repo="$2"; shift 2 ;;
       --base) base="$2"; shift 2 ;;
+      --force) FORZAR=1; shift ;;
       *) die "opción desconocida: $1" ;;
     esac
   done
@@ -120,6 +121,20 @@ cmd_new() {
   ' "$REGISTRY")"
 
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
+
+  # Un worktree crea una rama en el repo de origen. Con un perfil que prohíbe
+  # escribir fuera del docs repo, eso es exactamente lo que no se puede hacer.
+  if [[ -n "$docs" && -f "$docs/crux.json" ]]; then
+    local perfil escribe
+    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
+    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo "true")"
+    if [[ "$escribe" != "true" && $FORZAR -eq 0 ]]; then
+      err "perfil $perfil: no se escribe en $repo_name, y un worktree le crea una rama"
+      info "si el cliente lo autoriza, repite con --force"
+      exit 1
+    fi
+  fi
+
   load_config "$docs" "$repo_name"
 
   SLOT="$slot"; PORT0=$((PORT_BASE + slot * PORTS_PER_SLOT))

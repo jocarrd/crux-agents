@@ -82,6 +82,16 @@ el espacio aislado se quedaría sin el contexto del proyecto.
 - **Nombra los espacios por la tarea**, no por su número: `fix-login` te dice
   qué hay dentro dentro de dos días; `ws-3`, no.
 
+## Perfiles de cliente
+
+Si el proyecto declara un perfil que prohíbe escribir fuera del docs repo, el
+comando **se niega**: un worktree crea una rama en el repo de origen, y eso es
+escribir en código ajeno.
+
+Se puede forzar con `--force` cuando el cliente lo autoriza expresamente. Que
+haga falta un flag es a propósito: obliga a que sea una decisión, no un
+descuido.
+
 ## Al terminar
 
 `crux workspace rm <nombre>` libera el worktree y el slot. La rama sobrevive a
