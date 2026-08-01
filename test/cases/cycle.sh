@@ -179,3 +179,66 @@ test_usage_no_reporta_cero_como_si_fuera_un_dato() {
   out="$(CRUX_TRANSCRIPTS="$vacio" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
   assert_contains "$out" "Sin datos, no sin uso" "distingue ausencia de datos de ausencia de uso"
 }
+
+test_code_health_separa_lo_real_del_ruido() {
+  sandbox >/dev/null
+  local repo="$SB/proyecto"
+  mkdir -p "$repo/src" "$repo/src/__tests__"
+
+  # Lógica genuinamente duplicada en dos ficheros
+  for n in a b; do
+    cat > "$repo/src/$n.ts" <<'TS'
+export function calcular(items: Item[], factor: number) {
+  const filtrados = items.filter((x) => x.activo && x.valor > 0)
+  const total = filtrados.reduce((acc, x) => acc + x.valor * factor, 0)
+  if (total > LIMITE) {
+    throw new Error('supera el limite permitido para el calculo')
+  }
+  return Math.round(total * 100) / 100
+}
+TS
+  done
+
+  # Ruido que NO debe contarse: import multilínea y catálogo de datos
+  cat > "$repo/src/catalogo.ts" <<'TS'
+import {
+  PrimeraCosaMuyLarga,
+  SegundaCosaMuyLarga,
+  TerceraCosaMuyLarga,
+  CuartaCosaMuyLarga,
+} from './tipos'
+TS
+  cat > "$repo/src/__tests__/a.test.ts" <<'TS'
+export function calcular(items: Item[], factor: number) {
+  const filtrados = items.filter((x) => x.activo && x.valor > 0)
+  const total = filtrados.reduce((acc, x) => acc + x.valor * factor, 0)
+  if (total > LIMITE) {
+    throw new Error('supera el limite permitido para el calculo')
+  }
+  return Math.round(total * 100) / 100
+}
+TS
+
+  local out; out="$(node "$CRUX_HOME/skills/code-health/scripts/health.mjs" "$repo" 2>&1)"
+  assert_contains "$out" "src/a.ts" "detecta la duplicación real"
+  assert_contains "$out" "src/b.ts" "y su pareja"
+  assert_not_contains "$out" "PrimeraCosaMuyLarga" "no cuenta el import multilínea"
+  assert_not_contains "$out" "__tests__" "los tests quedan fuera por defecto"
+
+  out="$(node "$CRUX_HOME/skills/code-health/scripts/health.mjs" "$repo" --tests 2>&1)"
+  assert_contains "$out" "__tests__" "con --tests sí entran"
+}
+
+test_code_health_compara_contra_la_linea_base() {
+  sandbox >/dev/null
+  local repo="$SB/base"
+  mkdir -p "$repo/src"
+  printf 'export const x = 1\n' > "$repo/src/a.ts"
+
+  node "$CRUX_HOME/skills/code-health/scripts/health.mjs" "$repo" --save >/dev/null 2>&1
+  assert_file "$repo/.crux-health.json" "guarda la línea base"
+
+  local out; out="$(node "$CRUX_HOME/skills/code-health/scripts/health.mjs" "$repo" 2>&1)"
+  assert_contains "$out" "línea base" "compara contra ella"
+  assert_not_contains "$out" "Sin línea base" "y ya no dice que no la hay"
+}

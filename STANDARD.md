@@ -350,6 +350,7 @@ credenciales y nombres. Con dos guardas:
 | `repo-map` | Orientarse en un repo desconocido o dormido |
 | `workspace`, `ship` | El ciclo de trabajo diario |
 | `write-tests`, `root-cause`, `eval-fixtures` | Calidad y depuración |
+| `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback` | Operación |
 | `skill-creator`, `skill-audit` | El propio framework |
