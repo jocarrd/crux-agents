@@ -32,6 +32,9 @@ ningún proyecto tenga que saber dónde vive.
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
 | `crux workspace` | Espacios aislados —worktree, puertos, base de datos— para trabajar en paralelo |
 | `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
+| `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
+| `crux hooks` | Engancha el estándar al cierre de sesión y al commit |
+| `crux usage` | Qué skills se usan de verdad |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
 
 Todos existen también como skills: `/crux-init`, `/crux-doctor`, etc.
@@ -81,7 +84,7 @@ crux/
 ├── GUIA.md          cómo funciona todo, de principio a fin
 ├── VERSION
 ├── install.sh       una vez por máquina
-├── bin/             init, adopt, add-repo, link, workspace, doctor, upgrade
+├── bin/             init, adopt, add-repo, link, workspace, hooks, usage, doctor, upgrade
 ├── lib/             verificadores de paths y utilidades comunes
 ├── templates/       docs-repo/ y code-repo/
 ├── profiles/        multi-repo, client-repo

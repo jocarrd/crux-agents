@@ -21,6 +21,10 @@ note() { warn "$*"; WARNS=$((WARNS + 1)); }
 section() { SECTION_MARK=$ERRORS; }
 section_ok() { [[ $ERRORS -eq $SECTION_MARK ]] && ok "$*"; return 0; }
 
+if [[ "${1:-}" == "--machine" ]]; then
+  exec bash "$CRUX_HOME/bin/machine.sh" "${@:2}"
+fi
+
 DOCS="$(find_docs_repo "${1:-$PWD}")" || die "no encuentro un docs repo desde ${1:-$PWD}"
 CONFIG="$DOCS/crux.json"
 
@@ -121,7 +125,24 @@ while IFS= read -r sect; do
   [[ -d "$DOCS/$sect" ]] || note "sección declarada sin carpeta: $sect/"
 done < <(json_get "$CONFIG" sections 2>/dev/null || true)
 
-# --- 6. Enlaces markdown -----------------------------------------------------
+# --- 6. Numeración de los ADRs ----------------------------------------------
+#
+# Dos sesiones en paralelo eligen el mismo "siguiente número" y el conflicto no
+# lo detecta git: son líneas distintas del mismo fichero.
+
+section
+while IFS= read -r ledger; do
+  [[ -f "$ledger" ]] || continue
+  dup="$(grep -oE '^### ADR-[0-9]+' "$ledger" | sort | uniq -d | sed 's/^### //')"
+  if [[ -n "$dup" ]]; then
+    while IFS= read -r d; do
+      fail "ADR duplicado en ${ledger#$DOCS/}: $d — renumera el más reciente"
+    done <<< "$dup"
+  fi
+done < <(find "$DOCS/decisions" "$DOCS/repos" -name "*decisions*.md" -o -name "index.md" 2>/dev/null | grep -E "decisions" | sort -u)
+section_ok "numeración de los ADRs"
+
+# --- 7. Enlaces markdown -----------------------------------------------------
 
 if node "$CRUX_HOME/lib/check-doc-paths.mjs" "$DOCS" >/tmp/crux-doctor-paths.$$ 2>&1; then
   ok "enlaces markdown resuelven"
@@ -131,7 +152,7 @@ else
 fi
 rm -f /tmp/crux-doctor-paths.$$
 
-# --- 7. Skills del proyecto --------------------------------------------------
+# --- 8. Skills del proyecto --------------------------------------------------
 
 section
 skills=0

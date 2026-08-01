@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Funciones compartidas por los comandos de crux.
 # Se carga con: source "$CRUX_HOME/lib/common.sh"
-
-set -euo pipefail
+#
+# Una librería NO fija las opciones del shell: quien la carga ya declaró las
+# suyas, y pisárselas rompe de la peor manera —el script muere en silencio en
+# el primer comando que devuelve algo distinto de cero.
 
 # --- Localización del kernel -------------------------------------------------
 

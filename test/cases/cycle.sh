@@ -141,3 +141,41 @@ JSON
 
   assert_file "$CRUX_PROJECTS_DIR/setup-ran.txt" "el hook de setup se ejecuta"
 }
+
+test_machine_detecta_un_hook_roto() {
+  sandbox >/dev/null
+  local fakehome="$SB/home"
+  mkdir -p "$fakehome/.claude/skills" "$fakehome/.crux"
+  echo "CRUX_HOME=\"$CRUX_HOME\"" > "$fakehome/.crux/config"
+  ln -s "$CRUX_HOME/skills/end-session" "$fakehome/.claude/skills/end-session"
+  cat > "$fakehome/.claude/settings.json" <<'JSON'
+{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"/ruta/que/no/existe.sh"}]}]}}
+JSON
+
+  local out; out="$(HOME="$fakehome" bash "$CRUX_HOME/bin/machine.sh" 2>&1)"
+  assert_contains "$out" "apuntan a ficheros que no existen" "detecta el hook roto"
+
+  assert_exit 1 "un hook roto es error: parece vigilado y no lo está" \
+    env HOME="$fakehome" bash "$CRUX_HOME/bin/machine.sh"
+}
+
+test_machine_detecta_enlaces_de_skill_rotos() {
+  sandbox >/dev/null
+  local fakehome="$SB/home2"
+  mkdir -p "$fakehome/.claude/skills" "$fakehome/.crux"
+  echo "CRUX_HOME=\"$CRUX_HOME\"" > "$fakehome/.crux/config"
+  ln -s "$SB/skill-que-se-borro" "$fakehome/.claude/skills/fantasma"
+
+  local out; out="$(HOME="$fakehome" bash "$CRUX_HOME/bin/machine.sh" 2>&1)"
+  assert_contains "$out" "enlaces de skill rotos" "detecta el enlace muerto"
+}
+
+test_usage_no_reporta_cero_como_si_fuera_un_dato() {
+  sandbox >/dev/null
+  local vacio="$SB/sin-transcripciones"
+  mkdir -p "$vacio"
+
+  local out
+  out="$(CRUX_TRANSCRIPTS="$vacio" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  assert_contains "$out" "Sin datos, no sin uso" "distingue ausencia de datos de ausencia de uso"
+}

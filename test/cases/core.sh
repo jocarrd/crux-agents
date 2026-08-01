@@ -284,3 +284,36 @@ test_add_repo_rechaza_duplicados() {
   assert_exit 1 "no re-declara un repo existente" \
     bash "$CRUX_HOME/bin/add-repo.sh" api "$docs"
 }
+
+test_la_libreria_no_pisa_las_opciones_del_shell() {
+  # Un `set -e` dentro de la librería mata en silencio a quien la carga con
+  # otras opciones. Pasó dos veces: en la suite y en doctor.
+  local out
+  out="$(bash -c '
+    set +e
+    source "$1/lib/common.sh"
+    false
+    echo SOBREVIVE
+  ' _ "$CRUX_HOME" 2>&1)"
+  assert_contains "$out" "SOBREVIVE" "cargar la librería no activa set -e"
+
+  assert_eq "0" "$(grep -c '^set -' "$CRUX_HOME/lib/common.sh")" \
+    "la librería no fija opciones del shell"
+}
+
+test_doctor_detecta_adr_duplicados() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project sigma)"
+  cat >> "$docs/decisions/index.md" <<'ADR'
+
+### ADR-001: Primera
+- **Status**: Accepted
+
+### ADR-001: Otra sesión eligió el mismo número
+- **Status**: Accepted
+ADR
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "ADR duplicado" "detecta la colisión de numeración"
+  assert_exit 1 "es error, no aviso" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
