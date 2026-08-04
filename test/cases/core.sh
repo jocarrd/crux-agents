@@ -995,3 +995,36 @@ test_review_no_inventa_una_revision_sin_cambios() {
   assert_contains "$out" "no hay nada que revisar" "lo dice en vez de imprimir sección vacía"
   assert_exit 1 "y sale con error" bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main
 }
+
+test_el_docs_repo_nace_en_main() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rama)"
+  assert_eq "main" "$(git -C "$docs" rev-parse --abbrev-ref HEAD)" "la rama no depende de la máquina"
+}
+
+# Si el hook mira una rama que no existe, no bloquea nada y nadie se entera.
+test_el_hook_protege_la_rama_principal_real() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project heredado)"
+  git -C "$docs" branch -m main master
+
+  ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  local hook="$docs/.git/hooks/pre-push"
+  assert_file "$hook" "hook instalado"
+  assert_contains "$(cat "$hook")" "refs/heads/master" "vigila la rama que el repo usa de verdad"
+  assert_not_contains "$(cat "$hook")" "refs/heads/main" "y no una que no existe"
+}
+
+# La marca que deja la puerta bloqueaba el comando siguiente del propio ciclo.
+test_la_marca_de_la_puerta_no_bloquea_la_propuesta() {
+  sandbox >/dev/null
+  local repo="$SB/app"
+  mkdir -p "$repo" && git -C "$repo" init -q -b main
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new tarea --repo "$repo" >/dev/null 2>&1
+  local ws="$SB/app-ws-tarea"
+  assert_file "$ws/../app/.git/info/exclude" "el exclude existe"
+  printf 'abc\n' > "$ws/.crux-ship"
+  assert_eq "" "$(git -C "$ws" status --porcelain)" "la marca no ensucia el estado"
+}

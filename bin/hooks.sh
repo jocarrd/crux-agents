@@ -133,7 +133,10 @@ cmd_install() {
     # `|| true`: si no hay origin/HEAD el pipeline falla y con pipefail se lleva
     # por delante el script entero.
     principal="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)"
-    [[ -n "$principal" ]] || principal=main
+    # En un repo recién creado todavía no hay origin/HEAD, y asumir "main" deja
+    # el hook vigilando una rama que no existe: no bloquea nada.
+    [[ -n "$principal" ]] || principal="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [[ -n "$principal" && "$principal" != "HEAD" ]] || principal=main
     cat > "$hooks/pre-push" <<EOF
 #!/usr/bin/env bash
 # Instalado por crux hooks install.

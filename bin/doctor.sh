@@ -13,12 +13,13 @@ source "$CRUX_HOME/lib/common.sh"
 ERRORS=0
 WARNS=0
 SECTION_MARK=0
+SECTION_WARNS=0
 fail() { err "$*"; ERRORS=$((ERRORS + 1)); }
 note() { warn "$*"; WARNS=$((WARNS + 1)); }
 
 # Un 'ok' solo se imprime si la sección no ha producido errores: decir "ok" y
 # "error" de la misma comprobación es peor que no decir nada.
-section() { SECTION_MARK=$ERRORS; }
+section() { SECTION_MARK=$ERRORS; SECTION_WARNS=$WARNS; }
 section_ok() { [[ $ERRORS -eq $SECTION_MARK ]] && ok "$*"; return 0; }
 
 if [[ "${1:-}" == "--machine" ]]; then
@@ -159,7 +160,7 @@ elif json_has "$CONFIG" 'remote'; then
       note "$repo: el contrato dice $declarado y el origin es $real"
     fi
   done
-  section_ok "remoto coherente con el contrato"
+  [[ $WARNS -eq $SECTION_WARNS ]] && section_ok "remoto coherente con el contrato"
 else
   note "sin 'remote' en crux.json — 'crux clone' no podrá traer este proyecto"
 fi

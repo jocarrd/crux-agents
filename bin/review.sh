@@ -67,9 +67,12 @@ if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
       console.log(`      #${d.number} ${d.title}`);
       console.log(`      ${d.mergeable} · ${d.mergeStateStatus}`);
       const checks = d.statusCheckRollup || [];
-      if (!checks.length) return console.log("      sin comprobaciones automáticas — nada las bloquea no es lo mismo que verificado");
-      for (const c of checks) {
-        console.log(`      ${(c.conclusion || c.state || "?").toLowerCase().padEnd(10)} ${c.name || c.context}`);
+      if (!checks.length) {
+        console.log("      sin comprobaciones automáticas — nada las bloquea no es lo mismo que verificado");
+      } else {
+        for (const c of checks) {
+          console.log(`      ${(c.conclusion || c.state || "?").toLowerCase().padEnd(10)} ${c.name || c.context}`);
+        }
       }
     ' "$pr"
   else
@@ -93,7 +96,9 @@ tests="$(echo "$ficheros" | grep -iE '(^|/)(test|tests|spec|__tests__)/|\.(test|
 
 [[ -n "$codigo" && -z "$tests" ]] && senal "toca código y no toca ningún test"
 
-mapfile -t rutas_codigo < <(echo "$codigo" | grep -v '^$' || true)
+# Un console.log en un test es su forma de reportar, no trabajo a medias.
+mapfile -t rutas_codigo < <(echo "$codigo" | grep -v '^$' \
+  | grep -ivE '(^|/)(test|tests|spec|__tests__)/|\.(test|spec)\.[a-z]+$' || true)
 anadidas="$(git diff "$BASE...$RAMA" -- ${rutas_codigo[@]+"${rutas_codigo[@]}"} 2>/dev/null \
   | grep '^+' | grep -v '^+++' || true)"
 

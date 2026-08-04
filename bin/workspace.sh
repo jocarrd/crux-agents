@@ -162,6 +162,16 @@ cmd_new() {
 
   ok "worktree $path (rama $branch)"
 
+  # La marca de la puerta es estado local. Va al exclude del directorio común,
+  # que es el que git respeta desde un worktree, y así no toca el .gitignore
+  # versionado —que en un repo ajeno no se puede tocar.
+  local comun; comun="$(git -C "$path" rev-parse --git-common-dir 2>/dev/null || echo "")"
+  if [[ -n "$comun" ]]; then
+    mkdir -p "$comun/info"
+    grep -qxF '.crux-ship' "$comun/info/exclude" 2>/dev/null \
+      || echo '.crux-ship' >> "$comun/info/exclude"
+  fi
+
   if [[ -n "$ENV_FILE" && "$ENV_TEMPLATE" != "{}" ]]; then
     node -e '
       const fs = require("fs");
@@ -258,9 +268,11 @@ cmd_finish() {
 
   # Nada sale de un espacio sin estar commiteado: lo que se queda fuera de git
   # no llega a la revisión, y ese es el punto de trabajar así.
-  if [[ -n "$(git -C "$path" status --porcelain)" ]]; then
+  local pendiente
+  pendiente="$(git -C "$path" status --porcelain | grep -v ' \.crux-ship$' || true)"
+  if [[ -n "$pendiente" ]]; then
     err "quedan cambios sin commitear en $path"
-    git -C "$path" status -s | sed 's/^/      /'
+    echo "$pendiente" | sed 's/^/      /'
     exit 1
   fi
 

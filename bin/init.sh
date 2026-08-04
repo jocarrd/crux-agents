@@ -91,7 +91,9 @@ if [[ $CREA_REMOTO -eq 1 ]]; then
   ok "repo creado en el remoto y clonado ($VISIBILITY)"
 else
   mkdir -p "$DOCS"
-  ( cd "$DOCS" && git init -q )
+  # Sin esto el repo nace en la rama por defecto de la máquina, y el hook que
+  # protege la principal se instala mirando otra.
+  ( cd "$DOCS" && { git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }; } )
   if [[ $REMOTE -eq 1 ]]; then
     ( cd "$DOCS" && git remote add origin "$URL_DOCS" )
     ok "repo local con origin apuntando a $URL_DOCS"
