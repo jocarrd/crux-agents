@@ -26,6 +26,46 @@ raíz de proyectos.
 `/opt/dev/crux`, la raíz es `/opt/dev`. Se cambia con
 `install.sh --projects-dir <ruta>`.
 
+## El ciclo de trabajo
+
+Una tarea de desarrollo entra por un espacio aislado y sale como propuesta
+revisada. Ese es el recorrido completo, y **`/flow` es la entrada por defecto**:
+encadena las skills en este orden y explica por qué es ese y no otro.
+
+```mermaid
+flowchart TD
+    A["crux workspace new &lt;tarea&gt;<br/>rama, worktree y runtime propios"] --> B["desarrollar<br/>con los tests de lo que duele si falla"]
+    B --> C{"/ship<br/>la puerta del autor"}
+    C -- "alguna puerta en rojo" --> B
+    C -- "verde: commit" --> D["crux workspace finish &lt;tarea&gt;<br/>sube la rama y abre la propuesta"]
+    D --> E{"/review-pr<br/>la mirada del revisor"}
+    E -- "hallazgos confirmados" --> B
+    E -- "limpio" --> F["crux workspace merge &lt;tarea&gt; --yes<br/>la decisión sigue siendo de una persona"]
+    F --> G["/end-session<br/>lo que deba sobrevivir, a git"]
+```
+
+Las dos preguntas del centro son distintas, y por eso son dos pasos:
+
+- **`/ship`** pregunta *¿está listo lo que hice?* — tests, diff leído,
+  correctitud, regresión. La pasa quien escribió el cambio, antes de commitear.
+- **`/review-pr`** pregunta *¿es correcto y completo lo que se propone?* —
+  desde un contexto independiente. Quien acaba de defender cada decisión no
+  está en posición de refutarlas, y el hueco típico —arreglar un problema por
+  la puerta por la que se encontró y dejarlo abierto por otra— solo se ve desde
+  fuera.
+
+### Qué lo sostiene cuando nadie se acuerda
+
+Un ciclo que depende de la memoria no es un ciclo. Estas guardas lo hacen
+cumplir, y las instala `crux hooks install`:
+
+| Guarda | Qué impide |
+| ------ | ---------- |
+| `pre-push` en la rama principal | Empujar a `main` sin pasar por propuesta |
+| `commit-msg` | Mensajes de commit fuera del idioma del estándar |
+| `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
+| `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
+
 ## Comandos
 
 | Comando | Qué hace |
@@ -60,7 +100,7 @@ Cada docs repo declara su contrato con el kernel en un `crux.json`:
 
 ```json
 {
-  "crux": "0.1.0",
+  "crux": "0.7.0",
   "project": "acme",
   "profile": "multi-repo",
   "repos": ["Acme", "acme-engine", "acme-cms"],
@@ -103,9 +143,6 @@ crux/
 
 El catálogo completo de skills, en `STANDARD.md`.
 
-```
-```
-
 ## Tests
 
 ```bash
@@ -137,4 +174,7 @@ cambio. El comando solo etiqueta.
 
 ## Estado
 
-Versión `0.1.0`. Proyectos que lo consumen: `acme-docs`, `client-docs`.
+La versión la declara `VERSION`; cada docs repo declara en su `crux.json` con
+cuál se materializó, y `crux doctor` avisa cuando se separan.
+
+Proyectos que lo consumen: `acme-docs`, `client-docs`.
