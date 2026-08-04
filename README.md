@@ -15,26 +15,59 @@ No es un repo de documentación de un proyecto. Es lo que los fabrica.
 
 Necesita `bash`, `git` y `node`. Nada más: si el kernel necesitase dependencias
 para instalarse, dejaría de ser instalable en cualquier máquina. El código se
-mantiene dentro de lo que entiende **bash 3.2**, que es el que trae macOS de
-serie.
+mantiene dentro de lo que entiende **bash 3.2**, el que trae macOS de serie.
+
+### 1. Clonar y ejecutar el instalador
 
 ```bash
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh
 ```
 
-Eso **copia la versión** a `~/.crux/kernel/<version>/` y enlaza las skills ahí,
-para Claude Code (`/<nombre>`) y para Codex (`/<nombre>`). Tus proyectos usan esa
-copia, no tu working copy: mientras trabajas en el kernel —o te dejas una rama a
-medias— los proyectos siguen con la versión que instalaste. Al cambiar el
-kernel, repite el `install.sh`.
+**Dónde lo clones decide dónde viven tus proyectos**: el padre del kernel es la
+raíz. Si lo pones en `/opt/dev/crux`, tus proyectos van en `/opt/dev`. Se cambia
+con `--projects-dir <ruta>`, y conviene que el kernel viva con ellos.
 
-Para desarrollar el propio kernel, `install.sh --dev` enlaza al working copy y
-cada cambio es inmediato. Es el modo de una sola máquina: la tuya.
+### 2. Qué deja instalado
 
-**Dónde clones el kernel decide dónde viven tus proyectos**: si lo pones en
-`/opt/dev/crux`, la raíz es `/opt/dev`. Se cambia con
-`install.sh --projects-dir <ruta>`.
+| Qué | Dónde | Para qué |
+| --- | ----- | -------- |
+| La versión del kernel | `~/.crux/kernel/<version>/` | Copia inmutable: es lo que ejecutan tus proyectos |
+| El comando | `~/.local/bin/crux` → esa copia | `crux <lo que sea>` desde cualquier sitio |
+| Las skills | `~/.claude/skills/` y `~/.codex/prompts/` | `/<nombre>` en Claude Code y en Codex |
+| Config de máquina | `~/.crux/config` | Dónde vive el kernel, la raíz de proyectos y tus preferencias |
+
+Comprueba que `~/.local/bin` esté en tu `PATH`. Y para saber si la máquina tiene
+lo que las skills necesitan:
+
+```bash
+crux doctor --machine
+```
+
+### 3. Los dos modos
+
+**Release (por defecto).** Se copia la versión y todo apunta a esa copia. Tus
+proyectos siguen con ella aunque tú cambies el kernel o te dejes una rama a
+medias. Para pasar a una versión nueva, vuelve a ejecutar `install.sh`; las
+anteriores siguen en `~/.crux/kernel/` por si hay que volver atrás.
+
+**Dev (`install.sh --dev`).** Enlaza al working copy: cada cambio en el kernel es
+inmediato en todos tus proyectos. Es el modo de la máquina donde *desarrollas*
+crux, y por eso rechaza ejecutarse desde un worktree — al cerrarlo, la máquina se
+quedaría sin skills.
+
+```bash
+grep CRUX_MODE ~/.crux/config    # en cuál estás
+```
+
+### 4. Traer un proyecto que ya existe
+
+```bash
+crux clone <project>     # docs repo + repos de código + punteros
+```
+
+Y si el proyecto ya está en disco pero no bajo el estándar: `crux adopt` en su
+docs repo, y después `crux upgrade` para materializar lo que falte.
 
 ### Preferencias
 
@@ -47,6 +80,15 @@ ciclo como quiera sin cambiar el contrato que comparten los demás.
 | `CRUX_PROJECTS_DIR` | el padre del kernel | Dónde viven los proyectos |
 | `CRUX_MERGE_CLOSE_WORKSPACE` | `false` | Cerrar el espacio al fusionar, sin pedir el `rm` |
 | `CRUX_RM_DELETE_BRANCH` | `false` | Borrar también la rama local al cerrar el espacio, **solo si está integrada** |
+
+### Desinstalar
+
+```bash
+rm -rf ~/.crux ~/.local/bin/crux
+find ~/.claude/skills ~/.codex/prompts -maxdepth 1 -type l ! -exec test -e {} \; -delete
+```
+
+Los docs repos y los repos de código no se tocan: son tuyos y viven en git.
 
 ## El ciclo de trabajo
 
