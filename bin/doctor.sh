@@ -113,10 +113,22 @@ if [[ "$WRITES_POINTERS" == "true" ]]; then
   done
 else
   # El perfil prohíbe escribir fuera del docs repo: comprobar que nadie lo hizo.
+  #
+  # Un AGENTS.md del propio cliente no es una intrusión: es material suyo, y
+  # borrarlo sería justo lo que el perfil impide. La intrusión es el fichero que
+  # pusimos nosotros, y se reconoce por el bloque gestionado o porque no está
+  # versionado en su repo.
   for repo in "${declared[@]:-}"; do
     [[ -d "$ROOT/$repo" ]] || continue
     for intruso in AGENTS.md CLAUDE.md; do
-      [[ -e "$ROOT/$repo/$intruso" ]] && fail "perfil $PROFILE: $repo/$intruso no debería existir (código ajeno)"
+      fichero="$ROOT/$repo/$intruso"
+      [[ -e "$fichero" ]] || continue
+      if grep -qF 'crux:begin' "$fichero" 2>/dev/null ||
+         ! git -C "$ROOT/$repo" ls-files --error-unmatch "$intruso" >/dev/null 2>&1; then
+        fail "perfil $PROFILE: $repo/$intruso no debería existir (código ajeno)"
+      else
+        note "$repo/$intruso es del cliente — se respeta, no se toca"
+      fi
     done
   done
 fi

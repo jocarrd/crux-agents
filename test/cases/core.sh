@@ -124,6 +124,42 @@ test_perfil_cliente_detecta_intrusion() {
   assert_exit 1 "la intrusión es error, no aviso" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
+# El repo ajeno puede traer su propio AGENTS.md, versionado por el cliente. No es
+# una intrusión nuestra y el perfil prohíbe tocarlo: doctor no puede pedir que se
+# borre lo que no hemos escrito.
+test_perfil_cliente_respeta_el_agents_del_cliente() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project cliente3 --repos "vendor" --profile client-repo)"
+  local vendor="$CRUX_PROJECTS_DIR/cliente3/vendor"
+  mkdir -p "$vendor"
+  echo "# instrucciones del cliente" > "$vendor/AGENTS.md"
+  git -C "$vendor" init -q
+  git -C "$vendor" add AGENTS.md
+  git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add agents"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_not_contains "$out" "no debería existir" "el AGENTS.md del cliente no es intrusión"
+  assert_contains "$out" "es del cliente" "lo reporta como respetado"
+  assert_exit 0 "doctor pasa con el fichero del cliente" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# Pero un puntero nuestro sí lo es, aunque alguien lo haya commiteado en el repo
+# ajeno: lo delata el bloque gestionado.
+test_perfil_cliente_detecta_el_puntero_commiteado() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project cliente4 --repos "vendor" --profile client-repo)"
+  local vendor="$CRUX_PROJECTS_DIR/cliente4/vendor"
+  mkdir -p "$vendor"
+  printf '<!-- crux:begin -->\n@../cliente4-docs/AGENTS.md\n' > "$vendor/AGENTS.md"
+  git -C "$vendor" init -q
+  git -C "$vendor" add AGENTS.md
+  git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add pointer"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "no debería existir" "el bloque gestionado delata el puntero"
+  assert_exit 1 "sigue siendo error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
 test_link_crea_punteros_con_el_import() {
   sandbox >/dev/null
   local docs; docs="$(new_project iota --repos "api")"

@@ -148,7 +148,9 @@ El docs repo es propio, pero el repo de código pertenece a un cliente.
 
 - **No se escribe nada fuera del docs repo.** Ni punteros, ni `AGENTS.md`, ni
   carpetas del estándar en el repo del cliente. El agente abre la documentación
-  explícitamente.
+  explícitamente. Si el repo del cliente **ya traía** su propio `AGENTS.md`
+  versionado, no es una intrusión: se respeta y se sigue. `doctor` distingue el
+  fichero del cliente del puntero nuestro, que lleva el bloque gestionado.
 - **Se registran mediciones, no diagnósticos.** No se declara algo como bug ni
   se concluye qué está mal sin validación del cliente.
 - **Toda observación lleva evidencia reproducible**: fichero y línea, comando o
