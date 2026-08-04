@@ -314,6 +314,7 @@ cmd_finish() {
   fi
 
   echo
+  info "revísala antes de pedir revisión humana: /review-pr"
   info "cuando esté integrada: crux workspace rm $name"
 }
 

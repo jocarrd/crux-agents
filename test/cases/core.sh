@@ -950,3 +950,16 @@ test_se_distingue_un_worktree_de_su_repo_principal() {
 
   assert_contains "$(cat "$CRUX_HOME/install.sh")" "es_worktree" "install.sh lo comprueba antes de tocar nada"
 }
+
+# El ciclo se rompe en silencio si el paso existe en la skill pero el comando
+# que abre la propuesta no lo menciona: nadie lo invoca.
+test_el_ciclo_lleva_a_revisar_la_propuesta() {
+  sandbox >/dev/null
+  local skill="$CRUX_HOME/skills/review-pr/SKILL.md"
+  assert_file "$skill" "la skill existe"
+  assert_contains "$(head -1 "$skill")" "---" "con frontmatter"
+  assert_contains "$(cat "$skill")" "name: review-pr" "y su nombre"
+
+  assert_contains "$(cat "$CRUX_HOME/skills/flow/SKILL.md")" "/review-pr" "el ciclo la encadena"
+  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "/review-pr" "y finish la recuerda"
+}

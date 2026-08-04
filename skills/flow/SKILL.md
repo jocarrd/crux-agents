@@ -108,6 +108,21 @@ Se niega en dos casos, y los dos a propósito:
   **no se abre una propuesta de código que nadie ha revisado**, y la revisión
   deja de depender de que alguien se acuerde.
 
+### 6a. Revisar la propuesta
+
+```
+/review-pr
+```
+
+Con la propuesta ya abierta y **desde un contexto independiente del que escribió
+el cambio**: si el diff hace lo que promete, si el arreglo está completo por
+todas las puertas por las que entra el problema, si los tests fallan sin él, y
+qué deuda deja.
+
+No repite `/ship`. `/ship` pregunta si está listo lo que hiciste; esto pregunta
+si es correcto y completo lo que se propone, y lo pregunta alguien que no
+estaba dentro del problema. Es la diferencia entre revisar y confirmar.
+
 ### 6b. Fusionar, cuando tú lo autorices
 
 ```bash

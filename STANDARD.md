@@ -423,7 +423,7 @@ credenciales y nombres. Con dos guardas:
 | `promote-to-docs`, `adr`, `explain-plan`, `end-session` | Decidir y que el conocimiento sobreviva |
 | `repo-map` | Orientarse en un repo desconocido o dormido |
 | `flow` | **El ciclo completo y su orden** — la entrada por defecto |
-| `workspace`, `ship` | Las piezas del ciclo: aislar y verificar |
+| `workspace`, `ship`, `review-pr` | Las piezas del ciclo: aislar, verificar y revisar |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
@@ -432,7 +432,7 @@ credenciales y nombres. Con dos guardas:
 
 ### El ciclo de desarrollo
 
-Tres skills sostienen el trabajo del día a día, y se usan en este orden:
+Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 
 **El orden lo declara `/flow`**, que es lo que un agente lee primero. Resumido:
 
@@ -442,7 +442,11 @@ Tres skills sostienen el trabajo del día a día, y se usan en este orden:
 2. **`/ship`** — antes de commitear. Cadena de puertas donde cualquiera aborta:
    sanidad, diff, correctitud, simplificación, regresión, validación real solo
    si el cambio toca superficie observable, deriva de la documentación, commit.
-3. **`/end-session`** — antes de cerrar. Lo que deba sobrevivir a la sesión se
+3. **`/review-pr`** — con la propuesta ya abierta, desde un contexto
+   independiente del que escribió el cambio. `/ship` pregunta si está listo lo
+   que hiciste; esto, si es correcto y completo lo que se propone. Quien acaba
+   de defender cada decisión no está en posición de refutarlas.
+4. **`/end-session`** — antes de cerrar. Lo que deba sobrevivir a la sesión se
    escribe en git, se verifica la conformidad y se commitea.
 
 ---
