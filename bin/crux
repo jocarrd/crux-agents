@@ -38,6 +38,16 @@ EOF
 cmd="${1:-help}"
 [[ $# -gt 0 ]] && shift || true
 
+# La cabecera de cada script ya documenta su uso: se imprime en vez de mantener
+# un texto de ayuda aparte que envejece por su cuenta.
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  for script in "$CRUX_HOME/bin/$cmd.sh" "$CRUX_HOME/bin/$cmd.mjs"; do
+    [[ -f "$script" ]] || continue
+    awk 'NR > 1 { if ($0 !~ /^(#|\/\/)/) exit; sub(/^(# ?|\/\/ ?)/, ""); print }' "$script"
+    exit 0
+  done
+fi
+
 case "$cmd" in
   init)    exec bash "$CRUX_HOME/bin/init.sh" "$@" ;;
   clone)   exec bash "$CRUX_HOME/bin/clone.sh" "$@" ;;

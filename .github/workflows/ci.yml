@@ -40,6 +40,14 @@ jobs:
       - name: Suite del kernel
         run: ./test/run.sh
 
+      # Los fallos que han costado caro no salieron en la suite: salieron al
+      # recorrer el ciclo entero seguido, que es lo que esto hace.
+      - name: Batería de extremo a extremo
+        run: |
+          git config --global user.email ci@localhost
+          git config --global user.name ci
+          ./test/e2e.sh
+
       # La suite corre en sandboxes; esto comprueba el camino real de
       # instalación, que es lo primero que ejecuta cualquiera en una máquina
       # nueva y lo último que se prueba.

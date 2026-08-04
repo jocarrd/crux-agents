@@ -26,6 +26,18 @@ raíz de proyectos.
 `/opt/dev/crux`, la raíz es `/opt/dev`. Se cambia con
 `install.sh --projects-dir <ruta>`.
 
+### Preferencias
+
+En `~/.crux/config`, porque son tuyas y no del proyecto: cada uno cierra su
+ciclo como quiera sin cambiar el contrato que comparten los demás.
+
+| Clave | Por defecto | Qué hace |
+| ----- | ----------- | -------- |
+| `CRUX_REMOTE` | — | Plantilla del remoto para los proyectos que crees |
+| `CRUX_PROJECTS_DIR` | el padre del kernel | Dónde viven los proyectos |
+| `CRUX_MERGE_CLOSE_WORKSPACE` | `false` | Cerrar el espacio al fusionar, sin pedir el `rm` |
+| `CRUX_RM_DELETE_BRANCH` | `false` | Borrar también la rama local al cerrar el espacio, **solo si está integrada** |
+
 ## El ciclo de trabajo
 
 Una tarea de desarrollo entra por un espacio aislado y sale como propuesta

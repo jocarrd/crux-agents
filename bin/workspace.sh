@@ -438,21 +438,36 @@ cmd_merge() {
     || info "la rama remota sigue ahí: bórrala desde tu proveedor si quieres"
 
   echo
-  info "el espacio sigue vivo: 'crux workspace rm $name' libera el slot y sus recursos"
+  if [[ "$(preferencia CRUX_MERGE_CLOSE_WORKSPACE false)" == "true" ]]; then
+    cmd_rm "$name"
+  else
+    info "el espacio sigue vivo: 'crux workspace rm $name' libera el slot y sus recursos"
+  fi
 }
 
 cmd_list() {
+  local todos=0
+  [[ "${1:-}" == "--all" ]] && todos=1
   registry_init
+  local aqui=""
+  [[ $todos -eq 0 ]] && aqui="$(git rev-parse --show-toplevel 2>/dev/null || true)"
   node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const rows = Object.entries(r.workspaces);
-    if (!rows.length) { console.log("sin espacios activos"); process.exit(0); }
+    const aqui = process.argv[2];
+    let rows = Object.entries(r.workspaces);
+    const total = rows.length;
+    if (aqui) rows = rows.filter(([, w]) => w.repo === aqui);
+    if (!rows.length) {
+      console.log(total ? `sin espacios en este repo (${total} en otros: crux workspace list --all)`
+                        : "sin espacios activos");
+      process.exit(0);
+    }
     for (const [name, w] of rows) {
       const huerfano = fs.existsSync(w.path) ? "" : "  (sin worktree — libéralo con: crux workspace rm)";
       console.log(`${name.padEnd(16)} slot ${w.slot}  puertos ${w.ports[0]}-${w.ports[1]}  ${w.path}${huerfano}`);
     }
-  ' "$REGISTRY"
+  ' "$REGISTRY" "$aqui"
 }
 
 cmd_rm() {
@@ -493,8 +508,16 @@ cmd_rm() {
         && ok "teardown ejecutado" \
         || warn "el teardown falló — revisa si quedaron recursos del slot $SLOT"
     fi
-    git -C "$repo" worktree remove "$path" 2>/dev/null || git -C "$repo" worktree remove --force "$path"
-    ok "worktree eliminado"
+    if git -C "$repo" worktree remove "$path" 2>/dev/null \
+       || git -C "$repo" worktree remove --force "$path" 2>/dev/null; then
+      ok "worktree eliminado"
+    else
+      # git deja de reconocerlo si alguien borró su registro por otra vía. El
+      # directorio sigue ocupando el slot, así que se retira igual.
+      rm -rf "$path"
+      git -C "$repo" worktree prune 2>/dev/null || true
+      ok "directorio retirado (git ya no lo tenía como worktree)"
+    fi
   fi
 
   node -e '
@@ -505,12 +528,22 @@ cmd_rm() {
   ' "$REGISTRY" "$name"
 
   ok "slot liberado"
-  info "la rama $branch sigue existiendo; bórrala si ya no la necesitas"
+
+  # Solo si está integrada: una rama con trabajo que no está en ningún sitio no
+  # se borra por una preferencia.
+  if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] \
+     && git -C "$repo" branch --merged "$(rama_principal "$repo")" 2>/dev/null | grep -qx "  $branch"; then
+    git -C "$repo" branch -d "$branch" >/dev/null 2>&1 \
+      && ok "rama $branch borrada (CRUX_RM_DELETE_BRANCH)" \
+      || info "la rama $branch sigue existiendo"
+  else
+    info "la rama $branch sigue existiendo; bórrala si ya no la necesitas"
+  fi
 }
 
 case "${1:-}" in
   new)  shift; cmd_new "$@" ;;
-  list) shift; cmd_list ;;
+  list) shift; cmd_list "$@" ;;
   finish) shift; cmd_finish "$@" ;;
   merge)  shift; cmd_merge "$@" ;;
   rm)   shift; cmd_rm "$@" ;;

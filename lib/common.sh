@@ -65,6 +65,15 @@ es_semver() {
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
+preferencia() {
+  # preferencia <clave> [defecto] — de ~/.crux/config, que es del usuario y no
+  # del proyecto: cada uno cierra su ciclo como quiera sin tocar el contrato.
+  local clave="$1" defecto="${2:-}" valor=""
+  [[ -f "$HOME/.crux/config" ]] &&
+    valor="$(grep -E "^$clave=" "$HOME/.crux/config" | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+  echo "${valor:-$defecto}"
+}
+
 rama_principal() {
   # rama_principal <dir> — la declarada en el contrato, la del remoto, o la que
   # el repo esté usando. En ese orden.

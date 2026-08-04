@@ -1063,3 +1063,20 @@ test_la_rama_principal_no_es_la_del_worktree() {
 
   assert_eq "main" "$(rama_principal "$SB/app-ws-tarea")" "resuelve la troncal, no la de trabajo"
 }
+
+test_las_preferencias_del_usuario_se_leen_de_su_config() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  mkdir -p "$SB/home/.crux"
+  printf 'CRUX_RM_DELETE_BRANCH=true\nCRUX_MERGE_CLOSE_WORKSPACE="true"\n' > "$SB/home/.crux/config"
+
+  assert_eq "true" "$(HOME=$SB/home preferencia CRUX_RM_DELETE_BRANCH false)" "lee la preferencia"
+  assert_eq "true" "$(HOME=$SB/home preferencia CRUX_MERGE_CLOSE_WORKSPACE false)" "y quita las comillas"
+  assert_eq "false" "$(HOME=$SB/home preferencia CRUX_NO_DECLARADA false)" "y respeta el defecto"
+}
+
+# Una rama con trabajo que no está integrado no se borra por una preferencia.
+test_la_rama_solo_se_borra_si_esta_integrada() {
+  sandbox >/dev/null
+  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "branch --merged" "rm comprueba la integración antes de borrar"
+}

@@ -33,7 +33,12 @@ function raizProyectos() {
 
 const PROYECTOS = raizProyectos()
 const CRUX_HOME = process.env.CRUX_HOME || join(PROYECTOS, 'crux')
-const TRANSCRIPTS = process.env.CRUX_TRANSCRIPTS || join(HOME, '.claude', 'projects')
+// CLAUDE_SKILLS_DIR lo redirige la suite y cualquier entorno aislado: si los
+// transcripts siguen saliendo del HOME real, se mide la máquina, no el sandbox.
+const TRANSCRIPTS = process.env.CRUX_TRANSCRIPTS
+  || (process.env.CLAUDE_SKILLS_DIR
+        ? join(dirname(process.env.CLAUDE_SKILLS_DIR), 'projects')
+        : join(HOME, '.claude', 'projects'))
 
 const args = process.argv.slice(2)
 const days = Number((args.find(a => a.startsWith('--days')) || '').split('=')[1] || 90)
