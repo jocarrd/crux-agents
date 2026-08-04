@@ -65,6 +65,28 @@ es_semver() {
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
+rama_principal() {
+  # rama_principal <dir> — la declarada en el contrato, la del remoto, o la que
+  # el repo esté usando. En ese orden.
+  local dir="$1" docs declarada
+  docs="$(find_docs_repo "$dir" 2>/dev/null || echo "")"
+  if [[ -n "$docs" && -f "$docs/crux.json" ]]; then
+    declarada="$(json_get "$docs/crux.json" branch 2>/dev/null || echo "")"
+    [[ -n "$declarada" ]] && { echo "$declarada"; return 0; }
+  fi
+  declarada="$(git -C "$dir" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)"
+  if [[ -z "$declarada" ]]; then
+    # La rama actual solo como último recurso: desde un worktree es la de
+    # trabajo, y tomarla por principal deja el hook bloqueando justo esa.
+    for c in main master; do
+      git -C "$dir" show-ref --verify --quiet "refs/heads/$c" && { declarada="$c"; break; }
+    done
+  fi
+  [[ -n "$declarada" ]] || declarada="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [[ -n "$declarada" && "$declarada" != "HEAD" ]] || declarada=main
+  echo "$declarada"
+}
+
 es_worktree() {
   # En un worktree, .git es un fichero y el directorio común vive en el repo
   # principal.

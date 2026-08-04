@@ -62,6 +62,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
   "project": "acme",
   "profile": "multi-repo",
   "language": "es",
+  "branch": "main",
   "repos": ["Acme", "acme-engine", "acme-cms"],
   "sections": ["architecture", "conventions", "operations", "topics"]
 }
@@ -71,6 +72,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | ----- | ----------- |
 | `crux` | Versión del kernel con la que se materializó este proyecto |
 | `language` | Idioma de la documentación y de las descripciones de skills |
+| `branch` | Rama principal del proyecto. `main` por defecto; se declara porque el hook que la protege y los espacios de trabajo la leen de aquí |
 | `remote` | De dónde se clonan los repos del proyecto |
 | `project` | Nombre del proyecto, igual que la carpeta padre |
 | `profile` | Perfil aplicado (ver siguiente sección) |

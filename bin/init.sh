@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux init — crea el docs repo de un proyecto nuevo desde las plantillas.
 #
-#   crux init <project> [--description "..."] [--repos a,b,c]
+#   crux init <project> [--description "..."] [--repos a,b,c] [--branch <rama>]
 #                       [--profile multi-repo] [--visibility private]
 #                       [--language es] [--remote <plantilla>] [--no-remote]
 #
@@ -24,6 +24,7 @@ shift
 
 DESCRIPTION="Documentación transversal de $PROJECT."
 REPOS=""
+BRANCH="main"
 PROFILE="multi-repo"
 VISIBILITY="private"
 LANGUAGE="es"
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --description) DESCRIPTION="$2"; shift 2 ;;
     --repos)       REPOS="$2"; shift 2 ;;
+    --branch)      BRANCH="$2"; shift 2 ;;
     --profile)     PROFILE="$2"; shift 2 ;;
     --visibility)  VISIBILITY="$2"; shift 2 ;;
     --language)    LANGUAGE="$2"; shift 2 ;;
@@ -89,11 +91,20 @@ if [[ $CREA_REMOTO -eq 1 ]]; then
   ( cd "$ROOT" && gh repo create "$PROJECT-docs" \
       "--$VISIBILITY" --description "$DESCRIPTION" --clone >/dev/null )
   ok "repo creado en el remoto y clonado ($VISIBILITY)"
+
+  # El proveedor crea la rama según la preferencia de la cuenta. Se normaliza a
+  # la declarada porque el resto del kernel —hooks, worktrees, revisión— la lee
+  # del contrato: si divergen, la guarda vigila una rama que nadie usa.
+  rama_creada="$(git -C "$DOCS" symbolic-ref --short HEAD 2>/dev/null || echo "")"
+  if [[ -n "$rama_creada" && "$rama_creada" != "$BRANCH" ]]; then
+    git -C "$DOCS" branch -M "$BRANCH"
+    ok "rama normalizada a $BRANCH (el remoto la creó como $rama_creada)"
+  fi
 else
   mkdir -p "$DOCS"
   # Sin esto el repo nace en la rama por defecto de la máquina, y el hook que
   # protege la principal se instala mirando otra.
-  ( cd "$DOCS" && { git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }; } )
+  ( cd "$DOCS" && { git init -q -b "$BRANCH" 2>/dev/null || { git init -q && git symbolic-ref HEAD "refs/heads/$BRANCH"; }; } )
   if [[ $REMOTE -eq 1 ]]; then
     ( cd "$DOCS" && git remote add origin "$URL_DOCS" )
     ok "repo local con origin apuntando a $URL_DOCS"
@@ -174,6 +185,7 @@ cat > "$DOCS/crux.json" <<EOF
   "project": "$PROJECT",
   "profile": "$PROFILE",
   "language": "${LANGUAGE:-es}",
+  "branch": "$BRANCH",
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [],
   "remote": {

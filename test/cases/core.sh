@@ -1003,16 +1003,30 @@ test_el_docs_repo_nace_en_main() {
 }
 
 # Si el hook mira una rama que no existe, no bloquea nada y nadie se entera.
-test_el_hook_protege_la_rama_principal_real() {
+test_el_hook_protege_la_rama_que_declara_el_proyecto() {
   sandbox >/dev/null
-  local docs; docs="$(new_project heredado)"
-  git -C "$docs" branch -m main master
+  local docs; docs="$(new_project heredado --branch master)"
+  assert_eq "master" "$(git -C "$docs" rev-parse --abbrev-ref HEAD)" "el repo nace en la declarada"
 
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
   local hook="$docs/.git/hooks/pre-push"
-  assert_file "$hook" "hook instalado"
-  assert_contains "$(cat "$hook")" "refs/heads/master" "vigila la rama que el repo usa de verdad"
-  assert_not_contains "$(cat "$hook")" "refs/heads/main" "y no una que no existe"
+  assert_contains "$(cat "$hook")" "refs/heads/master" "y el hook vigila esa"
+  assert_not_contains "$(cat "$hook")" "refs/heads/main" "no una que no existe"
+}
+
+# Un proyecto anterior al campo no declara nada: manda lo que el repo usa.
+test_sin_rama_declarada_se_usa_la_real() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  local docs; docs="$(new_project sindeclarar)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); delete o.branch;
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json"
+  git -C "$docs" branch -m main troncal
+
+  assert_eq "troncal" "$(rama_principal "$docs")" "cae en la rama real del repo"
 }
 
 # La marca que deja la puerta bloqueaba el comando siguiente del propio ciclo.
@@ -1027,4 +1041,25 @@ test_la_marca_de_la_puerta_no_bloquea_la_propuesta() {
   assert_file "$ws/../app/.git/info/exclude" "el exclude existe"
   printf 'abc\n' > "$ws/.crux-ship"
   assert_eq "" "$(git -C "$ws" status --porcelain)" "la marca no ensucia el estado"
+}
+
+test_el_contrato_declara_la_rama_principal() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project declarada --branch troncal)"
+  assert_eq "troncal" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).branch)' "$docs/crux.json")" \
+    "queda escrita en el contrato"
+  assert_eq "troncal" "$(git -C "$docs" rev-parse --abbrev-ref HEAD)" "y es la del repo"
+}
+
+# Desde un worktree, la rama actual es la de trabajo: tomarla por principal deja
+# el hook bloqueando justo la rama que hay que subir.
+test_la_rama_principal_no_es_la_del_worktree() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  local repo="$SB/app"
+  mkdir -p "$repo" && git -C "$repo" init -q -b main
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
+  git -C "$repo" worktree add -q -b ws/tarea "$SB/app-ws-tarea" >/dev/null 2>&1
+
+  assert_eq "main" "$(rama_principal "$SB/app-ws-tarea")" "resuelve la troncal, no la de trabajo"
 }
