@@ -35,12 +35,6 @@ echo "$PROJECT: crux $FROM → $TO"
 [[ $DRY -eq 1 ]] && warn "dry-run: no se escribe nada"
 echo
 
-if [[ "$FROM" == "$TO" && $FORCE -eq 0 ]]; then
-  ok "ya está en la versión del kernel"
-  echo
-  exec bash "$CRUX_HOME/bin/doctor.sh" "$DOCS"
-fi
-
 # Degradar el contrato en la máquina que lleva el kernel viejo deja al proyecto
 # declarando menos de lo que ya tiene materializado, y sin avisar a nadie.
 if version_mayor_que "$FROM" "$TO"; then
@@ -72,7 +66,17 @@ while IFS= read -r src; do
   added=$((added + 1))
 done < <(find "$CRUX_HOME/templates/docs-repo" -type f | sort)
 
+# La versión que coincide no garantiza que estén todas las piezas: 'crux adopt'
+# escribe la versión actual sobre un repo que aún no tiene la estructura, y si
+# se sale antes de mirar, el comando que debía completarla no completa nada.
 [[ $added -eq 0 ]] && ok "no falta ninguna pieza del estándar"
+
+# CLAUDE.md es un symlink, no una plantilla: sin esto, un proyecto adoptado se
+# queda sin él y doctor lo reporta como pieza que falta para siempre.
+if [[ $DRY -eq 0 && -f "$DOCS/AGENTS.md" && ! -e "$DOCS/CLAUDE.md" ]]; then
+  ( cd "$DOCS" && ln -s AGENTS.md CLAUDE.md )
+  ok "materializado CLAUDE.md"
+fi
 
 # --- Actualizar la versión declarada ----------------------------------------
 

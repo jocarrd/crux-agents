@@ -137,6 +137,70 @@ git clone -q "$REMOTO" "$OTRA/demo-docs" 2>/dev/null
 cierto '[[ -f "$OTRA/demo-docs/crux.json" ]]' "el docs repo viaja por git"
 cierto '[[ -f "$OTRA/demo-docs/repos/api/README.md" ]]' "con la documentación de sus repos"
 
+# --- 5. Un repo más, en caliente ---------------------------------------------
+
+paso "registrar un segundo repo en el proyecto"
+REPO2="$CRUX_PROJECTS_DIR/demo/worker"
+mkdir -p "$REPO2" && git init -q -b main "$REPO2"
+echo "worker" > "$REPO2/main.py"
+git_ -C "$REPO2" add -A && git_ -C "$REPO2" commit -qm "chore: init"
+( cd "$DOCS" && crux add-repo worker --description "Procesa la cola" >/dev/null 2>&1 )
+cierto '[[ -f "$DOCS/repos/worker/README.md" ]]' "la carpeta de doc se crea"
+cierto 'grep -q "worker" "$DOCS/crux.json"' "y queda declarado en el contrato"
+cierto '[[ -f "$REPO2/AGENTS.md" ]]' "con su puntero en el repo de código"
+
+paso "el nombre de un repo no puede escaparse de la carpeta"
+salida="$( cd "$DOCS" && crux add-repo "../../fuera" --description "x" 2>&1 )"
+cierto '[[ "$salida" == *"kebab-case"* || "$salida" == *"inválido"* ]]' "se rechaza"
+cierto '[[ ! -e "$CRUX_PROJECTS_DIR/fuera" ]]' "y no se crea nada fuera"
+
+# --- 6. Idempotencia ---------------------------------------------------------
+
+paso "repetir link y hooks no cambia nada"
+antes="$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)"
+crux link "$DOCS" >/dev/null 2>&1
+( cd "$DOCS" && crux hooks install >/dev/null 2>&1 )
+cierto '[[ "$antes" == "$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)" ]]' "el puntero es el mismo"
+cierto '[[ "$(grep -c "crux workspace" "$DOCS/.git/hooks/pre-push")" -le 2 ]]' "el hook no se duplica"
+
+# --- 7. Un proyecto que ya existía -------------------------------------------
+
+paso "adoptar un docs repo que no nació con crux"
+AJENO="$CRUX_PROJECTS_DIR/heredado/heredado-docs"
+mkdir -p "$AJENO" && git init -q -b main "$AJENO"
+echo "# heredado" > "$AJENO/README.md"
+git_ -C "$AJENO" add -A && git_ -C "$AJENO" commit -qm "docs: init"
+( cd "$AJENO" && crux adopt . >/dev/null 2>&1 )
+cierto '[[ -f "$AJENO/crux.json" ]]' "queda con contrato"
+salida="$(bash "$CRUX_HOME/bin/upgrade.sh" "$AJENO" 2>&1)"
+cierto '[[ "$salida" == *"materializado"* || "$salida" == *"no falta"* ]]' "y upgrade completa lo que falte"
+bash "$CRUX_HOME/bin/doctor.sh" "$AJENO" >/dev/null 2>&1
+cierto '[[ $? -eq 0 ]]' "hasta pasar doctor"
+
+# --- 8. El perfil de cliente -------------------------------------------------
+
+paso "con perfil de cliente no se escribe en el repo ajeno"
+crux init cliente --no-remote --parent "$CRUX_PROJECTS_DIR" --repos vendor --profile client-repo >/dev/null 2>&1
+CDOCS="$CRUX_PROJECTS_DIR/cliente/cliente-docs"
+VENDOR="$CRUX_PROJECTS_DIR/cliente/vendor"
+mkdir -p "$VENDOR" && git init -q -b main "$VENDOR"
+echo "codigo" > "$VENDOR/main.c"
+git_ -C "$VENDOR" add -A && git_ -C "$VENDOR" commit -qm "chore: init"
+crux link "$CDOCS" >/dev/null 2>&1
+cierto '[[ ! -f "$VENDOR/AGENTS.md" && ! -f "$VENDOR/CLAUDE.md" ]]' "link no deja punteros"
+
+paso "y el espacio de trabajo se niega sin autorización"
+salida="$( cd "$VENDOR" && crux workspace new tarea 2>&1 )"
+cierto '[[ "$salida" == *"--force"* ]]' "avisa de que hace falta autorización"
+cierto '[[ ! -d "$CRUX_PROJECTS_DIR/cliente/vendor-ws-tarea" ]]' "y no crea la rama"
+
+paso "doctor detecta lo que falta y lo que sobra"
+rm -rf "$DOCS/repos/worker"
+salida="$(bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" 2>&1)"
+cierto '[[ "$salida" == *"sin carpeta de doc"* ]]' "reporta el repo declarado sin doc"
+bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" >/dev/null 2>&1
+cierto '[[ $? -ne 0 ]]' "y sale con error"
+
 echo
 if [[ $FALLOS -eq 0 ]]; then
   echo "${G}e2e correcto${O} — $PASO pasos del ciclo"

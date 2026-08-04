@@ -1080,3 +1080,21 @@ test_la_rama_solo_se_borra_si_esta_integrada() {
   sandbox >/dev/null
   assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "branch --merged" "rm comprueba la integración antes de borrar"
 }
+
+# adopt escribe la versión actual sobre un repo sin estructura: si upgrade sale
+# antes de mirar, el comando que debía completarla no completa nada.
+test_upgrade_completa_un_proyecto_adoptado() {
+  sandbox >/dev/null
+  local docs="$CRUX_PROJECTS_DIR/heredado/heredado-docs"
+  mkdir -p "$docs" && git -C "$docs" init -q -b main
+  echo "# heredado" > "$docs/README.md"
+  git -C "$docs" add -A
+  git -C "$docs" -c user.email=t@t -c user.name=t commit -qm "docs: init"
+  ( cd "$docs" && bash "$CRUX_HOME/bin/adopt.sh" . >/dev/null 2>&1 )
+
+  bash "$CRUX_HOME/bin/upgrade.sh" "$docs" >/dev/null 2>&1
+  for f in AGENTS.md decisions/README.md decisions/index.md repos/README.md; do
+    assert_file "$docs/$f" "upgrade repone $f"
+  done
+  assert_symlink "$docs/CLAUDE.md" "AGENTS.md" "y el symlink que no es una plantilla"
+}
