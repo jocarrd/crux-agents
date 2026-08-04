@@ -1154,3 +1154,12 @@ test_install_dev_rechaza_un_worktree() {
 
   git -C "$CRUX_HOME" worktree remove --force "$wt" 2>/dev/null
 }
+
+# Con el kernel instalado como copia, CRUX_HOME no es un repo: publicar desde
+# ahí fallaba con "no es un repositorio git" en vez de decir qué hacer.
+test_release_se_ejecuta_desde_el_repo_del_kernel() {
+  sandbox >/dev/null
+  local fuera="$SB/fuera"; mkdir -p "$fuera"
+  local out; out="$( cd "$fuera" && bash "$CRUX_HOME/bin/release.sh" 9.9.9 2>&1 )"
+  assert_contains "$out" "desde el repositorio del kernel" "dice dónde hay que ejecutarlo"
+}

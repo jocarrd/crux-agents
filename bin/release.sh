@@ -19,6 +19,15 @@ CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/..
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
+# Publicar es una operación sobre el repositorio del kernel, no sobre la copia
+# instalada: desde ella no hay ni git ni suite que ejecutar.
+REPO="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+if [[ -z "$REPO" || ! -f "$REPO/test/run.sh" || ! -f "$REPO/STANDARD.md" ]]; then
+  err "crux release se ejecuta desde el repositorio del kernel"
+  info "estás en: $PWD"
+  exit 1
+fi
+
 NUEVA="${1:-}"
 [[ -n "$NUEVA" ]] || die "uso: crux release <version> [--yes]"
 shift
@@ -33,8 +42,8 @@ done
 
 [[ "$NUEVA" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "la versión debe ser semver: 1.2.3"
 
-ACTUAL="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
-ultimo_tag="$(git -C "$CRUX_HOME" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")"
+ACTUAL="$(tr -d '[:space:]' < "$REPO/VERSION")"
+ultimo_tag="$(git -C "$REPO" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")"
 version_mayor_que "$NUEVA" "${ultimo_tag:-0.0.0}" || die "$NUEVA no es posterior a la última publicada ($ultimo_tag)"
 
 echo "release $ACTUAL → $NUEVA"
@@ -45,11 +54,11 @@ fallo() { err "$*"; FALLOS=$((FALLOS + 1)); }
 
 # --- 1. El repo del kernel ---------------------------------------------------
 
-rama="$(git -C "$CRUX_HOME" rev-parse --abbrev-ref HEAD)"
+rama="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
 [[ "$rama" == "main" ]] || fallo "estás en la rama $rama, no en main"
-[[ -z "$(git -C "$CRUX_HOME" status --porcelain)" ]] || fallo "hay cambios sin commitear"
-[[ -z "$(git -C "$CRUX_HOME" log --oneline '@{u}..' 2>/dev/null)" ]] || fallo "hay commits sin pushear"
-git -C "$CRUX_HOME" rev-parse "v$NUEVA" >/dev/null 2>&1 && fallo "la etiqueta v$NUEVA ya existe"
+[[ -z "$(git -C "$REPO" status --porcelain)" ]] || fallo "hay cambios sin commitear"
+[[ -z "$(git -C "$REPO" log --oneline '@{u}..' 2>/dev/null)" ]] || fallo "hay commits sin pushear"
+git -C "$REPO" rev-parse "v$NUEVA" >/dev/null 2>&1 && fallo "la etiqueta v$NUEVA ya existe"
 [[ "$ACTUAL" == "$NUEVA" ]] || fallo "VERSION dice $ACTUAL: súbelo a $NUEVA por propuesta antes de etiquetar"
 [[ $FALLOS -eq 0 ]] && ok "repo listo: main, limpio, al día y con VERSION en $NUEVA"
 
@@ -59,7 +68,7 @@ git -C "$CRUX_HOME" rev-parse "v$NUEVA" >/dev/null 2>&1 && fallo "la etiqueta v$
 # el uno al otro sin fin.
 if [[ -n "${CRUX_IN_TESTS:-}" ]]; then
   info "suite omitida: se está ejecutando desde la propia suite"
-elif ( cd "$CRUX_HOME" && ./test/run.sh >/tmp/crux-release-tests.$$ 2>&1 ); then
+elif ( cd "$REPO" && ./test/run.sh >/tmp/crux-release-tests.$$ 2>&1 ); then
   ok "suite en verde ($(grep -oE '[0-9]+ aserciones' /tmp/crux-release-tests.$$ | tail -1))"
 else
   fallo "la suite no pasa:"
@@ -89,10 +98,10 @@ done
 
 # --- Notas -------------------------------------------------------------------
 
-ultimo="$(git -C "$CRUX_HOME" describe --tags --abbrev=0 2>/dev/null || echo "")"
+ultimo="$(git -C "$REPO" describe --tags --abbrev=0 2>/dev/null || echo "")"
 rango="${ultimo:+$ultimo..}HEAD"
 
-notas="$(git -C "$CRUX_HOME" log --format='%s' "$rango" | node -e '
+notas="$(git -C "$REPO" log --format='%s' "$rango" | node -e '
   const tipos = { feat: "Novedades", fix: "Arreglos", refactor: "Refactor",
                   docs: "Documentación", test: "Tests", chore: "Mantenimiento" };
   let d = "";
@@ -134,10 +143,10 @@ if [[ $CONFIRMADO -eq 0 ]]; then
   exit 0
 fi
 
-git -C "$CRUX_HOME" tag -a "v$NUEVA" -m "$NUEVA
+git -C "$REPO" tag -a "v$NUEVA" -m "$NUEVA
 
 $notas"
-git -C "$CRUX_HOME" push -q origin "v$NUEVA"
+git -C "$REPO" push -q origin "v$NUEVA"
 ok "v$NUEVA publicada"
 
 echo
