@@ -1098,3 +1098,15 @@ test_upgrade_completa_un_proyecto_adoptado() {
   done
   assert_symlink "$docs/CLAUDE.md" "AGENTS.md" "y el symlink que no es una plantilla"
 }
+
+# El kernel se instala en cualquier máquina, y macOS trae bash 3.2 de serie.
+test_el_kernel_no_usa_bash_4() {
+  sandbox >/dev/null
+  local usos=""
+  for f in "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/bin/crux "$CRUX_HOME"/lib/*.sh \
+           "$CRUX_HOME/install.sh" "$CRUX_HOME"/test/*.sh "$CRUX_HOME"/adapters/*/*.sh; do
+    [[ -f "$f" ]] || continue
+    grep -qE '^\s*(mapfile|readarray|declare -A)' "$f" && usos+=" $(basename "$f")"
+  done
+  assert_eq "" "$usos" "ningún script depende de bash 4"
+}

@@ -97,8 +97,9 @@ tests="$(echo "$ficheros" | grep -iE '(^|/)(test|tests|spec|__tests__)/|\.(test|
 [[ -n "$codigo" && -z "$tests" ]] && senal "toca código y no toca ningún test"
 
 # Un console.log en un test es su forma de reportar, no trabajo a medias.
-mapfile -t rutas_codigo < <(echo "$codigo" | grep -v '^$' \
-  | grep -ivE '(^|/)(test|tests|spec|__tests__)/|\.(test|spec)\.[a-z]+$' || true)
+rutas_codigo=()
+while IFS= read -r r; do [[ -n "$r" ]] && rutas_codigo+=("$r"); done < <(
+  echo "$codigo" | grep -ivE '(^|/)(test|tests|spec|__tests__)/|\.(test|spec)\.[a-z]+$' || true)
 anadidas="$(git diff "$BASE...$RAMA" -- ${rutas_codigo[@]+"${rutas_codigo[@]}"} 2>/dev/null \
   | grep '^+' | grep -v '^+++' || true)"
 

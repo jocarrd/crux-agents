@@ -13,6 +13,11 @@ No es un repo de documentación de un proyecto. Es lo que los fabrica.
 
 ## Instalación
 
+Necesita `bash`, `git` y `node`. Nada más: si el kernel necesitase dependencias
+para instalarse, dejaría de ser instalable en cualquier máquina. El código se
+mantiene dentro de lo que entiende **bash 3.2**, que es el que trae macOS de
+serie.
+
 ```bash
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh
