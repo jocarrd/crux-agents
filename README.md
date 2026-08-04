@@ -23,9 +23,14 @@ git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh
 ```
 
-Eso deja las skills disponibles en Claude Code (`/<nombre>`) y en Codex
-(`/<nombre>`), y registra en `~/.crux/config` dónde vive el kernel y cuál es la
-raíz de proyectos.
+Eso **copia la versión** a `~/.crux/kernel/<version>/` y enlaza las skills ahí,
+para Claude Code (`/<nombre>`) y para Codex (`/<nombre>`). Tus proyectos usan esa
+copia, no tu working copy: mientras trabajas en el kernel —o te dejas una rama a
+medias— los proyectos siguen con la versión que instalaste. Al cambiar el
+kernel, repite el `install.sh`.
+
+Para desarrollar el propio kernel, `install.sh --dev` enlaza al working copy y
+cada cambio es inmediato. Es el modo de una sola máquina: la tuya.
 
 **Dónde clones el kernel decide dónde viven tus proyectos**: si lo pones en
 `/opt/dev/crux`, la raíz es `/opt/dev`. Se cambia con

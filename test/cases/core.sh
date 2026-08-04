@@ -1110,3 +1110,47 @@ test_el_kernel_no_usa_bash_4() {
   done
   assert_eq "" "$usos" "ningún script depende de bash 4"
 }
+
+# Enlazados al working copy, los proyectos usan lo que haya en él en cada
+# momento: una rama a medias les cambia el comportamiento sin tocarlos.
+test_install_deja_una_copia_por_version() {
+  sandbox >/dev/null
+  local casa="$SB/casa"; mkdir -p "$casa"
+  env HOME="$casa" bash "$CRUX_HOME/install.sh" --projects-dir "$casa/proyectos" >/dev/null 2>&1
+
+  local version; version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  assert_file "$casa/.crux/kernel/$version/bin/crux" "la copia de la versión existe"
+  assert_contains "$(readlink "$casa/.local/bin/crux")" ".crux/kernel/$version" "el comando apunta a la copia"
+  assert_contains "$(readlink "$CLAUDE_SKILLS_DIR/ship")" ".crux/kernel/$version" "y las skills también"
+  assert_contains "$(cat "$casa/.crux/config")" 'CRUX_MODE="release"' "queda registrado el modo"
+}
+
+test_install_dev_enlaza_al_working_copy() {
+  sandbox >/dev/null
+  local casa="$SB/casa2"; mkdir -p "$casa"
+  # Copia fuera de git: en dev el instalador rechaza un worktree, y la suite
+  # corre desde uno cuando se desarrolla el kernel.
+  local kernel="$SB/kernel"
+  mkdir -p "$kernel"
+  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+    | ( cd "$kernel" && tar xf - )
+
+  env HOME="$casa" bash "$kernel/install.sh" --dev --projects-dir "$casa/proyectos" >/dev/null 2>&1
+
+  assert_eq "$kernel/bin/crux" "$(readlink "$casa/.local/bin/crux")" "el comando apunta al repo"
+  assert_contains "$(cat "$casa/.crux/config")" 'CRUX_MODE="dev"' "y el modo lo dice"
+}
+
+test_install_dev_rechaza_un_worktree() {
+  sandbox >/dev/null
+  local wt="$SB/kernel-wt"
+  git -C "$CRUX_HOME" worktree add -q --detach "$wt" 2>/dev/null || return 0
+  cp "$CRUX_HOME/install.sh" "$wt/install.sh"
+
+  local casa="$SB/casa3"; mkdir -p "$casa"
+  local out; out="$(env HOME="$casa" bash "$wt/install.sh" --dev --projects-dir "$casa/p" 2>&1)"
+  assert_contains "$out" "worktree del kernel" "lo detecta"
+  assert_no_file "$casa/.local/bin/crux" "y no instala nada"
+
+  git -C "$CRUX_HOME" worktree remove --force "$wt" 2>/dev/null
+}

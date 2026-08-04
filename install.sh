@@ -21,28 +21,48 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/skills.sh"
 
-# Las skills se instalan como symlinks a este directorio. Desde un worktree, la
-# máquina entera acaba apuntando a una ruta que desaparece al cerrarlo.
-if es_worktree "$CRUX_HOME"; then
-  err "esto es un worktree del kernel: $CRUX_HOME"
-  info "instala desde el repo principal, o las skills quedarán colgando de un directorio efímero"
-  info "principal: $(repo_principal "$CRUX_HOME")"
-  exit 1
-fi
-
 export CRUX_DRY_RUN=0
 REMOTE_DEFECTO=""
 RAIZ_PROYECTOS=""
+MODO="release"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) export CRUX_DRY_RUN=1; shift ;;
+    --dev)     MODO="dev"; shift ;;
     --remote)  REMOTE_DEFECTO="$2"; shift 2 ;;
     --projects-dir) RAIZ_PROYECTOS="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
 
-echo "crux $(tr -d '[:space:]' < "$CRUX_HOME/VERSION") — $CRUX_HOME"
+# Los proyectos consumen el kernel por symlink. Enlazados al working copy, usan
+# lo que haya en él en cada momento: una rama a medias cambia el comportamiento
+# de todos los proyectos sin tocarlos. La copia por versión los desacopla.
+ORIGEN="$CRUX_HOME"
+VERSION_INSTALADA="$(tr -d '[:space:]' < "$ORIGEN/VERSION")"
+
+# En dev todo cuelga por symlink de este directorio: si es un worktree, al
+# cerrarlo la máquina se queda sin skills. En release da igual, porque se copia.
+if [[ "$MODO" == "dev" ]] && es_worktree "$ORIGEN"; then
+  err "esto es un worktree del kernel: $ORIGEN"
+  info "en dev las skills quedarían colgando de un directorio efímero"
+  info "instala desde el principal ($(repo_principal "$ORIGEN")), o sin --dev"
+  exit 1
+fi
+es_worktree "$ORIGEN" && warn "instalando desde un worktree: la copia será de la rama $(git -C "$ORIGEN" rev-parse --abbrev-ref HEAD)"
+if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" ]]; then
+  DESTINO="$HOME/.crux/kernel/$VERSION_INSTALADA"
+  rm -rf "$DESTINO"
+  mkdir -p "$DESTINO"
+  for pieza in bin lib skills templates profiles adapters VERSION STANDARD.md GUIA.md README.md AGENTS.md; do
+    [[ -e "$ORIGEN/$pieza" ]] && cp -R "$ORIGEN/$pieza" "$DESTINO/"
+  done
+  CRUX_HOME="$DESTINO"
+  export CRUX_HOME
+fi
+
+echo "crux $VERSION_INSTALADA — $CRUX_HOME"
+[[ "$MODO" == "dev" ]] && warn "modo dev: los proyectos usarán tu working copy, tal como esté en cada momento"
 [[ "$CRUX_DRY_RUN" == "1" ]] && warn "dry-run: no se escribe nada"
 echo
 
@@ -56,6 +76,7 @@ if [[ "$CRUX_DRY_RUN" == "0" ]]; then
   cat > "$HOME/.crux/config" <<EOF
 # Generado por crux install.sh
 CRUX_HOME="$CRUX_HOME"
+CRUX_MODE="$MODO"
 EOF
   if [[ -n "$REMOTE_DEFECTO" ]]; then
     echo "CRUX_REMOTE=\"$REMOTE_DEFECTO\"" >> "$HOME/.crux/config"
@@ -97,6 +118,15 @@ ok "contexto global de Codex en ~/.codex/AGENTS.md"
 claude_materialize_global "$CRUX_HOME"
 ok "contexto global de Claude verificado"
 
+echo
+if [[ "$MODO" == "release" ]]; then
+  echo "Instalado $VERSION_INSTALADA en $CRUX_HOME"
+  echo "Tus proyectos usan esa copia, no tu working copy: al cambiar el kernel, repite el install."
+  echo "Para desarrollar el propio kernel: install.sh --dev"
+else
+  echo "Modo dev: enlazado a $CRUX_HOME"
+  echo "Para volver a una versión inmutable: install.sh"
+fi
 echo
 echo "Siguiente paso: en el docs repo de un proyecto, 'crux adopt' o 'crux doctor'."
 echo "Para un proyecto nuevo: 'crux init <project>'."
