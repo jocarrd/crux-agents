@@ -963,3 +963,35 @@ test_el_ciclo_lleva_a_revisar_la_propuesta() {
   assert_contains "$(cat "$CRUX_HOME/skills/flow/SKILL.md")" "/review-pr" "el ciclo la encadena"
   assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "/review-pr" "y finish la recuerda"
 }
+
+test_review_reune_el_material_de_la_propuesta() {
+  sandbox >/dev/null
+  local repo="$SB/proyecto"
+  mkdir -p "$repo/src" && git -C "$repo" init -q -b main
+  echo "uno" > "$repo/src/app.sh"
+  git -C "$repo" add -A
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -qm "init"
+
+  git -C "$repo" checkout -q -b ws/tarea
+  printf 'dos\nconsole.log("x")\n# TODO: acabar\n' >> "$repo/src/app.sh"
+  git -C "$repo" add -A
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -qm "feat: algo"
+
+  local out; out="$(bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main 2>&1)"
+  assert_contains "$out" "ws/tarea" "dice qué rama revisa"
+  assert_contains "$out" "src/app.sh" "y qué ficheros toca"
+  assert_contains "$out" "no toca ningún test" "avisa de que no hay tests"
+  assert_contains "$out" "marcadores de trabajo a medias" "y de lo que quedó a medias"
+  assert_exit 0 "termina limpio" bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main
+}
+
+test_review_no_inventa_una_revision_sin_cambios() {
+  sandbox >/dev/null
+  local repo="$SB/vacio"
+  mkdir -p "$repo" && git -C "$repo" init -q -b main
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
+
+  local out; out="$(bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main 2>&1)"
+  assert_contains "$out" "no hay nada que revisar" "lo dice en vez de imprimir sección vacía"
+  assert_exit 1 "y sale con error" bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main
+}

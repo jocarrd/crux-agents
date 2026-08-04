@@ -19,6 +19,7 @@ crux — kernel del sistema de trabajo con agentes
   crux clone <project>  trae un proyecto entero a esta máquina
   crux adopt [dir]      registra un docs repo que ya existe
   crux add-repo <repo>  registra un repo nuevo en el proyecto
+  crux review           reúne el material para revisar una propuesta
   crux link [dir]       genera y verifica los punteros de los repos de código
   crux workspace ...    espacios aislados para trabajar en paralelo
   crux hooks ...        engancha el estándar al cierre de sesión y al commit
@@ -42,6 +43,7 @@ case "$cmd" in
   clone)   exec bash "$CRUX_HOME/bin/clone.sh" "$@" ;;
   adopt)   exec bash "$CRUX_HOME/bin/adopt.sh" "$@" ;;
   add-repo) exec bash "$CRUX_HOME/bin/add-repo.sh" "$@" ;;
+  review)   exec bash "$CRUX_HOME/bin/review.sh" "$@" ;;
   link)    exec bash "$CRUX_HOME/bin/link.sh" "$@" ;;
   workspace) exec bash "$CRUX_HOME/bin/workspace.sh" "$@" ;;
   hooks)   exec bash "$CRUX_HOME/bin/hooks.sh" "$@" ;;

@@ -459,6 +459,7 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux clone <project>` | — | Trae un proyecto entero a una máquina nueva |
 | `crux adopt` | — | Registra un docs repo que ya existe |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
+| `crux review` | Reúne el material de la revisión de una propuesta |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |

@@ -37,10 +37,18 @@ sin el historial de cómo se llegó ahí.
 
 ## Qué se pone delante
 
-1. El diff completo contra la rama base, no los últimos commits.
-2. La descripción de la propuesta: qué dice que hace.
-3. El resultado de la suite y de las comprobaciones automáticas.
-4. Las convenciones del repo. Están escritas; no se adivinan.
+```bash
+crux review
+```
+
+Reúne los commits, el diff contra la base, la propuesta con sus comprobaciones
+y unas señales objetivas —código sin tests, marcadores de trabajo a medias,
+credenciales aparentes, dependencias tocadas, ficheros que se han ido de
+tamaño—. No revisa: prepara, para que la revisión no dependa de que alguien se
+acuerde de juntarlo.
+
+Falta una cosa más, que no la da ningún comando: **las convenciones del repo**.
+Están escritas en su documentación; no se adivinan.
 
 ## El recorrido
 
@@ -130,8 +138,34 @@ que cuatro son ruido, enseña a ignorar la siguiente.
   propuesta y lo decide quien la revisa.
 - **Dudoso**: no se publica. Se comprueba primero.
 
-Y se deja dicho **qué se revisó y qué no**. Una revisión que no dice su alcance
-se lee como si lo cubriera todo.
+## Contárselo a quien decide
+
+**La revisión no termina en la propuesta: termina contada.** Un comentario en
+un hilo que nadie abre hasta la semana siguiente no es una revisión, es un
+archivo. Quien tiene que decidir necesita saberlo ahora y en su idioma, no en
+jerga de diff.
+
+Tres cosas por hallazgo, y en este orden:
+
+1. **Qué está mal** — en una frase, sin rodeos.
+2. **Qué cambiarías** — concreto: el fichero, la línea, el arreglo. Si ya está
+   hecho, se dice que está hecho.
+3. **Por qué importa** — la consecuencia real si se queda. Sin esto, todo
+   parece igual de urgente y quien decide no puede priorizar.
+
+Y con esto alrededor:
+
+- **Ordenado por lo que costaría si pasa**, no por fichero ni por orden de
+  aparición. Lo primero que se lee es lo que más duele.
+- **Separando lo arreglado de lo que necesita decisión.** Confundirlos hace que
+  parezca que hay más trabajo pendiente del que hay.
+- **Diciendo qué se revisó y no tenía nada.** Si no, el silencio se lee como
+  "no lo miré", y la siguiente revisión ya no se cree.
+- **Diciendo qué no se revisó.** Una revisión sin alcance declarado se lee como
+  si lo cubriera todo.
+
+Si no hay ningún hallazgo, también se cuenta: qué se miró, con qué criterio, y
+por qué no salió nada. Es información, no un trámite.
 
 ## Anti-patterns
 
@@ -144,6 +178,8 @@ se lee como si lo cubriera todo.
 - **Aprobar porque los tests pasan.** Los escribió quien hizo el cambio.
 - **Dejarlo para después de fusionar.** Después ya no es una propuesta, es el
   código del repo.
+- **Dejar los hallazgos solo en la propuesta.** Quien decide no está mirando el
+  hilo; se le cuenta.
 
 ## Relacionado
 
