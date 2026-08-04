@@ -780,3 +780,173 @@ test_el_hook_rechaza_un_mensaje_de_commit_en_espanol() {
   assert_contains "$out" "no-verify" "y dice cómo saltarlo cuando de verdad haga falta"
   assert_contains "$out" "pistas:" "y enseña por qué lo ha rechazado"
 }
+
+# Escribía la carpeta fuera del docs repo y doctor daba el contrato por bueno.
+test_add_repo_rechaza_un_nombre_que_escapa_de_la_carpeta() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project traversal --repos "api")"
+
+  for malo in "../fuera" "../../lejos" "con espacio" "sub/dir" ".oculto" "/abs"; do
+    assert_exit 1 "rechaza '$malo'" bash "$CRUX_HOME/bin/add-repo.sh" "$malo" "$docs"
+  done
+
+  assert_no_file "$(dirname "$docs")/fuera" "no crea nada fuera del docs repo"
+  assert_eq "api" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).repos.join(","))' "$docs/crux.json")" \
+    "el contrato queda intacto"
+
+  assert_exit 0 "y sigue aceptando un nombre válido" \
+    bash "$CRUX_HOME/bin/add-repo.sh" "web-front" --description "x" "$docs"
+  # Hay repos reales en CamelCase: la validación va contra el daño, no el estilo.
+  assert_exit 0 "acepta CamelCase" \
+    bash "$CRUX_HOME/bin/add-repo.sh" "MiApp" --description "x" "$docs"
+}
+
+test_add_repo_escapa_las_barras_de_la_descripcion() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project barras)"
+  bash "$CRUX_HOME/bin/add-repo.sh" web --description "front | back" "$docs" >/dev/null 2>&1
+
+  local fila; fila="$(grep '^| `web/`' "$docs/repos/README.md")"
+  assert_contains "$fila" '\|' "la barra va escapada"
+  local columnas; columnas="$(sed 's/\\|//g' <<< "$fila" | awk -F'|' '{print NF-2}')"
+  assert_eq "3" "$columnas" "la fila conserva tres columnas"
+}
+
+# "${declared[@]:-}" con el array vacío expande a un elemento vacío.
+test_doctor_no_inventa_un_repo_cuando_no_hay_ninguno() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project sinrepos)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.repos = [];
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_not_contains "$out" "/ sin AGENTS.md" "no avisa por un repo que no existe"
+  assert_contains "$out" "repos: 0 declarados" "y cuenta cero"
+  assert_exit 0 "sin errores" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# La máquina con el kernel viejo degradaba el contrato del proyecto sin avisar.
+test_upgrade_no_degrada_el_contrato_de_un_proyecto_mas_nuevo() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project adelantado)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = "99.0.0";
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/upgrade.sh" "$docs" 2>&1)"
+  assert_contains "$out" "actualiza el kernel" "dice qué hacer en vez de degradar"
+  assert_exit 1 "y no lo da por bueno" bash "$CRUX_HOME/bin/upgrade.sh" "$docs"
+  assert_eq "99.0.0" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).crux)' "$docs/crux.json")" \
+    "el contrato no se toca"
+
+  local aviso; aviso="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$aviso" "por delante del kernel" "y doctor no empuja al downgrade"
+}
+
+# Un dry-run que sale con error rompe cualquier uso encadenado o en CI.
+test_upgrade_en_dry_run_no_reporta_fallo() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project seco)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = "0.0.1";
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json"
+
+  assert_exit 0 "dry-run con trabajo pendiente sale limpio" \
+    bash "$CRUX_HOME/bin/upgrade.sh" "$docs" --dry-run
+  assert_eq "0.0.1" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).crux)' "$docs/crux.json")" \
+    "y no escribe nada"
+}
+
+# Una plantilla sin bloque gestionado se reportaba como escrita sin tocar nada.
+test_render_managed_distingue_la_plantilla_sin_bloque() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  local dir="$SB/rm"; mkdir -p "$dir"
+  printf 'plantilla sin bloque\n' > "$dir/tpl.md"
+  printf '<!-- crux:begin -->\nviejo\n<!-- crux:end -->\n' > "$dir/dst.md"
+
+  local rc=0
+  render_managed "$dir/tpl.md" "$dir/dst.md" || rc=$?
+  assert_eq "4" "$rc" "devuelve su propio código, no el de actualizado"
+  assert_contains "$(cat "$dir/dst.md")" "viejo" "y el destino queda intacto"
+}
+
+# Sin repo no se puede afirmar que el remoto coincida con el contrato.
+test_doctor_detecta_un_docs_repo_fuera_de_git() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project singit)"
+  rm -rf "$docs/.git"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "no está en git" "lo reporta"
+  assert_not_contains "$out" "remoto coherente con el contrato" "y no afirma lo que no puede saber"
+  assert_exit 1 "es error, no aviso" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# Un contrato sin campo 'crux' deja "?", y sort -V lo ponía por encima de todo.
+test_la_comparacion_de_versiones_ignora_lo_que_no_es_semver() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+
+  assert_exit 1 "'?' no es mayor que una versión" version_mayor_que "?" "0.6.0"
+  assert_exit 1 "ni 'unknown'" version_mayor_que "unknown" "0.6.0"
+  assert_exit 0 "0.10.0 sí es mayor que 0.9.0" version_mayor_que "0.10.0" "0.9.0"
+  assert_exit 1 "y 0.9.0 no lo es de 0.10.0" version_mayor_que "0.9.0" "0.10.0"
+}
+
+# Sin cierre, el frontmatter no es YAML válido y la skill no se activa.
+test_doctor_detecta_el_frontmatter_sin_cerrar() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project frontmatter)"
+  mkdir -p "$docs/.claude/skills/project/rota"
+  printf -- '---\nname: rota\ndescription: usa cuando pase algo\n\n# cuerpo\n' \
+    > "$docs/.claude/skills/project/rota/SKILL.md"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "frontmatter sin cerrar" "lo detecta"
+  assert_exit 1 "y es error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# clone terminaba en un condicional, así que salía con 1 tras haber ido bien.
+test_los_comandos_no_terminan_en_un_condicional() {
+  sandbox >/dev/null
+  local malos=""
+  for f in "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/lib/*.sh "$CRUX_HOME/install.sh"; do
+    local ultima; ultima="$(grep -vE '^\s*(#|$)' "$f" | tail -1)"
+    [[ "$ultima" == *"]]"*"&&"* || "$ultima" == *"]"*"&&"* ]] && malos+=" $(basename "$f")"
+  done
+  assert_eq "" "$malos" "ningún comando deja el código de salida en manos de su última condición"
+}
+
+# El mismo escape que en add-repo, por la puerta de init.
+test_init_rechaza_un_repo_que_escapa_de_la_carpeta() {
+  sandbox >/dev/null
+  assert_exit 1 "rechaza el repo con ruta" \
+    bash "$CRUX_HOME/bin/init.sh" fuga --no-remote --parent "$CRUX_PROJECTS_DIR" --repos "../../ESCAPE,ok"
+  assert_no_file "$CRUX_PROJECTS_DIR/ESCAPE" "no crea nada fuera"
+  assert_no_file "$CRUX_PROJECTS_DIR/fuga/ESCAPE" "tampoco dentro del proyecto"
+}
+
+# Instalar desde un worktree dejaba ~/.claude/skills apuntando a un directorio
+# que desaparece al cerrarlo, y con él todas las skills de la máquina.
+test_se_distingue_un_worktree_de_su_repo_principal() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  local repo="$SB/repo"
+  mkdir -p "$repo" && git -C "$repo" init -q
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
+  git -C "$repo" worktree add -q --detach "$SB/wt" >/dev/null 2>&1
+
+  assert_exit 1 "el repo principal no es un worktree" es_worktree "$repo"
+  assert_exit 0 "el worktree sí lo es" es_worktree "$SB/wt"
+  assert_eq "$repo" "$(repo_principal "$SB/wt")" "y sabe de quién cuelga"
+
+  assert_contains "$(cat "$CRUX_HOME/install.sh")" "es_worktree" "install.sh lo comprueba antes de tocar nada"
+}

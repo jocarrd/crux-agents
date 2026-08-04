@@ -21,6 +21,15 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/skills.sh"
 
+# Las skills se instalan como symlinks a este directorio. Desde un worktree, la
+# máquina entera acaba apuntando a una ruta que desaparece al cerrarlo.
+if es_worktree "$CRUX_HOME"; then
+  err "esto es un worktree del kernel: $CRUX_HOME"
+  info "instala desde el repo principal, o las skills quedarán colgando de un directorio efímero"
+  info "principal: $(repo_principal "$CRUX_HOME")"
+  exit 1
+fi
+
 export CRUX_DRY_RUN=0
 REMOTE_DEFECTO=""
 RAIZ_PROYECTOS=""

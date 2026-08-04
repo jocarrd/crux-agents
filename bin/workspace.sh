@@ -436,7 +436,8 @@ cmd_list() {
     const rows = Object.entries(r.workspaces);
     if (!rows.length) { console.log("sin espacios activos"); process.exit(0); }
     for (const [name, w] of rows) {
-      console.log(`${name.padEnd(16)} slot ${w.slot}  puertos ${w.ports[0]}-${w.ports[1]}  ${w.path}`);
+      const huerfano = fs.existsSync(w.path) ? "" : "  (sin worktree — libéralo con: crux workspace rm)";
+      console.log(`${name.padEnd(16)} slot ${w.slot}  puertos ${w.ports[0]}-${w.ports[1]}  ${w.path}${huerfano}`);
     }
   ' "$REGISTRY"
 }

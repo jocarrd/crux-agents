@@ -185,6 +185,11 @@ Un docs repo cumple el estándar si tiene esto:
 
 Eso es el suelo. Si tienes esto, el proyecto está documentado mínimamente.
 
+Y va **en git**, con remoto: es la condición que hace que el conocimiento
+sobreviva al cambio de máquina, que es para lo que existe todo esto. `doctor`
+lo comprueba, y sin repo tampoco puede verificar que el remoto declarado
+coincida con el real.
+
 ## Estructura opcional
 
 Aparecen **cuando el proyecto las necesita**, no antes:

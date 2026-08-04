@@ -14,6 +14,7 @@ source "$CRUX_HOME/lib/common.sh"
 
 REPO="${1:-}"
 [[ -n "$REPO" ]] || die "uso: crux add-repo <repo> [--description \"...\"]"
+nombre_valido "$REPO" || die "el nombre debe ir en kebab-case minúscula, sin barras: $REPO"
 shift
 
 DESCRIPTION="Qué hace este repo, en una línea."
@@ -62,7 +63,7 @@ if [[ -f "$INDEX" ]] && grep -q '^| *Carpeta' "$INDEX"; then
     let last = -1;
     for (let i = 0; i < lines.length; i++) if (/^\|/.test(lines[i])) last = i;
     if (last === -1) process.exit(0);
-    const row = `| \`${repo}/\` | \`${project}/${repo}\` | ${desc} |`;
+    const row = `| \`${repo}/\` | \`${project}/${repo}\` | ${desc.replace(/\|/g, "\\|")} |`;
     const empty = lines.findIndex((l, i) => i <= last && /^\|\s*\|\s*\|\s*\|\s*$/.test(l));
     if (empty !== -1) lines[empty] = row; else lines.splice(last + 1, 0, row);
     fs.writeFileSync(file, lines.join("\n"));

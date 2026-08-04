@@ -82,6 +82,7 @@ else
         0) ok "creado $repo/$fichero"; created=$((created + 1)) ;;
         1) ok "actualizado el bloque de $repo/$fichero"; updated=$((updated + 1)) ;;
         3) sin_marcadores+=("$repo/$fichero") ;;
+        4) die "la plantilla $fichero del kernel no trae el bloque gestionado" ;;
       esac
     done
   done < <(json_get "$CONFIG" repos 2>/dev/null || true)

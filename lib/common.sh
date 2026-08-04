@@ -52,6 +52,38 @@ err()  { echo "${C_RED}error${C_OFF} $*"; }
 info() { echo "${C_DIM}      $*${C_OFF}"; }
 die()  { err "$*"; exit 1; }
 
+# --- Nombres y versiones -----------------------------------------------------
+
+nombre_valido() {
+  # Aquí no se legisla el estilo —hay repos reales en CamelCase— sino lo que
+  # hace daño: un nombre con '/' o con '..' se concatena a una ruta y acaba
+  # escribiendo fuera del docs repo.
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && [[ "$1" != *".."* ]]
+}
+
+es_semver() {
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+es_worktree() {
+  # En un worktree, .git es un fichero y el directorio común vive en el repo
+  # principal.
+  local comun
+  comun="$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  [[ "$comun" != ".git" && "$comun" != "$1/.git" ]]
+}
+
+repo_principal() {
+  dirname "$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)"
+}
+
+version_mayor_que() {
+  # version_mayor_que <a> <b>. Comparadas como texto, 0.9.0 sale mayor que 0.10.0.
+  # Lo que no es semver no se compara: 'sort -V' colocaría "?" por encima de todo.
+  es_semver "$1" && es_semver "$2" || return 1
+  [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
+}
+
 # --- Lectura de crux.json ----------------------------------------------------
 #
 # Se usa node (presente en cualquier máquina donde se trabaja con estos repos)
@@ -138,7 +170,11 @@ render_managed() {
   # el puntero obligaría a pisar el contexto propio de cada repo, y nadie
   # actualizaría nunca.
   #
-  # Devuelve: 0 creado, 1 bloque actualizado, 2 sin cambios, 3 existe sin marcadores
+  # Devuelve: 0 creado, 1 bloque actualizado, 2 sin cambios, 3 existe sin
+  # marcadores, 4 la plantilla no trae bloque gestionado.
+  #
+  # El 4 no puede colapsarse en el 1: una plantilla mal formada se reportaba
+  # como escrita sin haber tocado el destino.
   local src="$1" dst="$2"; shift 2
   local nuevo
   nuevo="$(render_to_stdout "$src" "$@")"
@@ -173,6 +209,7 @@ render_managed() {
   ' "$dst" "$nuevo"
   local code=$?
   [[ $code -eq 2 ]] && return 2
+  [[ $code -eq 4 ]] && return 4
   return 1
 }
 

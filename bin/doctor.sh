@@ -50,7 +50,13 @@ LANG_DECLARADO="$(json_get "$CONFIG" language 2>/dev/null || echo "es")"
 KERNEL="$(crux_version)"
 
 [[ -f "$CRUX_HOME/profiles/$PROFILE.json" ]] || fail "perfil desconocido: $PROFILE"
-[[ "$DECLARED" == "$KERNEL" ]] || note "materializado con crux $DECLARED, el kernel es $KERNEL ('crux upgrade')"
+if [[ "$DECLARED" != "$KERNEL" ]]; then
+  if version_mayor_que "$DECLARED" "$KERNEL"; then
+    note "el proyecto va por delante del kernel ($DECLARED > $KERNEL): actualiza crux, no el proyecto"
+  else
+    note "materializado con crux $DECLARED, el kernel es $KERNEL ('crux upgrade')"
+  fi
+fi
 [[ "$(basename "$DOCS")" == "$PROJECT-docs" ]] || note "el docs repo debería llamarse $PROJECT-docs"
 section_ok "contrato: $PROJECT · perfil $PROFILE · crux $DECLARED"
 
@@ -77,8 +83,7 @@ ROOT="$(dirname "$DOCS")"
 declared=()
 while IFS= read -r r; do [[ -n "$r" ]] && declared+=("$r"); done < <(json_get "$CONFIG" repos 2>/dev/null || true)
 
-for repo in "${declared[@]:-}"; do
-  [[ -n "$repo" ]] || continue
+for repo in ${declared[@]+"${declared[@]}"}; do
   [[ -d "$DOCS/repos/$repo" ]] || fail "repo declarado sin carpeta de doc: repos/$repo/"
   [[ -f "$DOCS/repos/$repo/README.md" ]] || note "repos/$repo/ sin README.md"
   [[ -d "$ROOT/$repo" ]] || note "repo declarado que no está en disco: $repo"
@@ -89,7 +94,7 @@ if [[ -d "$DOCS/repos" ]]; then
     [[ -d "$dir" ]] || continue
     name="$(basename "$dir")"
     found=0
-    for repo in "${declared[@]:-}"; do [[ "$repo" == "$name" ]] && found=1; done
+    for repo in ${declared[@]+"${declared[@]}"}; do [[ "$repo" == "$name" ]] && found=1; done
     [[ $found -eq 1 ]] || note "repos/$name/ no está declarado en crux.json"
   done
 fi
@@ -101,7 +106,7 @@ section
 WRITES_POINTERS="$(json_get "$CRUX_HOME/profiles/$PROFILE.json" 'pointers.write' 2>/dev/null || echo "true")"
 
 if [[ "$WRITES_POINTERS" == "true" ]]; then
-  for repo in "${declared[@]:-}"; do
+  for repo in ${declared[@]+"${declared[@]}"}; do
     [[ -d "$ROOT/$repo" ]] || continue
     for fichero in AGENTS.md CLAUDE.md; do
       if [[ ! -f "$ROOT/$repo/$fichero" ]]; then
@@ -118,7 +123,7 @@ else
   # borrarlo sería justo lo que el perfil impide. La intrusión es el fichero que
   # pusimos nosotros, y se reconoce por el bloque gestionado o porque no está
   # versionado en su repo.
-  for repo in "${declared[@]:-}"; do
+  for repo in ${declared[@]+"${declared[@]}"}; do
     [[ -d "$ROOT/$repo" ]] || continue
     for intruso in AGENTS.md CLAUDE.md; do
       fichero="$ROOT/$repo/$intruso"
@@ -140,8 +145,10 @@ section_ok "reglas del perfil $PROFILE"
 # siguiente, que es cuando menos ganas hay de depurarlo.
 
 section
-if json_has "$CONFIG" 'remote'; then
-  for repo in "${declared[@]:-}"; do
+if ! git -C "$DOCS" rev-parse --git-dir >/dev/null 2>&1; then
+  fail "el docs repo no está en git: la documentación no sobrevive al cambio de máquina"
+elif json_has "$CONFIG" 'remote'; then
+  for repo in ${declared[@]+"${declared[@]}"}; do
     [[ -d "$ROOT/$repo/.git" ]] || continue
     real="$(git -C "$ROOT/$repo" remote get-url origin 2>/dev/null || true)"
     [[ -n "$real" ]] || continue
@@ -226,6 +233,9 @@ while IFS= read -r skill_md; do
   skills=$((skills + 1))
   name="$(basename "$(dirname "$skill_md")")"
   head -1 "$skill_md" | grep -q '^---$' || { fail "skill sin frontmatter: $name"; continue; }
+  # Sin la línea de cierre el frontmatter no es YAML válido y el agente carga
+  # la skill entera como cuerpo, o no la carga.
+  [[ "$(grep -c '^---$' "$skill_md")" -ge 2 ]] || { fail "skill con el frontmatter sin cerrar: $name"; continue; }
   grep -qE '^name:'        "$skill_md" || fail "skill sin 'name' en el frontmatter: $name"
   grep -qE '^description:' "$skill_md" || fail "skill sin 'description' en el frontmatter: $name"
   grep -qE '^name: *'"$name"'$' "$skill_md" || note "skill '$name': el 'name' del frontmatter no coincide con el directorio"

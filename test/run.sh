@@ -87,6 +87,9 @@ sandbox() {
   export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
   export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
   export CODEX_HOME_DIR="$SB/home/.codex"
+  # Sin esto, un caso que use workspace y olvide declararlo escribe en el
+  # registro real de quien ejecuta la suite.
+  export CRUX_REGISTRY="$SB/registry.json"
   mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
   echo "$SB"
 }

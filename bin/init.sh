@@ -123,9 +123,16 @@ if [[ -n "$REPOS" ]]; then
   IFS=',' read -ra repos <<< "$REPOS"
 fi
 
-for repo in "${repos[@]:-}"; do
+limpios=()
+for repo in ${repos[@]+"${repos[@]}"}; do
   repo="$(echo "$repo" | tr -d '[:space:]')"
   [[ -n "$repo" ]] || continue
+  nombre_valido "$repo" || die "nombre de repo inválido: $repo"
+  limpios+=("$repo")
+done
+repos=(${limpios[@]+"${limpios[@]}"})
+
+for repo in ${repos[@]+"${repos[@]}"}; do
   render_template "$CRUX_HOME/templates/repo-doc/README.md" "$DOCS/repos/$repo/README.md" \
     "REPO=$repo" "PROJECT=$PROJECT" "DESCRIPTION=Qué hace este repo, en una línea."
 

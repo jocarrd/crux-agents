@@ -122,5 +122,7 @@ bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" || true
 
 echo
 echo "listo: $ROOT"
-[[ -f "$DOCS/operations/machine-onboarding.md" ]] \
-  && info "credenciales y secretos del proyecto: $PROJECT-docs/operations/machine-onboarding.md"
+if [[ -f "$DOCS/operations/machine-onboarding.md" ]]; then
+  info "credenciales y secretos del proyecto: $PROJECT-docs/operations/machine-onboarding.md"
+fi
+exit 0

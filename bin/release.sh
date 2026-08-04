@@ -35,11 +35,7 @@ done
 
 ACTUAL="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
 ultimo_tag="$(git -C "$CRUX_HOME" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")"
-mayor_que() {
-  # mayor_que <a> <b> — cierto si a > b
-  [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
-}
-mayor_que "$NUEVA" "${ultimo_tag:-0.0.0}" || die "$NUEVA no es posterior a la última publicada ($ultimo_tag)"
+version_mayor_que "$NUEVA" "${ultimo_tag:-0.0.0}" || die "$NUEVA no es posterior a la última publicada ($ultimo_tag)"
 
 echo "release $ACTUAL → $NUEVA"
 echo

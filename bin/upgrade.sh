@@ -41,6 +41,15 @@ if [[ "$FROM" == "$TO" && $FORCE -eq 0 ]]; then
   exec bash "$CRUX_HOME/bin/doctor.sh" "$DOCS"
 fi
 
+# Degradar el contrato en la máquina que lleva el kernel viejo deja al proyecto
+# declarando menos de lo que ya tiene materializado, y sin avisar a nadie.
+if version_mayor_que "$FROM" "$TO"; then
+  err "el proyecto declara crux $FROM y este kernel es $TO"
+  info "actualiza el kernel ('git pull' en $CRUX_HOME) en vez de degradar el contrato"
+  info "si de verdad quieres bajarlo: crux upgrade --force"
+  [[ $FORCE -eq 0 ]] && exit 1
+fi
+
 # --- Materializar lo que falte ----------------------------------------------
 
 added=0
@@ -79,4 +88,7 @@ if [[ $DRY -eq 0 ]]; then
 fi
 
 echo
-[[ $DRY -eq 0 ]] && exec bash "$CRUX_HOME/bin/doctor.sh" "$DOCS"
+if [[ $DRY -eq 0 ]]; then
+  exec bash "$CRUX_HOME/bin/doctor.sh" "$DOCS"
+fi
+exit 0
