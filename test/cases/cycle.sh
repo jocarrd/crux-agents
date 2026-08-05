@@ -63,6 +63,32 @@ test_workspace_no_borra_trabajo_sin_commitear() {
   assert_file "$root/app-ws-wip/f.txt" "el trabajo sigue ahí"
 }
 
+test_workspace_avisa_si_los_hooks_apuntan_al_espacio_que_se_borra() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new conhooks --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-conhooks"
+  export CLAUDE_SETTINGS="$SB/settings.json"
+  printf '{"hooks":{"Stop":[{"hooks":[{"command":"%s/adapters/x.sh"}]}]}}\n' "$ws" > "$CLAUDE_SETTINGS"
+
+  rm -f "$ws/.env.local"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm conhooks 2>&1)"
+  assert_contains "$out" "quedarán rotos" "avisa antes de dejar los hooks colgando"
+  assert_contains "$out" "crux hooks install" "y dice cómo repararlos"
+  unset CLAUDE_SETTINGS
+}
+
+test_workspace_prune_no_adivina_sin_gh() {
+  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" \
+    "hace falta gh autenticado para saber qué propuestas se fusionaron" \
+    "prune se planta si no puede consultar las propuestas"
+  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" \
+    "la usa un worktree: se queda" "y no borra la rama de un espacio vivo"
+}
+
 test_workspace_libera_y_reutiliza_el_slot() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"

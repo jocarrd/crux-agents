@@ -6,6 +6,7 @@
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
 #   crux workspace rm <nombre>
+#   crux workspace prune [--yes]
 #
 # Un worktree de git aísla los ficheros, pero no el runtime: dos agentes sobre
 # el mismo repo siguen peleándose por el puerto, la base de datos y el .env.
@@ -498,6 +499,15 @@ cmd_rm() {
       die "$path tiene cambios sin commitear — resuélvelos antes de borrarlo"
     fi
 
+    # Instalar los hooks desde dentro de un espacio los deja apuntando a él, y
+    # al cerrarlo dejan de existir sin que nada lo diga hasta la sesión
+    # siguiente.
+    local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+    if [[ -f "$settings" ]] && grep -qF "$path" "$settings"; then
+      warn "los hooks del agente apuntan a este espacio: quedarán rotos al borrarlo"
+      info "reinstálalos desde el repo principal: crux hooks install"
+    fi
+
     SLOT="$(node -e '
       const fs = require("fs");
       const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -534,14 +544,68 @@ cmd_rm() {
 
   # Solo si está integrada: una rama con trabajo que no está en ningún sitio no
   # se borra por una preferencia.
-  if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] \
-     && git -C "$repo" branch --merged "$(rama_principal "$repo")" 2>/dev/null | grep -qx "  $branch"; then
-    git -C "$repo" branch -d "$branch" >/dev/null 2>&1 \
+  if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] && rama_integrada "$repo" "$branch"; then
+    git -C "$repo" branch -D "$branch" >/dev/null 2>&1 \
       && ok "rama $branch borrada (CRUX_RM_DELETE_BRANCH)" \
       || info "la rama $branch sigue existiendo"
   else
     info "la rama $branch sigue existiendo; bórrala si ya no la necesitas"
   fi
+}
+
+# Una rama fusionada por squash no aparece en `git branch --merged`: su commit
+# nunca entra en la principal. Preguntarle a la propuesta es lo único fiable en
+# un flujo que fusiona así.
+rama_integrada() {
+  local repo="$1" branch="$2"
+  git -C "$repo" branch --merged "$(rama_principal "$repo")" 2>/dev/null | grep -qx "[ *]*$branch" && return 0
+  command -v gh >/dev/null || return 1
+  local estado
+  estado="$(git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1 &&
+            gh pr list --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" \
+               --head "$branch" --state merged --json mergedAt -q '.[0].mergedAt // ""' 2>/dev/null)" || return 1
+  [[ -n "$estado" ]]
+}
+
+cmd_prune() {
+  local confirmado=0
+  [[ "${1:-}" == "--yes" ]] && confirmado=1
+
+  local repo; repo="$(git rev-parse --show-toplevel 2>/dev/null)" || die "esto se ejecuta dentro de un repo"
+  command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
+    || die "hace falta gh autenticado para saber qué propuestas se fusionaron"
+
+  local principal; principal="$(rama_principal "$repo")"
+  local integradas=()
+  while IFS= read -r b; do
+    [[ -n "$b" && "$b" != "$principal" ]] || continue
+    rama_integrada "$repo" "$b" && integradas+=("$b")
+  done < <(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin |
+           sed 's|^origin/||' | sort -u)
+
+  if [[ ${#integradas[@]} -eq 0 ]]; then
+    ok "no hay ramas fusionadas que limpiar"
+    return 0
+  fi
+
+  echo "ramas con su propuesta ya fusionada (${#integradas[@]}):"
+  printf '      %s\n' "${integradas[@]}"
+  echo
+  if [[ $confirmado -eq 0 ]]; then
+    info "para borrarlas, aquí y en el remoto: crux workspace prune --yes"
+    return 0
+  fi
+
+  local en_uso; en_uso="$(git -C "$repo" worktree list --porcelain | sed -n 's/^branch refs\/heads\///p')"
+  for b in "${integradas[@]}"; do
+    if echo "$en_uso" | grep -qx "$b"; then
+      info "$b la usa un worktree: se queda"
+      continue
+    fi
+    git -C "$repo" branch -D "$b" >/dev/null 2>&1
+    git -C "$repo" push -q origin --delete "$b" 2>/dev/null
+  done
+  ok "${#integradas[@]} ramas limpiadas"
 }
 
 case "${1:-}" in
@@ -550,5 +614,6 @@ case "${1:-}" in
   finish) shift; cmd_finish "$@" ;;
   merge)  shift; cmd_merge "$@" ;;
   rm)   shift; cmd_rm "$@" ;;
-  *) die "uso: crux workspace {new|list|finish|merge|rm}" ;;
+  prune) shift; cmd_prune "$@" ;;
+  *) die "uso: crux workspace {new|list|finish|merge|rm|prune}" ;;
 esac
