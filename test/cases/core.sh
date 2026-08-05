@@ -290,6 +290,18 @@ test_adopt_registra_un_docs_repo_existente() {
   assert_contains "$cfg" '"operations"' "declara las secciones activas"
 }
 
+# El caso de arriba monta la estructura entera a mano, así que nunca veía lo que
+# se encuentra quien adopta un proyecto anterior al kernel: una lista de errores.
+test_adopt_dice_como_reponer_lo_que_falta() {
+  sandbox >/dev/null
+  local docs="$CRUX_PROJECTS_DIR/pelado/pelado-docs"
+  mkdir -p "$docs"
+
+  local out; out="$(bash "$CRUX_HOME/bin/adopt.sh" "$docs" 2>&1)"
+  assert_contains "$out" "falta AGENTS.md" "el doctor dice qué falta"
+  assert_contains "$out" "crux upgrade" "y adopt dice con qué reponerlo"
+}
+
 test_adopt_no_pisa_un_proyecto_ya_adoptado() {
   sandbox >/dev/null
   local docs; docs="$(new_project mu)"

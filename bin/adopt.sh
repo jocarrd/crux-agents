@@ -120,4 +120,12 @@ if [[ ${#orphans[@]} -gt 0 ]]; then
 fi
 
 echo
-bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" || true
+rc=0
+bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" || rc=$?
+# adopt escribe el contrato y no toca nada más, así que un proyecto anterior al
+# kernel sale de aquí sin la estructura obligatoria. Quien lo adopta por primera
+# vez ve una lista de errores y ninguna salida.
+if [[ $rc -ne 0 ]]; then
+  echo
+  info "'crux upgrade' repone lo que falte sin pisar lo que ya hay"
+fi
