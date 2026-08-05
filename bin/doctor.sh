@@ -40,6 +40,13 @@ if [[ ! -f "$CONFIG" ]]; then
 fi
 
 section
+# Sin parar aquí, todo lo de abajo lee campos vacíos y los reporta como
+# ausencias: errores falsos sobre lo que sí está.
+if ! motivo="$(json_valido "$CONFIG")"; then
+  fail "crux.json no es JSON válido: $motivo"
+  echo; echo "$ERRORS $([[ $ERRORS -eq 1 ]] && echo error || echo errores), $WARNS $([[ $WARNS -eq 1 ]] && echo aviso || echo avisos)"; exit 1
+fi
+
 for field in crux project profile; do
   json_has "$CONFIG" "$field" || fail "crux.json sin campo obligatorio: $field"
 done

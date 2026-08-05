@@ -72,6 +72,20 @@ test_doctor_detecta_carpeta_no_declarada() {
 # Clonar un repo en el proyecto y olvidar registrarlo es el caso real: las demás
 # comprobaciones van de lo declarado a lo que hay en disco, así que este pasaba
 # como conforme.
+# upgrade, link y add-repo ya paraban con el motivo del parser. El que
+# diagnostica era el único que seguía, inventando errores sobre lo que sí está.
+test_doctor_dice_cuando_el_contrato_no_es_json_valido() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rota --repos "api")"
+  printf '{ "crux": "0.15.0", "project": ' > "$docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "no es JSON válido" "dice qué pasa de verdad"
+  assert_not_contains "$out" "sin campo obligatorio" "y no acusa a campos que sí están"
+  assert_not_contains "$out" "no está declarado" "ni inventa repos sin declarar"
+  assert_exit 1 "sale con error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
 test_doctor_detecta_un_repo_en_disco_sin_declarar() {
   sandbox >/dev/null
   local docs; docs="$(new_project omega --repos "api")"

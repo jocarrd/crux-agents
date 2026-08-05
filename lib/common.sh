@@ -120,6 +120,15 @@ version_mayor_que() {
 # Se usa node (presente en cualquier máquina donde se trabaja con estos repos)
 # en vez de jq, que no siempre está instalado.
 
+json_valido() {
+  # json_valido <fichero> — 0 si parsea; si no, escribe el motivo del parser.
+  node -e '
+    const fs = require("fs");
+    try { JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
+    catch (e) { process.stdout.write(e.message); process.exit(1); }
+  ' "$1"
+}
+
 json_get() {
   # json_get <fichero> <expresión js sobre el objeto raíz>
   local file="$1" expr="$2"
