@@ -17,6 +17,7 @@ source "$CRUX_HOME/lib/common.sh"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 DOC_SYNC="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
 CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
+MEMORY_GUARD="$CRUX_HOME/adapters/claude/hooks/memory-guard.sh"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
@@ -107,8 +108,9 @@ enganchar() {
 cmd_install() {
   [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
+  [[ -f "$MEMORY_GUARD" ]] || die "falta $MEMORY_GUARD"
   [[ -f "$COMMIT_MSG" ]] || die "falta $COMMIT_MSG"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -119,6 +121,9 @@ cmd_install() {
 
   enganchar UserPromptSubmit "$CYCLE_GUARD" 'cycle-guard'
   ok "hook del ciclo al empezar en la rama principal"
+
+  enganchar Stop "$MEMORY_GUARD" 'memory-guard'
+  ok "hook de memorias de proyecto sin promover al cerrar sesión"
 
   info "copia previa en $SETTINGS.bak"
 
@@ -230,7 +235,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [evento, grupos] of Object.entries(s.hooks || {})) {
       s.hooks[evento] = grupos
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[evento].length) delete s.hooks[evento];
     }

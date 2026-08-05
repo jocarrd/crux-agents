@@ -504,6 +504,12 @@ Regla que atraviesa todo: **las memorias de tipo `project` y `reference` van a
 git; solo `user` y `feedback` se quedan locales**. Lo primero es del proyecto y
 tiene que sobrevivir al cambio de máquina; lo segundo es sobre la persona.
 
+Esa parte ya no depende de que se invoque el ritual. `crux memory` lista lo que
+sigue solo en local, y un hook lo recuerda al cerrar sesión. Se midió: el
+ritual se invocaba en 2 de 46 sesiones, y mientras tanto había análisis de
+proyecto que solo existía en un portátil. Lo que no se dispara solo no se
+dispara.
+
 ---
 
 ## Nivel 7 — Extenderlo
@@ -622,11 +628,12 @@ crux hooks install    # desde el docs repo del proyecto
 crux hooks status
 ```
 
-Instala cuatro cosas: un aviso de deriva de documentación al cerrar sesión, un
-`pre-commit` que **bloquea el commit si `doctor` no pasa**, un `commit-msg` que
-rechaza los mensajes en español, y un recordatorio del ciclo al empezar a
-trabajar sobre la rama principal. Un estándar que hay que acordarse de
-comprobar se comprueba a veces.
+Instala cinco cosas: un aviso de deriva de documentación al cerrar sesión, un
+aviso de las memorias de proyecto que siguen solo en local, un `pre-commit` que
+**bloquea el commit si `doctor` no pasa**, un `commit-msg` que rechaza los
+mensajes en español, y un recordatorio del ciclo al empezar a trabajar sobre la
+rama principal. Un estándar que hay que acordarse de comprobar se comprueba a
+veces.
 
 El del idioma es el ejemplo más claro de por qué hace falta un hook y no una
 línea en un documento: la regla estaba escrita desde el primer commit y **los

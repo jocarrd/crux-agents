@@ -85,6 +85,9 @@ sandbox() {
   SB="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-XXXXXX")"
   export CRUX_PROJECTS_DIR="$SB/Proyectos"
   export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
+  # Sin esto, los casos de memoria leerían las memorias reales de quien ejecuta
+  # la suite, y el resultado dependería de la máquina.
+  export CLAUDE_CONFIG_DIR="$SB/home/.claude"
   export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
   export CODEX_HOME_DIR="$SB/home/.codex"
   # Sin esto, un caso que use workspace y olvide declararlo escribe en el

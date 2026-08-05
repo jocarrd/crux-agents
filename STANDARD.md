@@ -310,6 +310,17 @@ Cuatro tipos: `user`, `feedback`, `project`, `reference`.
   - Punteros a recursos externos → `operations/` o el README que corresponda
   - Estado del proyecto → `repos/<repo>/notes.md`
 
+Esto **se verifica**: `crux memory` lista las que siguen solo en local, y el
+hook que instala `crux hooks install` lo recuerda al cerrar sesión. La regla
+llevaba escrita desde el primer día y dependía de que alguien invocase el
+ritual de cierre, que se invocaba en 2 de 46 sesiones; mientras tanto había
+análisis de proyecto que solo existía en una máquina. Una regla que no se
+comprueba es una recomendación.
+
+Lo que el kernel no hace es decidir por ti: dice qué falta y en qué docs repo
+va. Dónde encaja dentro de él es una decisión, y las decisiones no las toma un
+hook.
+
 ### 6. Sincronización código ↔ doc
 
 Cuando se modifica código que afecta a una doc, **se actualiza la doc en el
@@ -472,6 +483,7 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux doctor --machine` | — | Verifica el entorno de la máquina |
 | `crux hooks install` | — | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | — | Mide qué skills se usan realmente |
+| `crux memory [--check]` | — | Memorias del agente que deberían estar en git |
 | `crux status` | `--check` | Proyectos, espacios y trabajo sin publicar |
 
 ---

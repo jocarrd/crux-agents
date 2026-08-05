@@ -135,6 +135,7 @@ instala `crux hooks install`:
 | `commit-msg` | Mensajes de commit fuera del idioma del estándar |
 | `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
 | `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
+| `crux memory` en el cierre | Cerrar sesión con conocimiento del proyecto solo en esta máquina |
 
 ## Comandos
 
@@ -151,6 +152,7 @@ instala `crux hooks install`:
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
 | `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | Qué skills se usan de verdad |
+| `crux memory` | Memorias del agente que son del proyecto y siguen solo en local |
 | `crux status` | Qué hay abierto ahora mismo en todos los proyectos |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
 | `crux release <ver>` | Publica una versión, comprobando antes que los proyectos siguen conformes |

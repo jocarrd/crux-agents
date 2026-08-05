@@ -56,10 +56,20 @@ pendientes, para no cerrar dejándose trabajo fuera de git.
 
 ### 2. Higiene de la memoria del agente
 
-Comprueba si en esta sesión se guardó alguna memoria de tipo `project` o
-`reference`. El estándar dice que esas van a git, no a local: promuévelas al
-docs repo (con `/promote-to-docs` o directamente) y borra la copia local,
-incluida su línea en el índice de memorias.
+```bash
+crux memory
+```
+
+Lista las memorias de tipo `project` y `reference` que siguen solo en local, de
+esta sesión y de las anteriores, con el docs repo al que pertenecen. El
+estándar dice que esas van a git: promuévelas (con `/promote-to-docs` o
+directamente) y borra la copia local, incluida su línea en el índice de
+memorias.
+
+Las que salen sin docs repo son de un ámbito que no es ningún proyecto. Ahí el
+destino lo decides tú: el comando no lo adivina por el nombre del fichero,
+porque acertaría a veces y colocaría documentación en el proyecto equivocado el
+resto.
 
 ### 3. Conformidad y drift
 
