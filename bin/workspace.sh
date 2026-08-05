@@ -287,7 +287,10 @@ cmd_finish() {
   # a depender de que alguien se acuerde.
   local head verificado
   head="$(git -C "$path" rev-parse HEAD)"
-  verificado="$(tr -d '[:space:]' < "$path/.crux-ship" 2>/dev/null || echo "")"
+  # La redirección de entrada la resuelve el shell antes de ejecutar tr, así que
+  # su error no lo silencia el 2>/dev/null del comando.
+  verificado=""
+  [[ -f "$path/.crux-ship" ]] && verificado="$(tr -d '[:space:]' < "$path/.crux-ship")"
   if [[ "$verificado" != "$head" ]]; then
     err "este commit no ha pasado la puerta de calidad"
     [[ -n "$verificado" ]] && info "lo último verificado fue ${verificado:0:8}, y HEAD es ${head:0:8}"

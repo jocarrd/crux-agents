@@ -282,6 +282,9 @@ test_finish_no_propone_codigo_sin_revisar() {
 
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea 2>&1)"
   assert_contains "$out" "no ha pasado la puerta" "se niega a proponer sin revisión"
+  # El error de bash por leer un fichero que no existe se colaba encima del
+  # mensaje, y es la salida que ve cualquiera que aún no ha pasado la puerta.
+  assert_not_contains "$out" ".crux-ship:" "sin el error crudo del shell encima"
 
   # Con la marca de la puerta, pero de un commit anterior: tampoco vale.
   git -C "$ws" rev-parse HEAD~0 > "$ws/.crux-ship"
