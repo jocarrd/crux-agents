@@ -405,6 +405,24 @@ test_add_repo_rechaza_duplicados() {
     bash "$CRUX_HOME/bin/add-repo.sh" api "$docs"
 }
 
+test_ningun_comando_disimula_un_fichero_que_no_puede_leer() {
+  # Silenciar la lectura de un fichero que tiene que estar convierte su ausencia
+  # en un valor vacío, y el vacío se reporta después como otra cosa: campos que
+  # faltan, listas sin elementos, un consumidor que no existe.
+  local hallazgos="" f
+  for f in "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/lib/*.sh "$CRUX_HOME/install.sh" \
+           "$CRUX_HOME"/adapters/*/*.sh; do
+    [[ -f "$f" ]] || continue
+    # Redirección de entrada o cat sobre una ruta, con el error tapado. La
+    # redirección la resuelve el shell antes del comando, así que el 2>/dev/null
+    # del comando ni siquiera la cubre: el error sale igual por pantalla.
+    local sospechas
+    sospechas="$(grep -nE '(<|cat) +"?\$[A-Za-z_{][^|;]*" *2>/dev/null' "$f" || true)"
+    [[ -n "$sospechas" ]] && hallazgos="$hallazgos $(basename "$f")"
+  done
+  assert_eq "" "$hallazgos" "ningún comando lee un fichero tapando el error"
+}
+
 test_la_libreria_no_pisa_las_opciones_del_shell() {
   # Un `set -e` dentro de la librería mata en silencio a quien la carga con
   # otras opciones. Pasó dos veces: en la suite y en doctor.

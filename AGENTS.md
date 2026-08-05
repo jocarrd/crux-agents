@@ -25,7 +25,7 @@ Y ejecuta la suite **antes y después**:
 
 ---
 
-## Las cuatro reglas que sostienen este repo
+## Las cinco reglas que sostienen este repo
 
 Están puestas a propósito y hay tests que fallan si se rompen. No son estilo.
 
@@ -65,6 +65,22 @@ Lo vigila `test_la_libreria_no_pisa_las_opciones_del_shell`.
 Los punteros de los repos, el catálogo de skills del índice y las filas de las
 tablas se producen desde plantillas y contratos. Si te encuentras editando algo
 que un comando podría escribir, el arreglo es el comando, no el fichero.
+
+### 5. Lo que no se puede leer se dice y se para
+
+Un fichero ausente, ilegible o corrupto **no se convierte en un valor por
+defecto**. Se nombra y se detiene ahí.
+
+Seguir con el hueco es lo que produce el peor fallo posible: uno que parece
+funcionar. `doctor` leía `?` de un `crux.json` roto y acusaba a campos que sí
+estaban; `release` no encontraba consumidores y publicaba diciendo que no había
+nada que verificar; `finish` dejaba escapar el error del shell porque el
+`2>/dev/null` de un comando no tapa la redirección que hace el propio shell.
+
+`2>/dev/null` vale para preguntar si algo existe. No vale para leer algo que
+tiene que estar.
+
+Lo vigila `test_ningun_comando_disimula_un_fichero_que_no_puede_leer`.
 
 ---
 
