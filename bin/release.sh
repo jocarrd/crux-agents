@@ -60,6 +60,18 @@ rama="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
 [[ -z "$(git -C "$REPO" log --oneline '@{u}..' 2>/dev/null)" ]] || fallo "hay commits sin pushear"
 git -C "$REPO" rev-parse "v$NUEVA" >/dev/null 2>&1 && fallo "la etiqueta v$NUEVA ya existe"
 [[ "$ACTUAL" == "$NUEVA" ]] || fallo "VERSION dice $ACTUAL: súbelo a $NUEVA por propuesta antes de etiquetar"
+
+# `crux release` corre el código de la copia instalada, no el del repo: publicar
+# con una copia vieja publica con el publicador viejo, y las mejoras de este
+# comando se pierden justo en su estreno.
+instalada=""
+if [[ -f "$HOME/.crux/config" ]]; then
+  home_instalado="$(grep -E '^CRUX_HOME=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+  [[ -n "$home_instalado" && -f "$home_instalado/VERSION" ]] &&
+    instalada="$(tr -d '[:space:]' < "$home_instalado/VERSION")"
+fi
+[[ -z "$instalada" || "$instalada" == "$NUEVA" ]] ||
+  fallo "el kernel instalado es $instalada: reinstálalo antes de publicar $NUEVA ('bash install.sh')"
 [[ $FALLOS -eq 0 ]] && ok "repo listo: main, limpio, al día y con VERSION en $NUEVA"
 
 # --- 2. La suite -------------------------------------------------------------

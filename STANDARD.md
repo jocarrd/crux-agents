@@ -428,6 +428,7 @@ credenciales y nombres. Con dos guardas:
 | `flow` | **El ciclo completo y su orden** — la entrada por defecto |
 | `workspace`, `ship`, `review-pr` | Las piezas del ciclo: aislar, verificar y revisar |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
+| `bug-hunt` | Buscar los fallos que nadie ha reportado |
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback` | Operación |

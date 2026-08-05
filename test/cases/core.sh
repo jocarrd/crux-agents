@@ -1357,3 +1357,15 @@ test_status_no_confunde_un_espacio_con_trabajo_perdido() {
   assert_contains "$out" "ws/tarea" "el espacio aparece como espacio"
   assert_not_contains "$out" "api-ws-tarea " "y su worktree no se cuenta como repo con pendientes"
 }
+
+test_release_no_publica_con_una_copia_instalada_vieja() {
+  sandbox >/dev/null
+  local casa="$SB/casa-release"; mkdir -p "$casa/.crux"
+  local viejo="$SB/kernel-viejo"; mkdir -p "$viejo"
+  echo "0.0.1" > "$viejo/VERSION"
+  echo "CRUX_HOME=\"$viejo\"" > "$casa/.crux/config"
+
+  local out; out="$(cd "$CRUX_HOME" && HOME="$casa" bash "$CRUX_HOME/bin/release.sh" 99.0.0 2>&1)"
+  assert_contains "$out" "el kernel instalado es 0.0.1" "avisa de que publicaría con el publicador viejo"
+  assert_contains "$out" "install.sh" "y dice cómo alinearlo"
+}
