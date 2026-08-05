@@ -58,7 +58,9 @@ LANG_DECLARADO="$(json_get "$CONFIG" language 2>/dev/null || echo "es")"
 KERNEL="$(crux_version)"
 
 [[ -f "$CRUX_HOME/profiles/$PROFILE.json" ]] || fail "perfil desconocido: $PROFILE"
-if [[ "$DECLARED" != "$KERNEL" ]]; then
+# Solo la serie: un patch no trae plantillas ni comprobaciones, así que avisar
+# por él manda a un upgrade que no cambia nada.
+if [[ "${DECLARED%.*}" != "${KERNEL%.*}" ]]; then
   if version_mayor_que "$DECLARED" "$KERNEL"; then
     note "el proyecto va por delante del kernel ($DECLARED > $KERNEL): actualiza crux, no el proyecto"
   else

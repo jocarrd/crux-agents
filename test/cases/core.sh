@@ -902,6 +902,37 @@ test_doctor_no_inventa_un_repo_cuando_no_hay_ninguno() {
   assert_exit 0 "sin errores" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
+test_doctor_no_avisa_por_una_diferencia_de_patch() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project alpatch)"
+  local kernel; kernel="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  local otro_patch="${kernel%.*}.99"
+  [[ "$otro_patch" == "$kernel" ]] && otro_patch="${kernel%.*}.98"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = process.argv[2];
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json" "$otro_patch"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_not_contains "$out" "crux upgrade" "un patch de diferencia no manda a actualizar"
+  assert_not_contains "$out" "va por delante" "ni en la dirección contraria"
+}
+
+test_doctor_avisa_por_un_salto_de_serie() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project deserie)"
+  local kernel; kernel="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = process.argv[2];
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json" "${kernel%%.*}.0.0"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "crux upgrade" "un minor por detrás sí se avisa"
+}
+
 # La máquina con el kernel viejo degradaba el contrato del proyecto sin avisar.
 test_upgrade_no_degrada_el_contrato_de_un_proyecto_mas_nuevo() {
   sandbox >/dev/null
