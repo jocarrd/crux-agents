@@ -81,6 +81,35 @@ test_workspace_avisa_si_los_hooks_apuntan_al_espacio_que_se_borra() {
   unset CLAUDE_SETTINGS
 }
 
+test_prune_no_se_para_en_la_primera_rama_que_falla() {
+  sandbox >/dev/null
+  local repo="$CRUX_PROJECTS_DIR/podado"
+  git init -q "$repo"
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  git -C "$repo" commit -q --allow-empty -m init
+  for b in uno dos tres; do git -C "$repo" branch "ws/$b"; done
+
+  # gh de mentira: todas las propuestas constan como fusionadas, sin red.
+  local bin="$SB/bin"; mkdir -p "$bin"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  auth) exit 0 ;;
+  repo) echo "test/repo" ;;
+  pr) echo "2026-08-05T00:00:00Z" ;;
+esac
+STUB
+  chmod +x "$bin/gh"
+
+  # Sin remoto configurado, el borrado remoto falla en las tres: con set -e la
+  # primera se llevaba la pasada entera.
+  local out; out="$(cd "$repo" && PATH="$bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" prune --yes 2>&1)"
+
+  assert_contains "$out" "3 de 3 ramas limpiadas" "las tres se borran aunque el remoto falle"
+  assert_eq "" "$(git -C "$repo" branch --list 'ws/*')" "no queda ninguna"
+}
+
 test_workspace_prune_no_adivina_sin_gh() {
   assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" \
     "hace falta gh autenticado para saber qué propuestas se fusionaron" \

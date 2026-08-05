@@ -596,16 +596,21 @@ cmd_prune() {
     return 0
   fi
 
+  local limpiadas=0
   local en_uso; en_uso="$(git -C "$repo" worktree list --porcelain | sed -n 's/^branch refs\/heads\///p')"
   for b in "${integradas[@]}"; do
     if echo "$en_uso" | grep -qx "$b"; then
       info "$b la usa un worktree: se queda"
       continue
     fi
-    git -C "$repo" branch -D "$b" >/dev/null 2>&1
-    git -C "$repo" push -q origin --delete "$b" 2>/dev/null
+    # Con set -e, un borrado que falla —la rama solo existía en local, o ya no
+    # está en el remoto— se llevaría por delante el resto de la pasada.
+    local borrada=0
+    git -C "$repo" branch -D "$b" >/dev/null 2>&1 && borrada=1
+    git -C "$repo" push -q origin --delete "$b" >/dev/null 2>&1 && borrada=1
+    [[ $borrada -eq 1 ]] && limpiadas=$((limpiadas + 1))
   done
-  ok "${#integradas[@]} ramas limpiadas"
+  ok "$limpiadas de ${#integradas[@]} ramas limpiadas"
 }
 
 case "${1:-}" in
