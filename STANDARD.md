@@ -471,6 +471,7 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux doctor --machine` | — | Verifica el entorno de la máquina |
 | `crux hooks install` | — | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | — | Mide qué skills se usan realmente |
+| `crux status` | `--check` | Proyectos, espacios y trabajo sin publicar |
 
 ---
 

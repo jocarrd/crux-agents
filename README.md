@@ -151,6 +151,7 @@ instala `crux hooks install`:
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
 | `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
 | `crux usage` | Qué skills se usan de verdad |
+| `crux status` | Qué hay abierto ahora mismo en todos los proyectos |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
 | `crux release <ver>` | Publica una versión, comprobando antes que los proyectos siguen conformes |
 

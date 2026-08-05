@@ -1322,3 +1322,38 @@ test_release_se_ejecuta_desde_el_repo_del_kernel() {
   local out; out="$( cd "$fuera" && bash "$CRUX_HOME/bin/release.sh" 9.9.9 2>&1 )"
   assert_contains "$out" "desde el repositorio del kernel" "dice dónde hay que ejecutarlo"
 }
+
+test_status_reune_proyectos_espacios_y_lo_que_no_esta_subido() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local docs; docs="$(new_project mirador --repos "api")"
+  local root; root="$(dirname "$docs")"
+  git init -q "$root/api"
+  git -C "$root/api" config user.email t@t
+  git -C "$root/api" config user.name t
+  git -C "$root/api" commit -q --allow-empty -m init
+  git -C "$root/api" commit -q --allow-empty -m "feat: sin subir"
+  echo suelto > "$root/api/pendiente.txt"
+
+  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  assert_contains "$out" "mirador" "lista el proyecto"
+  assert_contains "$out" "1 repos" "y cuántos repos declara"
+  assert_contains "$out" "mirador/api" "señala el repo con trabajo pendiente"
+  assert_contains "$out" "ficheros tocados" "y qué tiene pendiente"
+}
+
+test_status_no_confunde_un_espacio_con_trabajo_perdido() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local docs; docs="$(new_project espacios --repos "api")"
+  local root; root="$(dirname "$docs")"
+  git init -q "$root/api"
+  git -C "$root/api" config user.email t@t
+  git -C "$root/api" config user.name t
+  git -C "$root/api" commit -q --allow-empty -m init
+  bash "$CRUX_HOME/bin/workspace.sh" new tarea --repo "$root/api" >/dev/null 2>&1
+
+  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  assert_contains "$out" "ws/tarea" "el espacio aparece como espacio"
+  assert_not_contains "$out" "api-ws-tarea " "y su worktree no se cuenta como repo con pendientes"
+}
