@@ -80,7 +80,7 @@ demás.
 | Clave | Por defecto | Qué hace |
 | ----- | ----------- | -------- |
 | `CRUX_REMOTE` | — | Plantilla del remoto para los proyectos que crees |
-| `CRUX_PROJECTS_DIR` | el padre del kernel | Dónde viven los proyectos |
+| `CRUX_PROJECTS_DIR` | el padre del clon del kernel | Dónde viven los proyectos |
 | `CRUX_MERGE_CLOSE_WORKSPACE` | `false` | Cierra el espacio al fusionar, sin tener que pedir el `rm` |
 | `CRUX_RM_DELETE_BRANCH` | `false` | Borra también la rama local al cerrar el espacio, siempre que ya esté integrada |
 

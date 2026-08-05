@@ -68,6 +68,23 @@ echo
 
 # --- 1. Config de máquina ----------------------------------------------------
 
+# La raíz se deduce del clon del kernel, no de $CRUX_HOME: en release este ya
+# apunta a ~/.crux/kernel/<version>, cuyo padre es el directorio de kernels y no
+# contiene ningún proyecto. Con esa raíz, la comprobación de consumidores de
+# `crux release` no encontraba a nadie y publicaba sin verificar nada.
+# Precedencia: la bandera, lo ya declarado, y por último la deducción.
+RAIZ_ORIGEN_TEXTO="deducida de dónde está el clon del kernel"
+RAIZ_POR_BANDERA=0
+[[ -n "$RAIZ_PROYECTOS" ]] && RAIZ_POR_BANDERA=1
+if [[ -z "$RAIZ_PROYECTOS" && -f "$HOME/.crux/config" ]]; then
+  declarada="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+  if [[ -n "$declarada" ]]; then
+    RAIZ_PROYECTOS="$declarada"
+    RAIZ_ORIGEN_TEXTO="conservada de la instalación anterior"
+  fi
+fi
+RAIZ_EFECTIVA="${RAIZ_PROYECTOS:-$(dirname "$ORIGEN")}"
+
 if [[ "$CRUX_DRY_RUN" == "0" ]]; then
   mkdir -p "$HOME/.crux"
   # Se conserva el remoto por defecto si ya estaba: reinstalar no debe borrarlo.
@@ -85,11 +102,11 @@ EOF
   fi
   # Se deja escrita para que la lean también los hooks y los scripts de node,
   # que no pasan por lib/common.sh.
-  echo "CRUX_PROJECTS_DIR=\"${RAIZ_PROYECTOS:-$(dirname "$CRUX_HOME")}\"" >> "$HOME/.crux/config"
+  echo "CRUX_PROJECTS_DIR=\"$RAIZ_EFECTIVA\"" >> "$HOME/.crux/config"
 fi
 ok "config en ~/.crux/config"
-info "raíz de proyectos: ${RAIZ_PROYECTOS:-$(dirname "$CRUX_HOME")}"
-[[ -z "$RAIZ_PROYECTOS" ]] && info "(deducida de dónde está el kernel; cámbiala con --projects-dir)"
+info "raíz de proyectos: $RAIZ_EFECTIVA"
+[[ "$RAIZ_POR_BANDERA" == "0" ]] && info "($RAIZ_ORIGEN_TEXTO; cámbiala con --projects-dir)"
 
 # --- 2. Comando en el PATH ---------------------------------------------------
 

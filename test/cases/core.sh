@@ -1111,6 +1111,36 @@ test_el_kernel_no_usa_bash_4() {
   assert_eq "" "$usos" "ningún script depende de bash 4"
 }
 
+# La raíz mal deducida no rompe nada de forma visible: hace que `crux release`
+# no encuentre consumidores y publique diciendo que no hay nada que verificar.
+# El resto de los tests de install pasan --projects-dir, así que ninguno miraba
+# la deducción.
+test_install_deduce_la_raiz_del_clon_no_del_directorio_de_kernels() {
+  sandbox >/dev/null
+  local casa="$SB/casa-raiz"; mkdir -p "$casa"
+  # El clon vive en <raiz>/crux, como en una máquina real.
+  local raiz="$SB/proyectos-raiz"; local kernel="$raiz/crux"
+  mkdir -p "$kernel"
+  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+    | ( cd "$kernel" && tar xf - )
+
+  env HOME="$casa" bash "$kernel/install.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$casa/.crux/config")" "CRUX_PROJECTS_DIR=\"$raiz\"" \
+    "la raíz es el directorio del clon, no el de los kernels"
+}
+
+test_install_no_pisa_la_raiz_ya_declarada() {
+  sandbox >/dev/null
+  local casa="$SB/casa-raiz2"; mkdir -p "$casa"
+  env HOME="$casa" bash "$CRUX_HOME/install.sh" --projects-dir "$casa/elegida" >/dev/null 2>&1
+  # Reinstalar sin la bandera: lo que se declaró una vez debe seguir ahí.
+  env HOME="$casa" bash "$CRUX_HOME/install.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$casa/.crux/config")" "CRUX_PROJECTS_DIR=\"$casa/elegida\"" \
+    "la raíz declarada sobrevive a la reinstalación"
+}
+
 # Enlazados al working copy, los proyectos usan lo que haya en él en cada
 # momento: una rama a medias les cambia el comportamiento sin tocarlos.
 test_install_deja_una_copia_por_version() {
