@@ -424,6 +424,7 @@ credenciales y nombres. Con dos guardas:
 | `crux-init`, `crux-doctor`, `add-repo-to-docs` | Gestión del estándar |
 | `promote-to-docs`, `adr`, `explain-plan`, `end-session` | Decidir y que el conocimiento sobreviva |
 | `repo-map` | Orientarse en un repo desconocido o dormido |
+| `read-document` | Leer un documento que el agente no puede abrir |
 | `flow` | **El ciclo completo y su orden** — la entrada por defecto |
 | `workspace`, `ship`, `review-pr` | Las piezas del ciclo: aislar, verificar y revisar |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
