@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.webp" alt="crux — kernel del sistema de trabajo con agentes" width="820">
+</p>
+
 # crux
 
 El *crux* es el paso clave de una vía: el punto del que depende todo lo demás.
