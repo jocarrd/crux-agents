@@ -149,5 +149,17 @@ $notas"
 git -C "$REPO" push -q origin "v$NUEVA"
 ok "v$NUEVA publicada"
 
+# Sin esto las notas solo existen en el mensaje de la etiqueta, que nadie mira:
+# quien llega al repo no tiene forma de ver qué cambió entre dos versiones.
+if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  if ( cd "$REPO" && gh release create "v$NUEVA" --title "$NUEVA" --notes "$notas" >/dev/null 2>&1 ); then
+    ok "notas publicadas en la release v$NUEVA"
+  else
+    warn "no pude publicar las notas: 'gh release create v$NUEVA --notes ...' a mano"
+  fi
+else
+  info "sin gh autenticado: las notas se quedan en la etiqueta"
+fi
+
 echo
 info "los proyectos se alinean con 'crux upgrade' cuando les toque"

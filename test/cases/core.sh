@@ -790,6 +790,12 @@ test_release_exige_que_la_version_venga_por_propuesta() {
   assert_contains "$out" "súbelo a 99.0.0 por propuesta" "no commitea la versión por su cuenta"
 }
 
+test_release_publica_las_notas_que_genera() {
+  local src; src="$(cat "$CRUX_HOME/bin/release.sh")"
+  assert_contains "$src" "gh release create" "las notas no se quedan en la etiqueta"
+  assert_contains "$src" "sin gh autenticado" "y sin gh lo dice en vez de fallar"
+}
+
 test_release_verifica_a_quien_consume_el_kernel() {
   sandbox >/dev/null
   # Un consumidor que ha dejado de cumplir el estándar: el release tiene que
