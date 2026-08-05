@@ -78,6 +78,13 @@ RAIZ_POR_BANDERA=0
 [[ -n "$RAIZ_PROYECTOS" ]] && RAIZ_POR_BANDERA=1
 if [[ -z "$RAIZ_PROYECTOS" && -f "$HOME/.crux/config" ]]; then
   declarada="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+  # El directorio de kernels es donde una instalación anterior dejó escrita la
+  # raíz mal deducida. Conservarlo sería conservar el fallo en toda máquina ya
+  # instalada, así que se descarta y se vuelve a deducir.
+  if [[ -n "$declarada" && "$declarada" == "$HOME/.crux/kernel" ]]; then
+    warn "la raíz declarada era el directorio de kernels: se corrige"
+    declarada=""
+  fi
   if [[ -n "$declarada" ]]; then
     RAIZ_PROYECTOS="$declarada"
     RAIZ_ORIGEN_TEXTO="conservada de la instalación anterior"

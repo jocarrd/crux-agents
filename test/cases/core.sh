@@ -1130,6 +1130,24 @@ test_install_deduce_la_raiz_del_clon_no_del_directorio_de_kernels() {
     "la raíz es el directorio del clon, no el de los kernels"
 }
 
+# Conservar la raíz arregla el caso nuevo pero no la máquina que ya tiene el
+# valor malo escrito, que es justo la que sufre el fallo.
+test_install_corrige_la_raiz_heredada_del_directorio_de_kernels() {
+  sandbox >/dev/null
+  local casa="$SB/casa-raiz3"; mkdir -p "$casa/.crux"
+  printf 'CRUX_PROJECTS_DIR="%s"\n' "$casa/.crux/kernel" > "$casa/.crux/config"
+
+  local raiz="$SB/proyectos-heredada"; local kernel="$raiz/crux"
+  mkdir -p "$kernel"
+  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+    | ( cd "$kernel" && tar xf - )
+
+  env HOME="$casa" bash "$kernel/install.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$casa/.crux/config")" "CRUX_PROJECTS_DIR=\"$raiz\"" \
+    "la raíz heredada del directorio de kernels se descarta y se vuelve a deducir"
+}
+
 test_install_no_pisa_la_raiz_ya_declarada() {
   sandbox >/dev/null
   local casa="$SB/casa-raiz2"; mkdir -p "$casa"
