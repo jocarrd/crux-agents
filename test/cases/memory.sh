@@ -115,7 +115,6 @@ test_memory_brief_ocupa_dos_lineas_por_muchas_que_haya() {
 test_hooks_engancha_y_retira_el_guardian_de_memoria() {
   sandbox >/dev/null
   local docs; docs="$(new_project alfa)"
-  export CLAUDE_SETTINGS="$SB/settings.json"
   echo '{}' > "$CLAUDE_SETTINGS"
 
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
@@ -125,8 +124,6 @@ test_hooks_engancha_y_retira_el_guardian_de_memoria() {
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1 )
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "memory-guard" \
     "remove lo retira"
-
-  unset CLAUDE_SETTINGS
 }
 
 test_el_guardian_calla_cuando_no_hay_nada_que_promover() {
@@ -148,4 +145,14 @@ test_memory_avisa_si_no_hay_raiz_de_proyectos() {
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
   assert_contains "$out" "raíz de proyectos no existe" "no da el destino por perdido en silencio"
   assert_contains "$out" "nota" "y sigue reportando la fuga, que no depende de eso"
+}
+
+test_el_sandbox_aisla_los_ajustes_del_agente() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project alfa)"
+  ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+
+  assert_file "$CLAUDE_SETTINGS" "los hooks se instalan dentro del sandbox"
+  assert_not_contains "$CLAUDE_SETTINGS" "$HOME/.claude" \
+    "y no en los ajustes reales de quien ejecuta la suite"
 }

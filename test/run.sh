@@ -88,6 +88,10 @@ sandbox() {
   # Sin esto, los casos de memoria leerían las memorias reales de quien ejecuta
   # la suite, y el resultado dependería de la máquina.
   export CLAUDE_CONFIG_DIR="$SB/home/.claude"
+  # Y sin esto, cualquier caso que instale hooks los engancha en los ajustes
+  # reales: al correr la suite desde un worktree, la máquina se queda con los
+  # hooks apuntando a un directorio que se borra al cerrar el espacio.
+  export CLAUDE_SETTINGS="$SB/settings.json"
   export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
   export CODEX_HOME_DIR="$SB/home/.codex"
   # Sin esto, un caso que use workspace y olvide declararlo escribe en el
@@ -137,6 +141,15 @@ for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   if [[ "$HOME" != "$HOME_LIMPIO" || "${TMPDIR:-/tmp}" != "$TMPDIR_LIMPIO" ]]; then
     _fail "el caso exporta HOME o TMPDIR — pásalos por invocación, no al shell de la suite"
     HOME="$HOME_LIMPIO"; TMPDIR="$TMPDIR_LIMPIO"
+  fi
+
+  # Un caso que devuelva los ajustes del agente a su sitio real —con un unset,
+  # normalmente— se los deja así al siguiente, y el que instale hooks engancha
+  # los de quien ejecuta la suite. Pasó, y dejó la máquina con tres hooks
+  # apuntando a un worktree borrado.
+  if [[ -n "${SB:-}" && ( -z "${CLAUDE_SETTINGS:-}" || "${CLAUDE_SETTINGS}" == "$HOME_LIMPIO"/.claude/* ) ]]; then
+    _fail "el caso deja CLAUDE_SETTINGS fuera del sandbox — los hooks reales acaban tocados"
+    export CLAUDE_SETTINGS="$SB/settings.json"
   fi
   cd "$PWD_LIMPIO" || exit 1
 

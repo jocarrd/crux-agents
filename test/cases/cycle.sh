@@ -70,7 +70,6 @@ test_workspace_avisa_si_los_hooks_apuntan_al_espacio_que_se_borra() {
 
   bash "$CRUX_HOME/bin/workspace.sh" new conhooks --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-conhooks"
-  export CLAUDE_SETTINGS="$SB/settings.json"
   printf '{"hooks":{"Stop":[{"hooks":[{"command":"%s/adapters/x.sh"}]}]}}\n' "$ws" > "$CLAUDE_SETTINGS"
 
   rm -f "$ws/.env.local"
@@ -78,7 +77,6 @@ test_workspace_avisa_si_los_hooks_apuntan_al_espacio_que_se_borra() {
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm conhooks 2>&1)"
   assert_contains "$out" "quedarán rotos" "avisa antes de dejar los hooks colgando"
   assert_contains "$out" "crux hooks install" "y dice cómo repararlos"
-  unset CLAUDE_SETTINGS
 }
 
 test_prune_no_se_para_en_la_primera_rama_que_falla() {

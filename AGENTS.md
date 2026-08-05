@@ -125,7 +125,10 @@ comprobación que no se ha visto fallar no sirve.
 ```
 
 Cada caso corre en un sandbox aislado con los directorios de agentes
-redirigidos: la suite **no toca** `~/.claude`, `~/.codex` ni `~/Proyectos`. Si
+redirigidos —incluidos los **ajustes** donde viven los hooks, que un caso
+devolvió a su sitio real con un `unset` y dejó la máquina con tres hooks
+apuntando a un worktree ya borrado—: la suite **no toca** `~/.claude`,
+`~/.codex` ni `~/Proyectos`. El runner lo comprueba después de cada caso. Si
 escribes un caso que necesite un `$HOME`, **pásalo por invocación**
 (`env HOME=... bash ...`), nunca con `export`: exportarlo se lo lleva el caso
 siguiente, que al borrarse el sandbox se queda apuntando a un directorio
