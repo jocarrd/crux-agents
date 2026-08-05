@@ -99,6 +99,24 @@ if [[ -d "$DOCS/repos" ]]; then
     [[ $found -eq 1 ]] || note "repos/$name/ no está declarado en crux.json"
   done
 fi
+
+# El repo que está en disco y nadie declaró: se clona uno nuevo en el proyecto y
+# se olvida el registro. Las comprobaciones de arriba van en la otra dirección
+# —de lo declarado a lo que hay—, así que este caso pasaba como conforme.
+for dir in "$ROOT"/*/; do
+  [[ -d "$dir" ]] || continue
+  name="$(basename "$dir")"
+  [[ "$name" == "$(basename "$DOCS")" ]] && continue
+  # Solo la raíz de un repo: dentro de un repo, cualquier subdirectorio
+  # respondería que sí.
+  toplevel="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$toplevel" && "$(cd "$dir" && pwd -P)" == "$(cd "$toplevel" && pwd -P)" ]] || continue
+  # Los espacios de trabajo son worktrees hermanos: no son repos que declarar.
+  es_worktree "$dir" && continue
+  found=0
+  for repo in ${declared[@]+"${declared[@]}"}; do [[ "$repo" == "$name" ]] && found=1; done
+  [[ $found -eq 1 ]] || note "$name/ está en disco y no está declarado ('crux add-repo $name')"
+done
 section_ok "repos: ${#declared[@]} declarados"
 
 # --- 4. Reglas del perfil ----------------------------------------------------

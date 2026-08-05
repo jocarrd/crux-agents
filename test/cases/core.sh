@@ -69,6 +69,36 @@ test_doctor_detecta_carpeta_no_declarada() {
   assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
+# Clonar un repo en el proyecto y olvidar registrarlo es el caso real: las demás
+# comprobaciones van de lo declarado a lo que hay en disco, así que este pasaba
+# como conforme.
+test_doctor_detecta_un_repo_en_disco_sin_declarar() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omega --repos "api")"
+  local root; root="$(dirname "$docs")"
+  git init -q "$root/web"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "web/ está en disco y no está declarado" "lo detecta"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# Un espacio de trabajo es un worktree hermano del repo: avisar de él convertiría
+# la comprobación en ruido cada vez que se abre uno.
+test_doctor_no_confunde_un_espacio_de_trabajo_con_un_repo_sin_declarar() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project sigma --repos "api")"
+  local root; root="$(dirname "$docs")"
+  git init -q "$root/api"
+  ( cd "$root/api" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init )
+  git -C "$root/api" worktree add -q --detach "$root/api-ws-tarea" 2>/dev/null
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_not_contains "$out" "api-ws-tarea/ está en disco" "no avisa del worktree"
+
+  git -C "$root/api" worktree remove --force "$root/api-ws-tarea" 2>/dev/null
+}
+
 test_doctor_detecta_claude_md_divergente() {
   sandbox >/dev/null
   local docs; docs="$(new_project zeta)"
