@@ -76,4 +76,6 @@ leen frontmatter puedan descubrirlas.
   agente.** La memoria local queda para lo relativo a la persona.
 - **Los cambios en este repo se commitean y pushean al terminar.**
 - **Conventional commits**, body de 100 caracteres por línea como máximo.
-- **Sin `Co-Authored-By`. Sin emojis.**
+- **Sin `Co-Authored-By`. Sin emojis.** Ni en el commit ni en la descripción de
+  una propuesta de cambio: nada de firmas de la herramienta ni de líneas de
+  "generado con".

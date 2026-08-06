@@ -40,7 +40,8 @@ directorio se pisan los ficheros y mezclan sus cambios en el mismo commit.
 - **Las notas de proyecto y las referencias van a git**, no a la memoria local
   del agente. Esa queda para lo relativo a la persona.
 - Conventional commits, cuerpo de 100 caracteres por línea, sin
-  `Co-Authored-By` y sin emojis.
+  `Co-Authored-By` y sin emojis. La descripción de una propuesta de cambio
+  tampoco lleva firma de la herramienta ni línea de "generado con".
 - Sin comentarios que narren lo que el código ya dice. El porqué va en la
   documentación.
 

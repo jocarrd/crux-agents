@@ -40,7 +40,8 @@ Los pasos, si necesitas ir directo a uno:
 - **Si cambias código que invalida una doc, la actualizas en el mismo turno.**
 - **Las notas de proyecto y las referencias van a git**, no a memoria local.
 - Conventional commits, cuerpo de 100 caracteres por línea, sin
-  `Co-Authored-By` y sin emojis.
+  `Co-Authored-By` y sin emojis. La descripción de una propuesta de cambio
+  tampoco lleva firma de la herramienta ni línea de "generado con".
 - Sin comentarios que narren lo que el código ya dice.
 
 <!-- crux:end -->

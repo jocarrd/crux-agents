@@ -153,6 +153,8 @@ dos veces no vale, aunque el código sea correcto.
   lo comprueba el hook `commit-msg` que instala `crux hooks install`: la regla
   llevaba escrita desde el primer día y el historial estaba entero en español.
 - **Conventional commits**, cuerpo de 100 caracteres por línea, sin
-  `Co-Authored-By` y sin emojis.
+  `Co-Authored-By` y sin emojis. **Ni el commit ni la descripción de una
+  propuesta de cambio llevan la firma de la herramienta**: nada de
+  `Co-Authored-By` ni de una línea de "generado con" al pie.
 - **Sin comentarios que narren lo que el código ya dice.** Solo el porqué que
   no se deduce leyendo.

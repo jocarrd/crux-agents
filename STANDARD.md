@@ -330,13 +330,22 @@ doc (rename interno, test, refactor invisible), no se toca nada.
 La proximidad física entre código y doc ya no la da el filesystem: la da esta
 disciplina.
 
-### 7. Commits
+### 7. Commits y propuestas de cambio
 
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`…)
 - Subject en minúscula e imperativo
 - Body de 100 caracteres por línea como máximo
 - Sin `Co-Authored-By`
 - Sin emojis, salvo que la voz del fichero lo justifique
+
+**Nada de lo que se publica lleva la firma de la herramienta que lo escribió.**
+Ni el `Co-Authored-By` en el commit, ni una línea de "generado con" al pie de la
+descripción de una propuesta de cambio, ni el emoji que suele acompañarla. El
+autor es quien firma el commit; con qué herramienta lo hizo no es información
+del repositorio.
+
+Aplica al cuerpo de la propuesta igual que al commit: se describe el cambio, lo
+que se comprobó y lo que queda, y ahí se acaba.
 
 ---
 
