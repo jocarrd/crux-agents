@@ -106,7 +106,10 @@ cat > "$CONFIG" <<EOF
   "language": "es",
 $REMOTE_JSON
   "repos": [$(json_array "${repos[@]:-}")],
-  "sections": [$(json_array "${sections[@]:-}")]
+  "sections": [$(json_array "${sections[@]:-}")],
+  "conventions": {
+    "checks": []
+  }
 }
 EOF
 

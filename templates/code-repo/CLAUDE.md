@@ -35,6 +35,10 @@ directorio se pisan los ficheros y mezclan sus cambios en el mismo commit.
 
 ## Reglas que no se negocian
 
+- **Antes del primer fichero de una tarea, abre las convenciones del proyecto.**
+  Están escritas; el fallo no es que falten, es leerlas después de escribir el
+  código, cuando ya solo sirven para reordenar. La puerta 4 de `/ship` las
+  vuelve a poner delante, pero ahí ya es rework.
 - **Si cambias código que invalida una doc, la actualizas en el mismo turno.**
   No después, no en otro commit.
 - **Las notas de proyecto y las referencias van a git**, no a la memoria local

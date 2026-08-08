@@ -476,17 +476,17 @@ test_la_puerta_se_gradua_segun_el_diff() {
 
   touch docs/nota.md; git add -A
   local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
-  assert_contains "$out" "puertas: 2,7,8" "un cambio de solo texto no paga las ocho puertas"
+  assert_contains "$out" "puertas: 2,8,9" "un cambio de solo texto no paga las nueve puertas"
   assert_contains "$out" "tests: ninguno" "y no tiene tests que correr"
 
   git reset -q; rm -f docs/nota.md
   touch src/lib/util.ts; git add -A
   out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
-  assert_contains "$out" "puertas: 1,2,3,4,5,7,8" "el código que no se ve desde fuera se salta la 6"
+  assert_contains "$out" "puertas: 1,2,3,4,5,6,8,9" "el código que no se ve desde fuera se salta la 7"
 
   touch src/components/Card.tsx; git add -A
   out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
-  assert_contains "$out" "puertas: todas" "si se ve desde fuera, la 6 deja de ser opcional"
+  assert_contains "$out" "puertas: todas" "si se ve desde fuera, la 7 deja de ser opcional"
 
   cd "$CRUX_HOME" || return
 }

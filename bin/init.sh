@@ -188,6 +188,9 @@ cat > "$DOCS/crux.json" <<EOF
   "branch": "$BRANCH",
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [],
+  "conventions": {
+    "checks": []
+  },
   "remote": {
     "url": "${REMOTE_TMPL:-}",
     "visibility": "$VISIBILITY"

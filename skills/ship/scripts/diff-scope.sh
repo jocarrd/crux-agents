@@ -87,14 +87,14 @@ fi
 
 codigo=$((ui + api + data + logica + integracion + other + tests))
 if [[ $codigo -eq 0 ]]; then
-  echo "puertas: 2,7,8"
+  echo "puertas: 2,8,9"
   echo "  - solo texto: no hay código que pueda estar incorrecto ni tests que regresen"
 elif [[ $observable -eq 1 ]]; then
   echo "puertas: todas"
-  echo "  - el cambio se ve desde fuera: la 6 no es opcional aquí"
+  echo "  - el cambio se ve desde fuera: la 7 no es opcional aquí"
 else
-  echo "puertas: 1,2,3,4,5,7,8"
-  echo "  - nada observable desde fuera: la 6 se salta"
+  echo "puertas: 1,2,3,4,5,6,8,9"
+  echo "  - nada observable desde fuera: la 7 se salta"
 fi
 
 # --- Qué tests correr en la puerta 1 -----------------------------------------

@@ -79,6 +79,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | `repos` | Repos de código del proyecto, hermanos del docs repo |
 | `sections` | Carpetas opcionales activas |
 | `quality` | Cómo se ejecutan los tests aquí (opcional, ver abajo) |
+| `conventions` | Reglas de estilo comprobables mecánicamente (opcional, ver abajo) |
 
 Ningún script del kernel hardcodea nombres de proyecto ni listas de repos: todo
 sale de aquí. Si el fichero falta, el proyecto no está adoptado y `crux doctor`
@@ -131,6 +132,32 @@ Es opcional y lo consume la puerta de calidad. `testsFiltered` recibe en
 primera puerta corra solo lo afectado**: ahí únicamente se pregunta si el rojo
 ya venía de antes, y la suite entera es la puerta de regresión. Sin este campo
 la puerta sigue funcionando, pero dice por dónde filtrar en vez del comando.
+
+### Las convenciones comprobables
+
+```json
+"conventions": {
+  "checks": [
+    { "name": "tipos dentro de un fichero de constantes",
+      "files": "*.consts.ts",
+      "forbid": "^\\+\\s*(export )?(interface|type) [A-Z]" }
+  ]
+}
+```
+
+Es opcional y lo consume la puerta de convenciones. Cada entrada dice que en
+los ficheros que casan con `files`, ninguna línea añadida debe casar con
+`forbid`.
+
+Se declara aquí y no en el kernel porque **cada proyecto escribe distinto**, y
+un kernel que impusiera el estilo de uno haría ruido en todos los demás. Las
+señales que valen en cualquier lenguaje —un literal repetido, un catálogo que
+ya existe— van en la puerta y no se declaran.
+
+Una regla declarada no se aplica si el repo no tiene ni un fichero que case con
+su `files`: la convención está escrita pero ese repo todavía no la usa, y no
+hay nada que exigir. Y un `crux.json` que no se puede leer **detiene la
+puerta**, no la deja en cero reglas.
 
 ---
 
