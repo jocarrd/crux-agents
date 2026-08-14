@@ -478,6 +478,7 @@ credenciales y nombres. Con dos guardas:
 | `bug-hunt` | Buscar los fallos que nadie ha reportado |
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
+| `app-screenshots` | El recorrido de la aplicación, capturado y reproducible |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback` | Operación |
 | `skill-creator`, `skill-audit` | El propio framework |
