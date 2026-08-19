@@ -18,10 +18,11 @@ Para bootstrap de un proyecto nuevo: `/crux-init <project>`.
 6. **Punteros de cada repo de código**: `AGENTS.md` (canónico) y `CLAUDE.md` (symlink o `@-import`). Cortos, generados, no se editan a mano.
 7. **Sync discipline**: al cambiar código que afecta a una doc, se actualiza la doc en el mismo turno.
 8. **Auto-memory**: `project` y `reference` van a git (`<project>-docs/`). Solo `user` y `feedback` se quedan locales.
-9. **ADRs cross-repo** → `decisions/index.md`. **Single-repo** → `repos/<repo>/decisions.md`.
-10. **Markdown links** solo a ficheros dentro del propio docs repo. Referencias a código de repos hermanos, en backticks sin enlazar.
-11. **Skills**: las transversales viven en el kernel; las del proyecto en `<project>-docs/.claude/skills/project/`. La frontera la decide el test de la sección "Promoción de skills".
-12. **Cierre de sesión**: `/end-session` promueve lo que deba sobrevivir, verifica drift y commitea.
+9. **ADRs cross-repo** → `decisions/index.md`. **Single-repo** → `repos/<repo>/decisions.md`. Siete estados y ninguno más.
+10. **Runbooks**: lo de `operations/` se ejecuta, no se lee. Síntoma, confirmar, actuar, verificar, escalar — y se escribe en caliente.
+11. **Markdown links** solo a ficheros dentro del propio docs repo. Referencias a código de repos hermanos, en backticks sin enlazar.
+12. **Skills**: las transversales viven en el kernel; las del proyecto en `<project>-docs/.claude/skills/project/`. La frontera la decide el test de la sección "Promoción de skills".
+13. **Cierre de sesión**: `/end-session` promueve lo que deba sobrevivir, verifica drift y commitea.
 
 ---
 
@@ -321,13 +322,58 @@ rompe. `lib/check-doc-paths.mjs` verifica los que quedan.
 ### 4. ADRs
 
 - **Cross-repo** → `decisions/index.md`. **Single-repo** → `repos/<repo>/decisions.md`.
-- Mientras haya menos de 30 cross-repo, todos en un solo fichero.
+- Mientras haya menos de 30 cross-repo, todos en un solo fichero. Al pasar de
+  ahí, el registro abre con una tabla de contenidos —número, título, estado—
+  antes de partirlo en ficheros: partir obliga a reescribir todas las
+  referencias que lo citan desde otras docs, y la tabla resuelve el problema
+  real, que es encontrar una decisión sin leerlas todas.
 - Plantilla única para ambos niveles, definida en `decisions/README.md`.
 - Numeración local a cada ledger. Para citar entre ledgers, prefijo del path:
   `decisions/ADR-013` o `repos/demo-co/ADR-007`.
-- Al superseder, marcar `Status: Superseded by <ref>` en el viejo. No se borra.
+- **Siete estados y ninguno más**: `Open`, `Proposed`, `Accepted`, `Inherited`,
+  `Superseded by <ref>`, `Amended by <ref>`, `Deprecated`. El campo lleva el
+  estado y sus referencias, nada más; el porqué del cambio vive en el ADR que
+  lo provoca. La lista salió de lo que dos proyectos ya escribían a mano.
+- Una decisión aceptada a sabiendas de que hay que retirarla lleva `Sunset`
+  con la condición de retirada. Es un campo, no un estado: está aceptada **y**
+  caduca, y como estado habría que renunciar a una de las dos.
+- Al superseder o enmendar, se marca el viejo. No se borra.
 
-### 5. Auto-memory del agente
+### 5. Runbooks
+
+Lo que vive en `operations/` no es prosa explicativa: es lo que alguien
+ejecuta con el sistema caído. Tiene forma propia y obligatoria.
+
+Un **runbook** resuelve un problema concreto y conocido. Un **playbook** dice
+cómo se responde en general —qué se mira primero, cuándo se declara incidente,
+a quién se avisa— y en un proyecto pequeño suele ser un índice por síntoma que
+apunta a los runbooks.
+
+Las cinco partes de un runbook, en este orden:
+
+| Parte | Qué contiene |
+| ----- | ------------ |
+| **Síntoma** | Cómo se ve desde fuera, con las palabras de quien lo sufre |
+| **Confirmar** | Cómo distinguirlo de lo que se le parece |
+| **Actuar** | Los comandos, en orden |
+| **Verificar** | Cómo se sabe que se arregló |
+| **Escalar** | Cuándo dejar de intentarlo y qué hacer entonces |
+
+**Cada paso es un comando, no una historia.** El síntoma se escribe como lo
+diría quien lo reporta, porque es lo que se teclea al buscarlo; el porqué va a
+`architecture/` y el runbook enlaza si hace falta. Un runbook sin `Verificar`
+deja declarar resuelto lo que no lo está, y sin `Escalar` convierte cada
+incidente en una carrera sin línea de meta.
+
+**Se escribe en caliente**, justo después de resolver, que es el único momento
+en que se conoce el detalle. Escrito en frío sale una explicación, no un
+procedimiento. Para eso está `/runbook`.
+
+Un procedimiento que se repite en varios proyectos no es un runbook: es una
+skill. La frontera es la misma de siempre — si al tapar los nombres propios
+sigue teniendo sentido, hay un patrón.
+
+### 6. Auto-memory del agente
 
 Cuatro tipos: `user`, `feedback`, `project`, `reference`.
 
@@ -348,7 +394,7 @@ Lo que el kernel no hace es decidir por ti: dice qué falta y en qué docs repo
 va. Dónde encaja dentro de él es una decisión, y las decisiones no las toma un
 hook.
 
-### 6. Sincronización código ↔ doc
+### 7. Sincronización código ↔ doc
 
 Cuando se modifica código que afecta a una doc, **se actualiza la doc en el
 mismo turno**. No después, no en otro commit. Si el cambio no afecta a ninguna
@@ -357,7 +403,7 @@ doc (rename interno, test, refactor invisible), no se toca nada.
 La proximidad física entre código y doc ya no la da el filesystem: la da esta
 disciplina.
 
-### 7. Commits y propuestas de cambio
+### 8. Commits y propuestas de cambio
 
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`…)
 - Subject en minúscula e imperativo
@@ -469,7 +515,7 @@ credenciales y nombres. Con dos guardas:
 | Skill | Para qué |
 | ----- | -------- |
 | `crux-init`, `crux-doctor`, `add-repo-to-docs` | Gestión del estándar |
-| `promote-to-docs`, `adr`, `explain-plan`, `end-session` | Decidir y que el conocimiento sobreviva |
+| `promote-to-docs`, `adr`, `runbook`, `explain-plan`, `end-session` | Decidir, operar y que el conocimiento sobreviva |
 | `repo-map` | Orientarse en un repo desconocido o dormido |
 | `read-document` | Leer un documento que el agente no puede abrir |
 | `flow` | **El ciclo completo y su orden** — la entrada por defecto |

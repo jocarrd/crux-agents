@@ -22,7 +22,7 @@ los trate como cosas diferentes.
 ### ADR-NNN: Título
 
 - **Date**: YYYY-MM-DD
-- **Status**: Proposed | Accepted | Superseded
+- **Status**: uno de los cinco de la tabla de abajo
 - **Context**: qué problema o situación lo motiva
 - **Decision**: qué decidimos
 - **Consequences**: cómo cambia el código, la operación o el despliegue
@@ -30,14 +30,59 @@ los trate como cosas diferentes.
 - **Related**: refs a otros ADRs o issues (opcional)
 ```
 
+### Los estados
+
+| Estado | Significa | Referencia |
+| ------ | --------- | ---------- |
+| `Open` | Hay que decidir y todavía no hay propuesta. `Decision` dice "ninguna" | — |
+| `Proposed` | Hay una propuesta sobre la mesa, aún no se aplica | — |
+| `Accepted` | Vigente | — |
+| `Inherited` | No la tomamos nosotros: venía con el código | — |
+| `Superseded by <ref>` | Ya no vale: otra decisión ocupa su lugar | obligatoria, admite varias separadas por coma |
+| `Amended by <ref>` | Sigue vigente, pero otra decisión cambió una parte | obligatoria |
+| `Deprecated` | Ya no se aplica y nada la reemplaza | — |
+
+Tres de ellos existen porque la alternativa es peor:
+
+`Amended` — una decisión de la que solo cambió una parte no está superada: el
+resto sigue mandando, y marcarla como superada hace que alguien la descarte
+entera.
+
+`Open` — un problema conocido sin decidir **es** información, y de la más útil:
+avisa a quien llega de que ahí hay un hueco y no un descuido. Sin este estado
+acaba sin registrar, que es como se repite el mismo debate cada seis meses.
+
+`Inherited` — separa lo que decidimos de lo que nos encontramos. Importa en
+cualquier proyecto con código heredado y es obligatorio en el perfil
+`client-repo`, donde confundir ambas cosas significa atribuirle al cliente una
+decisión nuestra, o al revés.
+
+Sin un estado para cada caso, el matiz termina escrito en prosa dentro del
+campo, que es donde ningún lector automático lo encuentra.
+
 Reglas:
 
 - `NNN` es correlativo dentro del registro donde vive: cada `decisions.md`
   empieza en 001.
-- `Status: Superseded` debe apuntar al ADR que lo reemplaza:
-  `Superseded by decisions/ADR-014` o `Superseded by repos/<repo>/ADR-005`.
+- **El campo `Status` contiene el estado y sus referencias, nada más.** El
+  porqué del cambio va en `Consequences` del ADR nuevo, que es quien lo conoce.
+- Las referencias se citan como dice "Cómo citar entre registros": `ADR-014`
+  dentro del mismo registro, `decisions/ADR-014` al cruzar.
 - `Reversibility` es opcional pero recomendado: ayuda a estimar el coste de
   cambiar de opinión más adelante.
+
+### Decisiones con fecha de caducidad
+
+Un parche que se acepta sabiendo que hay que retirarlo lleva un campo más:
+
+```markdown
+- **Status**: Accepted
+- **Sunset**: cuando el CMS asuma los redirects (ver ADR-022)
+```
+
+`Sunset` es un campo y no un estado porque las dos cosas son ciertas a la vez:
+la decisión está aceptada **y** tiene fecha de retirada. Como estado habría que
+elegir una de las dos y se perdería la otra.
 
 ## Cómo citar entre registros
 

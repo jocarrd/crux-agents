@@ -231,16 +231,24 @@ done < <(json_get "$CONFIG" sections 2>/dev/null || true)
 # lo detecta git: son líneas distintas del mismo fichero.
 
 section
-while IFS= read -r ledger; do
-  [[ -f "$ledger" ]] || continue
-  dup="$(grep -oE '^### ADR-[0-9]+' "$ledger" | sort | uniq -d | sed 's/^### //')"
-  if [[ -n "$dup" ]]; then
-    while IFS= read -r d; do
-      fail "ADR duplicado en ${ledger#$DOCS/}: $d — renumera el más reciente"
-    done <<< "$dup"
-  fi
-done < <(find "$DOCS/decisions" "$DOCS/repos" -name "*decisions*.md" -o -name "index.md" 2>/dev/null | grep -E "decisions" | sort -u)
-section_ok "numeración de los ADRs"
+# El estado es lo que hace navegable el registro: un "Superseded" que no dice
+# por quién corta la cadena justo donde alguien la estaba siguiendo.
+decisions_out="/tmp/crux-doctor-decisions.$$"
+node "$CRUX_HOME/lib/check-decisions.mjs" "$DOCS" >"$decisions_out" 2>&1
+decisions_rc=$?
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  case "$line" in
+    aviso:*) note "${line#aviso: }" ;;
+    *) fail "$line" ;;
+  esac
+done <"$decisions_out"
+if [[ $decisions_rc -gt 1 ]]; then
+  fail "no se pudo verificar el estado de los ADRs"
+fi
+rm -f "$decisions_out"
+
+section_ok "estado y numeración de los ADRs"
 
 # --- 9. Enlaces markdown -----------------------------------------------------
 
@@ -285,6 +293,26 @@ while IFS= read -r skill_md; do
   fi
 done < <(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | sort)
 [[ $skills -gt 0 ]] && section_ok "skills del proyecto: $skills"
+
+# --- 11. Documentos que no enlaza nadie --------------------------------------
+#
+# Una doc que ningún índice menciona no la abre ningún agente: ocupa sitio,
+# envejece y termina contradiciendo a la que sí se lee.
+
+section
+huerfanos=0
+while IFS= read -r doc; do
+  [[ -n "$doc" ]] || continue
+  rel="${doc#$DOCS/}"
+  base="$(basename "$doc")"
+  # Un README es el índice de su propia carpeta: no lo enlaza nadie por diseño.
+  [[ "$base" == "README.md" || "$base" == "AGENTS.md" || "$base" == "CLAUDE.md" ]] && continue
+  if ! grep -rlF --include="*.md" "$base" "$DOCS" 2>/dev/null | grep -qv "^$doc$"; then
+    note "nadie enlaza $rel — añádelo a un índice o bórralo"
+    huerfanos=$((huerfanos + 1))
+  fi
+done < <(find "$DOCS" -name "*.md" -not -path "*/.git/*" -not -path "*/.claude/*" 2>/dev/null | sort)
+[[ $huerfanos -eq 0 ]] && section_ok "todos los documentos están en un índice"
 
 # --- Resumen -----------------------------------------------------------------
 
