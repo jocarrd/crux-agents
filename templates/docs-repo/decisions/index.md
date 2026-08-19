@@ -5,7 +5,10 @@ decisiones conflictivas entre sesiones y agentes, y conserva el contexto
 histórico de por qué las cosas son como son.
 
 Mientras haya menos de 30, todas viven en este fichero consolidado: facilita la
-lectura cronológica y deja la opción de partirlo cuando crezca.
+lectura cronológica, que es lo que deja ver cómo evolucionó el criterio. Al
+pasar de ahí, el fichero abre con una tabla de contenidos —número, título,
+estado— antes de plantearse partirlo: partir obliga a reescribir todas las
+referencias que lo citan desde otras docs.
 
 Formato y flujo de promoción: `README.md` de esta carpeta.
 

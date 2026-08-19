@@ -1369,3 +1369,129 @@ test_release_no_publica_con_una_copia_instalada_vieja() {
   assert_contains "$out" "el kernel instalado es 0.0.1" "avisa de que publicaría con el publicador viejo"
   assert_contains "$out" "install.sh" "y dice cómo alinearlo"
 }
+
+test_doctor_rechaza_un_estado_de_adr_que_no_existe() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project epsilon)"
+  cat >> "$docs/decisions/index.md" <<'ADR'
+
+### ADR-001: Una decisión con el estado inventado
+
+- **Date**: 2026-01-01
+- **Status**: Casi aceptada
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+ADR
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "Status no reconocido" "nombra el estado inválido"
+  assert_exit 1 "sale con error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_doctor_exige_que_superseded_diga_por_quien() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project zeta)"
+  cat >> "$docs/decisions/index.md" <<'ADR'
+
+### ADR-001: Una decisión superada sin decir por quién
+
+- **Date**: 2026-01-01
+- **Status**: Superseded
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+ADR
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "la cadena se corta" "explica por qué importa"
+  assert_exit 1 "sale con error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_doctor_detecta_una_referencia_a_un_adr_que_no_esta() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project eta)"
+  cat >> "$docs/decisions/index.md" <<'ADR'
+
+### ADR-001: Apunta a uno que no existe
+
+- **Date**: 2026-01-01
+- **Status**: Superseded by ADR-099
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+ADR
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "ahí no está" "detecta la referencia rota"
+  assert_exit 1 "sale con error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_doctor_admite_los_siete_estados_del_vocabulario() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project theta)"
+  cat >> "$docs/decisions/index.md" <<'ADR'
+
+### ADR-001: La que reemplaza
+
+- **Date**: 2026-01-01
+- **Status**: Accepted
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+
+### ADR-002: Heredada del código del cliente
+
+- **Date**: 2026-01-01
+- **Status**: Inherited
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+
+### ADR-003: Sin decidir todavía
+
+- **Date**: 2026-01-01
+- **Status**: Open
+- **Context**: da igual
+- **Decision**: ninguna
+- **Consequences**: da igual
+
+### ADR-004: Vigente con una parte cambiada
+
+- **Date**: 2026-01-01
+- **Status**: Amended by ADR-001
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+
+### ADR-005: Superada por dos a la vez
+
+- **Date**: 2026-01-01
+- **Status**: Superseded by ADR-001, ADR-004
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+
+### ADR-006: Retirada sin reemplazo
+
+- **Date**: 2026-01-01
+- **Status**: Deprecated
+- **Context**: da igual
+- **Decision**: da igual
+- **Consequences**: da igual
+ADR
+
+  assert_exit 0 "el vocabulario completo pasa" \
+    bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_doctor_avisa_de_una_doc_que_no_enlaza_nadie() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project iota)"
+  mkdir -p "$docs/operations"
+  echo "# Algo que nadie menciona" > "$docs/operations/perdida.md"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "nadie enlaza operations/perdida.md" "nombra el documento huérfano"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
