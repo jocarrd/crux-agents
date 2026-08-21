@@ -148,6 +148,7 @@ instala `crux hooks install`:
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
 | `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta y fusión |
 | `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks y señales |
+| `crux merge <n>` | Mergea una propuesta tras decir cuál es y de qué repositorio |
 | `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
 | `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |

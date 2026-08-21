@@ -317,7 +317,36 @@ while IFS= read -r skill_md; do
 done < <(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | sort)
 [[ $skills -gt 0 ]] && section_ok "skills del proyecto: $skills"
 
-# --- 11. Documentos que no enlaza nadie --------------------------------------
+# --- 11. Credenciales escritas en la documentación ---------------------------
+#
+# Un secreto commiteado queda en el historial y en cada clon, también después de
+# borrarlo. Esto no decide por nadie: dice dónde está para que sea una decisión
+# y no un descuido, y por eso avisa en lugar de bloquear.
+
+section
+secretos_out="/tmp/crux-doctor-secretos.$$"
+node "$CRUX_HOME/lib/check-secrets.mjs" "$DOCS" >"$secretos_out" 2>&1
+secretos_rc=$?
+if [[ $secretos_rc -gt 0 ]]; then
+  note "no se pudo revisar la documentación en busca de credenciales"
+else
+  while IFS= read -r linea; do
+    [[ -n "$linea" ]] || continue
+    note "credencial en la documentación: $linea"
+  done <"$secretos_out"
+fi
+[[ ! -s "$secretos_out" ]] && section_ok "sin credenciales a la vista en la documentación"
+rm -f "$secretos_out"
+
+# Un runbook con la marca puesta hace medio año no es falso, pero tampoco se
+# sabe si sigue siendo cierto. Solo se mira operations/: es donde equivocarse
+# cuesta caro y donde nadie lo nota hasta que el comando falla.
+while IFS= read -r linea; do
+  [[ -n "$linea" ]] || continue
+  note "$linea"
+done < <(node "$CRUX_HOME/lib/check-staleness.mjs" "$DOCS" 2>/dev/null || true)
+
+# --- 12. Documentos que no enlaza nadie --------------------------------------
 #
 # Una doc que ningún índice menciona no la abre ningún agente: ocupa sitio,
 # envejece y termina contradiciendo a la que sí se lee.

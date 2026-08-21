@@ -656,3 +656,27 @@ test_ship_avisa_de_los_artefactos_que_se_cuelan_en_la_raiz() {
   assert_not_contains "$out" "public/img/logo.png" "un asset dentro del árbol no es un artefacto"
   assert_not_contains "$out" "codigo.ts" "el código no es un artefacto"
 }
+
+test_usage_senala_la_skill_cuyo_procedimiento_se_sigue_sin_llamarla() {
+  sandbox >/dev/null
+  local kernel="$SB/kernel" trans="$SB/trans/proj"
+  mkdir -p "$kernel/skills/muda/scripts" "$kernel/skills/hablada/scripts" "$trans"
+  touch "$kernel/skills/muda/scripts/medir.sh" "$kernel/skills/hablada/scripts/correr.sh"
+
+  # Su procedimiento se sigue y su nombre no se invoca: la conclusión no es que
+  # sobre, es que su descripción no se activa. El informe la daba por leída.
+  {
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash medir.sh"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"hablada"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash correr.sh"}}]}}\n'
+  } > "$trans/s.jsonl"
+
+  local usage="$CRUX_HOME/bin/usage.mjs" out
+  out="$(CRUX_HOME="$kernel" CRUX_PROJECTS_DIR="$SB/vacio" CRUX_TRANSCRIPTS="$SB/trans" \
+    node "$usage" 2>&1)"
+
+  assert_contains "$out" "Se siguieron a mano" "abre la sección cuando hay alguna"
+  local seccion; seccion="$(printf '%s' "$out" | sed -n '/Se siguieron a mano/,/aparece el problema/p')"
+  assert_contains "$seccion" "muda" "señala la que no se llamó por su nombre"
+  assert_not_contains "$seccion" "hablada" "la que sí se invocó no aparece ahí"
+}

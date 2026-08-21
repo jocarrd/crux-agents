@@ -365,6 +365,12 @@ diría quien lo reporta, porque es lo que se teclea al buscarlo; el porqué va a
 deja declarar resuelto lo que no lo está, y sin `Escalar` convierte cada
 incidente en una carrera sin línea de meta.
 
+**Lleva la fecha en que se comprobó por última vez.** Un runbook envejece sin
+avisar: cambian los puertos, las rutas del servidor, los límites de un tercero.
+La marca no dice que siga siendo cierto, dice cuándo se supo que lo era, y eso
+basta para decidir si te fías o lo verificas antes. `crux doctor` avisa de los
+que pasan de seis meses.
+
 **Se escribe en caliente**, justo después de resolver, que es el único momento
 en que se conoce el detalle. Escrito en frío sale una explicación, no un
 procedimiento. Para eso está `/runbook`.
@@ -557,7 +563,8 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux clone <project>` | — | Trae un proyecto entero a una máquina nueva |
 | `crux adopt` | — | Registra un docs repo que ya existe |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
-| `crux review` | Reúne el material de la revisión de una propuesta |
+| `crux review` | `/review-pr` | Reúne el material de la revisión de una propuesta |
+| `crux merge <n>` | — | Mergea una propuesta diciendo antes cuál y de qué repo |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
