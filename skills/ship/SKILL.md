@@ -47,6 +47,14 @@ Si ya estaban rojos, no es cosa de tu diff: dilo y para. Es la puerta más
 barata y la que más tiempo ahorra, porque evita depurar durante media hora un
 fallo que ya venía de antes.
 
+### Artefactos colados
+
+Si el informe abre una sección `artefactos:`, míralos antes de nada. Son
+ficheros sueltos en la raíz —capturas que una herramienta dejó en el directorio
+de trabajo, volcados, temporales— que un `git add -A` se lleva a la rama sin
+que los vea ningún test ni el linter. Se sacan del stage o se añaden al
+`.gitignore`; lo que no se hace es commitearlos "por ahora".
+
 ## 2. Leer el diff
 
 Entero, no en diagonal. Lo que se busca aquí no son bugs todavía, sino **la

@@ -599,11 +599,60 @@ test_usage_cuenta_el_procedimiento_seguido_a_mano() {
 
   assert_contains "$out" "conscript" "la skill sale como usada aunque nadie la llamara por su nombre"
 
-  # 2 ejecuciones, no 3: leer el script no es usarlo.
+  # Una sesión, no dos ejecuciones ni tres menciones: leer el fichero no es
+  # usarlo, y llamarlo dos veces en la misma sesión sigue siendo una ocasión.
   local fila; fila="$(printf '%s' "$out" | grep conscript | head -1)"
-  assert_contains "$fila" "2" "leer el fichero no cuenta como ejecutarlo"
+  assert_contains "$fila" "1" "cuenta ocasiones, no ejecuciones"
 
   local muertas; muertas="$(printf '%s' "$out" | sed -n '/Sin usar/,$p')"
   assert_not_contains "$muertas" "conscript" "y no se la cuenta entre las muertas"
   assert_contains "$muertas" "sinscript" "la que de verdad no se usa sigue apareciendo"
+}
+
+test_usage_no_cuenta_escribir_la_skill_como_usarla() {
+  sandbox >/dev/null
+  local kernel="$SB/kernel" trans="$SB/trans/proj"
+  mkdir -p "$kernel/skills/recien/scripts" "$kernel/skills/veterana/scripts" "$trans"
+  touch "$kernel/skills/recien/scripts/medir.sh"
+  touch "$kernel/skills/veterana/scripts/correr.sh"
+
+  # La sesión en que se escribe una skill nombra su script una y otra vez. Sin
+  # separarlo, lo recién parido encabeza el ranking de lo más usado.
+  {
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > skills/recien/scripts/medir.sh <<EOF"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"chmod +x skills/recien/scripts/medir.sh"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"sed -i s/a/b/ skills/recien/scripts/medir.sh"}}]}}\n'
+    printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash correr.sh"}}]}}\n'
+  } > "$trans/s.jsonl"
+
+  local usage="$CRUX_HOME/bin/usage.mjs" out
+  out="$(CRUX_HOME="$kernel" CRUX_PROJECTS_DIR="$SB/vacio" CRUX_TRANSCRIPTS="$SB/trans" \
+    node "$usage" 2>&1)"
+
+  assert_contains "$out" "veterana" "la que se ejecutó sí cuenta"
+  local usadas; usadas="$(printf '%s' "$out" | sed -n '/Usadas:/,/Sin usar/p' | grep -c recien || true)"
+  assert_eq "0" "$usadas" "escribir una skill no la convierte en usada"
+}
+
+test_ship_avisa_de_los_artefactos_que_se_cuelan_en_la_raiz() {
+  sandbox >/dev/null
+  local repo="$SB/repo"; mkdir -p "$repo/public/img"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email t@t.t
+  git -C "$repo" config user.name t
+  echo x > "$repo/README.md"
+  git -C "$repo" add -A && git -C "$repo" commit -qm init
+
+  # Una herramienta escribe su captura en el directorio de trabajo y un
+  # `git add -A` se la lleva a la rama. No lo ve ni un test ni el linter.
+  touch "$repo/captura.png" "$repo/salida.log" "$repo/public/img/logo.png"
+  echo "export const a = 1" > "$repo/codigo.ts"
+  git -C "$repo" add -A
+
+  local out; out="$(cd "$repo" && bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh" 2>&1)"
+
+  assert_contains "$out" "captura.png" "nombra la captura suelta"
+  assert_contains "$out" "salida.log" "nombra el volcado suelto"
+  assert_not_contains "$out" "public/img/logo.png" "un asset dentro del árbol no es un artefacto"
+  assert_not_contains "$out" "codigo.ts" "el código no es un artefacto"
 }

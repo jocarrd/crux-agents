@@ -90,6 +90,11 @@ function scriptsDelCatalogo() {
 // copiarlo, buscar dentro. Se descarta cuando lo precede un verbo de lectura.
 const VERBO_DE_LECTURA = /\b(cat|sed|awk|grep|head|tail|less|ls|wc|chmod|cp|mv|rm|find|diff|git|shellcheck|vim|nano)\s+(-\S+\s+)*\S*$/
 
+// Escribir una skill no es usarla. Las sesiones en que se desarrolla nombran su
+// script una y otra vez —heredocs que lo reescriben, chmod, calibraciones— y
+// sin esto la skill recién parida aparece como la más usada del catálogo.
+const EDITA_EL_SCRIPT = /<<\s*['"]?\w*(PY|EOF|SH)\b|chmod\s|cat\s*>|>>\s*\S|sed -i|\.replace\(/
+
 function invocaciones(desde) {
   const cuenta = new Map()
   const porScript = new Map()
@@ -106,18 +111,27 @@ function invocaciones(desde) {
       if (statSync(full).mtimeMs < desde) continue
       ficheros++
       const texto = readFileSync(full, 'utf8')
+      const llamadasAqui = new Set()
       for (const m of texto.matchAll(/"name"\s*:\s*"Skill"\s*,\s*"input"\s*:\s*\{\s*"skill"\s*:\s*"([^"]+)"/g)) {
-        cuenta.set(m[1], (cuenta.get(m[1]) || 0) + 1)
+        llamadasAqui.add(m[1])
+      }
+      for (const skill of llamadasAqui) {
+        cuenta.set(skill, (cuenta.get(skill) || 0) + 1)
       }
       if (!scripts.size) continue
+      const scriptsAqui = new Set()
       for (const m of texto.matchAll(/"name"\s*:\s*"Bash"\s*,\s*"input"\s*:\s*\{[^}]*?"command"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
         const cmd = m[1]
+        if (EDITA_EL_SCRIPT.test(cmd)) continue
         for (const [script, skill] of scripts) {
           for (const h of cmd.matchAll(new RegExp(script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))) {
             if (VERBO_DE_LECTURA.test(cmd.slice(0, h.index))) continue
-            porScript.set(skill, (porScript.get(skill) || 0) + 1)
+            scriptsAqui.add(skill)
           }
         }
+      }
+      for (const skill of scriptsAqui) {
+        porScript.set(skill, (porScript.get(skill) || 0) + 1)
       }
     }
   }
@@ -152,10 +166,12 @@ for (const [nombre, n, s] of usadas) {
   const origen = cat.get(nombre) || '(de otra fuente)'
   console.log(`  ${String(n).padStart(7)}  ${String(s || '').padStart(6)}  ${origen.padEnd(16)} ${nombre}`)
 }
+console.log('\n  Ambas columnas cuentan SESIONES, no ejecuciones: un bucle que llama al')
+console.log('  script dieciocho veces sigue siendo una ocasión en que se usó.')
 console.log('\n  "llamada" es la skill invocada por su nombre. "script" es el rastro de')
-console.log('  sus scripts en comandos: el procedimiento seguido a mano. No se suman —')
-console.log('  no son la misma unidad, y el segundo es una cota superior porque')
-console.log('  incluye las ejecuciones desde tests.')
+console.log('  sus scripts en comandos: el procedimiento seguido a mano. No se suman:')
+console.log('  una misma sesión puede aparecer en las dos. Las sesiones en que se')
+console.log('  escribió la propia skill no cuentan como uso.')
 
 const huerfanas = usadas.filter(([n]) => !cat.has(n)).map(([n]) => n)
 if (huerfanas.length) {

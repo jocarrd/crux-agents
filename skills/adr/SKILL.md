@@ -1,6 +1,6 @@
 ---
 name: adr
-description: Registrar una decisión técnica en el formato canónico del proyecto, eligiendo el registro correcto según su alcance, con el contexto que la motivó, sus consecuencias y su coste de reversión. Usa cuando se tome una decisión de arquitectura, se elija entre alternativas, se descarte una opción por un motivo que no es obvio, o cuando alguien pregunte por qué algo está hecho así.
+description: Registrar un ADR: una decisión técnica en el formato canónico del proyecto, en `decisions/index.md` si cruza repos o en `repos/<repo>/decisions.md` si no, con el contexto que la motivó, sus consecuencias y su coste de reversión. Usa cuando se tome una decisión de arquitectura, se elija entre alternativas, se descarte una opción por un motivo que no es obvio, cuando vayas a tocar un registro de decisiones o marcar uno como superado, y cuando alguien pregunte por qué algo está hecho así.
 ---
 
 # adr

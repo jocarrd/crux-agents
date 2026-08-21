@@ -1495,3 +1495,31 @@ test_doctor_avisa_de_una_doc_que_no_enlaza_nadie() {
   assert_contains "$out" "nadie enlaza operations/perdida.md" "nombra el documento huérfano"
   assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
+
+test_doctor_ve_el_repo_que_solo_existe_en_el_remoto() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project kappa --repos "api")"
+  git -C "$docs" remote add origin "https://github.com/alguien/kappa-docs.git" 2>/dev/null || \
+    git -C "$docs" remote set-url origin "https://github.com/alguien/kappa-docs.git"
+
+  # Un repo del proyecto que nadie clonó en esta máquina es invisible al bucle
+  # que recorre el disco: así estuvo uno 185 días fuera del contrato.
+  local fake="$SB/bin"; mkdir -p "$fake"
+  cat > "$fake/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "repo list") printf 'kappa-docs\nkappa-olvidado\napi\notra-cosa\n' ;;
+  *) exit 0 ;;
+esac
+GH
+  chmod +x "$fake/gh"
+
+  local out
+  out="$(PATH="$fake:$PATH" bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+
+  assert_contains "$out" "kappa-olvidado está en el remoto" "nombra el repo que solo vive en el remoto"
+  assert_not_contains "$out" "otra-cosa está en el remoto" "el resto de la cuenta no es asunto suyo"
+  assert_not_contains "$out" "kappa-docs está en el remoto" "el propio docs repo no se reporta"
+  assert_exit 0 "es aviso, no error" env PATH="$fake:$PATH" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
