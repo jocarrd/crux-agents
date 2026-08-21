@@ -166,6 +166,21 @@ for (const [nombre, n, s] of usadas) {
   const origen = cat.get(nombre) || '(de otra fuente)'
   console.log(`  ${String(n).padStart(7)}  ${String(s || '').padStart(6)}  ${origen.padEnd(16)} ${nombre}`)
 }
+// El procedimiento se sigue y la skill no se invoca: no es que sobre, es que su
+// descripción no se activa cuando el problema aparece. Es la única conclusión
+// que el informe puede sacar solo, y estaba a la vista de quien supiera leerla.
+const descripcionMuda = usadas.filter(([n, llamadas, scripts]) =>
+  llamadas === 0 && scripts > 0 && cat.has(n),
+)
+if (descripcionMuda.length) {
+  console.log('\nSe siguieron a mano y nadie las llamó por su nombre:\n')
+  for (const [nombre, , scripts] of descripcionMuda) {
+    console.log(`  ${nombre} — ${scripts} ${scripts === 1 ? 'sesión' : 'sesiones'}`)
+  }
+  console.log('\n  El trabajo se hizo, así que la skill no sobra: lo que falla es su')
+  console.log('  descripción, que no lleva las palabras con las que aparece el problema.')
+}
+
 console.log('\n  Ambas columnas cuentan SESIONES, no ejecuciones: un bucle que llama al')
 console.log('  script dieciocho veces sigue siendo una ocasión en que se usó.')
 console.log('\n  "llamada" es la skill invocada por su nombre. "script" es el rastro de')

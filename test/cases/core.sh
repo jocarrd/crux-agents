@@ -1523,3 +1523,104 @@ GH
   assert_not_contains "$out" "kappa-docs está en el remoto" "el propio docs repo no se reporta"
   assert_exit 0 "es aviso, no error" env PATH="$fake:$PATH" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
+
+test_doctor_avisa_de_credenciales_en_la_documentacion() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project lambda)"
+  mkdir -p "$docs/operations"
+  cat > "$docs/operations/acceso.md" <<'DOC'
+# Acceso
+
+Entrar con:
+
+```
+admin@ejemplo.test
+Xk7pQm2ZrT9wLb4V
+```
+
+Token de despliegue: `ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
+DOC
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+
+  assert_contains "$out" "posible contraseña suelta" "ve la contraseña dentro del bloque"
+  assert_contains "$out" "token de GitHub" "ve el token por su formato"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_doctor_no_confunde_configuracion_con_credenciales() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project mu)"
+  mkdir -p "$docs/operations"
+  cat > "$docs/operations/servicio.md" <<'DOC'
+# Servicio
+
+```
+Restart=always
+RestartSec=10
+EnvironmentFile=/opt/servicio/.env
+```
+
+```
+postgres://usuario:devpass@127.0.0.1:5432/base
+```
+
+```
+La contraseña de ejemplo es changeme-dev
+```
+DOC
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+
+  assert_not_contains "$out" "credencial en la documentación" "la sintaxis y los ejemplos no son secretos"
+}
+
+test_merge_no_toca_la_propuesta_de_otro_repositorio() {
+  sandbox >/dev/null
+  local repo="$SB/repo"; mkdir -p "$repo"
+  git -C "$repo" init -q
+  git -C "$repo" remote add origin "https://github.com/alguien/proyecto-a.git"
+
+  # gh resuelve el repositorio por el directorio: un número correcto en el sitio
+  # equivocado mergea lo de otro proyecto sin preguntar.
+  local fake="$SB/bin"; mkdir -p "$fake"
+  cat > "$fake/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "pr view") exit 1 ;;
+  *) exit 0 ;;
+esac
+GH
+  chmod +x "$fake/gh"
+
+  local out rc=0
+  out="$(cd "$repo" && PATH="$fake:$PATH" bash "$CRUX_HOME/bin/merge.sh" 7 2>&1)" || rc=$?
+
+  assert_contains "$out" "no existe en alguien/proyecto-a" "dice en qué repositorio miró"
+  assert_eq "1" "$rc" "para en vez de mergear a ciegas"
+}
+
+test_merge_exige_un_numero() {
+  sandbox >/dev/null
+  local out rc=0
+  out="$(bash "$CRUX_HOME/bin/merge.sh" rama-cualquiera 2>&1)" || rc=$?
+  assert_contains "$out" "entero" "rechaza lo que no es un número"
+  assert_eq "1" "$rc" "sale con error"
+}
+
+test_doctor_avisa_del_runbook_que_lleva_medio_ano_sin_verificar() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project nu)"
+  mkdir -p "$docs/operations"
+  printf '# Reiniciar el servicio\n\n> Última verificación: 2020-01-15\n\nPasos.\n' \
+    > "$docs/operations/viejo.md"
+  printf '# Purgar la caché\n\n> Última verificación: %s\n\nPasos.\n' "$(date +%%F)" \
+    > "$docs/operations/reciente.md"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+
+  assert_contains "$out" "operations/viejo.md sin verificar" "nombra el que caducó"
+  assert_not_contains "$out" "operations/reciente.md sin verificar" "el recién comprobado no molesta"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
