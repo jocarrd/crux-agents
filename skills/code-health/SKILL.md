@@ -1,6 +1,6 @@
 ---
 name: code-health
-description: Medir la salud estructural de un repo y su tendencia: duplicación real, funciones largas con ramas, anidamiento, exports que nadie importa, dependencias sin usar y qué ficheros se remueven más. Guarda una línea base para poder responder si el código está peor que la última vez. Usa cada cierto tiempo, antes de planificar un refactor, al heredar un repo, o cuando lleves una temporada generando mucho código con agentes.
+description: Medir la salud estructural de un repo y su tendencia: duplicación real, funciones largas con ramas, anidamiento, exports que nadie importa, dependencias sin usar y qué ficheros se remueven más. Guarda una línea base para responder si el código está peor que la última vez. Usa cuando te preguntes por la deuda técnica, si esto se está pudriendo o por dónde empezar a limpiar; antes de planificar un refactor, al heredar un repo, y cuando lleves una temporada generando mucho código con agentes.
 ---
 
 # code-health

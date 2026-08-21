@@ -147,3 +147,14 @@ fi
 if [[ $docs -eq 0 && $((ui + api + data + logica)) -gt 0 ]]; then
   echo "doc: el cambio toca superficie y no hay documentación tocada — comprueba si alguna ha quedado desalineada"
 fi
+
+# Lo que se cuela con un `git add -A`: capturas que una herramienta escribió en
+# el directorio de trabajo, volcados, ficheros de un solo uso. No los reporta
+# ningún test ni el linter, y viajan a la rama sin que nadie los mire.
+sospechosos="$(echo "$files" | grep -E '^[^/]*\.(png|jpe?g|gif|webp|pdf|zip|tar|gz|mp4|log|tmp|bak|html)$' || true)"
+if [[ -n "$sospechosos" ]]; then
+  echo "artefactos: ficheros sueltos en la raíz que probablemente no van al repo —"
+  while IFS= read -r f; do
+    [[ -n "$f" ]] && echo "  - $f"
+  done <<< "$sospechosos"
+fi

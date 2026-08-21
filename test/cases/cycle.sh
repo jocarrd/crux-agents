@@ -633,3 +633,26 @@ test_usage_no_cuenta_escribir_la_skill_como_usarla() {
   local usadas; usadas="$(printf '%s' "$out" | sed -n '/Usadas:/,/Sin usar/p' | grep -c recien || true)"
   assert_eq "0" "$usadas" "escribir una skill no la convierte en usada"
 }
+
+test_ship_avisa_de_los_artefactos_que_se_cuelan_en_la_raiz() {
+  sandbox >/dev/null
+  local repo="$SB/repo"; mkdir -p "$repo/public/img"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email t@t.t
+  git -C "$repo" config user.name t
+  echo x > "$repo/README.md"
+  git -C "$repo" add -A && git -C "$repo" commit -qm init
+
+  # Una herramienta escribe su captura en el directorio de trabajo y un
+  # `git add -A` se la lleva a la rama. No lo ve ni un test ni el linter.
+  touch "$repo/captura.png" "$repo/salida.log" "$repo/public/img/logo.png"
+  echo "export const a = 1" > "$repo/codigo.ts"
+  git -C "$repo" add -A
+
+  local out; out="$(cd "$repo" && bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh" 2>&1)"
+
+  assert_contains "$out" "captura.png" "nombra la captura suelta"
+  assert_contains "$out" "salida.log" "nombra el volcado suelto"
+  assert_not_contains "$out" "public/img/logo.png" "un asset dentro del árbol no es un artefacto"
+  assert_not_contains "$out" "codigo.ts" "el código no es un artefacto"
+}

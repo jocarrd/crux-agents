@@ -1,6 +1,6 @@
 ---
 name: promote-to-docs
-description: Promover información que estaba en la memoria local del agente, en un commit message o solo en la conversación al sitio correcto del docs repo (decisions/, operations/, conventions/ o repos/<repo>/notes.md) y commitearla. Usa cuando estés a punto de guardar una memoria de tipo project o reference, o cuando una conversación haya generado conocimiento operativo o decisional que no va a quedar en el código.
+description: Llevar al docs repo lo que solo existe en la conversación, en la memoria local del agente o en un mensaje de commit, y commitearlo donde toca: `decisions/`, `operations/`, `conventions/` o `repos/<repo>/notes.md`. Usa cuando vayas a escribir una memoria de tipo project o reference, cuando digas «esto habría que documentarlo», cuando una sesión haya destapado una gotcha operativa o un porqué que no queda en el código, y antes de que se pierda al cerrar.
 ---
 
 # promote-to-docs

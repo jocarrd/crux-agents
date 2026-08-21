@@ -1,6 +1,6 @@
 ---
 name: crux-doctor
-description: Verificar que el repo de documentación de un proyecto cumple el estándar: contrato, estructura obligatoria, repos declarados frente a los que hay en disco, reglas del perfil, enlaces markdown y formato de las skills. Usa antes de cerrar sesión, después de reorganizar documentación, al volver a un proyecto que llevabas tiempo sin tocar, o cuando algo parezca desalineado.
+description: Pasar el doctor a un proyecto: verificar que su repo de documentación cumple el estándar —contrato, estructura obligatoria, repos declarados frente a los que hay, reglas del perfil, estado de los ADRs, enlaces markdown, documentos huérfanos y formato de las skills— y dejarlo en conforme. Usa antes de cerrar sesión, después de migrar o reorganizar documentación, al registrar un repo nuevo, al volver a un proyecto que llevabas tiempo sin tocar, o cuando quieras comprobar si algo se ha desalineado.
 ---
 
 # crux-doctor

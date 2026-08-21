@@ -90,6 +90,7 @@ section_ok "estructura obligatoria"
 
 section
 ROOT="$(dirname "$DOCS")"
+origin_docs_early="$(git -C "$DOCS" remote get-url origin 2>/dev/null || true)"
 declared=()
 while IFS= read -r r; do [[ -n "$r" ]] && declared+=("$r"); done < <(json_get "$CONFIG" repos 2>/dev/null || true)
 
@@ -126,6 +127,28 @@ for dir in "$ROOT"/*/; do
   for repo in ${declared[@]+"${declared[@]}"}; do [[ "$repo" == "$name" ]] && found=1; done
   [[ $found -eq 1 ]] || note "$name/ está en disco y no está declarado ('crux add-repo $name')"
 done
+# El repo que existe en el remoto y nadie clonó aquí: el bucle de arriba recorre
+# el disco, así que un repo del proyecto que solo vive en GitHub es invisible en
+# esta máquina, y así puede pasar medio año fuera del contrato sin que nadie
+# se entere.
+if [[ "$origin_docs_early" == *github.com* ]] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  owner="$(echo "$origin_docs_early" | sed -E 's#^.*github\.com[:/]##; s#/.*$##')"
+  while IFS= read -r remoto; do
+    [[ -n "$remoto" ]] || continue
+    [[ "$remoto" == "$(basename "$DOCS")" ]] && continue
+    # Solo los que llevan el nombre del proyecto: el resto de la cuenta no es asunto suyo.
+    shopt -s nocasematch
+    if [[ "$remoto" == "$PROJECT" || "$remoto" == "$PROJECT-"* ]]; then
+      found=0
+      for repo in ${declared[@]+"${declared[@]}"}; do
+        [[ "${repo,,}" == "${remoto,,}" ]] && found=1
+      done
+      [[ $found -eq 1 ]] || note "$remoto está en el remoto y no está declarado ('crux add-repo $remoto')"
+    fi
+    shopt -u nocasematch
+  done < <(gh repo list "$owner" --limit 200 --json name --jq '.[].name' 2>/dev/null || true)
+fi
+
 section_ok "repos: ${#declared[@]} declarados"
 
 # --- 4. Reglas del perfil ----------------------------------------------------
