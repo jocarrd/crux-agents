@@ -36,14 +36,21 @@ de lo anterior es que sí, ciérralo antes o no abras el túnel.
 
 Por orden, según lo que ya haya en la máquina:
 
-**1. cloudflared, si está instalado.** El más cómodo y el más rápido.
+**1. cloudflared.** No hace falta instalarlo: `npx` lo trae, lo que además
+esquiva la política de no descargar binarios sueltos de internet.
 
 ```bash
-cloudflared tunnel --url http://localhost:<puerto>
+npx --yes cloudflared tunnel --url http://localhost:<puerto>
 ```
 
-**2. SSH puro, si no lo está.** No instala nada: el cliente de SSH ya está en
-cualquier máquina y varios servicios aceptan una redirección remota.
+Su ventaja es que la dirección aguanta toda la sesión. Su pega, que el propio
+programa avisa: *«may take some time to be reachable»*. A veces son segundos y
+a veces el nombre no llega a resolverse —`NXDOMAIN` incluso preguntando a
+`1.1.1.1`— con el túnel perfectamente registrado del otro lado. **Comprueba que
+responde antes de repartir el enlace**, y ten preparada la vía de abajo.
+
+**2. SSH puro.** Tampoco instala nada y responde en segundos, a cambio de que
+la dirección rote. Es la vía fiable cuando la de arriba no resuelve.
 
 ```bash
 ssh -tt -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 \
