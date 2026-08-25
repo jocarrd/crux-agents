@@ -118,6 +118,38 @@ cosméticas y no impiden la demo.
 Y para estar seguro del todo, ábrela: una captura desde fuera con el ancho de un
 móvil enseña en un segundo lo que un `curl` no cuenta.
 
+## Si tiene que durar: supervisarlo
+
+Una sesión de túnel se cae sola. Dejar el proceso a pelo significa que a la
+media hora la persona a la que se lo enseñabas ve un error y tú no te enteras.
+
+Lo que aguanta es un supervisor: un bucle que reabre la conexión cuando cae y
+**deja escrita la dirección vigente en un fichero**, con espera creciente para
+no machacar el servicio si está caído del todo.
+
+Dos detalles al escribirlo:
+
+- **Desacóplalo de la sesión** (`setsid`), o morirá contigo. Compruébalo:
+  el proceso debe quedar colgando de `init`, no de tu terminal.
+- **Cuidado con `pkill -f`.** El patrón que buscas también aparece en la línea
+  de comandos del shell que ejecuta el `pkill`, así que se mata a sí mismo y el
+  comando termina con un código extraño. Filtra por PID hijo, no por texto.
+
+## La dirección cambia, y eso no tiene arreglo gratis
+
+**Cada reconexión trae una dirección nueva.** Los servicios gratuitos solo dan
+subdominio fijo a cuentas registradas: tanto localhost.run como Serveo piden
+dar de alta tu clave pública entrando con Google o GitHub.
+
+Consecuencias prácticas:
+
+- No prometas una dirección estable si no has registrado la cuenta antes.
+- Escribe siempre la vigente en un sitio consultable en vez de darla por sabida.
+- Si de verdad hace falta que no cambie, las vías son registrar la clave (un
+  minuto, una vez), un túnel con nombre bajo un dominio propio, o una
+  redirección remota contra un servidor tuyo. Elige antes de empezar, no
+  después de haber repartido el enlace.
+
 ## Al terminar
 
 Cierra el túnel. Mientras siga abierto, tu máquina está en internet.
