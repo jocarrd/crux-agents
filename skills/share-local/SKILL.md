@@ -141,6 +141,24 @@ Dos detalles al escribirlo:
 subdominio fijo a cuentas registradas: tanto localhost.run como Serveo piden
 dar de alta tu clave pública entrando con Google o GitHub.
 
+Y hay algo peor, porque no se ve venir: **la dirección también puede cambiar sin
+que la conexión se caiga**. El proceso sigue vivo, tú crees que todo va bien, y
+la dirección que repartiste empieza a devolver 503. Un supervisor que solo lee
+la dirección al abrir la sesión se queda apuntando a la vieja para siempre.
+
+Por eso hay que releerla mientras la conexión viva, no una sola vez:
+
+```bash
+while kill -0 "$ssh_pid" 2>/dev/null; do
+  url=$(grep -oE '[a-z0-9-]+\.lhr\.life' "$salida" | tail -1)   # tail, no head
+  [ "$url" != "$ultima" ] && { ultima="$url"; echo "https://$url" > "$fichero"; }
+  sleep 3
+done
+```
+
+El `tail -1` en vez de `head -1` es la mitad del arreglo: en la salida quedan
+todas las direcciones que ha tenido la sesión, y la buena es la última.
+
 Consecuencias prácticas:
 
 - No prometas una dirección estable si no has registrado la cuenta antes.
