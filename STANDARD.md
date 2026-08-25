@@ -531,7 +531,7 @@ credenciales y nombres. Con dos guardas:
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
-| `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback` | Operación |
+| `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local` | Operación |
 | `skill-creator`, `skill-audit` | El propio framework |
 
 ### El ciclo de desarrollo

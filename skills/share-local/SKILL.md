@@ -1,0 +1,140 @@
+---
+name: share-local
+description: Abrir el entorno local a alguien de fuera con un túnel público, sin desplegar nada. Elige la vía disponible, arregla las direcciones absolutas de la aplicación para que la página no llegue rota, comprueba que se ve de verdad desde fuera y deja el túnel cerrado al terminar. Usa cuando haya que enseñar un trabajo en curso a un cliente o a un compañero, revisar un diseño entre varios, probar en un móvil real, o recibir una llamada de un servicio externo que necesita una dirección pública.
+---
+
+# share-local
+
+Un túnel publica lo que corre en tu máquina bajo una dirección de internet. Sirve
+para enseñar sin desplegar, que es justo lo que hace falta cuando el trabajo
+todavía no está para producción.
+
+## Cuándo usar
+
+- Hay que enseñar un trabajo en curso a alguien que no tiene el entorno montado.
+- Estás iterando un diseño con otra persona y las capturas no bastan.
+- Quieres probar en un móvil de verdad, no en un navegador emulado.
+- Un servicio externo (una pasarela de pago, un webhook) necesita llamarte a una
+  dirección pública mientras desarrollas.
+
+**No lo uses** como despliegue de pruebas permanente. Un túnel dura lo que dura
+la sesión y su dirección cambia; para algo estable, despliega.
+
+## Antes de abrir nada
+
+Un túnel expone **todo lo que sirve ese puerto**, no solo la página que quieres
+enseñar. Repasa en voz alta:
+
+- ¿Hay un panel de administración accesible sin contraseña?
+- ¿La base de datos local es una copia de producción con datos de personas?
+- ¿Hay claves o ficheros de entorno que se sirvan por descuido?
+
+La dirección es larga y aleatoria, pero eso es oscuridad, no seguridad. Si algo
+de lo anterior es que sí, ciérralo antes o no abras el túnel.
+
+## Elegir la vía
+
+Por orden, según lo que ya haya en la máquina:
+
+**1. cloudflared, si está instalado.** El más cómodo y el más rápido.
+
+```bash
+cloudflared tunnel --url http://localhost:<puerto>
+```
+
+**2. SSH puro, si no lo está.** No instala nada: el cliente de SSH ya está en
+cualquier máquina y varios servicios aceptan una redirección remota.
+
+```bash
+ssh -tt -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 \
+    -o ExitOnForwardFailure=yes -R 80:localhost:<puerto> nokey@localhost.run
+```
+
+Dos detalles que cuestan media hora si no se saben:
+
+- **`-tt` no es opcional.** Sin terminal, el servicio abre el túnel pero no
+  imprime la dirección, y te quedas con un proceso conectado y sin URL.
+- **El usuario importa.** `nokey@` entra sin registro. Con tu propia clave
+  necesitas haberla dado de alta antes, o te responde `Permission denied
+  (publickey)` después de mostrarte el saludo de bienvenida, que despista.
+
+No instales un binario descargado de internet solo para esto si la vía de SSH
+está disponible: es más superficie de la que el problema merece.
+
+## La trampa de verdad: las direcciones absolutas
+
+**Este es el fallo que hace que el túnel "no funcione" cuando en realidad
+funciona perfectamente.**
+
+Muchas aplicaciones guardan su propia dirección y la escriben en los enlaces,
+las hojas de estilo y las imágenes que generan. Si esa dirección sigue siendo
+`localhost`, quien entra desde fuera recibe una página que le manda a buscar los
+recursos a *su* propio ordenador. Ve un documento en blanco o sin estilos, y tú
+ves el sitio perfecto porque tú sí tienes algo en ese puerto.
+
+Sitios donde suele estar guardada:
+
+- WordPress: `WP_HOME` y `WP_SITEURL`, o las opciones `siteurl`/`home`.
+- Frameworks de JavaScript: la variable de entorno con la URL pública.
+- Cualquier configuración con un campo tipo `base_url` o `app_url`.
+
+La solución es que la dirección **se deduzca de la petición** en vez de estar
+escrita. En un entorno local vale con distinguir lo que no es local:
+
+```php
+$host = $_SERVER['HTTP_HOST'] ?? '';
+$es_local = $host === '' || preg_match('/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/', $host);
+if (!$es_local) {
+    $_SERVER['HTTPS'] = 'on';   // el túnel termina el cifrado por su cuenta
+    define('WP_HOME', 'https://' . $host);
+    define('WP_SITEURL', 'https://' . $host);
+}
+```
+
+Comprobar lo que **no** es local, en vez de mantener una lista de proveedores de
+túnel, evita tener que volver aquí cada vez que se cambia de servicio.
+
+Y marca la conexión como segura: el túnel cifra de cara al visitante y te habla
+a ti por HTTP plano. Si la aplicación no lo sabe, generará enlaces mezclados que
+el navegador bloquea.
+
+## Comprobar que se ve, no que está abierto
+
+Que el proceso siga vivo no significa nada. Pide la página **por la dirección
+pública** y mira lo que llega:
+
+```bash
+curl -sS -o /tmp/tunel.html -w "%{http_code} · %{size_download} bytes\n" \
+     -m 45 https://<direccion-del-tunel>/<ruta>
+
+grep -c "localhost" /tmp/tunel.html     # tiene que dar 0, o casi
+```
+
+Si quedan referencias a `localhost`, mira cuáles son: las que genera la
+aplicación al vuelo se arreglan con lo de arriba; las que están guardadas en
+base de datos (un icono de pestaña, una dirección canónica) suelen ser
+cosméticas y no impiden la demo.
+
+Y para estar seguro del todo, ábrela: una captura desde fuera con el ancho de un
+móvil enseña en un segundo lo que un `curl` no cuenta.
+
+## Al terminar
+
+Cierra el túnel. Mientras siga abierto, tu máquina está en internet.
+
+```bash
+pkill -f "localhost.run"      # o el proceso de cloudflared
+```
+
+Si lo dejaste corriendo en segundo plano dentro de una sesión de agente, mátalo
+de forma explícita: no se cierra solo cuando termina la conversación.
+
+## Señales de que algo va mal
+
+| Lo que ves | Lo que suele ser |
+|---|---|
+| Túnel conectado pero sin dirección | Falta `-tt`: no hay terminal donde imprimirla |
+| `Permission denied (publickey)` tras el saludo | Tu clave no está registrada en el servicio; usa la vía sin clave |
+| Página en blanco desde fuera, bien desde dentro | Direcciones absolutas a `localhost`; ver arriba |
+| Estilos ausentes y avisos de contenido mixto | Falta decirle a la aplicación que la conexión es HTTPS |
+| Todo lento y a ratos caído | Límite del servicio gratuito; para algo sostenido, despliega |
