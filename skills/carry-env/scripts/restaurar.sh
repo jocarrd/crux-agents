@@ -20,9 +20,23 @@ for a in "$@"; do
 done
 
 # La raíz en ESTA máquina, que no tiene por qué ser la de la que salió la carpeta.
-PROYECTO="${DESTINO:-${CRUX_PROJECTS_DIR:-$HOME/Proyectos}/$NOMBRE}"
+RAIZ="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
+PROYECTO="${DESTINO:-$RAIZ/$NOMBRE}"
+
+# Una carpeta reunida antes de que collect.sh anclara en la raíz del proyecto
+# lleva por nombre el de un repo, no el del proyecto, y entonces el destino está
+# un nivel más adentro. Buscarlo aquí evita que esas carpetas —que ya están
+# hechas y llevan secretos— haya que rehacerlas desde la máquina de origen.
+if [[ -z "$DESTINO" && ! -d "$PROYECTO" ]]; then
+  for c in "$RAIZ"/*/"$NOMBRE"; do
+    [[ -d "$c" ]] || continue
+    echo "$NOMBRE no es un proyecto sino un repo de $(basename "$(dirname "$c")")"
+    PROYECTO="$c"; break
+  done
+fi
+
 [[ -d "$PROYECTO" ]] || {
-  echo "no encuentro el proyecto en $PROYECTO"
+  echo "no encuentro el proyecto en $RAIZ/$NOMBRE ni como repo de ningún proyecto"
   echo "pásalo como argumento: ./restaurar.sh /ruta/al/proyecto --hazlo"
   exit 1
 }

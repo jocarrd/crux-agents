@@ -35,6 +35,12 @@ Deja en `~/entornos-<proyecto>` los ficheros, `RESTAURAR.md` con la tabla de
 destinos y `restaurar.sh`, que es el camino de vuelta. Carpeta en 0700 y
 ficheros en 0600.
 
+El ancla es siempre la raíz del proyecto. Si le apuntas a un repo de dentro
+—o al docs repo— sube hasta la raíz y te lo dice, porque el mapa guarda rutas
+relativas a ella y es lo que la otra máquina sabrá encontrar. El nombre sale del
+`project` declarado en `crux.json`, no del directorio: es el que usa
+`crux bootstrap` para crear la carpeta en el destino.
+
 **No abre ningún fichero.** Copia con `cp` y reporta nombres y rutas. Si esto lo
 ejecuta un agente, ningún valor entra en su contexto ni queda escrito en la
 transcripción de la sesión — y un secreto que ha quedado escrito en una
@@ -63,9 +69,10 @@ cd ~/entornos-<proyecto>
 ./restaurar.sh --hazlo    # los copia
 ```
 
-Busca el proyecto en `~/Proyectos/<proyecto>`; si está en otro sitio, se lo pasas
-como argumento. **No sobreescribe nunca**: si el destino ya existe lo salta y lo
-dice, porque perder un valor que solo estaba ahí es peor que copiar de menos.
+Busca el proyecto en `~/Proyectos/<proyecto>`; si no está, mira un nivel más
+adentro por si la carpeta se reunió apuntando a un repo, y si tampoco, se lo
+pasas como argumento. **No sobreescribe nunca**: si el destino ya existe lo salta
+y lo dice, porque perder un valor que solo estaba ahí es peor que copiar de menos.
 
 Distingue tres finales —`puesto`, `ya existe`, `sin repo clonado`— y el tercero
 es el que hay que mirar: significa que ese repo no está, así que o falta clonarlo
