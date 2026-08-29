@@ -532,6 +532,7 @@ credenciales y nombres. Con dos guardas:
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local` | Operación |
+| `carry-env` | Llevarte a otra máquina lo que los repos no llevan |
 | `skill-creator`, `skill-audit` | El propio framework |
 
 ### El ciclo de desarrollo
