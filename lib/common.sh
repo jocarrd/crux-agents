@@ -334,3 +334,22 @@ remote_desde_git() {
     process.stdout.write(url.slice(0, i) + "{repo}" + url.slice(i + nombre.length));
   ' "$url" "$nombre"
 }
+
+normalize_git_url() {
+  # normalize_git_url <url> — forma canónica «host/owner/repo» para comparar.
+  # git@host:owner/repo.git y https://host/owner/repo.git dan lo mismo, de modo
+  # que declarar ssh y clonar con gh (que deja https) no dispare una falsa
+  # alarma en doctor. Se compara en minúsculas: el owner es case-insensitive.
+  local u="${1%.git}"
+  u="${u#ssh://}"; u="${u#git@}"; u="${u#https://}"; u="${u#http://}"
+  u="${u/:/\/}"
+  printf '%s' "${u,,}"
+}
+
+owner_from_template() {
+  # owner_from_template <plantilla> — el owner de git@host:OWNER/{repo}.git o
+  # https://host/OWNER/{repo}.git. Vacío si no casa el patrón de GitHub, que es
+  # el único proveedor para el que el kernel crea el repo remoto.
+  local tmpl="$1"
+  [[ "$tmpl" =~ github\.com[:/]([^/]+)/ ]] && printf '%s' "${BASH_REMATCH[1]}"
+}

@@ -206,7 +206,7 @@ elif json_has "$CONFIG" 'remote'; then
     declarado="$(remote_url "$CONFIG" "$repo" 2>/dev/null || true)"
     if [[ -z "$declarado" ]]; then
       note "$repo: sin remoto en el contrato — 'crux clone' no sabrá de dónde traerlo"
-    elif [[ "$declarado" != "$real" ]]; then
+    elif [[ "$(normalize_git_url "$declarado")" != "$(normalize_git_url "$real")" ]]; then
       note "$repo: el contrato dice $declarado y el origin es $real"
     fi
   done

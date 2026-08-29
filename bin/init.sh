@@ -88,9 +88,14 @@ echo
 
 mkdir -p "$ROOT"
 if [[ $CREA_REMOTO -eq 1 ]]; then
-  ( cd "$ROOT" && gh repo create "$PROJECT-docs" \
+  # El owner sale de la plantilla del remoto. Sin esto, gh crea siempre bajo la
+  # cuenta autenticada aunque el contrato declare una organización, y el docs
+  # repo nace en el sitio equivocado.
+  OWNER_DOCS="$(owner_from_template "$URL_DOCS")"
+  SLUG_DOCS="${OWNER_DOCS:+$OWNER_DOCS/}$PROJECT-docs"
+  ( cd "$ROOT" && gh repo create "$SLUG_DOCS" \
       "--$VISIBILITY" --description "$DESCRIPTION" --clone >/dev/null )
-  ok "repo creado en el remoto y clonado ($VISIBILITY)"
+  ok "repo creado en el remoto y clonado ($VISIBILITY${OWNER_DOCS:+ · $OWNER_DOCS})"
 
   # El proveedor crea la rama según la preferencia de la cuenta. Se normaliza a
   # la declarada porque el resto del kernel —hooks, worktrees, revisión— la lee

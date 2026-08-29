@@ -26,7 +26,8 @@ los trate como cosas diferentes.
 - **Context**: qué problema o situación lo motiva
 - **Decision**: qué decidimos
 - **Consequences**: cómo cambia el código, la operación o el despliegue
-- **Reversibility**: cómo de caro sería deshacerlo (opcional)
+- **Reversibility**: cómo de caro sería deshacerlo (recomendado siempre: es lo
+  que deja decidir con la cabeza fría si merece la pena probar)
 - **Related**: refs a otros ADRs o issues (opcional)
 ```
 
@@ -68,8 +69,9 @@ Reglas:
   porqué del cambio va en `Consequences` del ADR nuevo, que es quien lo conoce.
 - Las referencias se citan como dice "Cómo citar entre registros": `ADR-014`
   dentro del mismo registro, `decisions/ADR-014` al cruzar.
-- `Reversibility` es opcional pero recomendado: ayuda a estimar el coste de
-  cambiar de opinión más adelante.
+- `Reversibility` se pone siempre que se pueda: es lo que deja estimar el coste
+  de cambiar de opinión más adelante, y sin ese dato la decisión se juzga a
+  ciegas. Solo se omite cuando de verdad no aplica.
 
 ### Decisiones con fecha de caducidad
 
