@@ -90,6 +90,16 @@ Si el proyecto ya está en disco pero todavía no sigue el estándar, ejecuta
 `crux adopt` en su docs repo y después `crux upgrade`, que materializa las
 piezas que falten.
 
+### Cuando algo no sale como esperabas
+
+| Síntoma | Qué pasa y qué hacer |
+| ------- | -------------------- |
+| **El código de un proyecto no se clonó** | Perfil `client-repo`: el código vive en el remoto del cliente y `crux clone` no lo trae. Clónalo tú como hermano del docs repo (`git clone` en `~/Proyectos/<project>/`). |
+| **Un repo está en otra cuenta u organización** | Declara el override en `crux.json` → `remote.repos["<repo>"]` con su URL. Sin eso, `clone` no sabe de dónde traerlo y `doctor` lo avisa. |
+| **`crux init` no sabe dónde subir** | Falta la plantilla del remoto. Pásala con `--remote 'git@github.com:<org>/{repo}.git'`, fíjala en `~/.crux/config` (`CRUX_REMOTE`), o crea solo en local con `--no-remote`. |
+| **Quieres el docs repo en una organización** | Declara la org en la plantilla del remoto (`…:<org>/{repo}.git`): `crux init` crea el repo ahí, no en tu cuenta personal. Necesitas permiso de escritura en la org. |
+| **`bootstrap` no encuentra proyectos** | La lista sale de los repos `*-docs` con `crux.json`. Si falta `gh` o no estás autenticado, no puede descubrirlos: `gh auth login` y repite. |
+
 ### Preferencias
 
 Van en `~/.crux/config`. Son de la máquina y no del proyecto, así que cada uno

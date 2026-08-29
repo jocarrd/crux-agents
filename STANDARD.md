@@ -251,6 +251,26 @@ saas-foo-docs/topics/pricing/         política, descuentos, planes
 
 Así nunca aparece una carpeta suelta en la raíz que parece estándar y no lo es.
 
+### Cuando el proyecto crece: de un repo a varios
+
+Un proyecto suele empezar con un solo repo, y entonces casi toda su
+documentación es de ese repo: va en `repos/<repo>/`, y sus decisiones en
+`repos/<repo>/decisions.md`. Las carpetas transversales se quedan vacías o casi,
+porque todavía no hay nada que cruce repos. Es correcto: no se preparan "por si
+acaso".
+
+Cuando entra el segundo repo, lo transversal deja de ser hipotético y se mueve
+lo que ya vale para varios:
+
+- Un overview del sistema, una convención compartida o un despliegue común sube
+  de `repos/<repo>/` a la carpeta transversal que le toque.
+- Una decisión que ahora afecta a más de un repo pasa de
+  `repos/<repo>/decisions.md` a `decisions/index.md`, marcando la vieja como
+  movida. Las que siguen siendo de un repo se quedan donde están.
+
+Mover cuatro documentos el día que llega el segundo repo es más barato que
+mantener carpetas vacías que sugieren un reparto que aún no existe.
+
 ---
 
 ## Convenciones duras
