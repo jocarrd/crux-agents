@@ -24,7 +24,38 @@ while [[ $# -gt 0 ]]; do
 done
 
 PROYECTO="$(cd "$PROYECTO" && pwd)"
-NOMBRE="$(basename "$PROYECTO")"
+
+# El ancla es la raíz del proyecto, no el repo desde el que se llame. Apuntar
+# esto a un repo deja un paquete inservible de dos maneras a la vez: el mapa
+# guarda rutas relativas al repo, y el paquete dice llamarse como él, así que al
+# restaurar se busca <raíz>/<repo> — que no existe — en vez de <raíz>/<proyecto>.
+# El fallo no se ve al reunirlos: se ve meses después, en la máquina nueva.
+docs_repo() {
+  local probe="$1" d
+  while [[ "$probe" != "/" ]]; do
+    [[ -f "$probe/crux.json" ]] && { echo "$probe"; return 0; }
+    for d in "$probe"/*-docs; do
+      [[ -f "$d/crux.json" ]] && { echo "$d"; return 0; }
+    done
+    probe="$(dirname "$probe")"
+  done
+  return 1
+}
+
+NOMBRE=""
+if DOCS="$(docs_repo "$PROYECTO")"; then
+  RAIZ="$(dirname "$DOCS")"
+  if [[ "$RAIZ" != "$PROYECTO" ]]; then
+    echo "$(basename "$PROYECTO") es un repo de $(basename "$RAIZ"): reúno el proyecto entero"
+    echo "desde $RAIZ, que es lo que la otra máquina sabrá encontrar."
+    echo
+    PROYECTO="$RAIZ"
+  fi
+  # El nombre declarado manda sobre el del directorio: es el que usa
+  # `crux bootstrap` para crear la carpeta en la máquina de destino.
+  NOMBRE="$(sed -n 's/.*"project"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DOCS/crux.json" | head -1)"
+fi
+NOMBRE="${NOMBRE:-$(basename "$PROYECTO")}"
 SALIDA="${SALIDA:-$HOME/entornos-$NOMBRE}"
 
 # Lo que se excluye, y por qué:
@@ -50,8 +81,14 @@ buscar() {
 # raíz y el de un servicio de dentro se pisarían.
 nombre_plano() {
   local rel="${1#$PROYECTO/}"
-  local repo="${rel%%/*}"
   local variante; variante="$(basename "$1")"; variante="${variante#.env}"
+
+  # Un fichero en la raíz del proyecto no tiene repo del que tomar el nombre.
+  # Sin esto se toma `.env` por nombre de repo y sale `.env..env.`, que es justo
+  # lo contrario de para lo que están estos nombres: decir de dónde salió.
+  [[ "$rel" == */* ]] || { echo ".env${variante}"; return; }
+
+  local repo="${rel%%/*}"
   local dir; dir="$(dirname "$rel")"
   local sufijo=""
   local hoja; hoja="$(basename "$dir")"

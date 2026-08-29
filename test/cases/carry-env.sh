@@ -79,3 +79,66 @@ test_carry_env_no_sobreescribe_al_restaurar() {
   assert_file "$destino/web/.env.production" "y sí pone lo que faltaba"
   teardown
 }
+
+# El ancla. Reunir apuntando a un repo dejaba un paquete que se cree un proyecto
+# llamado como el repo, con rutas relativas a él: en la máquina nueva se busca
+# <raíz>/<repo>, que no existe, y no hay forma de restaurarlo sin saber el porqué.
+# El fallo no se ve al reunirlos sino meses después, que es cuando ya no ayuda.
+
+_proyecto_adoptado() {
+  local raiz="$SB/Proyectos/tienda"
+  mkdir -p "$raiz/tienda-docs" "$raiz/tienda-api"
+  echo '{"project": "tienda"}' > "$raiz/tienda-docs/crux.json"
+  echo "X=1" > "$raiz/tienda-api/.env"
+  echo "$raiz"
+}
+
+test_carry_env_ancla_en_la_raiz_aunque_le_apuntes_a_un_repo() {
+  sandbox >/dev/null
+  local raiz; raiz="$(_proyecto_adoptado)"
+
+  bash "$CRUX_HOME/skills/carry-env/scripts/collect.sh" \
+    --project "$raiz/tienda-api" --out "$SB/salida" >/dev/null 2>&1
+
+  # La línea entera: "tienda-api" contiene "tienda", así que un contains pasaría
+  # aunque el paquete se creyera el repo.
+  assert_eq "# proyecto: tienda" "$(head -1 "$SB/salida/mapa.txt")" \
+    "el paquete se llama como el proyecto, no como el repo"
+  assert_contains "$(cat "$SB/salida/mapa.txt")" "tienda-api/.env" \
+    "y las rutas son relativas a la raíz del proyecto"
+  teardown
+}
+
+test_carry_env_restaura_un_paquete_reunido_como_repo() {
+  sandbox >/dev/null
+  local raiz; raiz="$(_proyecto_adoptado)"
+  rm -f "$raiz/tienda-api/.env"
+
+  # Un paquete como los que dejaba la versión anterior: nombrado como el repo.
+  mkdir -p "$SB/viejo"
+  printf '# proyecto: tienda-api\n.env|.env\n' > "$SB/viejo/mapa.txt"
+  echo "X=1" > "$SB/viejo/.env"
+  cp "$CRUX_HOME/skills/carry-env/scripts/restaurar.sh" "$SB/viejo/"
+
+  CRUX_PROJECTS_DIR="$SB/Proyectos" bash "$SB/viejo/restaurar.sh" --hazlo >/dev/null 2>&1
+
+  assert_file "$raiz/tienda-api/.env" \
+    "lo encuentra un nivel más adentro en vez de rendirse"
+  teardown
+}
+
+test_carry_env_nombra_los_de_la_raiz_sin_inventarse_un_repo() {
+  sandbox >/dev/null
+  mkdir -p "$SB/suelto"
+  echo "X=1" > "$SB/suelto/.env"
+  echo "X=1" > "$SB/suelto/.env.local"
+
+  bash "$CRUX_HOME/skills/carry-env/scripts/collect.sh" \
+    --project "$SB/suelto" --out "$SB/salida" >/dev/null 2>&1
+
+  # Antes salía `.env..env.`: tomaba `.env` por nombre de repo. Un nombre que no
+  # dice de dónde vino es exactamente lo que esta skill existe para evitar.
+  assert_file "$SB/salida/.env" "el de la raíz se llama como es"
+  assert_file "$SB/salida/.env.local" "y su variante también"
+  teardown
+}
