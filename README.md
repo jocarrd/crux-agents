@@ -71,6 +71,21 @@ grep CRUX_MODE ~/.crux/config    # en cuál estás
 crux clone <project>     # docs repo + repos de código + punteros
 ```
 
+### 5. Empezar en una máquina donde no hay nada
+
+```bash
+crux bootstrap           # verifica la máquina, descubre los proyectos y los trae
+crux bootstrap --dry-run # qué traería, sin tocar el disco
+```
+
+La lista de proyectos sale del remoto —los repos `*-docs` que llevan contrato— y
+no de un inventario en un fichero, que se desactualiza en cuanto creas un
+proyecto y se consulta justamente el día en que no te acuerdas de cuáles tenías.
+
+No mueve credenciales: las claves SSH, los tokens y los secretos no se copian de
+una máquina a otra por una herramienta. Al terminar dice qué necesita cada
+proyecto y en qué documento está.
+
 Si el proyecto ya está en disco pero todavía no sigue el estándar, ejecuta
 `crux adopt` en su docs repo y después `crux upgrade`, que materializa las
 piezas que falten.
@@ -143,6 +158,7 @@ instala `crux hooks install`:
 | ------- | -------- |
 | `crux init <project>` | Crea `~/Proyectos/<project>/<project>-docs` desde las plantillas |
 | `crux clone <project>` | Trae un proyecto entero a una máquina nueva |
+| `crux bootstrap` | Deja una máquina nueva lista: verifica, descubre todos los proyectos y los trae |
 | `crux adopt` | Registra un docs repo que ya existe bajo el estándar |
 | `crux add-repo <repo>` | Registra un repo nuevo en un proyecto adoptado |
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |

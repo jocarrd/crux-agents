@@ -195,6 +195,18 @@ JSON
   assert_file "$CRUX_PROJECTS_DIR/setup-ran.txt" "el hook de setup se ejecuta"
 }
 
+# El doctor de máquina mira los mismos directorios que el resto del kernel, y
+# como el resto los deja redirigir. Apuntarlos al home falso dice qué se está
+# probando; forzar solo HOME dependía de que ningún override estuviera puesto.
+_machine_en() {
+  local home="$1"
+  HOME="$home" \
+  CRUX_CONFIG="$home/.crux/config" \
+  CLAUDE_SKILLS_DIR="$home/.claude/skills" \
+  CLAUDE_SETTINGS="$home/.claude/settings.json" \
+    bash "$CRUX_HOME/bin/machine.sh"
+}
+
 test_machine_detecta_un_hook_roto() {
   sandbox >/dev/null
   local fakehome="$SB/home"
@@ -205,11 +217,11 @@ test_machine_detecta_un_hook_roto() {
 {"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"/ruta/que/no/existe.sh"}]}]}}
 JSON
 
-  local out; out="$(HOME="$fakehome" bash "$CRUX_HOME/bin/machine.sh" 2>&1)"
+  local out; out="$(_machine_en "$fakehome" 2>&1)"
   assert_contains "$out" "apuntan a ficheros que no existen" "detecta el hook roto"
 
   assert_exit 1 "un hook roto es error: parece vigilado y no lo está" \
-    env HOME="$fakehome" bash "$CRUX_HOME/bin/machine.sh"
+    _machine_en "$fakehome"
 }
 
 test_machine_detecta_enlaces_de_skill_rotos() {
@@ -219,7 +231,7 @@ test_machine_detecta_enlaces_de_skill_rotos() {
   echo "CRUX_HOME=\"$CRUX_HOME\"" > "$fakehome/.crux/config"
   ln -s "$SB/skill-que-se-borro" "$fakehome/.claude/skills/fantasma"
 
-  local out; out="$(HOME="$fakehome" bash "$CRUX_HOME/bin/machine.sh" 2>&1)"
+  local out; out="$(_machine_en "$fakehome" 2>&1)"
   assert_contains "$out" "enlaces de skill rotos" "detecta el enlace muerto"
 }
 

@@ -38,9 +38,10 @@ DOCS="$ROOT/$PROJECT-docs"
 # diga: o la pasa el usuario, o se hereda del valor por defecto de la máquina.
 plantilla_inicial() {
   [[ -n "$FROM" ]] && { echo "$FROM"; return; }
-  if [[ -f "$HOME/.crux/config" ]]; then
+  local cfg="${CRUX_CONFIG:-$HOME/.crux/config}"
+  if [[ -f "$cfg" ]]; then
     local defecto
-    defecto="$(grep -E '^CRUX_REMOTE=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+    defecto="$(grep -E '^CRUX_REMOTE=' "$cfg" | cut -d= -f2- | tr -d '"')"
     [[ -n "$defecto" ]] && { echo "$defecto"; return; }
   fi
   echo ""

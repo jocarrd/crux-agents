@@ -561,6 +561,7 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | ------- | ----- | -------- |
 | `crux init <project>` | `/crux-init` | Crea el docs repo desde las plantillas |
 | `crux clone <project>` | — | Trae un proyecto entero a una máquina nueva |
+| `crux bootstrap` | — | Deja una máquina nueva lista: verifica, descubre los proyectos y los trae |
 | `crux adopt` | — | Registra un docs repo que ya existe |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
 | `crux review` | `/review-pr` | Reúne el material de la revisión de una propuesta |

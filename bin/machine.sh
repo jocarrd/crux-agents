@@ -42,11 +42,13 @@ necesario bash "los comandos del kernel son bash"
 # --- El propio kernel --------------------------------------------------------
 
 echo
-[[ -f "$HOME/.crux/config" ]] && ok "config de máquina en \$HOME/.crux/config" \
-  || fail "falta \$HOME/.crux/config — ejecuta install.sh"
+CONFIG_MAQUINA="${CRUX_CONFIG:-$HOME/.crux/config}"
+[[ -f "$CONFIG_MAQUINA" ]] && ok "config de máquina en $CONFIG_MAQUINA" \
+  || fail "falta $CONFIG_MAQUINA — ejecuta install.sh"
 tiene crux && ok "comando crux en el PATH" || note "crux no está en el PATH — añade ~/.local/bin"
 
-skills_enlazadas="$(ls "$HOME/.claude/skills" 2>/dev/null | wc -l)"
+SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+skills_enlazadas="$(ls "$SKILLS_DIR" 2>/dev/null | wc -l)"
 skills_kernel="$(ls "$CRUX_HOME/skills" 2>/dev/null | wc -l)"
 if [[ "$skills_enlazadas" -eq 0 ]]; then
   fail "ninguna skill materializada — ejecuta install.sh"
@@ -54,12 +56,13 @@ else
   ok "$skills_enlazadas skills disponibles ($skills_kernel en el kernel)"
 fi
 
-rotos="$(find "$HOME/.claude/skills" -maxdepth 1 -xtype l 2>/dev/null | wc -l)"
+rotos="$(find "$SKILLS_DIR" -maxdepth 1 -xtype l 2>/dev/null | wc -l)"
 [[ "$rotos" -gt 0 ]] && fail "$rotos enlaces de skill rotos — ejecuta install.sh"
 
 # Un hook que apunta a un fichero inexistente no falla: no hace nada, y eso es
 # peor, porque el sistema parece vigilado y no lo está.
-if [[ -f "$HOME/.claude/settings.json" ]]; then
+AJUSTES="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+if [[ -f "$AJUSTES" ]]; then
   hooks_rotos="$(node -e '
     const fs = require("fs");
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -71,7 +74,7 @@ if [[ -f "$HOME/.claude/settings.json" ]]; then
           if (p && !fs.existsSync(p)) n++;
         }
     process.stdout.write(String(n));
-  ' "$HOME/.claude/settings.json" 2>/dev/null || echo 0)"
+  ' "$AJUSTES" 2>/dev/null || echo 0)"
   [[ "$hooks_rotos" -gt 0 ]] && fail "$hooks_rotos hooks apuntan a ficheros que no existen — 'crux hooks status'"
 fi
 
