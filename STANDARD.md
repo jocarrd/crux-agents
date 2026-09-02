@@ -429,6 +429,47 @@ doc (rename interno, test, refactor invisible), no se toca nada.
 La proximidad física entre código y doc ya no la da el filesystem: la da esta
 disciplina.
 
+#### Lo que se pierde no suele ser un fichero
+
+La regla de arriba solo cubre lo que deja rastro en el diff, y ese no es el
+caso que hace daño. El caso que hace daño es una sesión que **mide algo,
+descubre un riesgo o resuelve una pregunta abierta**, commitea el código
+limpio, y se cierra sin que nada de eso llegue al docs repo. No hay fichero que
+delate la pérdida, así que ninguna comprobación basada en el diff la ve.
+
+Antes de cerrar una sesión hay que **responder explícitamente** qué se queda:
+
+| Lo que pasó en la sesión | Dónde vive |
+| ------------------------ | ---------- |
+| Decisión con alternativas descartadas | `decisions/` (ADR) |
+| Algo medido que costaría repetir | `repos/<repo>/` u `operations/` |
+| Gotcha de infraestructura o despliegue | `operations/` |
+| Riesgo nuevo | `operations/open-risks.md` |
+| Pregunta abierta que se ha resuelto | donde estaba la pregunta |
+| Estado de un repo que ha cambiado | `repos/<repo>/notes.md` |
+
+**"No hay nada que promocionar" es una respuesta válida**, pero tiene que ser
+una respuesta. La diferencia entre decidir que no hace falta y no acordarse es
+justo lo que este apartado existe para eliminar.
+
+#### Cómo se sostiene
+
+No con buena voluntad. Con tres piezas, en orden de dureza:
+
+1. **La puerta de cierre** (`adapters/<agente>/hooks/doc-sync.sh`) — al terminar
+   la sesión, si el proyecto se ha movido, **bloquea el cierre una vez** y pide
+   la respuesta. Bloquea como mucho una vez por sesión: un hook que bloquea
+   siempre se acaba desinstalando, y entonces no vigila nada.
+2. **`crux doctor`** — mide la deriva entre el último commit de cada repo de
+   código y el último de documentación. Es la parte auditable: permite ver a
+   posteriori si la puerta se estuvo saltando.
+3. **`/promote-to-docs` y `/end-session`** — el procedimiento para ejecutarlo.
+
+La medida de doctor no dice **qué** falta documentar; eso no se sabe desde git.
+Dice que el código lleva moviéndose sin que la documentación se mueva, que es
+la única señal objetiva disponible. El juicio lo sigue poniendo quien cierra:
+la puerta solo garantiza que se le pregunte.
+
 ### 8. Commits y propuestas de cambio
 
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`…)
@@ -551,7 +592,7 @@ credenciales y nombres. Con dos guardas:
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
-| `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local` | Operación |
+| `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local`, `drive-browser` | Operación |
 | `carry-env` | Llevarte a otra máquina lo que los repos no llevan |
 | `skill-creator`, `skill-audit` | El propio framework |
 

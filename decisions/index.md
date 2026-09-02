@@ -138,3 +138,42 @@
   - Sigue sin medir adherencia al procedimiento: un agente puede ejecutar el
     script y saltarse la mitad de los pasos. Eso no lo ve ninguna métrica local.
 - **Reversibility**: alta. Es una función en `bin/usage.mjs`.
+
+---
+
+### ADR-007: La promoción a documentación se sostiene con una puerta que bloquea, no con un aviso
+
+- **Date**: 2026-09-02
+- **Status**: Accepted
+- **Context**: `doc-sync.sh` llevaba desde el principio vigilando la disciplina
+  de §7, y el 2026-09-02 se comprobó que no vigilaba nada en el caso que
+  importa. Una sesión real sobre un proyecto de cliente midió una auditoría de
+  accesibilidad entera, descubrió un despliegue fantasma, identificó la
+  librería del hero y resolvió dos preguntas abiertas del docs repo. Al cerrar,
+  nada de eso estaba en git. El hook se ejecutó y salió con 0 **dos veces**,
+  reproducido después: desde el repo de código salía en la comprobación del
+  árbol limpio —todo estaba commiteado— y desde el docs repo salía porque
+  buscaba `repos/<nombre-del-docs-repo>`, que no existe. Las dos salidas eran
+  correctas según su propio diseño; el diseño era el fallo. Vigilaba **ficheros
+  tocados que la doc menciona por nombre**, y lo que se pierde no es un fichero:
+  es lo que se midió, se decidió o se descubrió y nunca fue un fichero.
+- **Decision**: la disciplina pasa a sostenerse en tres piezas de dureza
+  decreciente. `doc-sync.sh` se convierte en una **puerta que bloquea el cierre
+  con código 2** cuando el proyecto se ha movido, y exige responder qué se
+  queda; bloquea **una sola vez por sesión**, con marca en `~/.crux/state/` y
+  respetando `stop_hook_active`. `crux doctor` gana una comprobación de deriva
+  (`lib/check-doc-drift.mjs`) que compara el último commit de cada repo de
+  código con el último de documentación. Y §7 del estándar pasa a decir
+  explícitamente que "no hay nada que promocionar" es una respuesta válida pero
+  **tiene que ser una respuesta**.
+- **Consequences**: cerrar sesión en un proyecto activo cuesta un turno más.
+  Es el precio, y es deliberado: el aviso silencioso ya se probó y falló. Lo que
+  **no** resuelve: nadie puede medir desde git si lo promocionado es suficiente
+  —se puede responder "nada" y cerrar—, así que la puerta garantiza que se
+  pregunte, no que se acierte. La comprobación de doctor tampoco distingue un
+  refactor invisible de un hallazgo sin documentar; por eso es aviso y no error.
+  Efecto lateral útil: la medida de deriva destapó que `crux init` deja un
+  fichero sin commitear al crear un proyecto.
+- **Reversibility**: alta. Quitar el `exit 2` devuelve el comportamiento de
+  aviso; la comprobación de doctor es un bloque numerado más.
+- **Related**: `STANDARD.md` §7, `ADR-005`

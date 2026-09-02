@@ -31,7 +31,7 @@ claude mcp list        # ¿aparece chrome-devtools / playwright / browser?
 ```
 
 Si no aparece **y quieres que sea fácil de aquí en adelante**, instala uno (se
-carga al **reiniciar** Claude Code, no en la sesión actual):
+carga al **reiniciar** el agente, no en la sesión actual):
 
 ```bash
 # Conecta a un Chrome por su endpoint de depuración (reusa sesión):
@@ -89,7 +89,7 @@ Para **ahora mismo**, sin reiniciar, sigue con CDP a mano (el resto de la skill)
 
 ## Gotchas (lo que cuesta tiempo)
 
-- **No hay MCP de navegador en Claude Code de terminal por defecto.** Solo
+- **El agente de terminal no suele traer MCP de navegador por defecto.** Solo
   aparecen los de claude.ai (Gmail/Drive/…). La extensión de Claude para Chrome
   **no** es invocable desde aquí. Confírmalo con `claude mcp list` antes de
   teorizar por qué "no puedes navegar".

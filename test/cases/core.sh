@@ -59,6 +59,38 @@ test_doctor_detecta_repo_declarado_sin_carpeta_de_doc() {
   assert_exit 1 "sale con error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
+# La parte auditable de §7: si el código se movió después que la documentación,
+# doctor lo dice. Es lo que permite ver a posteriori si la puerta se saltó.
+test_doctor_mide_la_deriva_entre_codigo_y_documentacion() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project deriva --repos "api")"
+  local repo; repo="$(dirname "$docs")/api"
+  mkdir -p "$repo"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  printf 'x\n' > "$repo/a.txt"
+  git -C "$repo" add -A
+  git -C "$repo" commit -qm "posterior a la doc"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "deriva código ↔ doc" "avisa de la deriva"
+  assert_contains "$out" "api" "y dice en qué repo"
+  assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# El negativo: sin repos de código que se hayan movido, no inventa deriva.
+test_doctor_no_inventa_deriva_cuando_no_la_hay() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project sindeeriva)"
+  git -C "$docs" add -A
+  git -C "$docs" commit -qm "documentación al día" 2>/dev/null || true
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "documentación al día con el código" "lo dice en positivo"
+  assert_not_contains "$out" "deriva código ↔ doc" "y no levanta aviso"
+}
+
 test_doctor_detecta_carpeta_no_declarada() {
   sandbox >/dev/null
   local docs; docs="$(new_project epsilon --repos "api")"
@@ -727,14 +759,75 @@ test_el_hook_de_deriva_funciona_fuera_de_la_ruta_habitual() {
   printf 'export const x = 1\n' > "$repo/src/util.ts"
   git -C "$repo" add -A
   git -C "$repo" commit -qm init
+  printf '{"crux":"0.1.0","project":"proj","profile":"multi-repo","repos":["api"],"sections":[]}\n' \
+    > "$raiz/proj/proj-docs/crux.json"
   # La documentación menciona el fichero, y el fichero se modifica sin commitear.
   printf 'El helper vive en `src/util.ts`.\n' > "$raiz/proj/proj-docs/repos/api/README.md"
   printf 'export const x = 2\n' > "$repo/src/util.ts"
 
   local out
-  out="$(cd "$repo" && CRUX_PROJECTS_DIR="$raiz" bash "$CRUX_HOME/adapters/claude/hooks/doc-sync.sh" 2>&1)"
-  assert_contains "$out" "sync discipline" "avisa aunque la raíz no sea la habitual"
+  out="$(cd "$repo" && echo '{"session_id":"raro"}' | env HOME="$SB/hogar" CRUX_PROJECTS_DIR="$raiz" \
+    bash "$CRUX_HOME/adapters/claude/hooks/doc-sync.sh" 2>&1)"
+  assert_contains "$out" "PUERTA DE DOCUMENTACIÓN" "avisa aunque la raíz no sea la habitual"
   assert_contains "$out" "src/util.ts" "y dice qué fichero lo provoca"
+}
+
+# La puerta sirve si para el cierre. Un aviso que se imprime y deja cerrar es
+# lo que ya había, y es lo que falló.
+test_la_puerta_de_documentacion_bloquea_el_cierre_una_vez() {
+  sandbox >/dev/null
+  local raiz="$SB/workspace"
+  local repo="$raiz/proj/api"
+  mkdir -p "$repo" "$raiz/proj/proj-docs/repos/api"
+  printf '{"crux":"0.1.0","project":"proj","profile":"multi-repo","repos":["api"],"sections":[]}\n' \
+    > "$raiz/proj/proj-docs/crux.json"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  printf 'x\n' > "$repo/a.txt"
+  git -C "$repo" add -A
+  git -C "$repo" commit -qm init
+  printf 'y\n' > "$repo/a.txt"
+
+  local hook="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
+
+  assert_exit 2 "bloquea el cierre cuando la sesión movió cosas" \
+    bash -c "cd '$repo' && echo '{\"session_id\":\"s1\"}' | env HOME='$SB/hogar' CRUX_PROJECTS_DIR='$raiz' bash '$hook' >/dev/null 2>&1"
+
+  # Segunda pasada de la misma sesión: ya se preguntó, deja cerrar.
+  assert_exit 0 "no vuelve a bloquear en la misma sesión" \
+    bash -c "cd '$repo' && echo '{\"session_id\":\"s1\"}' | env HOME='$SB/hogar' CRUX_PROJECTS_DIR='$raiz' bash '$hook' >/dev/null 2>&1"
+
+  # Y nunca bloquea el turno que ya viene de un Stop bloqueado: eso es un bucle.
+  assert_exit 0 "no se encadena consigo mismo" \
+    bash -c "cd '$repo' && echo '{\"session_id\":\"s2\",\"stop_hook_active\":true}' | env HOME='$SB/hogar2' CRUX_PROJECTS_DIR='$raiz' bash '$hook' >/dev/null 2>&1"
+}
+
+# Y el negativo: en un proyecto donde no se ha movido nada, callar. Preguntar
+# en sesiones vacías es la forma más rápida de que alguien lo desinstale.
+test_la_puerta_de_documentacion_calla_si_no_se_movio_nada() {
+  sandbox >/dev/null
+  local raiz="$SB/workspace"
+  local repo="$raiz/proj/api"
+  mkdir -p "$repo" "$raiz/proj/proj-docs/repos/api"
+  printf '{"crux":"0.1.0","project":"proj","profile":"multi-repo","repos":["api"],"sections":[]}\n' \
+    > "$raiz/proj/proj-docs/crux.json"
+
+  local viejo="2020-01-01T00:00:00"
+  local d
+  for d in "$repo" "$raiz/proj/proj-docs"; do
+    git -C "$d" init -q
+    git -C "$d" config user.email t@t
+    git -C "$d" config user.name t
+    printf 'x\n' > "$d/a.txt"
+    git -C "$d" add -A
+    env GIT_AUTHOR_DATE="$viejo" GIT_COMMITTER_DATE="$viejo" git -C "$d" commit -qm init
+  done
+
+  local out
+  out="$(cd "$repo" && echo '{"session_id":"quieta"}' | env HOME="$SB/hogar" CRUX_PROJECTS_DIR="$raiz" \
+    bash "$CRUX_HOME/adapters/claude/hooks/doc-sync.sh" 2>&1)"
+  assert_eq "" "$out" "en un proyecto quieto no dice nada"
 }
 
 test_las_herramientas_de_inventario_respetan_la_raiz() {

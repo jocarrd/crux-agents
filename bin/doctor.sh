@@ -366,6 +366,26 @@ while IFS= read -r doc; do
 done < <(find "$DOCS" -name "*.md" -not -path "*/.git/*" -not -path "*/.claude/*" 2>/dev/null | sort)
 [[ $huerfanos -eq 0 ]] && section_ok "todos los documentos están en un índice"
 
+# --- 13. Deriva entre el código y la documentación ---------------------------
+#
+# No mide si falta documentar algo —eso no se sabe desde git—, sino si el
+# código lleva moviéndose sin que la documentación se haya movido. Es la única
+# parte auditable de la disciplina de §7: el resto lo sostiene la puerta de
+# cierre, y esto es lo que permite ver después si la puerta se está saltando.
+
+section
+deriva_out="/tmp/crux-doctor-deriva.$$"
+if node "$CRUX_HOME/lib/check-doc-drift.mjs" "$DOCS" >"$deriva_out" 2>/dev/null; then
+  while IFS= read -r linea; do
+    [[ -n "$linea" ]] || continue
+    note "deriva código ↔ doc: $linea"
+  done <"$deriva_out"
+  [[ ! -s "$deriva_out" ]] && section_ok "documentación al día con el código"
+else
+  note "no se pudo medir la deriva entre código y documentación"
+fi
+rm -f "$deriva_out"
+
 # --- Resumen -----------------------------------------------------------------
 
 echo
