@@ -979,6 +979,42 @@ test_el_hook_quita_la_firma_de_la_herramienta() {
   assert_contains "$(cat "$f")" "reviewer@example.org" "respeta un co-autor humano"
 }
 
+test_init_andamia_el_bloque_de_la_puerta() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project puerta --repos "app")"
+  # Un proyecto nuevo nacía sin quality, así que `ship gate` no servía hasta que
+  # alguien supiera que el campo existe.
+  assert_contains "$(cat "$docs/crux.json")" '"quality"' "el contrato nuevo trae el bloque de la puerta"
+  assert_contains "$(cat "$docs/crux.json")" '"gate"' "con el hueco donde declarar los comandos"
+}
+
+test_la_maquina_detecta_que_no_hay_hooks() {
+  sandbox >/dev/null
+  local vacio="$SB/settings-vacios.json"; echo '{}' > "$vacio"
+  # Un hook roto se veía; ninguno, no. Y ese es el caso de una máquina nueva.
+  local out; out="$(CLAUDE_SETTINGS="$vacio" bash "$CRUX_HOME/bin/machine.sh" 2>&1 || true)"
+  assert_contains "$out" "ningún hook de crux enganchado" "avisa de una máquina sin hooks"
+
+  out="$(CLAUDE_SETTINGS="$SB/no-existe.json" bash "$CRUX_HOME/bin/machine.sh" 2>&1 || true)"
+  assert_contains "$out" "no hay ningún hook enganchado" "y de una sin ajustes siquiera"
+}
+
+test_los_repos_de_codigo_tambien_protegen_su_rama_principal() {
+  # Se protegía el kernel y el docs repo, y no los repos de código, que es
+  # donde se hace casi todo el trabajo.
+  local src; src="$(cat "$CRUX_HOME/bin/hooks.sh")"
+  assert_contains "$src" 'instalar_pre_push "$raiz/$repo"' "pre-push también en los repos de código"
+}
+
+test_traer_un_proyecto_deja_sus_hooks_puestos() {
+  # Una máquina nueva se monta con bootstrap o clonando proyecto a proyecto. Por
+  # las dos vías quedaba sin un solo hook, y sin ellos no queda nada automático.
+  assert_contains "$(cat "$CRUX_HOME/bin/bootstrap.sh")" "hooks.sh\" install" \
+    "bootstrap engancha los hooks de cada proyecto que trae"
+  assert_contains "$(cat "$CRUX_HOME/bin/clone.sh")" "hooks.sh\" install" \
+    "y clone los del proyecto que clona"
+}
+
 # Escribía la carpeta fuera del docs repo y doctor daba el contrato por bueno.
 test_add_repo_rechaza_un_nombre_que_escapa_de_la_carpeta() {
   sandbox >/dev/null

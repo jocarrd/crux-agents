@@ -121,6 +121,14 @@ bash "$CRUX_HOME/bin/link.sh" "$DOCS"
 echo
 bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" || true
 
+# Traer un proyecto y no engancharle nada deja una copia que parece lista y no lo
+# está: todo lo que sostiene el estándar es automático. Se hace con los repos ya
+# en disco, porque los hooks por repo los necesitan.
+echo
+( cd "$DOCS" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1 \
+  && ok "hooks enganchados" \
+  || warn "no pude enganchar los hooks — hazlo con 'crux hooks install' desde $PROJECT-docs"
+
 echo
 echo "listo: $ROOT"
 if [[ -f "$DOCS/operations/machine-onboarding.md" ]]; then

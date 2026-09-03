@@ -76,6 +76,31 @@ if [[ -f "$AJUSTES" ]]; then
     process.stdout.write(String(n));
   ' "$AJUSTES" 2>/dev/null || echo 0)"
   [[ "$hooks_rotos" -gt 0 ]] && fail "$hooks_rotos hooks apuntan a ficheros que no existen — 'crux hooks status'"
+
+  # Un hook roto se veía; ninguno, no. Y es el caso de una máquina nueva: se
+  # instala el kernel, se traen los proyectos y no queda enganchado nada. Todo
+  # lo que de verdad sostiene el estándar es automático, así que una máquina sin
+  # hooks parece sana y no lo está.
+  hooks_crux="$(node -e '
+    const fs = require("fs");
+    const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    let n = 0;
+    for (const grupos of Object.values(s.hooks || {}))
+      for (const g of grupos)
+        for (const h of (g.hooks || []))
+          if (/doc-sync|cycle-guard|memory-guard/.test(h.command || "")) n++;
+    process.stdout.write(String(n));
+  ' "$AJUSTES" 2>/dev/null || echo 0)"
+  if [[ "${hooks_crux:-0}" -eq 0 ]]; then
+    # Aviso y no error: `bootstrap` exige que esta comprobación pase, y es
+    # precisamente él quien engancha los hooks al traer los proyectos. Un error
+    # aquí dejaría una máquina nueva sin forma de arrancar.
+    note "ningún hook de crux enganchado — 'crux hooks install'"
+  else
+    ok "$hooks_crux hooks de sesión enganchados"
+  fi
+else
+  note "sin $AJUSTES: no hay ningún hook enganchado — 'crux hooks install'"
 fi
 
 # --- Lo que necesitan las skills --------------------------------------------
