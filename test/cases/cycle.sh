@@ -320,12 +320,16 @@ test_workspace_respeta_el_perfil_de_cliente() {
   printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' \
     > "$root/cli-docs/crux.json"
 
+  # Una rama local no es documentación, y en un repo de cliente desarrollar es el
+  # encargo: se avisa de a dónde va la documentación y se deja trabajar.
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" 2>&1)"
-  assert_contains "$out" "no se escribe en vendor" "se niega a crear un worktree en código ajeno"
-  assert_no_file "$root/vendor-ws-x" "y no lo crea"
+  assert_contains "$out" "documentación de vendor" "avisa de que la documentación no va al repo del cliente"
+  assert_file "$root/vendor-ws-x/f.txt" "y aun así crea el espacio de trabajo"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --force >/dev/null 2>&1
-  assert_file "$root/vendor-ws-x/f.txt" "con --force sí, cuando el cliente lo autoriza"
+  bash "$CRUX_HOME/bin/workspace.sh" rm x >/dev/null 2>&1
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --force 2>&1)"
+  assert_not_contains "$out" "documentación de vendor" "con --force no repite el aviso"
+  assert_file "$root/vendor-ws-x/f.txt" "y crea el espacio igual"
 }
 
 test_finish_no_propone_codigo_sin_revisar() {

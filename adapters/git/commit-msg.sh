@@ -17,6 +17,21 @@ set -u
 
 [[ -f "${1:-}" ]] || exit 0
 
+# --- Firma de la herramienta ------------------------------------------------
+#
+# El estándar lo prohíbe desde siempre, y aun así aparece: el agente lo añade
+# porque su propio entorno se lo pide, así que la regla escrita compite con una
+# instrucción viva y pierde. Se borra en vez de rechazar el commit: bloquear
+# obliga a reescribir un mensaje que por lo demás está bien, y el descuido se
+# repite en el commit siguiente.
+if grep -qiE '^[[:space:]]*(co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(🤖[[:space:]]*)?(generated|generado) with)' "$1"; then
+  tmp="$(mktemp)"
+  grep -viE '^[[:space:]]*(co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(🤖[[:space:]]*)?(generated|generado) with)' "$1" \
+    | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$tmp"
+  mv "$tmp" "$1"
+  echo "crux: quitada la firma de la herramienta del mensaje de commit"
+fi
+
 # Las líneas de comentario son de git, y lo que va en backticks es código: ni
 # una cosa ni la otra dicen en qué idioma está escrito el mensaje.
 msg="$(sed -e '/^#/d' -e 's/`[^`]*`//g' "$1" | tr '[:upper:]' '[:lower:]')"

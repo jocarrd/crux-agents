@@ -139,16 +139,19 @@ cmd_new() {
 
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
 
-  # Un worktree crea una rama en el repo de origen. Con un perfil que prohíbe
-  # escribir fuera del docs repo, eso es exactamente lo que no se puede hacer.
+  # `pointers.write: false` dice que la documentación del estándar no se escribe
+  # en el repo de código; no dice que no se pueda trabajar en él. Una rama local
+  # no es documentación, y en un repo de cliente desarrollar es justo el encargo:
+  # bloquearlo impedía la tarea sin proteger nada. Se avisa de a dónde va la
+  # documentación y se sigue. Lo que sí sale hacia el cliente es `finish`, que
+  # empuja la rama y abre la propuesta: ahí es donde toca mirar.
   if [[ -n "$docs" && -f "$docs/crux.json" ]]; then
     local perfil escribe
     perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
     escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo "true")"
     if [[ "$escribe" != "true" && $FORZAR -eq 0 ]]; then
-      err "perfil $perfil: no se escribe en $repo_name, y un worktree le crea una rama"
-      info "si el cliente lo autoriza, repite con --force"
-      exit 1
+      warn "perfil $perfil: la rama y el worktree son locales y tuyos, pero la"
+      warn "documentación de $repo_name va a $(basename "$docs"), no al repo del cliente"
     fi
   fi
 

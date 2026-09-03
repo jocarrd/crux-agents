@@ -156,5 +156,10 @@ dos veces no vale, aunque el código sea correcto.
   `Co-Authored-By` y sin emojis. **Ni el commit ni la descripción de una
   propuesta de cambio llevan la firma de la herramienta**: nada de
   `Co-Authored-By` ni de una línea de "generado con" al pie.
+  El hook `commit-msg` la borra sola, porque el agente la añade por instrucción
+  de su propio entorno y la regla escrita perdía esa pelea.
+- **La descripción de una propuesta dice qué cambia, qué se añade y por qué**,
+  más lo comprobado y lo pendiente. En un repo de cliente no nombra nuestro
+  tooling ni nuestros procesos internos. Ver `STANDARD.md` §8.
 - **Sin comentarios que narren lo que el código ya dice.** Solo el porqué que
   no se deduce leyendo.
