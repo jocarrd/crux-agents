@@ -954,6 +954,31 @@ test_el_hook_rechaza_un_mensaje_de_commit_en_espanol() {
   assert_contains "$out" "pistas:" "y enseña por qué lo ha rechazado"
 }
 
+test_el_hook_quita_la_firma_de_la_herramienta() {
+  sandbox >/dev/null
+  local hook="$CRUX_HOME/adapters/git/commit-msg.sh"
+  local f="$SB/MSG"
+
+  # El agente la añade porque su propio entorno se lo pide: la regla escrita
+  # compite con una instrucción viva y pierde, así que se borra sola.
+  printf 'feat: add the why we measure column\n\nExplains each indicator.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01ABC\n' > "$f"
+  assert_exit 0 "no rechaza el commit por llevar firma" bash "$hook" "$f"
+  assert_not_contains "$(cat "$f")" "Co-Authored-By" "quita el trailer de co-autoría"
+  assert_not_contains "$(cat "$f")" "Claude-Session" "y el enlace de sesión"
+  assert_contains "$(cat "$f")" "Explains each indicator." "sin tocar el cuerpo"
+
+  # La otra forma de la firma: el pie de "generado con" y su emoji.
+  printf 'fix: correct the partner logo\n\n\xf0\x9f\xa4\x96 Generated with [Claude Code](https://claude.com/claude-code)\n' > "$f"
+  bash "$hook" "$f" >/dev/null 2>&1
+  assert_not_contains "$(cat "$f")" "Claude Code" "quita el pie de generado con"
+  assert_contains "$(cat "$f")" "fix: correct the partner logo" "y deja el asunto"
+
+  # Un co-autor humano es información real del repo y no se toca.
+  printf 'feat: add the reviewed copy\n\nCo-Authored-By: A Reviewer <reviewer@example.org>\n' > "$f"
+  bash "$hook" "$f" >/dev/null 2>&1
+  assert_contains "$(cat "$f")" "reviewer@example.org" "respeta un co-autor humano"
+}
+
 # Escribía la carpeta fuera del docs repo y doctor daba el contrato por bueno.
 test_add_repo_rechaza_un_nombre_que_escapa_de_la_carpeta() {
   sandbox >/dev/null

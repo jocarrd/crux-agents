@@ -188,6 +188,8 @@ El docs repo es propio, pero el repo de código pertenece a un cliente.
 - **Distinguir lo medido de lo heredado.** La documentación previa describe la
   intención del momento en que se escribió, no el estado actual: verificar
   antes de citarla.
+- **Las propuestas no enseñan nuestro andamiaje.** Ni el tooling, ni los
+  nombres de rama, ni los procesos internos. Ver §8.
 
 Los perfiles viven en `profiles/<nombre>.json` del kernel y `crux doctor` los
 hace cumplir. Un perfil no es prosa en un README: es una regla verificable.
@@ -486,6 +488,32 @@ del repositorio.
 
 Aplica al cuerpo de la propuesta igual que al commit: se describe el cambio, lo
 que se comprobó y lo que queda, y ahí se acaba.
+
+#### Qué lleva la descripción de una propuesta
+
+**Qué cambia, qué se añade y por qué.** Luego, lo que se comprobó y lo que queda
+pendiente. Ahí se acaba.
+
+No es una bitácora. No cuenta el camino que recorrió quien la escribió, ni las
+vueltas que dio, ni qué herramienta ejecutó cada paso. Quien la revisa necesita
+juzgar el cambio, no reconstruir la sesión.
+
+**Y el listón cambia según de quién sea el repo:**
+
+| | Repo propio | Repo de cliente |
+| --- | --- | --- |
+| Comandos y scripts del propio repo | Se nombran | Se nombran — son suyos |
+| Nuestro tooling: `crux`, sus comandos, sus skills, sus marcas | Se nombra | **No aparece** |
+| Nuestros nombres de rama, espacios de trabajo o procesos internos | Se nombran | **No aparecen** |
+
+En el repo de un cliente, quien lee no conoce cómo trabajamos por dentro ni
+tiene por qué. Nombrar ahí nuestro andamiaje no añade rigor: añade ruido y
+enseña una maquinaria que no es del proyecto. Un script que está en el
+`package.json` del cliente es suyo y se cita con naturalidad; lo nuestro se
+queda fuera.
+
+La distinción no es de tono, es de propiedad: el repo declara su perfil en
+`crux.json`, y `client-repo` es el que la activa.
 
 ---
 

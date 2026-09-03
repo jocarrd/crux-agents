@@ -17,6 +17,7 @@ Esta skill reparte las dos cosas.
 
 ```bash
 crux workspace new <nombre>      # desde el repo, o con --repo <dir>
+crux workspace new <nombre> --branch fix/algo    # elige el nombre de la rama
 crux workspace list
 crux workspace rm <nombre>
 ```
@@ -24,6 +25,12 @@ crux workspace rm <nombre>
 `new` crea el worktree en una rama nueva, reserva el primer slot libre, escribe
 el fichero de entorno con los valores de ese slot y lo registra. `rm` libera
 todo, y **se niega a borrar un espacio con cambios sin commitear**.
+
+**El nombre del espacio es local; el de la rama se publica.** Por defecto la
+rama es `ws/<nombre>`, que en un repo propio está bien. En el de un cliente esa
+rama acaba visible en su repositorio, con nuestra nomenclatura y con el idioma
+que lleve el nombre: ahí se fija con `--branch`. El comando avisa cuando el
+perfil es `client-repo` y no se ha elegido.
 
 ## Configurar el reparto
 
