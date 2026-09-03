@@ -84,7 +84,8 @@ test_doctor_no_inventa_deriva_cuando_no_la_hay() {
   sandbox >/dev/null
   local docs; docs="$(new_project sindeeriva)"
   git -C "$docs" add -A
-  git -C "$docs" commit -qm "documentación al día" 2>/dev/null || true
+  # Sin `|| true`: un commit que no se puede hacer se dice, no se disimula.
+  git -C "$docs" commit -qm "documentación al día" >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
   assert_contains "$out" "documentación al día con el código" "lo dice en positivo"

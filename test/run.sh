@@ -92,6 +92,12 @@ sandbox() {
   # reales: al correr la suite desde un worktree, la máquina se queda con los
   # hooks apuntando a un directorio que se borra al cerrar el espacio.
   export CLAUDE_SETTINGS="$SB/settings.json"
+  # La identidad de git venía de la máquina. En un runner limpio no hay ninguna,
+  # así que los `git commit` de los casos fallaban, y un `|| true` se lo tragaba:
+  # la suite pasaba en local y llevaba días en rojo en CI por un motivo que no
+  # se parecía en nada al mensaje. Un arnés no puede depender del entorno.
+  export GIT_AUTHOR_NAME="crux test" GIT_AUTHOR_EMAIL="test@localhost"
+  export GIT_COMMITTER_NAME="crux test" GIT_COMMITTER_EMAIL="test@localhost"
   export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
   export CODEX_HOME_DIR="$SB/home/.codex"
   # Sin esto, un caso que use workspace y olvide declararlo escribe en el
