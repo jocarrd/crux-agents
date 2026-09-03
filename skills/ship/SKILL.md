@@ -163,6 +163,16 @@ en voz alta. **Es para obedecer a quien decide, no para ahorrarse un paso.**
 
 Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.
 
+## Antes de publicar la propuesta
+
+```bash
+crux ship body <fichero con el cuerpo>
+```
+
+Busca la firma de la herramienta y, si el perfil es `client-repo`, cualquier
+mención de nuestro tooling. Era el único artefacto del flujo que no comprobaba
+nadie, y es el que acaba delante del cliente.
+
 ## Anti-patterns
 
 - **Saltarse la puerta 0 y decidir a ojo.** Acaba siempre en el mismo sitio:

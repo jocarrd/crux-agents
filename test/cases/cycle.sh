@@ -392,6 +392,29 @@ test_hooks_si_impone_las_convenciones_en_repo_propio() {
   assert_exit 1 "rechaza la mayúscula tras el prefijo" bash "$hook" "$f"
 }
 
+test_ship_body_no_deja_publicar_la_firma_ni_nuestro_andamiaje() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/cli"
+  mkdir -p "$root/vendor" "$root/cli-docs"
+  git -C "$root/vendor" init -q
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' \
+    > "$root/cli-docs/crux.json"
+
+  local b="$SB/BODY.md"
+  printf 'Adds the thing and says why.\n' > "$b"
+  assert_exit 0 "deja pasar un cuerpo limpio" \
+    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+
+  printf 'Adds the thing.\n\nGenerated with Claude Code\n' > "$b"
+  assert_exit 1 "para la firma de la herramienta" \
+    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+
+  # En el repo de un cliente, además, no se enseña cómo trabajamos por dentro.
+  printf 'Adds the thing.\n\nChecked by passing crux ship and workspace finish.\n' > "$b"
+  assert_exit 1 "y nuestro tooling en un repo de cliente" \
+    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+}
+
 test_finish_no_propone_codigo_sin_revisar() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"

@@ -91,10 +91,45 @@ cmd_show() {
 
 cmd_clear() { rm -f "$RECIBO"; ok "recibo descartado"; }
 
+# El cuerpo de una propuesta era el único artefacto del flujo sin comprobar, y
+# es el que se publica. Por ahí se coló la firma de la herramienta.
+cmd_body() {
+  local fichero="${1:-}"
+  [[ -f "$fichero" ]] || die "uso: crux ship body <fichero con el cuerpo>"
+
+  local fallos=0
+  reporta() { err "$1"; shift; printf '%s\n' "$@" | sed 's/^/      /'; fallos=$((fallos+1)); }
+
+  local firma
+  firma="$(grep -inE 'co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(generated|generado) with|🤖' "$fichero" || true)"
+  [[ -n "$firma" ]] && reporta "la firma de la herramienta no va en una propuesta" "$firma"
+
+  # En un repo de cliente, además, no se enseña nuestro andamiaje.
+  local docs perfil escribe
+  docs="$(find_docs_repo "$REPO" 2>/dev/null || echo "")"
+  if [[ -n "$docs" && -f "$docs/crux.json" ]]; then
+    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
+    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo true)"
+    if [[ "$escribe" == "false" ]]; then
+      local nuestro
+      nuestro="$(grep -inE '\bcrux\b|\.crux-ship|/ship\b|workspace (new|finish)|crux doctor' "$fichero" || true)"
+      [[ -n "$nuestro" ]] && reporta "perfil $perfil: esto nombra nuestro tooling en el repo de un cliente" "$nuestro"
+    fi
+  fi
+
+  if [[ $fallos -gt 0 ]]; then
+    echo
+    info "el cuerpo dice qué cambia, qué se añade y por qué; ver STANDARD.md §8"
+    exit 1
+  fi
+  ok "el cuerpo de la propuesta no enseña nada que no deba"
+}
+
 case "${1:-}" in
   run)   shift; cmd_run "$@" ;;
   seal)  cmd_seal ;;
   show)  cmd_show ;;
   clear) cmd_clear ;;
+  body)  shift; cmd_body "$@" ;;
   *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
