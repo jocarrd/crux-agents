@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux workspace — espacios de trabajo aislados para trabajar en paralelo.
 #
-#   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--force]
+#   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>] [--force]
 #   crux workspace list
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
@@ -90,13 +90,14 @@ substitute() {
 
 cmd_new() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace new <nombre> [--repo <dir>] [--base <rama>]"
+  [[ -n "$name" ]] || die "uso: crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>]"
 
-  local repo="$PWD" base="" FORZAR=0
+  local repo="$PWD" base="" rama_pedida="" FORZAR=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) repo="$2"; shift 2 ;;
       --base) base="$2"; shift 2 ;;
+      --branch) rama_pedida="$2"; shift 2 ;;
       --force) FORZAR=1; shift ;;
       *) die "opción desconocida: $1" ;;
     esac
@@ -107,7 +108,10 @@ cmd_new() {
   local repo_name; repo_name="$(basename "$repo")"
   local parent; parent="$(dirname "$repo")"
   local path="$parent/${repo_name}-ws-${name}"
-  local branch="ws/$name"
+  # El nombre del espacio es local; el de la rama se publica. En el repo de un
+  # cliente `ws/<lo-que-sea>` enseña nuestra nomenclatura y, si el nombre va en
+  # otro idioma, también eso. Por eso la rama se puede fijar aparte.
+  local branch="${rama_pedida:-ws/$name}"
 
   [[ -e "$path" ]] && die "ya existe $path"
 
@@ -152,6 +156,11 @@ cmd_new() {
     if [[ "$escribe" != "true" && $FORZAR -eq 0 ]]; then
       warn "perfil $perfil: la rama y el worktree son locales y tuyos, pero la"
       warn "documentación de $repo_name va a $(basename "$docs"), no al repo del cliente"
+      # La rama sí acaba publicada en su repositorio al proponer el cambio.
+      if [[ -z "$rama_pedida" ]]; then
+        warn "y la rama '$branch' se verá en su repositorio, con nuestra nomenclatura"
+        info "para elegirla: crux workspace new $name --branch fix/<algo-en-ingles>"
+      fi
     fi
   fi
 

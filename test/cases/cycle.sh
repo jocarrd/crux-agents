@@ -326,6 +326,17 @@ test_workspace_respeta_el_perfil_de_cliente() {
   assert_contains "$out" "documentación de vendor" "avisa de que la documentación no va al repo del cliente"
   assert_file "$root/vendor-ws-x/f.txt" "y aun así crea el espacio de trabajo"
 
+  # La rama sí se publica en su repositorio: se avisa de que lleva nuestra
+  # nomenclatura, y se puede elegir otra.
+  assert_contains "$out" "se verá en su repositorio" "avisa de que la rama la verá el cliente"
+  assert_contains "$out" "--branch" "y dice cómo elegirla"
+
+  bash "$CRUX_HOME/bin/workspace.sh" rm x >/dev/null 2>&1
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --branch fix/a-real-name 2>&1)"
+  assert_eq "fix/a-real-name" "$(git -C "$root/vendor-ws-x" rev-parse --abbrev-ref HEAD)" \
+    "--branch fija el nombre de la rama"
+  assert_not_contains "$out" "se verá en su repositorio" "y entonces no avisa"
+
   bash "$CRUX_HOME/bin/workspace.sh" rm x >/dev/null 2>&1
   out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --force 2>&1)"
   assert_not_contains "$out" "documentación de vendor" "con --force no repite el aviso"
@@ -352,6 +363,33 @@ test_hooks_engancha_el_commit_msg_tambien_en_repo_de_cliente() {
   printf 'feat: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n' > "$f"
   bash "$root/vendor/.git/hooks/commit-msg" "$f" >/dev/null 2>&1
   assert_not_contains "$(cat "$f")" "Co-Authored-By" "y el que engancha quita la firma"
+
+  # Pero solo eso: el idioma y el formato del historial de un cliente son suyos.
+  # Imponerles los nuestros sería el error que el perfil existe para evitar.
+  printf 'Añadido lo que hacia falta para que esto pase de una vez\n' > "$f"
+  assert_exit 0 "y no le impone nuestro idioma ni nuestro formato" \
+    bash "$root/vendor/.git/hooks/commit-msg" "$f"
+}
+
+test_hooks_si_impone_las_convenciones_en_repo_propio() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/propio"
+  mkdir -p "$root/app" "$root/propio-docs"
+  git -C "$root/app" init -q
+  git -C "$root/propio-docs" init -q
+  printf '{"crux":"0.1.0","project":"propio","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/propio-docs/crux.json"
+
+  ( cd "$root/propio-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+  assert_file "$root/app/.git/hooks/commit-msg" "engancha el commit-msg en el repo propio"
+
+  local f="$SB/MSG" hook="$root/app/.git/hooks/commit-msg"
+  printf 'feat: add the thing\n' > "$f"
+  assert_exit 0 "deja pasar un mensaje conforme" bash "$hook" "$f"
+  printf 'Added the thing\n' > "$f"
+  assert_exit 1 "rechaza el asunto sin prefijo conventional" bash "$hook" "$f"
+  printf 'feat: Add the thing\n' > "$f"
+  assert_exit 1 "rechaza la mayúscula tras el prefijo" bash "$hook" "$f"
 }
 
 test_finish_no_propone_codigo_sin_revisar() {

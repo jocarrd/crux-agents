@@ -163,10 +163,16 @@ EOF
 
   # Se copia en vez de invocar al kernel desde el hook: así sigue funcionando
   # aunque `crux` no esté en el PATH de quien commitea.
+  #
+  # El alcance se fija al instalar. En el repo de un cliente solo se quita la
+  # firma de la herramienta: su idioma y su formato de commit son suyos, y
+  # imponerles los nuestros sería el mismo error que el perfil client-repo
+  # existe para evitar.
   instalar_commit_msg() {
-    local repo="$1" hooks
+    local repo="$1" alcance="${2:-full}" hooks
     hooks="$(dir_hooks "$repo")" || return 1
-    cp "$COMMIT_MSG" "$hooks/commit-msg"
+    sed "s|^SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-full}\"|SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-$alcance}\"|" \
+      "$COMMIT_MSG" > "$hooks/commit-msg"
     chmod +x "$hooks/commit-msg"
   }
 
@@ -208,14 +214,20 @@ EOF
     # versionado, no viaja en ningún push y no es "escribir en su repo". Al
     # saltárselos, el único sitio donde la firma de la herramienta no puede
     # aparecer era precisamente el único sin la red que la quita.
-    local raiz repo
+    local raiz repo perfil escribe alcance
+    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo multi-repo)"
+    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo true)"
+    alcance=full
+    [[ "$escribe" == "false" ]] && alcance=signature
     raiz="$(dirname "$docs")"
     while IFS= read -r repo; do
       [[ -n "$repo" ]] || continue
       git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
       # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
       # entero por set -e, y los repos siguientes se quedarían sin enganchar.
-      if instalar_commit_msg "$raiz/$repo"; then ok "commit-msg en $repo"; fi
+      if instalar_commit_msg "$raiz/$repo" "$alcance"; then
+        ok "commit-msg en $repo${alcance:+ ($alcance)}"
+      fi
     done < <(json_get "$docs/crux.json" repos 2>/dev/null)
   else
     info "sin docs repo en el directorio actual: no se instala el pre-commit"
