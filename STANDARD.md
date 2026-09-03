@@ -134,6 +134,27 @@ primera puerta corra solo lo afectado**: ahí únicamente se pregunta si el rojo
 ya venía de antes, y la suite entera es la puerta de regresión. Sin este campo
 la puerta sigue funcionando, pero dice por dónde filtrar en vez del comando.
 
+El mismo bloque declara **qué ejecuta la puerta**, con solapado por repo:
+
+```json
+"quality": {
+  "gate": ["pnpm run typecheck", "pnpm test"],
+  "repos": {
+    "web": { "gate": ["pnpm run typecheck:web", "pnpm run build:web", "pnpm run qa:web"] }
+  }
+}
+```
+
+`crux ship gate` lo lee, ejecuta cada comando y anota su resultado en el recibo.
+Sin él la puerta eran cuatro invocaciones que había que recordar una por una, y
+lo medido dice que lo que se salta es exactamente lo que hay que recordar: de 54
+skills, 39 sin usar en 90 días, y el ciclo se invocó cero veces en 31 sesiones
+hasta que un hook lo trajo solo.
+
+**El kernel no sabe cómo se comprueba un proyecto, y no debe saberlo.** Lo
+declara el contrato, que es lo que hace que esto sea una línea de trabajo y no
+un puñado de scripts atados a un repo concreto.
+
 ### Las convenciones comprobables
 
 ```json

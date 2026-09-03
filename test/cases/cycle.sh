@@ -403,6 +403,35 @@ test_hooks_si_impone_las_convenciones_en_repo_propio() {
   assert_exit 1 "rechaza la mayúscula tras el prefijo" bash "$hook" "$f"
 }
 
+test_ship_gate_lee_las_comprobaciones_del_contrato() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/g"
+  mkdir -p "$root/app" "$root/g-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t; git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm "feat: init"
+
+  # Sin declararlo, la puerta dice cómo declararlo en vez de inventarse nada.
+  printf '{"crux":"0.1.0","project":"g","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/g-docs/crux.json"
+  local out; out="$(cd "$root/app" && bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)"
+  assert_contains "$out" "no declara qué comprobar" "sin contrato, no se inventa las comprobaciones"
+  assert_contains "$out" "quality" "y dice dónde declararlas"
+
+  # Declarado por repo: las ejecuta y las anota con el comando tal cual.
+  printf '{"crux":"0.1.0","project":"g","profile":"multi-repo","repos":["app"],"sections":[],
+    "quality":{"repos":{"app":{"gate":["true","echo hecho"]}}}}\n' > "$root/g-docs/crux.json"
+  ( cd "$root/app" && bash "$CRUX_HOME/bin/ship.sh" gate >/dev/null 2>&1 )
+  assert_contains "$(cat "$root/app/.crux-ship")" "run 0 " "ejecuta y anota el resultado"
+  assert_contains "$(cat "$root/app/.crux-ship")" "echo hecho" "con el comando declarado, no el envoltorio"
+
+  # Una comprobación en rojo no cierra la puerta.
+  printf '{"crux":"0.1.0","project":"g","profile":"multi-repo","repos":["app"],"sections":[],
+    "quality":{"repos":{"app":{"gate":["false"]}}}}\n' > "$root/g-docs/crux.json"
+  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)"
+  assert_contains "$out" "en rojo" "y una en rojo la deja abierta"
+}
+
 test_ship_body_no_deja_publicar_la_firma_ni_nuestro_andamiaje() {
   sandbox >/dev/null
   local root="$CRUX_PROJECTS_DIR/cli"

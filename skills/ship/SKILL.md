@@ -143,11 +143,12 @@ Las comprobaciones de los pasos anteriores no se ejecutan a mano y se anotan
 después: **se ejecutan a través de `crux ship run`, que anota el resultado real**.
 
 ```bash
-crux ship run -- <el comando de tests del proyecto>
-crux ship run -- <el de tipos>
-crux ship run -- <el de build>
+crux ship gate          # ejecuta lo que declara quality.gate del contrato
 crux ship seal          # después del commit
 ```
+
+Si el proyecto aún no lo declara, `gate` dice cómo hacerlo. Para una
+comprobación suelta que no esté en el contrato: `crux ship run -- <comando>`.
 
 `seal` se niega a cerrar si algún comando quedó en rojo, y cierra el recibo
 contra el sha de HEAD. **`crux workspace finish` lo lee y no abre una propuesta
