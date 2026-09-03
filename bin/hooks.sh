@@ -204,23 +204,19 @@ EOF
     ok "pre-commit y commit-msg en $(basename "$docs")"
 
     # Los commits de los repos de código son la mayoría, así que ahí es donde
-    # más falta hace. Pero solo si el perfil deja escribir en ellos: en un repo
-    # de cliente no se toca nada, tampoco sus hooks.
-    local perfil escribe raiz repo
-    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo multi-repo)"
-    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo true)"
-    if [[ "$escribe" != "false" ]]; then
-      raiz="$(dirname "$docs")"
-      while IFS= read -r repo; do
-        [[ -n "$repo" ]] || continue
-        git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
-        # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
-        # entero por set -e, y los repos siguientes se quedarían sin enganchar.
-        if instalar_commit_msg "$raiz/$repo"; then ok "commit-msg en $repo"; fi
-      done < <(json_get "$docs/crux.json" repos 2>/dev/null)
-    else
-      info "perfil $perfil: no se tocan los repos de código, tampoco sus hooks"
-    fi
+    # más falta hace. También en los de cliente: `.git/hooks/` no está
+    # versionado, no viaja en ningún push y no es "escribir en su repo". Al
+    # saltárselos, el único sitio donde la firma de la herramienta no puede
+    # aparecer era precisamente el único sin la red que la quita.
+    local raiz repo
+    raiz="$(dirname "$docs")"
+    while IFS= read -r repo; do
+      [[ -n "$repo" ]] || continue
+      git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+      # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
+      # entero por set -e, y los repos siguientes se quedarían sin enganchar.
+      if instalar_commit_msg "$raiz/$repo"; then ok "commit-msg en $repo"; fi
+    done < <(json_get "$docs/crux.json" repos 2>/dev/null)
   else
     info "sin docs repo en el directorio actual: no se instala el pre-commit"
     info "entra en uno y repite para engancharlo"

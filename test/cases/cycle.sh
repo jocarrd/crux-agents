@@ -332,6 +332,28 @@ test_workspace_respeta_el_perfil_de_cliente() {
   assert_file "$root/vendor-ws-x/f.txt" "y crea el espacio igual"
 }
 
+test_hooks_engancha_el_commit_msg_tambien_en_repo_de_cliente() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/cli"
+  mkdir -p "$root/vendor" "$root/cli-docs"
+  git -C "$root/vendor" init -q
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' \
+    > "$root/cli-docs/crux.json"
+  git -C "$root/cli-docs" init -q
+
+  ( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+
+  # `.git/hooks/` no está versionado y no viaja en ningún push: engancharlo no
+  # es escribir en el repo del cliente. Saltárselo dejaba sin red justo el sitio
+  # donde la firma de la herramienta no puede aparecer.
+  assert_file "$root/vendor/.git/hooks/commit-msg" "engancha el commit-msg en el repo del cliente"
+
+  local f="$SB/MSG"
+  printf 'feat: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n' > "$f"
+  bash "$root/vendor/.git/hooks/commit-msg" "$f" >/dev/null 2>&1
+  assert_not_contains "$(cat "$f")" "Co-Authored-By" "y el que engancha quita la firma"
+}
+
 test_finish_no_propone_codigo_sin_revisar() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
