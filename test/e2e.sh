@@ -115,6 +115,8 @@ paso "proponer el cambio"
 git -C "$REPO" remote add origin "$SB/remotos/api.git" 2>/dev/null
 git init -q --bare -b main "$SB/remotos/api.git" 2>/dev/null \
   || { git init -q --bare "$SB/remotos/api.git"; git -C "$SB/remotos/api.git" symbolic-ref HEAD refs/heads/main; }
+# La puerta ya no se declara: se pasa, y el recibo dice qué se ejecutó.
+( cd "$WS" && crux ship run -- true >/dev/null 2>&1 && crux ship seal >/dev/null 2>&1 )
 salida="$( cd "$WS" && crux workspace finish tarea 2>&1 )"
 cierto '[[ "$salida" != *"sin commitear"* ]]' "la marca de la puerta no bloquea la propuesta"
 cierto 'git -C "$SB/remotos/api.git" show-ref --verify --quiet refs/heads/ws/tarea' "la rama llegó al remoto"
@@ -189,10 +191,11 @@ git_ -C "$VENDOR" add -A && git_ -C "$VENDOR" commit -qm "chore: init"
 crux link "$CDOCS" >/dev/null 2>&1
 cierto '[[ ! -f "$VENDOR/AGENTS.md" && ! -f "$VENDOR/CLAUDE.md" ]]' "link no deja punteros"
 
-paso "y el espacio de trabajo se niega sin autorización"
+paso "y el espacio de trabajo avisa, pero deja trabajar"
 salida="$( cd "$VENDOR" && crux workspace new tarea 2>&1 )"
-cierto '[[ "$salida" == *"--force"* ]]' "avisa de que hace falta autorización"
-cierto '[[ ! -d "$CRUX_PROJECTS_DIR/cliente/vendor-ws-tarea" ]]' "y no crea la rama"
+cierto '[[ "$salida" == *"documentación de vendor"* ]]' "avisa de a dónde va la documentación"
+cierto '[[ "$salida" == *"se verá en su repositorio"* ]]' "y de que la rama la verá el cliente"
+cierto '[[ -d "$CRUX_PROJECTS_DIR/cliente/vendor-ws-tarea" ]]' "y aun así crea el espacio"
 
 paso "doctor detecta lo que falta y lo que sobra"
 rm -rf "$DOCS/repos/worker"
