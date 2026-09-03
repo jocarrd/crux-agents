@@ -228,6 +228,10 @@ EOF
       if instalar_commit_msg "$raiz/$repo" "$alcance"; then
         ok "commit-msg en $repo${alcance:+ ($alcance)}"
       fi
+      # La rama principal se protegía en el kernel y en el docs repo, y no en
+      # los repos de código, que es donde se hace casi todo el trabajo. Como el
+      # commit-msg, es estado local: no toca nada del repo de un cliente.
+      instalar_pre_push "$raiz/$repo" && ok "pre-push en $repo"
     done < <(json_get "$docs/crux.json" repos 2>/dev/null)
   else
     info "sin docs repo en el directorio actual: no se instala el pre-commit"

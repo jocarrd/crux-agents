@@ -176,6 +176,19 @@ if [[ ${#sueltos[@]} -gt 0 ]]; then
   info "si alguno hace falta: git clone, o 'crux adopt' si merece ser un proyecto"
 fi
 
+# Traer los proyectos y no enganchar nada deja una máquina que parece lista y no
+# lo está: todo lo que de verdad sostiene el estándar es automático, y sin los
+# hooks no queda ni uno. Se hace aquí, con los proyectos ya en disco, porque los
+# hooks por repo necesitan que existan.
+echo
+for p in "${traidos[@]}"; do
+  docs="$PARENT/$p/$p-docs"
+  [[ -f "$docs/crux.json" ]] || continue
+  ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1 \
+    && ok "hooks enganchados en $p" \
+    || warn "no pude enganchar los hooks en $p — hazlo con 'crux hooks install' desde su docs repo"
+done
+
 echo
 info "'crux status' para ver cómo quedó todo"
 exit $(( ${#fallidos[@]} > 0 ? 1 : 0 ))

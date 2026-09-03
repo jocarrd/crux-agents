@@ -193,6 +193,10 @@ cat > "$DOCS/crux.json" <<EOF
   "branch": "$BRANCH",
   "repos": [$(json_array "${repos[@]:-}")],
   "sections": [],
+  "quality": {
+    "gate": [],
+    "repos": {}
+  },
   "conventions": {
     "checks": []
   },
