@@ -515,6 +515,22 @@ queda fuera.
 La distinción no es de tono, es de propiedad: el repo declara su perfil en
 `crux.json`, y `client-repo` es el que la activa.
 
+#### La puerta se gana, no se declara
+
+`crux ship run -- <comando>` ejecuta la comprobación y anota su código de salida;
+`crux ship seal` cierra el recibo contra el sha de HEAD. `workspace finish` lo
+lee y **se niega a proponer** si no hay recibo, si no registra ni un comando, si
+alguno está en rojo o si el sha no es el de HEAD.
+
+Antes era un sha suelto que escribía el propio agente después de afirmar que
+había verificado. Eso no prueba que verificara: prueba que escribió un sha.
+
+**El atajo existe y es legítimo cuando lo pide una persona**: `finish
+--sin-puerta`, y lo dice en voz alta. Lo que no puede pasar es que un agente lo
+tome por su cuenta. Esa es la línea en todo el estándar —`--no-verify`,
+`--force`, `--admin`, `--sin-puerta`—: son para obedecer a quien decide, no para
+que el agente se ahorre un paso.
+
 ---
 
 ## Idioma
@@ -658,6 +674,7 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux merge <n>` | — | Mergea una propuesta diciendo antes cuál y de qué repo |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
+| `crux ship` | `/ship` | La puerta de calidad, con recibo de lo ejecutado |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | — | Re-materializa el kernel a la versión actual |
 | `crux release <ver>` | — | Publica una versión del kernel |

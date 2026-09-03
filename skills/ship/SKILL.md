@@ -139,16 +139,27 @@ varios commits.
 
 ## Dejar constancia
 
-Después del commit, anota qué se verificó:
+Las comprobaciones de los pasos anteriores no se ejecutan a mano y se anotan
+después: **se ejecutan a través de `crux ship run`, que anota el resultado real**.
 
 ```bash
-printf '%s\n' "$(git rev-parse HEAD)" > .crux-ship
+crux ship run -- <el comando de tests del proyecto>
+crux ship run -- <el de tipos>
+crux ship run -- <el de build>
+crux ship seal          # después del commit
 ```
 
-No es burocracia: **`crux workspace finish` lo lee para no abrir una propuesta
-de código que no ha pasado la puerta**. Si el commit cambia después, la marca
-deja de coincidir y hay que volver a pasarla, que es exactamente lo que debe
-ocurrir.
+`seal` se niega a cerrar si algún comando quedó en rojo, y cierra el recibo
+contra el sha de HEAD. **`crux workspace finish` lo lee y no abre una propuesta
+sin él**: sin recibo, sin comandos registrados, con alguno fallando o con un sha
+que ya no es el de HEAD, se para.
+
+Antes esto era un `printf` del sha que escribía el propio agente después de
+afirmar que había verificado. Eso no prueba que verificara: prueba que escribió
+un sha. Por eso ya no vale.
+
+Si de verdad hay que saltarse la puerta, existe `finish --sin-puerta`, y lo dice
+en voz alta. **Es para obedecer a quien decide, no para ahorrarse un paso.**
 
 Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.
 
