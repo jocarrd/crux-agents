@@ -16,12 +16,12 @@ SRC="${1:?perfil de origen requerido}"
 WORK="${2:-/tmp/cdp-profile}"
 PORT="${3:-9222}"
 CHROME="${CHROME_BIN:-/opt/google/chrome/chrome}"
-CFG="$(dirname "$(dirname "$SRC")")"   # .../google-chrome
+CFG="$(dirname "$SRC")"   # .../google-chrome (el dir del perfil, no su padre)
 
 fuser -k "${PORT}/tcp" >/dev/null 2>&1; sleep 1
 rm -rf "$WORK"; mkdir -p "$WORK/Default"
 # Local State lleva la clave de cifrado envuelta por el llavero: imprescindible.
-cp "$CFG/Local State" "$WORK/" 2>/dev/null
+cp "$CFG/Local State" "$WORK/" || { echo "FATAL: no se encontró $CFG/Local State; sin él Chrome no descifra las cookies" >&2; exit 1; }
 for f in Cookies Cookies-wal Preferences "Login Data"; do
   [ -e "$SRC/$f" ] && cp "$SRC/$f" "$WORK/Default/$f" 2>/dev/null
 done

@@ -75,8 +75,8 @@ Para **ahora mismo**, sin reiniciar, sigue con CDP a mano (el resto de la skill)
    # URL: https://vercel.com/<equipo>...  -> logueado. Si es /login -> falló el descifrado.
    ```
 
-4. **Pilota**: navega, clica y rellena por JS (más fiable que coordenadas), y
-   captura para ver el estado.
+4. **Pilota**: navega, clica y rellena. En SPA modernas usa `click`, que manda
+   eventos de puntero de verdad; el `element.click()` de JS no basta.
    ```bash
    python3 .../cdp.py evalshot '[...document.querySelectorAll("button,a")].find(e=>e.textContent.trim()==="Create Database")?.click()??"no"' /tmp/x.png 3
    python3 .../cdp.py eval 'location.href'
@@ -88,6 +88,30 @@ Para **ahora mismo**, sin reiniciar, sigue con CDP a mano (el resto de la skill)
    ```
 
 ## Gotchas (lo que cuesta tiempo)
+
+- **Google ya no entra con el perfil copiado, por muy bien que lo copies.** Las
+  cookies viajan y se descifran —se ven `SID`, `HSID`, `__Secure-1PSID`— pero
+  Google las ata al dispositivo de origen y el selector de cuentas sale con
+  "Sesión cerrada". Para servicios de Google, o para un "entrar con Google", hay
+  que **pedirle al usuario que inicie sesión una vez** en la ventana headed que ya
+  tienes abierta; después ya pilotas tú. Otras webs (Malt, Vercel) sí aceptan las
+  cookies copiadas.
+- **`element.click()` de JS no dispara nada en muchas SPA.** Ni él ni
+  `dispatchEvent` con MouseEvent sintético: React ignora eventos no confiables en
+  algunos componentes. Usa la acción `click` de `cdp.py`, que va por
+  `Input.dispatchMouseEvent`. Fue la diferencia entre avanzar y no avanzar en un
+  alta completa.
+- **Una pestaña puede dejar colgado `Runtime.evaluate`** y entonces todo `eval`
+  se queda esperando, aunque CDP siga respondiendo por HTTP. No mates Chrome, que
+  pierdes la sesión: abre pestaña nueva y cierra la vieja.
+  ```bash
+  curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"
+  curl -s "http://127.0.0.1:9222/json/close/<targetId>"
+  ```
+- **Los inputs con autocompletado necesitan tecleo real** para que salgan las
+  sugerencias: pon el valor a "" con el setter nativo, y luego `type`. Con el
+  setter solo, el desplegable no aparece. Si aun así no aparece, prueba Enter:
+  algunos widgets confirman el texto tal cual.
 
 - **El agente de terminal no suele traer MCP de navegador por defecto.** Solo
   aparecen los de claude.ai (Gmail/Drive/…). La extensión de Claude para Chrome
