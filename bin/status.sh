@@ -54,6 +54,33 @@ if [[ -f "$REGISTRY" ]]; then
       console.log(`  ${n.padEnd(14)} ${w.branch.padEnd(24)} slot ${w.slot}${vivo}`);
     }
   ' "$REGISTRY"
+
+  # Una propuesta abierta desde una rama sin recibo es el atajo tomado por la
+  # espalda: legítimo si lo pidió una persona, pero tiene que verse. Sin esto,
+  # rodear la puerta no dejaba rastro en ningún sitio.
+  node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    for (const [n, w] of Object.entries(r.workspaces || {})) {
+      if (!fs.existsSync(w.path)) continue;
+      console.log([n, w.path, w.branch].join("\t"));
+    }
+  ' "$REGISTRY" | while IFS=$'\t' read -r n path rama; do
+    command -v gh >/dev/null || break
+    origen="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
+    [[ -n "$origen" ]] || continue
+    slug="$(echo "$origen" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+    abierta="$(gh pr list --repo "$slug" --head "$rama" --state open --json number \
+      --jq '.[0].number' 2>/dev/null || true)"
+    [[ -n "$abierta" && "$abierta" != "null" ]] || continue
+    recibo="$path/.crux-ship"
+    head="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
+    sellado=""
+    [[ -f "$recibo" ]] && sellado="$(awk '/^sealed /{print $2}' "$recibo" | tail -1)"
+    if [[ "$sellado" != "$head" ]]; then
+      warn "$slug#$abierta ($n) está abierta y su rama no tiene recibo de la puerta"
+    fi
+  done
 else
   echo "  ninguno"
 fi

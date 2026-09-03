@@ -116,6 +116,17 @@ test_workspace_prune_no_adivina_sin_gh() {
     "la usa un worktree: se queda" "y no borra la rama de un espacio vivo"
 }
 
+# Como prune, esto necesita gh y un remoto: se afirma sobre la fuente, que es lo
+# que la suite puede comprobar sin red.
+test_status_canta_una_propuesta_abierta_sin_recibo() {
+  local src; src="$(cat "$CRUX_HOME/bin/status.sh")"
+  assert_contains "$src" "no tiene recibo de la puerta" \
+    "status avisa de una propuesta abierta cuya rama no pasó la puerta"
+  assert_contains "$src" "command -v gh >/dev/null || break" \
+    "y no lo intenta siquiera sin gh"
+  assert_contains "$src" "sealed " "leyendo el sello del recibo, no un sha suelto"
+}
+
 test_workspace_libera_y_reutiliza_el_slot() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
