@@ -253,12 +253,13 @@ cmd_new() {
 
 cmd_finish() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace finish <nombre> [--title \"...\"]"
+  [[ -n "$name" ]] || die "uso: crux workspace finish <nombre> [--title \"...\"] [--sin-puerta]"
 
-  local titulo=""
+  local titulo="" SIN_PUERTA=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --title) titulo="$2"; shift 2 ;;
+      --sin-puerta) SIN_PUERTA=1; shift ;;
       *) die "opción desconocida: $1" ;;
     esac
   done
@@ -298,19 +299,43 @@ cmd_finish() {
   # La puerta de calidad deja constancia del commit que verificó. Sin ella, se
   # abriría una propuesta de código que nadie ha revisado, y la revisión pasaría
   # a depender de que alguien se acuerde.
-  local head verificado
+  # El recibo dice qué se ejecutó y con qué resultado. Un sha suelto solo decía
+  # que alguien lo escribió, que no es lo mismo: la puerta se gana, no se
+  # declara. El atajo existe, pero hay que pedirlo y se ve.
+  local head
   head="$(git -C "$path" rev-parse HEAD)"
-  # La redirección de entrada la resuelve el shell antes de ejecutar tr, así que
-  # su error no lo silencia el 2>/dev/null del comando.
-  verificado=""
-  [[ -f "$path/.crux-ship" ]] && verificado="$(tr -d '[:space:]' < "$path/.crux-ship")"
-  if [[ "$verificado" != "$head" ]]; then
-    err "este commit no ha pasado la puerta de calidad"
-    [[ -n "$verificado" ]] && info "lo último verificado fue ${verificado:0:8}, y HEAD es ${head:0:8}"
-    info "pasa /ship y repite"
-    exit 1
+  if [[ $SIN_PUERTA -eq 1 ]]; then
+    warn "propuesta abierta SIN pasar la puerta de calidad, a petición explícita"
+  else
+    local recibo="$path/.crux-ship" sellado="" comandos=0 fallos=0
+    if [[ -f "$recibo" ]]; then
+      sellado="$(awk '/^sealed /{print $2}' "$recibo" | tail -1)"
+      comandos="$(grep -c '^run ' "$recibo" || true)"
+      fallos="$(grep -c '^run [^0] ' "$recibo" || true)"
+    fi
+    if [[ ! -f "$recibo" ]]; then
+      err "este commit no ha pasado la puerta de calidad"
+      info "pásala: crux ship run -- <comando>, y después crux ship seal"
+      info "si de verdad hace falta saltarla: --sin-puerta"
+      exit 1
+    fi
+    if [[ "${comandos:-0}" -eq 0 ]]; then
+      err "el recibo de la puerta no registra ni un comando ejecutado"
+      info "un sha suelto no prueba que se verificara nada: crux ship run -- <comando>"
+      exit 1
+    fi
+    if [[ "${fallos:-0}" -gt 0 ]]; then
+      err "el recibo registra $fallos comprobaciones en rojo"
+      exit 1
+    fi
+    if [[ "$sellado" != "$head" ]]; then
+      err "este commit no ha pasado la puerta de calidad"
+      [[ -n "$sellado" ]] && info "el recibo es de ${sellado:0:8}, y HEAD es ${head:0:8}"
+      info "vuelve a pasarla y cierra con: crux ship seal"
+      exit 1
+    fi
+    ok "puerta pasada sobre ${head:0:8} con $comandos comprobaciones"
   fi
-  ok "puerta de calidad pasada sobre ${head:0:8}"
 
   git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
   ok "$branch subida ($commits commits)"
