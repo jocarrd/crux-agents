@@ -45,8 +45,10 @@ cmd_run() {
   "$@"; rc=$?
   fin=$(date +%s)
 
-  printf 'run %s %s %s\n' "$rc" "$((fin - inicio))" "$*" >> "$RECIBO"
-  if [[ $rc -eq 0 ]]; then ok "$* — $((fin - inicio))s"; else err "$* — salida $rc"; fi
+  # El recibo anota el comando tal y como se declaró, no el envoltorio.
+  local etiqueta="${ETIQUETA:-$*}"
+  printf 'run %s %s %s\n' "$rc" "$((fin - inicio))" "$etiqueta" >> "$RECIBO"
+  if [[ $rc -eq 0 ]]; then ok "$etiqueta — $((fin - inicio))s"; else err "$etiqueta — salida $rc"; fi
   return $rc
 }
 
@@ -125,8 +127,50 @@ cmd_body() {
   ok "el cuerpo de la propuesta no enseña nada que no deba"
 }
 
+# Las comprobaciones no las sabe el kernel: las declara el proyecto en
+# `quality.gate` de su crux.json, con solapado por repo. Sin esto la puerta eran
+# cuatro invocaciones que había que recordar una por una, y lo medido dice que
+# lo que se salta es justo lo que hay que recordar.
+cmd_gate() {
+  local docs; docs="$(find_docs_repo "$REPO" 2>/dev/null || echo "")"
+  [[ -n "$docs" && -f "$docs/crux.json" ]] \
+    || die "no encuentro el crux.json del proyecto: declara ahí quality.gate"
+
+  local repo_name; repo_name="$(basename "$REPO")"
+  # En un worktree el nombre lleva el sufijo del espacio; el contrato habla del repo.
+  repo_name="${repo_name%%-ws-*}"
+
+  local comandos; comandos="$(node -e '
+    const fs = require("fs");
+    const [file, repo] = process.argv.slice(1);
+    const q = (JSON.parse(fs.readFileSync(file, "utf8")).quality) || {};
+    const r = (q.repos || {})[repo] || {};
+    const g = r.gate || q.gate || [];
+    process.stdout.write((Array.isArray(g) ? g : [g]).join("\n"));
+  ' "$docs/crux.json" "$repo_name" 2>/dev/null)"
+
+  if [[ -z "$comandos" ]]; then
+    err "el contrato no declara qué comprobar en $repo_name"
+    info "decláralo en $docs/crux.json:"
+    info '  "quality": { "gate": ["<comando>", "<comando>"] }'
+    info "o por repo:  \"quality\": { \"repos\": { \"$repo_name\": { \"gate\": [...] } } }"
+    exit 1
+  fi
+
+  cmd_clear >/dev/null
+  local fallos=0
+  while IFS= read -r c; do
+    [[ -n "$c" ]] || continue
+    ETIQUETA="$c" cmd_run -- bash -c "$c" || fallos=$((fallos+1))
+  done <<< "$comandos"
+
+  [[ $fallos -eq 0 ]] || { err "$fallos comprobaciones en rojo: la puerta no se cierra"; exit 1; }
+  info "commitea y cierra con: crux ship seal"
+}
+
 case "${1:-}" in
   run)   shift; cmd_run "$@" ;;
+  gate)  cmd_gate ;;
   seal)  cmd_seal ;;
   show)  cmd_show ;;
   clear) cmd_clear ;;
