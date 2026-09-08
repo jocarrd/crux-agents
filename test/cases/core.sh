@@ -404,7 +404,11 @@ EOF
 
 test_ninguna_skill_del_kernel_nombra_herramientas_de_un_agente() {
   local hits
-  hits="$(grep -rlriE '\b(claude code|codex|cursor)\b' "$CRUX_HOME/skills" 2>/dev/null | wc -l)"
+  # Solo el markdown: la regla es que el PROCEDIMIENTO no se ate a un agente.
+  # Los scripts quedan fuera porque "cursor" es tambien una propiedad CSS, y un
+  # script que lee getComputedStyle().cursor no esta nombrando a ningun editor.
+  hits="$(grep -rliE '\b(claude code|codex|cursor)\b' \
+    --include='*.md' "$CRUX_HOME/skills" 2>/dev/null | wc -l)"
   assert_eq "0" "$hits" "las skills del kernel no se atan a un agente concreto"
 }
 

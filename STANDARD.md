@@ -656,6 +656,7 @@ credenciales y nombres. Con dos guardas:
 | `bug-hunt` | Buscar los fallos que nadie ha reportado |
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
+| `ui-behaviour` | Que los controles hagan algo y se alcancen con el teclado |
 | `promo-video` | Enseñar el producto en movimiento, para redes |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local`, `drive-browser` | Operación |
