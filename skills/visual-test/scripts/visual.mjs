@@ -58,7 +58,198 @@ async function load(page, url) {
   }
 }
 
-if (mode === 'shot') {
+// --- recorrido como el de una persona -------------------------------------
+// Las animaciones de entrada y las islas que hidratan tarde solo se ven si se
+// baja con pausas. Un scroll de golpe mide el estado anterior.
+async function recorrer(page, pasos = 60, salto = 500, espera = 150) {
+  for (let i = 0; i < pasos; i++) {
+    await page.evaluate((y) => window.scrollBy(0, y), salto)
+    await page.waitForTimeout(espera)
+  }
+  await page.waitForTimeout(2500)
+}
+
+function relacionContraste(a, b) {
+  const canal = (c) => {
+    const m = c.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/)
+    if (m) return [+m[1], +m[2], +m[3]]
+    const n = c.match(/[\d.]+/g)
+    return n ? n.slice(0, 3).map((x) => +x / 255) : [0, 0, 0]
+  }
+  const lum = (c) => {
+    const [r, g, bl] = canal(c).map((n) =>
+      n <= 0.03928 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4,
+    )
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+  }
+  const la = lum(a)
+  const lb = lum(b)
+  return +((Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)).toFixed(2)
+}
+
+if (mode === 'invisible') {
+  // Una animación de entrada que no dispara deja el contenido en opacity 0
+  // para siempre. No lo ve el build, ni el typecheck, ni axe.
+  const urls = rest.filter((r) => !r.startsWith('--'))
+  const desktop = rest.includes('--desktop')
+  let malos = 0
+  await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
+    for (const url of urls) {
+      await load(page, url)
+      await recorrer(page)
+      const ocultos = await page.evaluate(() => {
+        const dentroDeCarrusel = (e) => !!e.closest('.swiper, [data-carousel]')
+        return [...document.querySelectorAll('main *')]
+          .filter((e) => {
+            if (dentroDeCarrusel(e)) return false
+            const c = getComputedStyle(e)
+            if (c.visibility === 'hidden' || +c.opacity < 0.95) {
+              const r = e.getBoundingClientRect()
+              return r.width > 24 && r.height > 12 && (e.textContent || '').trim()
+            }
+            return false
+          })
+          .slice(0, 8)
+          .map((e) => `${e.tagName}.${(e.className || '').toString().split(' ')[0]}`)
+      })
+      if (ocultos.length) {
+        malos++
+        console.log(`🔴 ${url} — ${ocultos.length} elementos invisibles`)
+        ocultos.forEach((o) => console.log(`   ${o}`))
+      } else console.log(`✅ ${url} — nada invisible`)
+    }
+  })
+  if (malos) process.exit(1)
+} else if (mode === 'hydration') {
+  // Un fallo de hidratación hace que el framework tire el HTML del servidor y
+  // repinte en cliente. Solo se ve escuchando pageerror mientras se recorre.
+  const urls = rest.filter((r) => !r.startsWith('--'))
+  const desktop = rest.includes('--desktop')
+  let malos = 0
+  await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
+    for (const url of urls) {
+      const errs = []
+      page.on('pageerror', (e) => errs.push(String(e).slice(0, 120)))
+      page.on('console', (m) => {
+        if (m.type() === 'error') errs.push('console: ' + m.text().slice(0, 120))
+      })
+      await load(page, url)
+      await recorrer(page, 45, 500, 120)
+      if (errs.length) {
+        malos++
+        console.log(`🔴 ${url}`)
+        ;[...new Set(errs)].slice(0, 5).forEach((e) => console.log(`   ${e}`))
+      } else console.log(`✅ ${url} — sin errores en consola`)
+      page.removeAllListeners('pageerror')
+      page.removeAllListeners('console')
+    }
+  })
+  if (malos) process.exit(1)
+} else if (mode === 'states') {
+  // axe mide el estado en reposo. Un botón puede pasar parado y fallar al
+  // pasar el ratón o al quedarse activo, y eso no lo ve nadie.
+  const url = rest[0]
+  const desktop = !rest.includes('--mobile')
+  await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
+    await load(page, url)
+    await recorrer(page, 40, 450, 130)
+    const n = await page.$$eval('main button, main a[href]', (e) => e.length)
+    const filas = []
+    for (let i = 0; i < n; i++) {
+      const el = (await page.$$('main button, main a[href]'))[i]
+      if (!el) continue
+      const meta = await page.evaluate((idx) => {
+        const e = [...document.querySelectorAll('main button, main a[href]')][idx]
+        const r = e.getBoundingClientRect()
+        return {
+          txt: (e.textContent || '').trim().slice(0, 28) || e.getAttribute('aria-label') || '(sin texto)',
+          ok: r.width > 0 && r.height > 0 && !e.disabled,
+        }
+      }, i)
+      if (!meta.ok) continue
+      const leer = () =>
+        page.evaluate((idx) => {
+          const e = [...document.querySelectorAll('main button, main a[href]')][idx]
+          const c = getComputedStyle(e)
+          let fondo = c.backgroundColor
+          let nodo = e
+          while (fondo === 'rgba(0, 0, 0, 0)' && nodo.parentElement) {
+            nodo = nodo.parentElement
+            fondo = getComputedStyle(nodo).backgroundColor
+          }
+          return { color: c.color, fondo, cursor: c.cursor }
+        }, i)
+      await el.scrollIntoViewIfNeeded().catch(() => {})
+      await page.mouse.move(2, 2)
+      await page.waitForTimeout(450)
+      const reposo = await leer()
+      await el.hover({ timeout: 2000 }).catch(() => {})
+      await page.waitForTimeout(500)
+      const hover = await leer()
+      filas.push({
+        txt: meta.txt,
+        reposo: relacionContraste(reposo.color, reposo.fondo),
+        hover: relacionContraste(hover.color, hover.fondo),
+        cursor: hover.cursor,
+      })
+    }
+    const malos = filas.filter((f) => f.reposo < 4.5 || f.hover < 4.5)
+    console.log(`${filas.length} controles · ${malos.length} por debajo de 4.5`)
+    malos.forEach((f) =>
+      console.log(`🔴 "${f.txt}" reposo:${f.reposo} hover:${f.hover}`),
+    )
+    if (!malos.length) console.log('✅ todos pasan AA en reposo y en hover')
+    console.log(
+      '\nOjo: los estados que solo existen al pulsar (pestaña activa, chip',
+    )
+    console.log('seleccionado) hay que activarlos y volver a medir a mano.')
+  })
+} else if (mode === 'rhythm') {
+  // El aire entre secciones y el que queda donde cambia la banda de fondo.
+  const url = rest[0]
+  const desktop = !rest.includes('--mobile')
+  await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
+    await load(page, url)
+    await recorrer(page, 30, 600, 100)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.waitForTimeout(700)
+    const filas = await page.evaluate(() => {
+      const secs = [...document.querySelectorAll('main section, main > div')]
+      return secs.map((s, i) => {
+        const c = getComputedStyle(s)
+        const r = s.getBoundingClientRect()
+        const sig = secs[i + 1]
+        const cab = s.querySelector('h1, h2, h3, header')
+        return {
+          que: (s.id || (s.className || '').toString().split(' ')[0] || '?').slice(0, 26),
+          fondo: c.backgroundColor,
+          padT: Math.round(parseFloat(c.paddingTop)),
+          padB: Math.round(parseFloat(c.paddingBottom)),
+          aire: sig
+            ? Math.round(
+                sig.getBoundingClientRect().top - r.bottom +
+                  parseFloat(c.paddingBottom) +
+                  parseFloat(getComputedStyle(sig).paddingTop),
+              )
+            : null,
+          alTitulo: cab ? Math.round(cab.getBoundingClientRect().top - r.top) : null,
+          cambiaFondo: sig ? getComputedStyle(sig).backgroundColor !== c.backgroundColor : false,
+        }
+      })
+    })
+    console.log('sección                     fondo                padT  padB   aire  al titular')
+    filas.forEach((f) =>
+      console.log(
+        `${f.que.padEnd(27)} ${f.fondo.padEnd(20)} ${String(f.padT).padStart(4)} ${String(f.padB).padStart(5)} ${String(f.aire ?? '-').padStart(6)} ${String(f.alTitulo ?? '-').padStart(11)}` +
+          (f.cambiaFondo && f.padB === 0 ? '  ← el fondo cambia y no hay aire' : ''),
+      ),
+    )
+    const pegados = filas.filter((f) => f.alTitulo !== null && f.alTitulo < 24 && f.padT < 24)
+    if (pegados.length)
+      console.log(`\n🔴 ${pegados.length} secciones con el titular pegado al canto`)
+  })
+} else if (mode === 'shot') {
+
   const url = rest[0]
   const out = rest[1] || 'shot.png'
   const desktop = rest.includes('--desktop')
@@ -266,7 +457,7 @@ if (mode === 'shot') {
   })
 } else {
   console.log(
-    'modos: shot | audit | bisect | checks | a11y (ver cabecera del script)',
+    'modos: shot | audit | bisect | checks | a11y | invisible | hydration | states | rhythm (ver cabecera del script)',
   )
   process.exit(1)
 }

@@ -1,6 +1,6 @@
 ---
 name: visual-test
-description: Inspeccionar visualmente páginas y componentes web en viewport móvil (390px) y escritorio (1280px) con Chrome headless. Hace capturas, detecta scroll horizontal y localiza el elemento exacto que desborda, reporta señales objetivas de usabilidad móvil y ejecuta una auditoría de accesibilidad real con axe-core. Usa cuando pulas diseño responsive, te reporten que algo se ve mal en móvil, caces un desbordamiento horizontal, o quieras comparar móvil y escritorio antes de desplegar.
+description: Inspeccionar visualmente páginas y componentes web en viewport móvil (390px) y escritorio (1280px) con Chrome headless. Hace capturas, detecta scroll horizontal y localiza el elemento exacto que desborda, reporta señales objetivas de usabilidad móvil, ejecuta una auditoría de accesibilidad real con axe-core, y caza cuatro cosas que ninguna de las anteriores ve: contenido que una animación de entrada deja invisible para siempre, fallos de hidratación, contraste que solo falla en hover o en estado activo, y el ritmo vertical entre secciones. Usa cuando pulas diseño responsive, te reporten que algo se ve mal en móvil, caces un desbordamiento horizontal, revises animaciones de entrada, o quieras comparar móvil y escritorio antes de desplegar.
 ---
 
 # Visual test
@@ -55,6 +55,19 @@ node visual.mjs checks http://localhost:3000/ruta
 # Auditoría WCAG real con axe-core
 node visual.mjs a11y http://localhost:3000/ruta
 node visual.mjs a11y http://localhost:3000/ruta --desktop
+
+# Contenido que se queda invisible: recorre la página con pausas y busca
+# lo que sigue en opacity 0. Devuelve código 1 si encuentra algo.
+node visual.mjs invisible http://localhost:3000/a http://localhost:3000/b
+
+# Fallos de hidratación: escucha la consola mientras recorre
+node visual.mjs hydration http://localhost:3000/a http://localhost:3000/b
+
+# Contraste de los controles en reposo y en hover
+node visual.mjs states http://localhost:3000/ruta
+
+# Ritmo vertical: aire entre secciones y en el cambio de banda
+node visual.mjs rhythm http://localhost:3000/ruta
 ```
 
 Después, abre las capturas para mirarlas. Ese paso no es opcional: el objetivo
@@ -73,6 +86,39 @@ solo para lectores de pantalla, leyendas pequeñas— y hay que filtrarlos.
 `a11y` inyecta axe-core y agrupa las violaciones por impacto con su selector y
 su motivo. Necesita red. Es mucho más fiable que las heurísticas de `checks`
 para accesibilidad real.
+
+## Las cuatro comprobaciones que nadie más hace
+
+Ni el build, ni el typecheck, ni axe ven ninguna de estas. Las cuatro salieron
+de fallos reales.
+
+**`invisible` — contenido inaccesible para siempre.** Una animación de entrada
+oculta el elemento y lo revela al entrar en pantalla. Si el disparador se
+pierde —porque el contenido carga solo y cambia el alto de la página después de
+calcular las posiciones—, ese elemento se queda en `opacity: 0` para siempre.
+Es el peor fallo posible y no lo ve nadie: el HTML está ahí, el test pasa, y el
+usuario no ve nada.
+
+Dos reglas que salieron de esto: **no ocultes nunca un contenedor entero**
+—si a un item se le escapa el disparador se nota poco, si es una sección es un
+tramo de página inaccesible—, y **excluye lo que viva dentro de un carrusel**,
+porque una diapositiva fuera de pantalla en horizontal no intersecta nunca.
+
+**`hydration` — el HTML del servidor descartado.** Un desajuste entre lo que
+pinta el servidor y lo que pinta el cliente hace que el framework tire el HTML
+y repinte entero. Solo se ve escuchando `pageerror` mientras se recorre.
+
+**`states` — contraste en hover.** axe mide el estado en reposo. Un botón puede
+pasar parado y fallar al pasar el ratón. **Y el estado activo hay que
+provocarlo a mano**: si solo hay una pestaña activa a la vez, axe únicamente ve
+la que viene seleccionada por defecto, y las otras pueden estar fallando sin
+que nada lo diga.
+
+**`rhythm` — el aire entre secciones.** Señala las que tienen el titular pegado
+al canto. El caso típico: una regla que no suma el aire de dos bandas seguidas
+del mismo fondo, aplicada a una página que pinta su banda con una clase propia
+en vez de declararla, y que por tanto pierde el aire justo donde el fondo
+cambia.
 
 ## Cómo leer la auditoría
 
@@ -96,6 +142,16 @@ para accesibilidad real.
 
 ## Gotchas
 
+- **Nada se mide hasta que el componente hidrata.** Con islas o carga diferida,
+  un barrido rápido mide el marcado del servidor: el mismo bloque puede dar
+  4.766 px o 1.463 según eso. Baja en tramos con pausa y espera al selector que
+  solo existe hidratado.
+- **Recorre sin volver arriba.** Al volver al principio, lo del fondo queda por
+  debajo del pliegue y la comprobación de invisibles da un falso positivo.
+- **`node script | head` mata el proceso por SIGPIPE** antes de que escriba su
+  salida, y acabas comparando contra datos viejos. Redirige a fichero.
+- **Un servidor estático no avisa si el puerto ya está ocupado**: puedes estar
+  midiendo otra aplicación. Verifica el contenido servido antes de medir.
 - **Algunos bundlers en modo desarrollo no recompilan de forma fiable los
   cambios del layout raíz.** Tras tocarlo, reinicia el servidor de desarrollo
   antes de volver a auditar, o medirás el estado anterior.
@@ -112,3 +168,4 @@ para accesibilidad real.
 
 - `/device-loop` — la hermana nativa: ver la app real en un dispositivo físico
 - `/render-loop` — iterar sobre una salida renderizada sin referencia
+- `/ui-behaviour` — la otra mitad: que los controles hagan algo útil al pulsarlos
