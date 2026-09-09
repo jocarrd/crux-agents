@@ -8,8 +8,8 @@ description: Escribir el procedimiento de un incidente que se acaba de resolver,
 Un runbook no se escribe para documentar un incidente. Se escribe **para que
 la próxima vez no haya que pensar**.
 
-> **La métrica no es lo completo que sea: es cuánto tarda alguien con prisa en
-> llegar del síntoma al comando.**
+> **Un runbook se mide por lo que tarda alguien con prisa en llegar del síntoma
+> al comando.**
 
 ## Cuándo usar
 
@@ -23,8 +23,8 @@ la próxima vez no haya que pensar**.
 - **El problema tiene arreglo.** Un runbook para algo que se puede eliminar es
   aceptar que va a repetirse. Primero se pregunta si se arregla; el runbook es
   para lo que no depende de ti o no compensa arreglar.
-- **El procedimiento se repite en varios proyectos.** Entonces no es un
-  runbook, es una skill. Tapa los nombres propios: si sigue teniendo sentido,
+- **El procedimiento se repite en varios proyectos.** Entonces lo que tienes es
+  una skill. Tapa los nombres propios: si sigue teniendo sentido,
   hay un patrón.
 - **Ha pasado una vez y no sabes por qué.** Lo que tienes es una anécdota.
   Anótala en las notas del repo y espera a la segunda.

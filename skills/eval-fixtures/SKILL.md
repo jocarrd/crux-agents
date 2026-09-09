@@ -7,8 +7,7 @@ description: Probar funcionalidad construida sobre un modelo de lenguaje, donde 
 
 Un test normal no vale para una salida generada: dos ejecuciones no dan lo
 mismo, y aunque dieran, la respuesta correcta no es única. Pero **la mayoría de
-los fallos reales no son de calidad literaria**: son estructurales, y esos sí
-se pueden atrapar.
+los fallos reales son estructurales**, y esos sí se pueden atrapar.
 
 ## Las tres capas
 
@@ -71,8 +70,8 @@ Empieza por estas. Son objetivas y cubren el daño más caro.
 El valor aparece cuando cambias algo: prompt, modelo, versión, contexto
 recuperado. Sin una línea base, cada cambio es una apuesta.
 
-Guarda el resultado del conjunto como referencia y compara. Lo que interesa no
-es la nota absoluta, sino **qué casos pasaban antes y ahora no**. Un cambio que
+Guarda el resultado del conjunto como referencia y compara. Lo que interesa es
+**qué casos pasaban antes y ahora no**. Un cambio que
 sube la media y rompe tres casos que funcionaban suele ser un mal cambio.
 
 ## Coste

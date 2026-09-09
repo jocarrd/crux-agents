@@ -5,8 +5,8 @@ description: Depurar con disciplina: reproducir antes de tocar nada, medir en ve
 
 # root-cause
 
-El fallo más común al depurar no es técnico: es **proponer el arreglo antes de
-entender el fallo**. Suele funcionar a la primera lo justo para esconder la
+El fallo más común al depurar es **proponer el arreglo antes de entender el
+problema**. Suele funcionar a la primera lo justo para esconder la
 causa real, que reaparece un mes después con otra cara.
 
 ## La regla

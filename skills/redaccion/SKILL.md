@@ -113,9 +113,24 @@ node scripts/redaccion.mjs detalle <fichero>      # enseña cada caso en su lín
 El script cuenta y localiza. Decidir si cada caso sobra te toca a ti. Hay
 textos donde una regla de tres es exactamente lo que pide el contenido.
 
+De los siete, **solo cinco puntúan**. La raya larga y los dos puntos se
+informan aparte, porque una expresión regular no distingue un remate de una
+explicación: «no vale para una salida generada: dos ejecuciones no dan lo
+mismo» es uso correcto, y el script no puede saberlo.
+
 **Umbral orientativo** para un documento de unas 2.000 palabras. Cero
-paralelismos negativos. Menos de tres reglas de tres. Menos de tres rayas
-largas. Ningún titular epigramático. Por encima de eso, se nota.
+paralelismos negativos. Menos de tres reglas de tres. Ningún titular
+epigramático. Por encima de eso, se nota.
+
+## Falsos positivos conocidos
+
+Tres familias que el script ya excluye, y que conviene no volver a meter:
+
+- **«clave»** en castellano técnico suele ser una clave SSH, no el adjetivo.
+  Solo cuenta cuando va de adjetivo: «un factor clave», «es clave para».
+- **«lo que hace falta»** es un giro corriente, y contiene «lo que hace».
+- **Los dos puntos que abren una enumeración** son uso normal. El tic es
+  rematar la frase con una sentencia.
 
 ## Lo que esta skill no arregla
 

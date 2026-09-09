@@ -62,8 +62,8 @@ Los que dan resultado, por orden de rentabilidad:
 
 Muchas rarezas son decisiones. Antes de arreglar, busca la cabecera del fichero,
 el comentario o la documentación que explique por qué es así. Si el
-comportamiento es deliberado pero deja a quien lo usa sin salida, el arreglo no
-es cambiarlo: es **decir cuál es el siguiente paso**.
+comportamiento es deliberado pero deja a quien lo usa sin salida, el arreglo
+está en **decir cuál es el siguiente paso**.
 
 ## 5. Medir antes de proponer
 
@@ -71,7 +71,7 @@ Una mejora que parece obvia hay que **medirla contra los datos reales** antes de
 escribirla. Aplica el cambio propuesto sobre el histórico y mira a cuántos casos
 afecta y cuántos falsos positivos crea.
 
-Descartar una mejora tras medirla no es trabajo perdido: es el trabajo.
+Descartar una mejora tras medirla también es trabajo hecho.
 
 ## 6. Un arreglo, un test que falle sin él
 

@@ -132,7 +132,8 @@ pese: X reencoda, y cuanto mejor sea el origen, mejor queda el resultado.
 
 - Abre tres fotogramas sueltos —uno de la apertura, uno del medio y el cierre—
   y míralos. Es más rápido que ver el vídeo entero y detecta lo importante.
-- Comprueba que el primer fotograma **no es negro**: es la miniatura.
+- Comprueba que el primer fotograma no sea negro, que es el que se usa de
+  miniatura.
 - Comprueba que se entiende **sin sonido y sin leer nada**. Si hace falta leer
   un párrafo, el vídeo no funciona.
 

@@ -5,11 +5,10 @@ description: Presentar una propuesta técnica para que se pueda decidir sobre el
 
 # explain-plan
 
-Un plan no se escribe para documentar lo que vas a hacer. Se escribe **para que
-alguien pueda pararlo a tiempo**.
+Un plan se escribe **para que alguien pueda pararlo a tiempo**.
 
-> **La métrica de un buen plan no es que sea completo: es cuánto tarda quien lo
-> lee en detectar que está mal.**
+> **Un buen plan se mide por lo que tarda quien lo lee en detectar que está
+> mal.**
 
 Un plan que dice "voy a cambiar el formato de la clave de caché" se rechaza en
 cinco segundos con "no, eso rompe las claves existentes, usa un prefijo

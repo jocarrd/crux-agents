@@ -5,8 +5,8 @@ description: Inspeccionar visualmente páginas y componentes web en viewport mó
 
 # Visual test
 
-Inspección visual headless con el Chrome del sistema. No es testing de
-aserciones: es para **ver** la página como en un móvil real, **detectar scroll
+Inspección visual headless con el Chrome del sistema. Sirve para **ver** la
+página como en un móvil real, **detectar scroll
 horizontal** y **cazar el elemento culpable** sin teorizar.
 
 ## Cuándo usar

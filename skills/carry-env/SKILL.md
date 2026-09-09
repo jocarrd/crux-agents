@@ -9,7 +9,7 @@ Todo lo que hace falta para trabajar está en git menos una cosa: los ficheros d
 entorno. Están ignorados a propósito, así que un `clone` te deja el código
 completo y el proyecto sin arrancar.
 
-Esto los reúne en una carpeta que puedes llevarte, y —lo que de verdad importa—
+Esto los reúne en una carpeta que puedes llevarte y, sobre todo,
 deja escrito **a dónde vuelve cada uno**. Doce ficheros con nombres planos y
 ninguna pista de su ruta no valen nada dentro de tres meses, que es justo cuando
 se usan.

@@ -15,8 +15,9 @@ const MARCADORES = [
     peso: 3,
     re: [
       /\bno\s+(?:es|son|se\s+trata\s+de|va\s+de|consiste\s+en)\b[^.;!?]{2,60}[:,]\s*(?:es|son|sino)\b/gi,
-      /\bno\s+\w+(?:a|e|o|an|en)\b[^.;!?]{0,40},\s*(?:sino|es)\b/gi,
-      /,\s*no\s+(?:una|un|el|la|los|las|lo)\s+\w+\.?$/gim,
+      // Un contraste al final de la frase —«el historial del shell, no la
+      // memoria»— es castellano corriente. Solo cuenta la forma «no es X, es Y».
+      /\bno\s+\w+(?:a|e|o|an|en)\b[^.;!?]{0,40},\s*sino\s+(?:que\s+)?\w/gi,
       /\bmás\s+que\s+\w+[^.;!?]{0,40},\s*es\b/gi,
     ],
   },
@@ -41,22 +42,34 @@ const MARCADORES = [
   },
   {
     id: 'raya-larga',
-    nombre: 'Raya larga (—)',
-    peso: 1,
+    nombre: 'Raya larga (—), por encima de 3 por cada 1.000 palabras',
+    peso: 0,
+    orientativo: true,
+    // En castellano el inciso con raya es correcto. Lo que delata es la
+    // densidad, así que solo cuenta el exceso sobre una tasa razonable.
     re: [/—/g],
+    exceso: 3,
   },
   {
     id: 'dos-puntos-aforisticos',
     nombre: 'Dos puntos en mitad de frase',
-    peso: 1,
-    re: [/[a-záéíóúñü]{3,}: +[a-záéíóúñü]/g],
+    peso: 0,
+    orientativo: true,
+    // Solo dentro de una frase ya empezada: un rótulo o una entrada de
+    // lista que abre con dos puntos es uso normal, no un tic.
+    // Si tras los dos puntos viene una enumeración, es uso normal. El tic
+    // es rematar la frase con una sentencia, no abrir una lista.
+    re: [/[a-záéíóúñü]{3,}[^.\n]{10,}?[a-záéíóúñü]{3,}: +[a-záéíóúñü][^,.\n]{12,}(?=[.\n])/g],
   },
   {
     id: 'vocabulario',
     nombre: 'Vocabulario recurrente',
     peso: 1,
     re: [
-      /\b(?:clave|fundamental|crucial|robusto?a?s?|sólid[oa]s?|potente|riguros[oa]|profundizar|panorama|en última instancia|cabe destacar|es importante señalar|garantizar|optimizar|impulsar)\b/gi,
+      // «clave» solo como adjetivo: en un texto técnico, la clave suele ser
+      // una clave SSH y contarla sería un falso positivo constante.
+      /\b(?:es|son|resulta|resultan) clave\b|\b(?:factor|punto|aspecto|elemento|pieza|paso) clave\b|\bclave para\b/gi,
+      /\b(?:fundamental|crucial|robusto?a?s?|sólid[oa]s?|potente|riguros[oa]|profundizar|panorama|en última instancia|cabe destacar|es importante señalar|garantizar|optimizar|impulsar)\b/gi,
       /\bno solo\b[^.;!?]{0,60}\bsino también\b/gi,
     ],
   },
@@ -65,12 +78,14 @@ const MARCADORES = [
     nombre: 'Grandilocuencia («lo que hace…», «esto es lo que…»)',
     peso: 2,
     re: [
-      /\b(?:lo que (?:hace|separa|distingue|de verdad)|esto es lo que|es(?:o)? es lo que|en el fondo,|al final del día)\b/gi,
+      // «lo que hace falta» es un giro corriente, no grandilocuencia.
+      /\blo que (?!hace falta)(?:hace|separa|distingue) (?:consistente|grande|especial|único|utilizable|de verdad)\b/gi,
+      /\b(?:lo que de verdad importa|en el fondo,|al final del día|no es casualidad que)\b/gi,
     ],
   },
 ];
 
-function analiza(texto, { titulares = [] } = {}) {
+function analiza(texto, { titulares = [], palabrasTexto = 0 } = {}) {
   const salida = [];
   for (const m of MARCADORES) {
     const fuente = m.soloTitulares ? titulares.join('\n') : texto;
@@ -79,18 +94,24 @@ function analiza(texto, { titulares = [] } = {}) {
       re.lastIndex = 0;
       let x;
       while ((x = re.exec(fuente)) !== null) {
-        casos.push(x[0].trim().replace(/\s+/g, ' ').slice(0, 90));
+        casos.push(x[0].trim().replace(/\s+/g, ' ').slice(0, 110));
         if (x[0].length === 0) re.lastIndex += 1;
       }
     }
-    salida.push({ ...m, n: casos.length, casos });
+    let n = casos.length;
+    if (m.exceso) {
+      const permitidas = Math.round((palabrasTexto / 1000) * m.exceso);
+      n = Math.max(0, n - permitidas);
+    }
+    salida.push({ ...m, n, casos });
   }
   return salida;
 }
 
-function linea(texto, fragmento) {
-  const i = texto.indexOf(fragmento.slice(0, 40));
-  return i < 0 ? '?' : texto.slice(0, i).split('\n').length;
+function linea(original, fragmento) {
+  const aguja = fragmento.slice(0, 32).trim();
+  const i = original.indexOf(aguja);
+  return i < 0 ? '?' : original.slice(0, i).split('\n').length;
 }
 
 const [, , orden, ...resto] = process.argv;
@@ -137,14 +158,15 @@ const titulares = crudo
   .map((l) => l.replace(/^#{1,6}\s+/, ''));
 
 const palabras = texto.split(/\s+/).filter(Boolean).length;
-const res = analiza(texto, { titulares });
+const res = analiza(texto, { titulares, palabrasTexto: palabras });
 const carga = res.reduce((a, m) => a + m.n * m.peso, 0);
 const por1000 = palabras ? (carga / palabras) * 1000 : 0;
 
 console.log(`\n${etiqueta} · ${palabras} palabras · ${titulares.length} titulares\n`);
 for (const m of res) {
-  const marca = m.n === 0 ? '  ' : m.peso >= 2 ? '🔴' : '🟡';
-  console.log(`${marca} ${String(m.n).padStart(3)}  ${m.nombre}`);
+  const marca = m.n === 0 ? '  ' : m.orientativo ? '··' : m.peso >= 2 ? '🔴' : '🟡';
+  const cola = m.orientativo ? '  (orientativo, no puntúa)' : '';
+  console.log(`${marca} ${String(m.n).padStart(3)}  ${m.nombre}${cola}`);
   if (orden === 'detalle' && m.n) {
     for (const c of m.casos.slice(0, 12)) console.log(`         L${linea(texto, c)}  ${c}`);
     if (m.casos.length > 12) console.log(`         … y ${m.casos.length - 12} más`);
@@ -152,5 +174,6 @@ for (const m of res) {
 }
 const veredicto = por1000 < 4 ? 'suena a persona' : por1000 < 9 ? 'revisable' : 'suena a máquina';
 console.log(`\ncarga ${carga} · ${por1000.toFixed(1)} por cada 1.000 palabras — ${veredicto}`);
-console.log('\nEl umbral es orientativo. Una figura que el contenido pide no es un tic.\n');
+console.log('\nSolo puntúan los cinco marcadores fiables. La raya larga y los dos puntos se');
+console.log('informan porque una expresión regular no distingue un remate de una explicación.\n');
 process.exit(por1000 >= 9 ? 1 : 0);

@@ -5,8 +5,8 @@ description: Levantar en pocos minutos el mapa de un repo que no conoces o que l
 
 # repo-map
 
-Orientarse antes de tocar. El objetivo no es entender el repo entero: es saber
-**dónde mirar** para la tarea que tienes delante.
+Orientarse antes de tocar. El objetivo es saber **dónde mirar** para la tarea
+que tienes delante, sin llegar a entender el repo entero.
 
 ## Cuándo usar
 
@@ -94,4 +94,4 @@ exactamente lo que el estándar viene a evitar.
 ## Relacionado
 
 - `/promote-to-docs` — para que el mapa sobreviva a la sesión
-- `/root-cause` — cuando el objetivo no es orientarse, sino encontrar un fallo
+- `/root-cause` — para encontrar un fallo concreto

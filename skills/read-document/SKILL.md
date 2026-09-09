@@ -8,7 +8,7 @@ description: Poner en contexto un documento que no se puede abrir directamente �
 Un documento que no se puede abrir es un documento que no existe. Esta skill lo
 convierte a Markdown para poder leerlo, citarlo y volver a él.
 
-Lo que aporta no es el comando de conversión, que es una línea, sino tres
+El comando de conversión es una línea. Lo que aporta esta skill son tres
 decisiones: **por qué vía**, **cómo saber que salió bien** y **qué se perdió por
 el camino**.
 
@@ -73,12 +73,11 @@ wc -c <destino>.md
 ```
 
 Contrasta el tamaño con lo que cabría esperar del documento. Un documento de
-varias páginas que produce cuatro líneas no es un documento corto: es una
-conversión fallida.
+varias páginas que produce cuatro líneas indica una conversión fallida.
 
 Si la herramienta avisa de que hace falta OCR, **para y dilo**. No sigas con
-media conversión ni afirmes que el documento está vacío: no lo está, es que no
-se puede leer así. Ofrece las salidas reales —pedir el original en otro
+media conversión ni afirmes que el documento está vacío. El documento tiene
+contenido; lo que falla es la vía de lectura. Ofrece las salidas reales —pedir el original en otro
 formato, o usar un servicio de OCR— y deja la decisión a quien pregunta.
 
 ## 4. Decir qué se perdió

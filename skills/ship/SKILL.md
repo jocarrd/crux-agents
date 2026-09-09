@@ -5,8 +5,8 @@ description: Puerta de calidad antes de commitear, graduada según lo que toca e
 
 # ship
 
-Cadena de puertas antes de commitear. Cualquiera puede abortar el proceso: la
-gracia no es pasar por todas, es no seguir cuando una falla.
+Cadena de puertas antes de commitear. Cualquiera puede abortar el proceso, y la
+gracia está en parar en cuanto una falla.
 
 ## 0. Qué puertas hacen falta
 
@@ -25,9 +25,9 @@ correr en la 1** y **si hace falta levantar el entorno**.
 | Código que no se ve desde fuera | 1 a 6, 8, 9 |
 | Superficie observable: interfaz, API, datos, dependencias, integración | todas |
 
-No es una concesión, es aritmética: **si esto cuesta lo mismo para una errata
-que para un cambio de esquema, dejarás de invocarlo en dos semanas** y la
-puerta habrá fracasado. Un cambio de solo documentación no tiene código que
+La razón es aritmética. **Si esto cuesta lo mismo para una errata que para un
+cambio de esquema, dejarás de invocarlo en dos semanas** y la puerta habrá
+fracasado. Un cambio de solo documentación no tiene código que
 pueda estar incorrecto ni tests que puedan regresar; hacerle las nueve puertas
 no lo verifica más, solo lo encarece.
 
@@ -57,8 +57,9 @@ que los vea ningún test ni el linter. Se sacan del stage o se añaden al
 
 ## 2. Leer el diff
 
-Entero, no en diagonal. Lo que se busca aquí no son bugs todavía, sino **la
-intención**: qué se pretendía cambiar y si el diff hace exactamente eso.
+Entero, no en diagonal. Aquí se busca **la intención**: qué se pretendía
+cambiar y si el diff hace exactamente eso. Los bugs vienen en el paso
+siguiente.
 
 Señales de que hay que parar y preguntar: ficheros tocados que no venían a
 cuento, cambios de formato mezclados con cambios de lógica, código muerto que
@@ -187,8 +188,8 @@ nadie, y es el que acaba delante del cliente.
 - **Saltarse la 6 porque "el cambio era pequeño".** Los arreglos rompen cosas.
 - **Marcar la 7 como hecha sin haber mirado nada.** Si no viste la pantalla ni
   llamaste al endpoint, esa puerta no está pasada.
-- **Commitear con una puerta en rojo y "ya lo arreglo".** Entonces la cadena no
-  es una puerta, es un adorno.
+- **Commitear con una puerta en rojo y "ya lo arreglo".** Entonces la cadena
+  queda en adorno.
 
 ## Relacionado
 

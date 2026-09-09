@@ -66,7 +66,7 @@ descartaron con su motivo. Es la parte que evita repetir el trabajo.
 **Decision** en pasado y en afirmativo: qué se hace ahora, no qué se propone.
 
 **Consequences** honesto en las dos direcciones. Un ADR que solo lista ventajas
-no es una decisión, es una justificación. Lo que se pierde también se escribe.
+está justificando una decisión ya tomada. Lo que se pierde también se escribe.
 
 **Reversibility** es el campo más infravalorado: dice si esto es una puerta de
 ida y vuelta o de un solo sentido, y por tanto cuánto había que pensarlo.

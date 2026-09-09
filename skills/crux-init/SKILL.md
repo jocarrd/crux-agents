@@ -12,8 +12,8 @@ Crea el docs repo de un proyecto nuevo siguiendo el estándar.
 - Arrancas un proyecto y quieres su documentación montada desde el día uno.
 - Tienes un proyecto que vive sin documentación y quieres formalizarlo.
 
-Si el proyecto **ya tiene** un docs repo con contenido, no es esta skill: es
-`crux adopt`, que lo registra sin tocar lo que ya hay.
+Si el proyecto **ya tiene** un docs repo con contenido, usa `crux adopt`, que
+lo registra sin tocar lo que ya hay.
 
 ## Precondiciones
 

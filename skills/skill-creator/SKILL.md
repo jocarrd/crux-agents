@@ -21,8 +21,8 @@ procedimiento, solo cómo salió esa vez.
 
 ## Lo primero: el disparador
 
-La parte más importante de una skill **no es el procedimiento, es la
-descripción**. Es lo único que se lee para decidir si activarla, y una skill que
+La parte más importante de una skill **es la descripción**, por encima del
+procedimiento. Es lo único que se lee para decidir si activarla, y una skill que
 no se activa cuando toca es como si no existiese.
 
 Una buena descripción tiene dos mitades:

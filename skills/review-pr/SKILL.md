@@ -141,8 +141,7 @@ que cuatro son ruido, enseña a ignorar la siguiente.
 ## Contárselo a quien decide
 
 **La revisión no termina en la propuesta: termina contada.** Un comentario en
-un hilo que nadie abre hasta la semana siguiente no es una revisión, es un
-archivo. Quien tiene que decidir necesita saberlo ahora y en su idioma, no en
+un hilo que nadie abre hasta la semana siguiente queda archivado sin más. Quien tiene que decidir necesita saberlo ahora y en su idioma, no en
 jerga de diff.
 
 Tres cosas por hallazgo, y en este orden:
@@ -176,8 +175,8 @@ por qué no salió nada. Es información, no un trámite.
 - **Mirar solo lo que el diff toca.** La pregunta del punto 2 —por dónde más
   entra— vive fuera del diff.
 - **Aprobar porque los tests pasan.** Los escribió quien hizo el cambio.
-- **Dejarlo para después de fusionar.** Después ya no es una propuesta, es el
-  código del repo.
+- **Dejarlo para después de fusionar.** Después ya forma parte del código del
+  repo.
 - **Dejar los hallazgos solo en la propuesta.** Quien decide no está mirando el
   hilo; se le cuenta.
 

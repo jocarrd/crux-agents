@@ -5,8 +5,8 @@ description: Mover estilos de una hoja CSS global a los componentes que los usan
 
 # De CSS global a componentes
 
-Trasladar estilos sin que se muevan. El éxito no es que quede bonito: es que
-**los valores computados sean los mismos** antes y después.
+Trasladar estilos sin que se muevan. El éxito se mide en que **los valores
+computados sean los mismos** antes y después.
 
 ## Cuándo usar
 
