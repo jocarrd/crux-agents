@@ -85,6 +85,25 @@ escondido.
 Un diagrama transporta la misma información con bastante menos coste que la
 prosa equivalente — **cuando hay algo que dibujar**.
 
+## El plan se cierra cuando se ejecuta
+
+Un plan no es un documento que se escribe y se abandona. Al terminar el trabajo
+que describe, **el propio plan recibe una cabecera de estado**: qué está hecho,
+con qué commit, y sobre todo **qué salió distinto de lo planeado y por qué**.
+
+Las dos primeras son inventario. La tercera es la que vale: un plan aprobado y
+ejecutado sin desviaciones es raro, y cuando las hay son decisiones que se
+tomaron con el código delante y con más información de la que había al
+escribirlo. Si no quedan escritas, se pierde justo la parte que costó descubrir.
+
+Un plan que sigue describiendo como pendiente algo ya hecho **miente igual que
+una documentación sin actualizar**, y encima invita a rehacer el trabajo. Es el
+mismo fallo que la regla de sincronización código-documentación, aplicado al
+documento que tú mismo produjiste.
+
+Cerrar no es archivar: el plan se queda donde está, y sirve de ahí en adelante
+como el porqué y la medición de partida.
+
 ## Anti-patterns
 
 - **El diagrama decorativo.** Un flujo de cuatro cajas obvias no aporta nada y
@@ -100,6 +119,9 @@ prosa equivalente — **cuando hay algo que dibujar**.
   programar sobre papel.
 - **Presentar solo la conclusión.** Sin la traza, aprobar es confiar. Y confiar
   no es revisar.
+- **El plan huérfano.** Se escribe, se aprueba, se ejecuta y ahí se queda,
+  describiendo un futuro que ya es pasado. El siguiente que lo lee no sabe si
+  está pendiente.
 
 ## Relacionado
 

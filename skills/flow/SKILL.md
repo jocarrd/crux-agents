@@ -147,6 +147,9 @@ Lo que se ha aprendido y no queda en el código —decisiones, gotchas,
 convenciones— se escribe donde sobreviva a la sesión. Si no, se pierde, y en
 tres meses alguien vuelve a descubrirlo.
 
+**Y se cierra el plan del paso 3.** Cabecera de estado con lo hecho, el commit
+de cada paso y qué salió distinto de lo planeado. Ver `/explain-plan`.
+
 ---
 
 ## El orden importa
