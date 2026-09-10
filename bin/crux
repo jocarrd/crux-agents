@@ -26,6 +26,7 @@ crux — kernel del sistema de trabajo con agentes
   crux workspace ...    espacios aislados para trabajar en paralelo
   crux ship ...         la puerta de calidad, con recibo de lo ejecutado
   crux hooks ...        engancha el estándar al cierre de sesión y al commit
+  crux stg ...          publica una carpeta construida en un staging con clave
   crux usage            qué skills se usan de verdad
   crux memory [--check] memorias del agente que deberían estar en git
   crux status [--check] qué hay abierto ahora mismo en todos los proyectos
@@ -65,6 +66,7 @@ case "$cmd" in
   workspace) exec bash "$CRUX_HOME/bin/workspace.sh" "$@" ;;
   ship)    exec bash "$CRUX_HOME/bin/ship.sh" "$@" ;;
   hooks)   exec bash "$CRUX_HOME/bin/hooks.sh" "$@" ;;
+  stg)     exec bash "$CRUX_HOME/bin/stg.sh" "$@" ;;
   usage)   exec node "$CRUX_HOME/bin/usage.mjs" "$@" ;;
   memory)  exec bash "$CRUX_HOME/bin/memory.sh" "$@" ;;
   doctor)  exec bash "$CRUX_HOME/bin/doctor.sh" "$@" ;;

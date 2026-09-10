@@ -121,6 +121,7 @@ fi
 opcional pdftoppm "comparar PDFs con visual-diff"
 opcional docker   "deploy-fallback y las bases de datos por espacio de trabajo"
 opcional adb      "device-loop, probar en un dispositivo Android"
+opcional rsync    "publicar una demo con crux stg"
 
 if tiene google-chrome || tiene google-chrome-stable || tiene chromium; then
   ok "navegador para headless"
