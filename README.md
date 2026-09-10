@@ -179,6 +179,7 @@ instala `crux hooks install`:
 | `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
 | `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
+| `crux stg` | Publica una carpeta construida en un staging con clave, para enseñar trabajo sin publicarlo |
 | `crux usage` | Qué skills se usan de verdad |
 | `crux memory` | Memorias del agente que son del proyecto y siguen solo en local |
 | `crux status` | Qué hay abierto ahora mismo en todos los proyectos |

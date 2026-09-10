@@ -15,7 +15,10 @@
 #   CRUX_STG_DOMAIN     dominio base; cada demo cuelga como <nombre>.<dominio>
 #   CRUX_STG_ROOT       raíz en el servidor (contiene sites/ y caddy/)
 #   CRUX_STG_CONTAINER  contenedor de Caddy al que se le pide recargar
-#   CRUX_STG_USER       usuario de la clave de acceso
+#
+# Cada demo trae su propio usuario y su propia clave: el usuario es su nombre.
+# Compartir un par para todas hace que retirar una no le quite el acceso a
+# nadie, que es justo lo que se espera al retirarla.
 #
 # Un despliegue no reinicia nada: escribe la carpeta, escribe el bloque y
 # recarga la configuración, que Caddy valida antes de aplicar. Si el bloque
@@ -34,13 +37,13 @@ CLAVES="$HOME/.crux/staging"
 cargar_config() {
   if [ ! -f "$CONFIG" ]; then
     err "no hay configuración de staging en $CONFIG"
-    info "créala con las cinco variables que documenta la cabecera de este comando:"
+    info "créala con las cuatro variables que documenta la cabecera de este comando:"
     info "  crux stg --help"
     exit 1
   fi
   # shellcheck disable=SC1090
   . "$CONFIG"
-  for v in CRUX_STG_SSH CRUX_STG_DOMAIN CRUX_STG_ROOT CRUX_STG_CONTAINER CRUX_STG_USER; do
+  for v in CRUX_STG_SSH CRUX_STG_DOMAIN CRUX_STG_ROOT CRUX_STG_CONTAINER; do
     eval "valor=\${$v:-}"
     [ -n "$valor" ] || die "falta $v en $CONFIG"
   done
@@ -79,7 +82,7 @@ $nombre.$CRUX_STG_DOMAIN {
     encode zstd gzip
 
     basic_auth {
-        $CRUX_STG_USER $hash
+        $nombre $hash
     }
 
     # Es trabajo sin publicar: no se indexa aunque alguien reparta el enlace.
@@ -126,7 +129,7 @@ cmd_deploy() {
   local url="https://$nombre.$CRUX_STG_DOMAIN"
   ok "publicado $nombre"
   info "$url"
-  info "usuario $CRUX_STG_USER · clave $clave"
+  info "usuario $nombre · clave $clave"
   local peso
   peso="$(du -sh "$carpeta" | cut -f1)"
   info "$peso subidos"
@@ -143,7 +146,7 @@ cmd_list() {
     [ -n "$n" ] || continue
     local f="$CLAVES/$n.pass"
     if [ -f "$f" ]; then
-      echo "  https://$n.$CRUX_STG_DOMAIN  ·  $CRUX_STG_USER / $(cat "$f")"
+      echo "  https://$n.$CRUX_STG_DOMAIN  ·  $n / $(cat "$f")"
     else
       echo "  https://$n.$CRUX_STG_DOMAIN  ·  clave no guardada en esta máquina"
     fi
@@ -157,7 +160,7 @@ cmd_url() {
   en_servidor "test -d '$CRUX_STG_ROOT/sites/$nombre'" || die "no hay ninguna demo llamada $nombre"
   echo "https://$nombre.$CRUX_STG_DOMAIN"
   if [ -f "$CLAVES/$nombre.pass" ]; then
-    echo "usuario $CRUX_STG_USER · clave $(cat "$CLAVES/$nombre.pass")"
+    echo "usuario $nombre · clave $(cat "$CLAVES/$nombre.pass")"
   else
     warn "la clave no está guardada en esta máquina; regenérala con un deploy"
   fi
