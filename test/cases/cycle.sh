@@ -1121,3 +1121,20 @@ test_el_perfil_decide_como_se_llama_la_rama() {
   assert_eq "feature/algo" "$(git -C "$root/app-ws-algo" rev-parse --abbrev-ref HEAD)" \
     "la rama sigue el patrón del perfil"
 }
+
+test_usage_dice_con_que_palabras_aparecio_el_problema() {
+  sandbox >/dev/null
+  local t="$SB/transcripts/p"; mkdir -p "$t"
+  # El procedimiento se sigue a mano y nadie llama a la skill: lo que falta es
+  # saber con qué palabras se pidió, que es lo que su descripción no lleva.
+  {
+    printf '{"type":"user","message":{"role":"user","content":"esto parece espagueti y da miedo tocarlo"}}\n'
+    printf '{"name":"Bash","input":{"command":"node scripts/health.mjs ."}}\n'
+  } > "$t/s.jsonl"
+
+  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  assert_contains "$out" "code-health" "señala la skill que se siguió sin llamar"
+  assert_contains "$out" "espagueti" "y con qué palabras se pidió el trabajo"
+  assert_not_contains "$out" "duplicación" "sin repetir lo que la descripción ya dice"
+  assert_not_contains "$out" " esto" "sin las palabras vacías"
+}
