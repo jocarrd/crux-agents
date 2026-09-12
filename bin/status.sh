@@ -127,6 +127,6 @@ if [[ $pendiente -eq 0 ]]; then
   echo "  nada: todo está subido"
 fi
 
-# --check se engancha a algo automático, como el de memory: tiene que poder fallar.
+# --check existe para engancharlo a algo automático: tiene que poder fallar.
 [[ $COMPROBAR -eq 1 && $PROBLEMAS -gt 0 ]] && exit 1
 exit 0

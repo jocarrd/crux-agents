@@ -906,12 +906,13 @@ test_workspace_no_acepta_un_nombre_que_se_sale_del_arbol() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_con_config)"
 
-  # Con una rama válida, el nombre ya no lo frena git: plantaba el worktree
-  # fuera del proyecto, donde ../<proyecto>-docs deja de resolver.
+  # Con una rama válida el nombre ya no lo frena git: plantaba el worktree donde
+  # apuntara el nombre, más un directorio basura 'app-ws-..' que rm no recogía.
   local out
   out="$(bash "$CRUX_HOME/bin/workspace.sh" new '../../fuera' --repo "$root/app" --branch fix/ok 2>&1)"
   assert_contains "$out" "nombre" "un nombre con .. se rechaza"
-  assert_no_file "$CRUX_PROJECTS_DIR/fuera" "y no se crea nada fuera del proyecto"
+  assert_no_file "$root/fuera" "y no se crea nada fuera del repo"
+  assert_no_file "$root/app-ws-.." "ni el directorio que quedaba por el camino"
   assert_not_contains "$(cat "$CRUX_REGISTRY" 2>/dev/null || echo '')" "fuera" \
     "ni queda registrado"
 
@@ -934,17 +935,28 @@ test_el_cerrojo_del_registro_no_deja_el_kernel_muerto() {
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new tras-el-oom --repo "$root/app" 2>&1)"
   assert_contains "$out" "listo" "un cerrojo de un proceso que ya no existe se retira solo"
 
-  # Y el cerrojo no puede seguir cogido mientras corre el setup del proyecto,
-  # que es lo que hacía chocar a dos espacios lanzados a la vez.
+  # Y dos espacios lanzados a la vez tienen que salir los dos: el cerrojo se
+  # mantenía durante el setup, que puede tardar minutos, con cinco segundos de
+  # espera. Se comprueba el resultado, no el mecanismo del cerrojo.
   node -e '
     const fs = require("fs"); const f = process.argv[1];
     const j = JSON.parse(fs.readFileSync(f, "utf8"));
-    j.workspace.setup = "test -d " + process.argv[2] + " && echo COGIDO > " + process.argv[3] + " || echo LIBRE > " + process.argv[3];
+    j.workspace.setup = "sleep 3";
     fs.writeFileSync(f, JSON.stringify(j));
-  ' "$root/proj-docs/crux.json" "$(dirname "$CRUX_REGISTRY")/.workspaces.lock" "$SB/durante-setup"
-  bash "$CRUX_HOME/bin/workspace.sh" new con-setup --repo "$root/app" >/dev/null 2>&1
-  assert_eq "LIBRE" "$(cat "$SB/durante-setup" 2>/dev/null || echo AUSENTE)" \
-    "el cerrojo se suelta antes del setup, que puede tardar minutos"
+  ' "$root/proj-docs/crux.json"
+  bash "$CRUX_HOME/bin/workspace.sh" new par-uno --repo "$root/app" >/dev/null 2>&1 &
+  local primero=$!
+  sleep 1
+  bash "$CRUX_HOME/bin/workspace.sh" new par-dos --repo "$root/app" >/dev/null 2>&1
+  local rc_dos=$?
+  wait "$primero"; local rc_uno=$?
+
+  assert_eq "0 0" "$rc_uno $rc_dos" "los dos espacios en paralelo salen bien"
+  assert_eq "2" "$(node -e '
+    const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const s = Object.entries(r.workspaces).filter(([n]) => n.startsWith("par-")).map(([, w]) => w.slot);
+    process.stdout.write(String(new Set(s).size));
+  ' "$CRUX_REGISTRY")" "y con un slot distinto cada uno"
 }
 
 test_dos_proyectos_no_se_reparten_el_mismo_puerto() {
@@ -979,4 +991,47 @@ test_dos_proyectos_no_se_reparten_el_mismo_puerto() {
     process.stdout.write(String(n));
   ' "$CRUX_REGISTRY")"
   assert_eq "0" "$choques" "ningún espacio se solapa con el rango de otro"
+}
+
+test_una_interrupcion_no_declara_el_espacio_listo() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const j = JSON.parse(fs.readFileSync(f, "utf8"));
+    j.workspace.setup = "sleep 10";
+    fs.writeFileSync(f, JSON.stringify(j));
+  ' "$root/proj-docs/crux.json"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new cortado --repo "$root/app" > "$SB/salida" 2>&1 &
+  local pid=$!
+  sleep 3
+  kill -TERM "$pid" 2>/dev/null
+  wait "$pid"; local rc=$?
+
+  assert_not_contains "$(cat "$SB/salida")" "listo" "una señal no deja declarar el espacio listo"
+  assert_eq "sí" "$([[ $rc -ne 0 ]] && echo sí || echo no)" "y sale con código de error"
+
+  # El worktree ya está en disco: la entrada se queda, porque borrarla dejaba
+  # un worktree que la herramienta ya no reconocía y un slot repartido dos veces.
+  if [[ -d "$root/app-ws-cortado" ]]; then
+    assert_not_contains "$(bash "$CRUX_HOME/bin/workspace.sh" rm cortado 2>&1)" "no existe el espacio" \
+      "el espacio a medias sigue registrado y se puede retirar"
+    assert_contains "$(bash "$CRUX_HOME/bin/workspace.sh" list --all)" "cortado" \
+      "y se ve en la lista"
+  fi
+}
+
+test_el_contrato_ilegible_no_se_convierte_en_puertos_por_defecto() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+  printf '{"crux":"0.1.0","project":"proj","workspace":{"portBase":4000' \
+    > "$root/proj-docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new roto --repo "$root/app" 2>&1)"
+  assert_contains "$out" "ilegible" "un contrato roto se dice"
+  assert_not_contains "$out" "sin configuración de workspace" "y no se pasa por 'no hay configuración'"
+  assert_no_file "$root/app-ws-roto/.env.local" "el espacio no arranca con los puertos por defecto"
 }

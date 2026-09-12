@@ -134,8 +134,8 @@ function invocaciones(desde) {
   const cuenta = new Map()
   const porScript = new Map()
   const scripts = scriptsDelCatalogo()
-  let ficheros = 0
-  if (!existsSync(TRANSCRIPTS)) return { cuenta, porScript, ficheros }
+  let sesiones = 0
+  if (!existsSync(TRANSCRIPTS)) return { cuenta, porScript, sesiones }
 
   for (const proyecto of readdirSync(TRANSCRIPTS)) {
     const dir = join(TRANSCRIPTS, proyecto)
@@ -145,7 +145,7 @@ function invocaciones(desde) {
         try { return statSync(f).mtimeMs >= desde } catch { return false }
       })
       if (!reciente) continue
-      ficheros++
+      sesiones++
       const texto = partes.map((f) => {
         try { return readFileSync(f, 'utf8') } catch { return '' }
       }).join('\n')
@@ -173,16 +173,16 @@ function invocaciones(desde) {
       }
     }
   }
-  return { cuenta, porScript, ficheros }
+  return { cuenta, porScript, sesiones }
 }
 
 const desde = Date.now() - days * 24 * 3600 * 1000
 const cat = catalogo()
-const { cuenta, porScript, ficheros } = invocaciones(desde)
+const { cuenta, porScript, sesiones } = invocaciones(desde)
 
-console.log(`uso de skills — últimos ${days} días · ${ficheros} sesiones revisadas\n`)
+console.log(`uso de skills — últimos ${days} días · ${sesiones} sesiones revisadas\n`)
 
-if (!ficheros) {
+if (!sesiones) {
   console.log('No hay transcripciones en el periodo. Sin datos, no sin uso.\n')
   process.exit(0)
 }
