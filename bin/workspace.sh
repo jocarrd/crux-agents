@@ -31,15 +31,51 @@ registry_init() {
   [[ -f "$REGISTRY" ]] || echo '{"workspaces":{}}' > "$REGISTRY"
 }
 
+LOCK_MIO=0
+RESERVA=""
+
+borra_del_registro() {
+  node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    delete r.workspaces[process.argv[2]];
+    fs.writeFileSync(process.argv[1], JSON.stringify(r, null, 2) + "\n");
+  ' "$REGISTRY" "$1" || warn "no pude retirar '$1' del registro"
+}
+
+al_salir() {
+  [[ -n "$RESERVA" ]] && { borra_del_registro "$RESERVA"; RESERVA=""; }
+  unlock
+}
+trap al_salir EXIT INT TERM
+
 with_lock() {
   # mkdir es atómico: sirve de cerrojo sin depender de flock.
-  local tries=0
+  local tries=0 dueno
   until mkdir "$LOCK" 2>/dev/null; do
+    if [[ -f "$LOCK/pid" ]]; then dueno="$(cat "$LOCK/pid")"; else dueno=""; fi
+    # Un proceso muerto en seco bloqueaba el registro para siempre.
+    if [[ -n "$dueno" ]] && ! kill -0 "$dueno" 2>/dev/null; then
+      warn "retirado el cerrojo del proceso $dueno, que ya no existe"
+      rm -rf "$LOCK"
+      continue
+    fi
     tries=$((tries + 1))
-    [[ $tries -gt 50 ]] && die "registro bloqueado: borra $LOCK si ningún crux está corriendo"
+    if [[ $tries -gt 300 ]]; then
+      [[ -n "$dueno" ]] \
+        && die "el registro lleva 30s cogido por el proceso $dueno, que sigue vivo" \
+        || die "cerrojo sin dueño en $LOCK: retíralo si ningún crux está corriendo"
+    fi
     sleep 0.1
   done
-  trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+  echo $$ > "$LOCK/pid"
+  LOCK_MIO=1
+}
+
+unlock() {
+  [[ $LOCK_MIO -eq 1 ]] || return 0
+  rm -rf "$LOCK" 2>/dev/null || true
+  LOCK_MIO=0
 }
 
 # --- Configuración de workspace del proyecto --------------------------------
@@ -77,6 +113,19 @@ load_config() {
   ' "$cfg" "$repo" 2>/dev/null)"
 }
 
+escribir_espacio() {
+  node -e '
+    const fs = require("fs");
+    const [file, name, slot, repo, path, branch, port0, perSlot] = process.argv.slice(1);
+    const r = JSON.parse(fs.readFileSync(file, "utf8"));
+    r.workspaces[name] = {
+      slot: Number(slot), repo, path, branch,
+      ports: [Number(port0), Number(port0) + Number(perSlot) - 1],
+    };
+    fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n");
+  ' "$REGISTRY" "$@"
+}
+
 substitute() {
   # substitute <texto> — aplica {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}
   node -e '
@@ -90,7 +139,13 @@ substitute() {
 
 cmd_new() {
   local name="${1:-}"; shift || true
+  if [[ "$name" == "--help" || "$name" == "-h" ]]; then
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+  fi
   [[ -n "$name" ]] || die "uso: crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>]"
+  nombre_valido "$name" \
+    || die "nombre de espacio inválido: '$name' — letras, números, punto, guion y guion bajo, sin barras ni '..'"
 
   local repo="$PWD" base="" rama_pedida="" FORZAR=0
   while [[ $# -gt 0 ]]; do
@@ -127,20 +182,6 @@ cmd_new() {
   ' "$REGISTRY" "$repo" 2>/dev/null || true)"
   [[ -n "$otros" ]] && warn "ya hay trabajo abierto sobre $repo_name: $otros"
 
-  registry_init
-  with_lock
-
-  # Menor slot libre: los espacios van y vienen, y reutilizar huecos mantiene
-  # los puertos en un rango pequeño y predecible.
-  local slot
-  slot="$(node -e '
-    const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const used = new Set(Object.values(r.workspaces).map(w => w.slot));
-    let s = 0; while (used.has(s)) s++;
-    process.stdout.write(String(s));
-  ' "$REGISTRY")"
-
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
 
   # `pointers.write: false` dice que la documentación del estándar no se escribe
@@ -166,8 +207,28 @@ cmd_new() {
 
   load_config "$docs" "$repo_name"
 
+  registry_init
+  with_lock
+
+  # Menor slot libre: los espacios van y vienen, y reutilizar huecos mantiene
+  # los puertos en un rango pequeño y predecible.
+  local slot
+  slot="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const used = new Set(Object.values(r.workspaces).map(w => w.slot));
+    let s = 0; while (used.has(s)) s++;
+    process.stdout.write(String(s));
+  ' "$REGISTRY")"
+
   SLOT="$slot"; PORT0=$((PORT_BASE + slot * PORTS_PER_SLOT))
   WS_NAME="$name"; WS_BRANCH="$branch"
+
+  # Reservado el slot, el cerrojo se suelta: instalar y levantar el setup tarda
+  # minutos, y con el registro cogido el segundo espacio no arrancaba.
+  escribir_espacio "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT"
+  RESERVA="$name"
+  unlock
 
   git -C "$repo" worktree add ${base:+-b "$branch"} "$path" ${base:-"$branch"} >/dev/null 2>&1 \
     || git -C "$repo" worktree add -b "$branch" "$path" >/dev/null \
@@ -234,16 +295,7 @@ cmd_new() {
     fi
   fi
 
-  node -e '
-    const fs = require("fs");
-    const [file, name, slot, repo, path, branch, port0, perSlot] = process.argv.slice(1);
-    const r = JSON.parse(fs.readFileSync(file, "utf8"));
-    r.workspaces[name] = {
-      slot: Number(slot), repo, path, branch,
-      ports: [Number(port0), Number(port0) + Number(perSlot) - 1],
-    };
-    fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n");
-  ' "$REGISTRY" "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT"
+  RESERVA=""
 
   echo
   ok "espacio '$name' listo"
@@ -310,8 +362,8 @@ cmd_finish() {
     local recibo="$path/.crux-ship" sellado="" comandos=0 fallos=0
     if [[ -f "$recibo" ]]; then
       sellado="$(awk '/^sealed /{print $2}' "$recibo" | tail -1)"
-      comandos="$(grep -c '^run ' "$recibo" || true)"
-      fallos="$(grep -c '^run [^0] ' "$recibo" || true)"
+      comandos="$(recibo_comandos "$recibo")"
+      fallos="$(recibo_fallos "$recibo")"
     fi
     if [[ ! -f "$recibo" ]]; then
       err "este commit no ha pasado la puerta de calidad"
@@ -326,6 +378,7 @@ cmd_finish() {
     fi
     if [[ "${fallos:-0}" -gt 0 ]]; then
       err "el recibo registra $fallos comprobaciones en rojo"
+      recibo_en_rojo "$recibo" | sed 's/^/      /'
       exit 1
     fi
     if [[ "$sellado" != "$head" ]]; then
@@ -530,6 +583,7 @@ cmd_rm() {
   repo="$(echo "$path" | sed -n 2p)"
   branch="$(echo "$path" | sed -n 3p)"
   path="$(echo "$path" | sed -n 1p)"
+  unlock
 
   if [[ -d "$path" ]]; then
     if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
@@ -570,12 +624,9 @@ cmd_rm() {
     fi
   fi
 
-  node -e '
-    const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    delete r.workspaces[process.argv[2]];
-    fs.writeFileSync(process.argv[1], JSON.stringify(r, null, 2) + "\n");
-  ' "$REGISTRY" "$name"
+  with_lock
+  borra_del_registro "$name"
+  unlock
 
   ok "slot liberado"
 
