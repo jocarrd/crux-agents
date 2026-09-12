@@ -1783,3 +1783,16 @@ test_doctor_avisa_del_runbook_que_lleva_medio_ano_sin_verificar() {
   assert_not_contains "$out" "operations/reciente.md sin verificar" "el recién comprobado no molesta"
   assert_exit 0 "es aviso, no error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
+
+test_status_distingue_el_contrato_ilegible_de_la_ausencia() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project s)"
+  # Truncado a la mitad: ni está ausente ni se puede leer.
+  printf '{\n  "crux": "0.36.0",\n  "project": "s",\n  "profile": "mul' > "$docs/crux.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  assert_contains "$out" "ilegible" "un contrato roto se dice, no se cuenta como cero repos"
+  assert_not_contains "$out" "0 repos" "cero parecía un dato y no lo era"
+
+  assert_exit 1 "y --check sale 1, como el de memory" bash "$CRUX_HOME/bin/status.sh" --check
+}

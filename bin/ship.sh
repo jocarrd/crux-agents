@@ -56,12 +56,12 @@ cmd_seal() {
   [[ -f "$RECIBO" ]] && ! es_recibo_viejo || die "no hay recibo: pasa la puerta con 'crux ship run -- <comando>'"
 
   local total fallos
-  total="$(grep -c '^run ' "$RECIBO" || true)"
-  fallos="$(grep -c '^run [^0] ' "$RECIBO" || true)"
+  total="$(recibo_comandos "$RECIBO")"
+  fallos="$(recibo_fallos "$RECIBO")"
   [[ "${total:-0}" -gt 0 ]] || die "el recibo no tiene ni un comando ejecutado"
   if [[ "${fallos:-0}" -gt 0 ]]; then
     err "$fallos de $total comandos fallaron: la puerta no se cierra"
-    grep '^run [^0] ' "$RECIBO" | sed 's/^run [^ ]* [^ ]* /      /'
+    recibo_en_rojo "$RECIBO" | sed 's/^/      /'
     exit 1
   fi
 

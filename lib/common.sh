@@ -148,6 +148,29 @@ json_has() {
   json_get "$1" "$2" >/dev/null 2>&1
 }
 
+# --- Recibo de la puerta de calidad ------------------------------------------
+
+recibo_comandos() {
+  # recibo_comandos <fichero> — cuántos comandos se ejecutaron.
+  [[ -f "$1" ]] || { echo 0; return 0; }
+  awk '$1 == "run" { n++ } END { print n + 0 }' "$1"
+}
+
+recibo_fallos() {
+  # recibo_fallos <fichero> — cuántos salieron con algo distinto de cero.
+  [[ -f "$1" ]] || { echo 0; return 0; }
+  awk '$1 == "run" && $2 != 0 { n++ } END { print n + 0 }' "$1"
+}
+
+recibo_en_rojo() {
+  # recibo_en_rojo <fichero> — la etiqueta de los que fallaron, con su código.
+  [[ -f "$1" ]] || return 0
+  awk '$1 == "run" && $2 != 0 {
+    codigo = $2; $1 = ""; $2 = ""; $3 = ""; sub(/^ +/, "")
+    printf "%s (salida %s)\n", $0, codigo
+  }' "$1"
+}
+
 # --- Raíz de los proyectos ---------------------------------------------------
 #
 # No se asume una carpeta concreta: la pista más fiable es que el propio kernel

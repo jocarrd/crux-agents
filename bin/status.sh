@@ -2,7 +2,7 @@
 # crux status — qué hay abierto ahora mismo, en todos los proyectos.
 #
 #   crux status            los proyectos, sus espacios y el trabajo sin publicar
-#   crux status --check    además, pasa el doctor de cada proyecto
+#   crux status --check    además, pasa el doctor de cada proyecto; sale 1 si algo falla
 #
 # `doctor` responde por un proyecto. Esto responde por la mañana: dónde quedó
 # el trabajo, qué espacios siguen vivos y qué no está subido a ningún sitio.
@@ -24,16 +24,26 @@ echo "proyectos en $RAIZ"
 echo
 
 proyectos=0
+PROBLEMAS=0
 for docs in "$RAIZ"/*/*-docs; do
   [[ -f "$docs/crux.json" ]] || continue
   proyectos=$((proyectos + 1))
   nombre="$(basename "$(dirname "$docs")")"
+
+  if ! motivo="$(json_valido "$docs/crux.json")"; then
+    printf '  %-14s %s\n' "$nombre" "contrato ilegible — $motivo"
+    info "arréglalo o mira qué le pasa: crux doctor $docs"
+    PROBLEMAS=$((PROBLEMAS + 1))
+    continue
+  fi
+
   version="$(json_get "$docs/crux.json" crux 2>/dev/null || echo "?")"
   repos="$(json_get "$docs/crux.json" repos 2>/dev/null | wc -l | tr -d ' ')"
 
   estado=""
   if [[ $COMPROBAR -eq 1 ]]; then
-    estado="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1 | tail -1)"
+    salida="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" || PROBLEMAS=$((PROBLEMAS + 1))
+    estado="$(echo "$salida" | tail -1)"
     [[ "$estado" == conforme* ]] && estado="conforme"
   fi
   printf '  %-14s crux %-8s %s repos%s\n' "$nombre" "$version" "$repos" "${estado:+  ·  $estado}"
@@ -116,3 +126,7 @@ done
 if [[ $pendiente -eq 0 ]]; then
   echo "  nada: todo está subido"
 fi
+
+# --check existe para engancharlo a algo automático: tiene que poder fallar.
+[[ $COMPROBAR -eq 1 && $PROBLEMAS -gt 0 ]] && exit 1
+exit 0
