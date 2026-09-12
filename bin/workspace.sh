@@ -33,37 +33,71 @@ registry_init() {
 
 LOCK_MIO=0
 RESERVA=""
+WORKTREE_HECHO=0
 
 borra_del_registro() {
+  local propio=0
+  if [[ $LOCK_MIO -eq 0 ]]; then with_lock 50 && propio=1; fi
   node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     delete r.workspaces[process.argv[2]];
     fs.writeFileSync(process.argv[1], JSON.stringify(r, null, 2) + "\n");
   ' "$REGISTRY" "$1" || warn "no pude retirar '$1' del registro"
+  [[ $propio -eq 1 ]] && unlock
+  return 0
 }
 
 al_salir() {
-  [[ -n "$RESERVA" ]] && { borra_del_registro "$RESERVA"; RESERVA=""; }
+  trap - EXIT
+  if [[ -n "$RESERVA" ]]; then
+    # Con el worktree ya en disco la entrada se queda: es lo que deja
+    # retirarlo con 'workspace rm' en vez de a mano.
+    if [[ $WORKTREE_HECHO -eq 1 ]]; then
+      warn "espacio '$RESERVA' a medias — retíralo con: crux workspace rm $RESERVA"
+    else
+      borra_del_registro "$RESERVA"
+    fi
+    RESERVA=""
+  fi
   unlock
 }
-trap al_salir EXIT INT TERM
+trap al_salir EXIT
+trap 'al_salir; exit 130' INT
+trap 'al_salir; exit 143' TERM
+
+# El cerrojo lo suelta el sistema al morir el proceso, así que un Ctrl-C duro o
+# un OOM no dejan el registro bloqueado. Donde no hay flock —macOS— se usa un
+# mkdir con el pid dentro, que sí necesita reconocer al dueño muerto.
+FLOCK="$(command -v flock 2>/dev/null || true)"
 
 with_lock() {
-  # mkdir es atómico: sirve de cerrojo sin depender de flock.
+  local tope="${1:-300}" segundos=$(( (${1:-300} + 9) / 10 ))
+  mkdir -p "$(dirname "$REGISTRY")"
+
+  if [[ -n "$FLOCK" ]]; then
+    exec 9>"$LOCK.flock"
+    "$FLOCK" -w "$segundos" 9 \
+      || die "el registro lleva ${segundos}s cogido por otro crux"
+    LOCK_MIO=1
+    return 0
+  fi
+
   local tries=0 dueno
   until mkdir "$LOCK" 2>/dev/null; do
-    if [[ -f "$LOCK/pid" ]]; then dueno="$(cat "$LOCK/pid")"; else dueno=""; fi
-    # Un proceso muerto en seco bloqueaba el registro para siempre.
+    dueno=""
+    if [[ -r "$LOCK/pid" ]]; then dueno="$(cat "$LOCK/pid" || true)"; fi
     if [[ -n "$dueno" ]] && ! kill -0 "$dueno" 2>/dev/null; then
-      warn "retirado el cerrojo del proceso $dueno, que ya no existe"
-      rm -rf "$LOCK"
+      if mv "$LOCK" "$LOCK.$$" 2>/dev/null; then
+        rm -rf "$LOCK.$$"
+        warn "retirado el cerrojo del proceso $dueno, que ya no existe"
+      fi
       continue
     fi
     tries=$((tries + 1))
-    if [[ $tries -gt 300 ]]; then
+    if [[ $tries -gt $tope ]]; then
       [[ -n "$dueno" ]] \
-        && die "el registro lleva 30s cogido por el proceso $dueno, que sigue vivo" \
+        && die "el registro lleva ${segundos}s cogido por el proceso $dueno, que sigue vivo" \
         || die "cerrojo sin dueño en $LOCK: retíralo si ningún crux está corriendo"
     fi
     sleep 0.1
@@ -74,7 +108,7 @@ with_lock() {
 
 unlock() {
   [[ $LOCK_MIO -eq 1 ]] || return 0
-  rm -rf "$LOCK" 2>/dev/null || true
+  if [[ -n "$FLOCK" ]]; then exec 9>&-; else rm -rf "$LOCK" 2>/dev/null || true; fi
   LOCK_MIO=0
 }
 
@@ -94,6 +128,8 @@ load_config() {
   SETUP_CMD=""; TEARDOWN_CMD=""; INSTALAR="true"
   local cfg="$docs/crux.json"
   [[ -f "$cfg" ]] || return 0
+  local motivo
+  motivo="$(json_valido "$cfg")" || die "el contrato de $(basename "$docs") es ilegible — $motivo"
 
   eval "$(node -e '
     const fs = require("fs");
@@ -139,10 +175,6 @@ substitute() {
 
 cmd_new() {
   local name="${1:-}"; shift || true
-  if [[ "$name" == "--help" || "$name" == "-h" ]]; then
-    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
-    exit 0
-  fi
   [[ -n "$name" ]] || die "uso: crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>]"
   nombre_valido "$name" \
     || die "nombre de espacio inválido: '$name' — letras, números, punto, guion y guion bajo, sin barras ni '..'"
@@ -246,6 +278,7 @@ cmd_new() {
     || git -C "$repo" worktree add -b "$branch" "$path" >/dev/null \
     || die "no pude crear el worktree"
 
+  WORKTREE_HECHO=1
   ok "worktree $path (rama $branch)"
 
   # La marca de la puerta es estado local. Va al exclude del directorio común,
@@ -713,6 +746,14 @@ cmd_prune() {
   ok "$limpiadas de ${#integradas[@]} ramas limpiadas"
 }
 
+uso() {
+  awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
+}
+
+for arg in "$@"; do
+  [[ "$arg" == "--help" || "$arg" == "-h" ]] && { uso; exit 0; }
+done
+
 case "${1:-}" in
   new)  shift; cmd_new "$@" ;;
   list) shift; cmd_list "$@" ;;
@@ -720,5 +761,6 @@ case "${1:-}" in
   merge)  shift; cmd_merge "$@" ;;
   rm)   shift; cmd_rm "$@" ;;
   prune) shift; cmd_prune "$@" ;;
-  *) die "uso: crux workspace {new|list|finish|merge|rm|prune}" ;;
+  help) uso ;;
+  *) uso >&2; die "uso: crux workspace {new|list|finish|merge|rm|prune}" ;;
 esac
