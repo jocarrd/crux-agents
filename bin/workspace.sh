@@ -210,16 +210,28 @@ cmd_new() {
   registry_init
   with_lock
 
-  # Menor slot libre: los espacios van y vienen, y reutilizar huecos mantiene
-  # los puertos en un rango pequeño y predecible.
+  # El menor slot con su rango libre: cada proyecto parte de su propia base, y
+  # dos slots distintos de dos proyectos daban el mismo rango de puertos.
   local slot
   slot="$(node -e '
     const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const used = new Set(Object.values(r.workspaces).map(w => w.slot));
-    let s = 0; while (used.has(s)) s++;
+    const [file, base, perSlot] = process.argv.slice(1);
+    const r = JSON.parse(fs.readFileSync(file, "utf8"));
+    const ws = Object.values(r.workspaces);
+    const ocupados = new Set(ws.map((w) => w.slot));
+    const rangos = ws.map((w) => w.ports).filter(Array.isArray);
+    const libre = (s) => {
+      if (ocupados.has(s)) return false;
+      const desde = Number(base) + s * Number(perSlot);
+      const hasta = desde + Number(perSlot) - 1;
+      return !rangos.some(([a, b]) => desde <= b && a <= hasta);
+    };
+    let s = 0;
+    while (!libre(s)) {
+      if (++s > 9999) { process.stderr.write("no queda ningún rango de puertos libre\n"); process.exit(1); }
+    }
     process.stdout.write(String(s));
-  ' "$REGISTRY")"
+  ' "$REGISTRY" "$PORT_BASE" "$PORTS_PER_SLOT")" || die "no pude repartir un slot"
 
   SLOT="$slot"; PORT0=$((PORT_BASE + slot * PORTS_PER_SLOT))
   WS_NAME="$name"; WS_BRANCH="$branch"

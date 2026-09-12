@@ -946,3 +946,37 @@ test_el_cerrojo_del_registro_no_deja_el_kernel_muerto() {
   assert_eq "LIBRE" "$(cat "$SB/durante-setup" 2>/dev/null || echo AUSENTE)" \
     "el cerrojo se suelta antes del setup, que puede tardar minutos"
 }
+
+test_dos_proyectos_no_se_reparten_el_mismo_puerto() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+
+  # Otro proyecto, con su propia base de puertos. El slot es único en el
+  # registro, pero el rango sale del portBase de cada uno: con bases distintas,
+  # dos slots distintos daban el mismo rango.
+  local otro="$CRUX_PROJECTS_DIR/otro"
+  mkdir -p "$otro/api" "$otro/otro-docs"
+  git -C "$otro/api" init -q
+  git -C "$otro/api" config user.email t@t; git -C "$otro/api" config user.name t
+  echo x > "$otro/api/f.txt"; git -C "$otro/api" add -A; git -C "$otro/api" commit -qm init
+  printf '{"crux":"0.1.0","project":"otro","profile":"multi-repo","repos":["api"],"sections":[],
+    "workspace":{"portBase":4005,"portsPerSlot":5,"envFile":".env","env":{"PORT":"{{PORT0}}"}}}\n' \
+    > "$otro/otro-docs/crux.json"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$otro/api" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new a --repo "$root/app" >/dev/null 2>&1
+
+  local choques
+  choques="$(node -e '
+    const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const e = Object.entries(r.workspaces);
+    let n = 0;
+    for (let i = 0; i < e.length; i++) for (let j = i + 1; j < e.length; j++) {
+      const [, A] = e[i], [, B] = e[j];
+      if (A.ports[0] <= B.ports[1] && B.ports[0] <= A.ports[1]) n++;
+    }
+    process.stdout.write(String(n));
+  ' "$CRUX_REGISTRY")"
+  assert_eq "0" "$choques" "ningún espacio se solapa con el rango de otro"
+}
