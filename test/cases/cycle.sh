@@ -837,3 +837,112 @@ test_usage_senala_la_skill_cuyo_procedimiento_se_sigue_sin_llamarla() {
   assert_contains "$seccion" "muda" "señala la que no se llamó por su nombre"
   assert_not_contains "$seccion" "hablada" "la que sí se invocó no aparece ahí"
 }
+
+# --- Bordes medidos en una caza de fallos (v0.36.0) --------------------------
+
+test_la_puerta_cuenta_los_fallos_de_dos_cifras() {
+  sandbox >/dev/null
+  local repo="$CRUX_PROJECTS_DIR/rc"
+  mkdir -p "$repo"; git -C "$repo" init -q
+  git -C "$repo" commit -q --allow-empty -m init
+
+  # Una orden que no existe sale con 127, un tiempo agotado con 124 y un
+  # proceso al que mata el sistema por memoria con 137. Contar solo los de una
+  # cifra dejaba pasar justo esos tres, que son los que más aparecen.
+  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- bash -c 'exit 127' ) >/dev/null 2>&1
+  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- bash -c 'exit 124' ) >/dev/null 2>&1
+
+  local out; out="$(cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  assert_contains "$out" "no se cierra" "127 y 124 son fallos: la puerta no se cierra"
+  assert_not_contains "$out" "puerta cerrada" "y no se declara cerrada"
+  assert_not_contains "$(cat "$repo/.crux-ship")" "sealed " "ni se escribe el sello"
+}
+
+test_finish_no_publica_con_el_recibo_en_rojo_de_dos_cifras() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+  bash "$CRUX_HOME/bin/workspace.sh" new r --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-r"
+  echo cambio > "$ws/nuevo.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: algo"
+
+  # Un recibo sellado sobre el commit, pero con una comprobación en 127.
+  printf '# recibo\nrepo %s\nrun 127 1 npm test\nsealed %s x\n' \
+    "$ws" "$(git -C "$ws" rev-parse HEAD)" > "$ws/.crux-ship"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish r 2>&1)"
+  assert_contains "$out" "en rojo" "el recibo con un 127 no deja abrir la propuesta"
+}
+
+test_usage_entiende_los_dias_separados_por_espacio() {
+  sandbox >/dev/null
+  local t="$SB/transcripts/p"; mkdir -p "$t"
+  printf '{"name":"Skill","input":{"skill":"adr"}}\n' > "$t/s.jsonl"
+
+  local out
+  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" --days 7 2>&1)"
+  assert_contains "$out" "últimos 7 días" "la forma documentada '--days N' se respeta"
+  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" --days=7 2>&1)"
+  assert_contains "$out" "últimos 7 días" "y la forma con igual sigue valiendo"
+  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" --days abc 2>&1)"
+  assert_contains "$out" "no es un número" "un valor que no es número se dice, no se ignora"
+}
+
+test_usage_cuenta_lo_que_hicieron_los_subagentes() {
+  sandbox >/dev/null
+  local t="$SB/transcripts/p"; mkdir -p "$t/sesion/subagents"
+  # La sesión padre no invoca nada; su subagente sí. El trabajo se hizo.
+  printf '{"type":"user"}\n' > "$t/sesion.jsonl"
+  printf '{"name":"Skill","input":{"skill":"review-pr"}}\n' > "$t/sesion/subagents/a.jsonl"
+
+  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  assert_contains "$out" "review-pr" "lo que invoca un subagente cuenta como uso"
+  assert_contains "$out" "1 sesiones revisadas" "y el subagente no infla el número de sesiones"
+}
+
+test_workspace_no_acepta_un_nombre_que_se_sale_del_arbol() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+
+  # Con una rama válida, el nombre ya no lo frena git: plantaba el worktree
+  # fuera del proyecto, donde ../<proyecto>-docs deja de resolver.
+  local out
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" new '../../fuera' --repo "$root/app" --branch fix/ok 2>&1)"
+  assert_contains "$out" "nombre" "un nombre con .. se rechaza"
+  assert_no_file "$CRUX_PROJECTS_DIR/fuera" "y no se crea nada fuera del proyecto"
+  assert_not_contains "$(cat "$CRUX_REGISTRY" 2>/dev/null || echo '')" "fuera" \
+    "ni queda registrado"
+
+  # Pedir ayuda no crea un espacio llamado '--help'.
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" new --help 2>&1)"
+  assert_contains "$out" "crux workspace new" "'new --help' enseña el uso"
+  assert_not_contains "$(cat "$CRUX_REGISTRY" 2>/dev/null || echo '')" "help" \
+    "y no registra un espacio con ese nombre"
+}
+
+test_el_cerrojo_del_registro_no_deja_el_kernel_muerto() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+
+  # Un proceso muerto en seco —un OOM, un Ctrl-C duro— dejaba el cerrojo
+  # puesto para siempre, y ningún comando sabía retirarlo.
+  mkdir -p "$(dirname "$CRUX_REGISTRY")/.workspaces.lock"
+  echo 999999 > "$(dirname "$CRUX_REGISTRY")/.workspaces.lock/pid"
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new tras-el-oom --repo "$root/app" 2>&1)"
+  assert_contains "$out" "listo" "un cerrojo de un proceso que ya no existe se retira solo"
+
+  # Y el cerrojo no puede seguir cogido mientras corre el setup del proyecto,
+  # que es lo que hacía chocar a dos espacios lanzados a la vez.
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const j = JSON.parse(fs.readFileSync(f, "utf8"));
+    j.workspace.setup = "test -d " + process.argv[2] + " && echo COGIDO > " + process.argv[3] + " || echo LIBRE > " + process.argv[3];
+    fs.writeFileSync(f, JSON.stringify(j));
+  ' "$root/proj-docs/crux.json" "$(dirname "$CRUX_REGISTRY")/.workspaces.lock" "$SB/durante-setup"
+  bash "$CRUX_HOME/bin/workspace.sh" new con-setup --repo "$root/app" >/dev/null 2>&1
+  assert_eq "LIBRE" "$(cat "$SB/durante-setup" 2>/dev/null || echo AUSENTE)" \
+    "el cerrojo se suelta antes del setup, que puede tardar minutos"
+}
