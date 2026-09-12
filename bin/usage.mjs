@@ -41,8 +41,21 @@ const TRANSCRIPTS = process.env.CRUX_TRANSCRIPTS
         : join(HOME, '.claude', 'projects'))
 
 const args = process.argv.slice(2)
-const days = Number((args.find(a => a.startsWith('--days')) || '').split('=')[1] || 90)
 const showAll = args.includes('--all')
+
+// Un valor que no es número se dice, no se sustituye por el defecto en silencio.
+function leerDias(lista) {
+  const i = lista.findIndex(a => a === '--days' || a.startsWith('--days='))
+  if (i === -1) return 90
+  const crudo = lista[i].includes('=') ? lista[i].slice('--days='.length) : lista[i + 1]
+  const n = Number(crudo)
+  if (crudo === undefined || crudo === '' || !Number.isFinite(n) || n <= 0) {
+    console.error(`--days: '${crudo ?? ''}' no es un número de días`)
+    process.exit(1)
+  }
+  return n
+}
+const days = leerDias(args)
 
 function catalogo() {
   const out = new Map()
@@ -95,6 +108,28 @@ const VERBO_DE_LECTURA = /\b(cat|sed|awk|grep|head|tail|less|ls|wc|chmod|cp|mv|r
 // sin esto la skill recién parida aparece como la más usada del catálogo.
 const EDITA_EL_SCRIPT = /<<\s*['"]?\w*(PY|EOF|SH)\b|chmod\s|cat\s*>|>>\s*\S|sed -i|\.replace\(/
 
+// Lo que delega una sesión cuelga de <sesión>/subagents/ y cuenta como esa sesión.
+function sesionesDe(dirProyecto) {
+  const grupos = new Map()
+  const visita = (dir, raiz) => {
+    let entradas
+    try { entradas = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entradas) {
+      const full = join(dir, e.name)
+      if (e.isDirectory()) { visita(full, raiz || e.name); continue }
+      if (!e.name.endsWith('.jsonl')) continue
+      const id = raiz || e.name.slice(0, -'.jsonl'.length)
+      grupos.set(id, [...(grupos.get(id) || []), full])
+    }
+  }
+  visita(dirProyecto, null)
+  return grupos
+}
+
+function esDirectorio(ruta) {
+  try { return statSync(ruta).isDirectory() } catch { return false }
+}
+
 function invocaciones(desde) {
   const cuenta = new Map()
   const porScript = new Map()
@@ -104,13 +139,16 @@ function invocaciones(desde) {
 
   for (const proyecto of readdirSync(TRANSCRIPTS)) {
     const dir = join(TRANSCRIPTS, proyecto)
-    if (!statSync(dir).isDirectory()) continue
-    for (const f of readdirSync(dir)) {
-      if (!f.endsWith('.jsonl')) continue
-      const full = join(dir, f)
-      if (statSync(full).mtimeMs < desde) continue
+    if (!esDirectorio(dir)) continue
+    for (const partes of sesionesDe(dir).values()) {
+      const reciente = partes.some((f) => {
+        try { return statSync(f).mtimeMs >= desde } catch { return false }
+      })
+      if (!reciente) continue
       ficheros++
-      const texto = readFileSync(full, 'utf8')
+      const texto = partes.map((f) => {
+        try { return readFileSync(f, 'utf8') } catch { return '' }
+      }).join('\n')
       const llamadasAqui = new Set()
       for (const m of texto.matchAll(/"name"\s*:\s*"Skill"\s*,\s*"input"\s*:\s*\{\s*"skill"\s*:\s*"([^"]+)"/g)) {
         llamadasAqui.add(m[1])
