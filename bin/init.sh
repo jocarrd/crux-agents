@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -f "$CRUX_HOME/profiles/$PROFILE.json" ]] || die "perfil desconocido: $PROFILE"
+perfil_existe "$PROFILE" || die "perfil desconocido: $PROFILE"
 [[ "$PROJECT" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || die "el nombre debe ir en kebab-case minúscula: $PROJECT"
 
 ROOT="$PARENT/$PROJECT"

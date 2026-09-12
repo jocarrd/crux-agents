@@ -196,10 +196,18 @@ cmd_new() {
   local repo_name; repo_name="$(basename "$repo")"
   local parent; parent="$(dirname "$repo")"
   local path="$parent/${repo_name}-ws-${name}"
+  local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
+  local perfil=""
+  [[ -n "$docs" && -f "$docs/crux.json" ]] &&
+    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
+
   # El nombre del espacio es local; el de la rama se publica. En el repo de un
   # cliente `ws/<lo-que-sea>` enseña nuestra nomenclatura y, si el nombre va en
-  # otro idioma, también eso. Por eso la rama se puede fijar aparte.
-  local branch="${rama_pedida:-ws/$name}"
+  # otro idioma, también eso. Por eso el patrón lo decide el perfil y la rama se
+  # puede fijar aparte.
+  local patron branch
+  patron="$(perfil_get "$perfil" "$docs" branch.pattern "ws/{{name}}")"
+  branch="${rama_pedida:-${patron//\{\{name\}\}/$name}}"
 
   [[ -e "$path" ]] && die "ya existe $path"
 
@@ -215,18 +223,15 @@ cmd_new() {
   ' "$REGISTRY" "$repo" 2>/dev/null || true)"
   [[ -n "$otros" ]] && warn "ya hay trabajo abierto sobre $repo_name: $otros"
 
-  local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
-
   # `pointers.write: false` dice que la documentación del estándar no se escribe
   # en el repo de código; no dice que no se pueda trabajar en él. Una rama local
   # no es documentación, y en un repo de cliente desarrollar es justo el encargo:
   # bloquearlo impedía la tarea sin proteger nada. Se avisa de a dónde va la
   # documentación y se sigue. Lo que sí sale hacia el cliente es `finish`, que
   # empuja la rama y abre la propuesta: ahí es donde toca mirar.
-  if [[ -n "$docs" && -f "$docs/crux.json" ]]; then
-    local perfil escribe
-    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
-    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo "true")"
+  if [[ -n "$perfil" ]]; then
+    local escribe
+    escribe="$(perfil_get "$perfil" "$docs" pointers.write true)"
     if [[ "$escribe" != "true" && $FORZAR -eq 0 ]]; then
       warn "perfil $perfil: la rama y el worktree son locales y tuyos, pero la"
       warn "documentación de $repo_name va a $(basename "$docs"), no al repo del cliente"

@@ -57,7 +57,7 @@ DECLARED="$(json_get "$CONFIG" crux 2>/dev/null || echo "?")"
 LANG_DECLARADO="$(json_get "$CONFIG" language 2>/dev/null || echo "es")"
 KERNEL="$(crux_version)"
 
-[[ -f "$CRUX_HOME/profiles/$PROFILE.json" ]] || fail "perfil desconocido: $PROFILE"
+perfil_existe "$PROFILE" "$DOCS" || fail "perfil desconocido: $PROFILE"
 # Solo la serie: un patch no trae plantillas ni comprobaciones, así que avisar
 # por él manda a un upgrade que no cambia nada.
 if [[ "${DECLARED%.*}" != "${KERNEL%.*}" ]]; then
@@ -154,7 +154,7 @@ section_ok "repos: ${#declared[@]} declarados"
 # --- 4. Reglas del perfil ----------------------------------------------------
 
 section
-WRITES_POINTERS="$(json_get "$CRUX_HOME/profiles/$PROFILE.json" 'pointers.write' 2>/dev/null || echo "true")"
+WRITES_POINTERS="$(perfil_get "$PROFILE" "$DOCS" pointers.write true)"
 
 if [[ "$WRITES_POINTERS" == "true" ]]; then
   for repo in ${declared[@]+"${declared[@]}"}; do
@@ -187,6 +187,10 @@ else
       fi
     done
   done
+fi
+if [[ -n "$(perfil_get "$PROFILE" "$DOCS" rules "")" ]] &&
+   ! grep -qF 'crux:begin perfil' "$DOCS/AGENTS.md" 2>/dev/null; then
+  note "las reglas del perfil no están en AGENTS.md ('crux link')"
 fi
 section_ok "reglas del perfil $PROFILE"
 

@@ -54,9 +54,47 @@ tagline_de() {
   echo "${out:-parte de $PROJECT}"
 }
 
+# --- Reglas del perfil -------------------------------------------------------
+#
+# Estaban en el perfil y nadie las leía, o copiadas a mano en el AGENTS.md de un
+# proyecto diciendo que doctor las hacía cumplir, que era falso. Se escriben
+# desde el perfil, en un bloque gestionado, y doctor comprueba que estén.
+
+escribir_reglas_del_perfil() {
+  local reglas; reglas="$(perfil_get "$PROFILE" "$DOCS" rules "")"
+  [[ -n "$reglas" ]] || return 0
+
+  local bloque
+  bloque="$(printf '<!-- crux:begin perfil -->\n## Reglas del perfil `%s`\n\nLas declara el perfil, y `crux doctor` comprueba que estén escritas aquí.\nCumplirlas es cosa de quien trabaja: son reglas de trabajo, no\ncomprobaciones automáticas.\n\n' "$PROFILE")"
+  local r
+  while IFS= read -r r; do
+    [[ -n "$r" ]] || continue
+    bloque="$bloque$(printf -- '- %s\n' "$r")"
+  done <<< "$reglas"
+  bloque="$bloque$(printf '\n<!-- crux:end -->')"
+
+  local destino="$DOCS/AGENTS.md"
+  [[ -f "$destino" ]] || return 0
+  if grep -qF 'crux:begin perfil' "$destino"; then
+    node -e '
+      const fs = require("fs");
+      const [f, bloque] = process.argv.slice(1);
+      const re = /<!-- crux:begin perfil[\s\S]*?crux:end -->/;
+      const actual = fs.readFileSync(f, "utf8");
+      if (actual.match(re)[0] === bloque) process.exit(2);
+      fs.writeFileSync(f, actual.replace(re, bloque));
+    ' "$destino" "$bloque" && ok "reglas del perfil $PROFILE actualizadas en AGENTS.md" || true
+  else
+    printf '\n%s\n' "$bloque" >> "$destino"
+    ok "reglas del perfil $PROFILE escritas en AGENTS.md"
+  fi
+}
+
+escribir_reglas_del_perfil
+
 # --- Punteros de los repos de código ----------------------------------------
 
-WRITES_POINTERS="$(json_get "$CRUX_HOME/profiles/$PROFILE.json" 'pointers.write' 2>/dev/null || echo "true")"
+WRITES_POINTERS="$(perfil_get "$PROFILE" "$DOCS" pointers.write true)"
 
 if [[ "$WRITES_POINTERS" != "true" ]]; then
   warn "perfil $PROFILE: no se escribe nada fuera del docs repo"

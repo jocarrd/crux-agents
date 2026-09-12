@@ -35,7 +35,7 @@ CONFIG="$DOCS/crux.json"
 # --- Perfil ------------------------------------------------------------------
 
 PROFILE="${PROFILE:-multi-repo}"
-[[ -f "$CRUX_HOME/profiles/$PROFILE.json" ]] || die "perfil desconocido: $PROFILE"
+perfil_existe "$PROFILE" "$TARGET" || die "perfil desconocido: $PROFILE"
 
 # --- Repos: los que ya tienen carpeta de documentación ----------------------
 

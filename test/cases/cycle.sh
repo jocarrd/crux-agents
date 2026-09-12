@@ -1103,3 +1103,21 @@ test_list_dice_desde_cuando_esta_abierto_un_espacio() {
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" list --all)"
   assert_contains "$out" "hoy" "un espacio abierto hoy se ve como tal"
 }
+
+test_el_perfil_decide_como_se_llama_la_rama() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local casa="$SB/home"; mkdir -p "$casa/.crux/profiles"
+  printf '{"name":"suyo","pointers":{"write":true},"branch":{"pattern":"feature/{{name}}"}}\n' \
+    > "$casa/.crux/profiles/suyo.json"
+  local root; root="$(_repo_con_config)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const j = JSON.parse(fs.readFileSync(f, "utf8")); j.profile = "suyo";
+    fs.writeFileSync(f, JSON.stringify(j));
+  ' "$root/proj-docs/crux.json"
+
+  env HOME="$casa" bash "$CRUX_HOME/bin/workspace.sh" new algo --repo "$root/app" >/dev/null 2>&1
+  assert_eq "feature/algo" "$(git -C "$root/app-ws-algo" rev-parse --abbrev-ref HEAD)" \
+    "la rama sigue el patrón del perfil"
+}
