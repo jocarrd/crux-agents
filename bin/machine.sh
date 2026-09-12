@@ -142,7 +142,23 @@ if [[ -f "$registro" ]]; then
   ' "$registro" 2>/dev/null || echo "0|")"
   total="${vivos%%|*}"; muertos="${vivos#*|}"
   [[ "$total" -gt 0 ]] && ok "$total espacios de trabajo registrados"
-  [[ -n "$muertos" ]] && note "espacios en el registro sin directorio: $muertos — 'crux workspace rm'"
+  [[ -n "$muertos" ]] && note "espacios en el registro sin directorio: $muertos — 'crux workspace gc'"
+
+  # El registro y el disco también se separan al revés, y así no se ve nunca.
+  raiz_ws="$(projects_root)"
+  registrados="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(Object.values(r.workspaces || {}).map((w) => w.path).join("\n"));
+  ' "$registro" 2>/dev/null || true)"
+  sueltos=0
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    printf '%s\n' "$registrados" | grep -qxF "$d" && continue
+    git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue
+    sueltos=$((sueltos + 1))
+  done < <(find "$raiz_ws" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null)
+  [[ $sueltos -gt 0 ]] && note "$sueltos worktrees en disco que el registro no conoce — 'crux workspace gc'"
 fi
 
 # --- Resumen -----------------------------------------------------------------

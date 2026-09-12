@@ -171,6 +171,86 @@ recibo_en_rojo() {
   }' "$1"
 }
 
+# --- Perfiles ----------------------------------------------------------------
+#
+# Tres capas, de la general a la concreta: la que trae el kernel, la del usuario
+# —que sobrevive al upgrade y viaja con la máquina— y la del proyecto. Se
+# solapan campo a campo, así que un proyecto puede cambiar uno sin copiar el
+# resto, y un perfil propio no obliga a tocar el repo del kernel.
+
+perfil_capas() {
+  # perfil_capas <nombre> [docs] — las rutas que existen, de menos a más específica.
+  local nombre="$1" docs="${2:-}"
+  local c
+  for c in "$CRUX_HOME/profiles/$nombre.json" "$HOME/.crux/profiles/$nombre.json"; do
+    [[ -f "$c" ]] && echo "$c"
+  done
+  [[ -n "$docs" && -f "$docs/profile.json" ]] && echo "$docs/profile.json"
+  return 0
+}
+
+perfil_existe() {
+  # perfil_existe <nombre> [docs]
+  [[ -n "$(perfil_capas "$1" "${2:-}")" ]]
+}
+
+perfil_json() {
+  # perfil_json <nombre> [docs] — el perfil con las capas ya solapadas.
+  local capas; capas="$(perfil_capas "$1" "${2:-}")"
+  [[ -n "$capas" ]] || { echo '{}'; return 0; }
+  printf '%s\n' "$capas" | node -e '
+    const fs = require("fs");
+    let crudo = "";
+    process.stdin.on("data", (d) => (crudo += d)).on("end", () => {
+      const fundir = (a, b) => {
+        for (const [k, v] of Object.entries(b)) {
+          a[k] = (v && typeof v === "object" && !Array.isArray(v)
+                  && a[k] && typeof a[k] === "object" && !Array.isArray(a[k]))
+            ? fundir({ ...a[k] }, v) : v;
+        }
+        return a;
+      };
+      let o = {};
+      for (const f of crudo.split("\n").filter(Boolean)) {
+        o = fundir(o, JSON.parse(fs.readFileSync(f, "utf8")));
+      }
+      process.stdout.write(JSON.stringify(o));
+    });
+  '
+}
+
+perfil_get() {
+  # perfil_get <nombre> <docs> <clave> [defecto]
+  local nombre="$1" docs="$2" clave="$3" defecto="${4:-}" valor
+  valor="$(perfil_json "$nombre" "$docs" | node -e '
+    const clave = process.argv[1];
+    let crudo = "";
+    process.stdin.on("data", (d) => (crudo += d)).on("end", () => {
+      const v = clave.split(".").reduce((x, k) => (x == null ? x : x[k]), JSON.parse(crudo));
+      if (v === undefined || v === null) process.exit(2);
+      process.stdout.write(Array.isArray(v) ? v.join("\n") : String(v));
+    });
+  ' "$clave")" || { [[ -n "$defecto" ]] && echo "$defecto"; return 0; }
+  echo "$valor"
+}
+
+perfil_forbid() {
+  # perfil_forbid <nombre> [docs] — un patrón por línea, con su motivo detrás
+  # de un tabulador.
+  perfil_json "$1" "${2:-}" | node -e '
+    let crudo = "";
+    process.stdin.on("data", (d) => (crudo += d)).on("end", () => {
+      const lista = (JSON.parse(crudo).propose || {}).forbid || [];
+      for (const e of lista) {
+        const patron = typeof e === "string" ? e : e.patron;
+        if (!patron) continue;
+        const motivo = (typeof e === "object" && e.motivo) || "el perfil no deja que esto salga en una propuesta";
+        process.stdout.write(`${patron}\t${motivo}\n`);
+      }
+    });
+  '
+}
+
 # --- Raíz de los proyectos ---------------------------------------------------
 #
 # No se asume una carpeta concreta: la pista más fiable es que el propio kernel
@@ -199,6 +279,9 @@ find_docs_repo() {
   # Sube desde el directorio dado hasta encontrar un crux.json.
   # Si no lo encuentra, prueba con el hermano <project>-docs del padre.
   local dir="${1:-$PWD}"
+  # Sin esto la ruta quedaba vacía, y dirname "" devuelve "." indefinidamente:
+  # el bucle de abajo no terminaba nunca.
+  [[ -d "$dir" ]] || return 1
   dir="$(cd "$dir" && pwd)"
 
   local probe="$dir"

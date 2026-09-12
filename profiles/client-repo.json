@@ -12,5 +12,13 @@
     "Se distingue siempre lo medido de lo heredado de documentación previa: los documentos describen la intención del momento en que se escribieron, no el estado actual.",
     "Las notas de proyecto y las referencias van a git, no a memoria local del agente.",
     "La descripción de una propuesta de cambio dice qué cambia, qué se añade y por qué, más lo comprobado y lo pendiente. No nombra nuestro tooling —crux, sus comandos, sus skills, sus marcas— ni nuestros nombres de rama o procesos internos: quien lee no conoce cómo trabajamos por dentro y no le aporta nada. Los scripts del propio repo del cliente sí se citan, porque son suyos."
-  ]
+  ],
+  "propose": {
+    "forbid": [
+      {
+        "patron": "\\bcrux\\b|\\.crux-ship|/ship\\b|workspace (new|finish)|crux doctor",
+        "motivo": "esto nombra nuestro tooling en el repo de un cliente"
+      }
+    ]
+  }
 }

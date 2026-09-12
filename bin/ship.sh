@@ -106,17 +106,19 @@ cmd_body() {
   firma="$(grep -inE 'co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(generated|generado) with|🤖' "$fichero" || true)"
   [[ -n "$firma" ]] && reporta "la firma de la herramienta no va en una propuesta" "$firma"
 
-  # En un repo de cliente, además, no se enseña nuestro andamiaje.
-  local docs perfil escribe
+  # Lo demás lo declara el perfil, que es de quien depende: en el repo de un
+  # cliente no se enseña nuestro andamiaje, y en otro puede ser su nombre.
+  local docs perfil=""
   docs="$(find_docs_repo "$REPO" 2>/dev/null || echo "")"
-  if [[ -n "$docs" && -f "$docs/crux.json" ]]; then
+  [[ -n "$docs" && -f "$docs/crux.json" ]] &&
     perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
-    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo true)"
-    if [[ "$escribe" == "false" ]]; then
-      local nuestro
-      nuestro="$(grep -inE '\bcrux\b|\.crux-ship|/ship\b|workspace (new|finish)|crux doctor' "$fichero" || true)"
-      [[ -n "$nuestro" ]] && reporta "perfil $perfil: esto nombra nuestro tooling en el repo de un cliente" "$nuestro"
-    fi
+  if [[ -n "$perfil" ]]; then
+    local patron motivo hallado
+    while IFS=$'\t' read -r patron motivo; do
+      [[ -n "$patron" ]] || continue
+      hallado="$(grep -inE "$patron" "$fichero" || true)"
+      [[ -n "$hallado" ]] && reporta "perfil $perfil: $motivo" "$hallado"
+    done < <(perfil_forbid "$perfil" "$docs")
   fi
 
   if [[ $fallos -gt 0 ]]; then

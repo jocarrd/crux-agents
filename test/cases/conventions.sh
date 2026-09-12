@@ -163,3 +163,51 @@ test_conventions_aplica_las_reglas_tambien_en_un_repo_grande() {
   assert_contains "$(conventions_run "$repo")" "tipos declarados dentro de un .consts" \
     "la lista de ficheros no puede cerrarle la tubería a git y saltarse las reglas"
 }
+
+test_el_perfil_decide_el_idioma_del_commit() {
+  sandbox >/dev/null
+  local casa="$SB/home"; mkdir -p "$casa/.crux/profiles"
+  printf '{"name":"castellano","pointers":{"write":true},"commit":{"language":"es"}}\n' \
+    > "$casa/.crux/profiles/castellano.json"
+
+  local root="$CRUX_PROJECTS_DIR/ci"; mkdir -p "$root/app" "$root/ci-docs"
+  git -C "$root/app" init -q; git -C "$root/ci-docs" init -q
+  printf '{"crux":"0.1.0","project":"ci","profile":"castellano","repos":["app"],"sections":[]}\n' \
+    > "$root/ci-docs/crux.json"
+  ( cd "$root/ci-docs" && env HOME="$casa" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+
+  local f="$SB/msg"
+  printf 'feat: añade el aviso cuando la caché no responde\n\nEsto hace que el usuario vea el error real y no una pantalla en blanco.\n' > "$f"
+  assert_exit 0 "un perfil que declara español no rechaza el commit en español" \
+    bash "$root/app/.git/hooks/commit-msg" "$f"
+
+  # Y el que no lo declara sigue exigiendo inglés.
+  local otro="$CRUX_PROJECTS_DIR/en"; mkdir -p "$otro/app" "$otro/en-docs"
+  git -C "$otro/app" init -q; git -C "$otro/en-docs" init -q
+  printf '{"crux":"0.1.0","project":"en","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$otro/en-docs/crux.json"
+  ( cd "$otro/en-docs" && env HOME="$casa" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  assert_exit 1 "y sin declararlo se sigue pidiendo inglés" \
+    bash "$otro/app/.git/hooks/commit-msg" "$f"
+}
+
+test_el_perfil_declara_que_no_puede_salir_en_una_propuesta() {
+  sandbox >/dev/null
+  local casa="$SB/home"; mkdir -p "$casa/.crux/profiles"
+  printf '{"name":"nda","pointers":{"write":true},"propose":{"forbid":[{"patron":"nombre-del-cliente","motivo":"el nombre del cliente no sale de aquí"}]}}\n' \
+    > "$casa/.crux/profiles/nda.json"
+
+  local root="$CRUX_PROJECTS_DIR/pr"; mkdir -p "$root/app" "$root/pr-docs"
+  git -C "$root/app" init -q; git -C "$root/app" commit -q --allow-empty -m init
+  printf '{"crux":"0.1.0","project":"pr","profile":"nda","repos":["app"],"sections":[]}\n' \
+    > "$root/pr-docs/crux.json"
+
+  local b="$SB/cuerpo"
+  printf 'Arregla el cálculo para nombre-del-cliente.\n' > "$b"
+  local out; out="$(cd "$root/app" && env HOME="$casa" bash "$CRUX_HOME/bin/ship.sh" body "$b" 2>&1)"
+  assert_contains "$out" "no sale de aquí" "el patrón del perfil se comprueba, con su motivo"
+
+  printf 'Arregla el cálculo del desvío.\n' > "$b"
+  assert_exit 0 "y un cuerpo limpio pasa" \
+    env HOME="$casa" bash -c "cd '$root/app' && bash '$CRUX_HOME/bin/ship.sh' body '$b'"
+}

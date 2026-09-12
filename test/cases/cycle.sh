@@ -1016,10 +1016,10 @@ test_una_interrupcion_no_declara_el_espacio_listo() {
   # El worktree ya está en disco: la entrada se queda, porque borrarla dejaba
   # un worktree que la herramienta ya no reconocía y un slot repartido dos veces.
   if [[ -d "$root/app-ws-cortado" ]]; then
-    assert_not_contains "$(bash "$CRUX_HOME/bin/workspace.sh" rm cortado 2>&1)" "no existe el espacio" \
-      "el espacio a medias sigue registrado y se puede retirar"
     assert_contains "$(bash "$CRUX_HOME/bin/workspace.sh" list --all)" "cortado" \
-      "y se ve en la lista"
+      "el espacio a medias se ve en la lista"
+    assert_not_contains "$(bash "$CRUX_HOME/bin/workspace.sh" rm cortado 2>&1)" "no existe el espacio" \
+      "y se puede retirar"
   fi
 }
 
@@ -1034,4 +1034,107 @@ test_el_contrato_ilegible_no_se_convierte_en_puertos_por_defecto() {
   assert_contains "$out" "ilegible" "un contrato roto se dice"
   assert_not_contains "$out" "sin configuración de workspace" "y no se pasa por 'no hay configuración'"
   assert_no_file "$root/app-ws-roto/.env.local" "el espacio no arranca con los puertos por defecto"
+}
+
+test_gc_reconcilia_el_registro_con_el_disco() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new vivo --repo "$root/app" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new fantasma --repo "$root/app" >/dev/null 2>&1
+  # El worktree desaparece por fuera: es como queda tras un borrado a mano.
+  git -C "$root/app" worktree remove --force "$root/app-ws-fantasma" 2>/dev/null || rm -rf "$root/app-ws-fantasma"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
+  assert_contains "$out" "fantasma" "señala la entrada sin worktree"
+  assert_not_contains "$out" "vivo " "y no toca la que sí lo tiene"
+  assert_contains "$(cat "$CRUX_REGISTRY")" "fantasma" "sin --yes no borra nada"
+
+  bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
+  assert_not_contains "$(cat "$CRUX_REGISTRY")" "fantasma" "con --yes retira la entrada"
+  assert_contains "$(cat "$CRUX_REGISTRY")" "vivo" "y conserva la que está viva"
+}
+
+test_gc_ve_los_worktrees_que_el_registro_no_conoce() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+
+  # Un worktree creado a mano, o el que dejó una versión con el fallo del nombre.
+  git -C "$root/app" worktree add -b suelta "$root/app-ws-suelta" >/dev/null 2>&1
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
+  assert_contains "$out" "app-ws-suelta" "ve el worktree que no está registrado"
+  assert_contains "$out" "--con-disco" "y dice cómo retirarlo"
+
+  bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
+  assert_file "$root/app-ws-suelta/f.txt" "sin --con-disco no se toca el disco"
+
+  # Con trabajo dentro no se retira ni pidiéndolo.
+  echo pendiente > "$root/app-ws-suelta/sin-commitear.txt"
+  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --con-disco >/dev/null 2>&1
+  assert_file "$root/app-ws-suelta/sin-commitear.txt" "un worktree con cambios sin commitear se queda"
+
+  rm -f "$root/app-ws-suelta/sin-commitear.txt"
+  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --con-disco >/dev/null 2>&1
+  assert_no_file "$root/app-ws-suelta" "limpio y con --con-disco, se retira"
+}
+
+test_el_fichero_de_entorno_no_bloquea_el_cierre_del_espacio() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+  bash "$CRUX_HOME/bin/workspace.sh" new conenv --repo "$root/app" >/dev/null 2>&1
+
+  assert_file "$root/app-ws-conenv/.env.local" "el comando escribe el fichero de entorno"
+  assert_eq "" "$(git -C "$root/app-ws-conenv" status --porcelain)" \
+    "y no cuenta como cambio sin commitear: lo escribió crux, no tú"
+  assert_contains "$(bash "$CRUX_HOME/bin/workspace.sh" rm conenv 2>&1)" "slot liberado" \
+    "así que no bloquea el cierre del espacio"
+}
+
+test_list_dice_desde_cuando_esta_abierto_un_espacio() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+  bash "$CRUX_HOME/bin/workspace.sh" new reciente --repo "$root/app" >/dev/null 2>&1
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" list --all)"
+  assert_contains "$out" "hoy" "un espacio abierto hoy se ve como tal"
+}
+
+test_el_perfil_decide_como_se_llama_la_rama() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local casa="$SB/home"; mkdir -p "$casa/.crux/profiles"
+  printf '{"name":"suyo","pointers":{"write":true},"branch":{"pattern":"feature/{{name}}"}}\n' \
+    > "$casa/.crux/profiles/suyo.json"
+  local root; root="$(_repo_con_config)"
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const j = JSON.parse(fs.readFileSync(f, "utf8")); j.profile = "suyo";
+    fs.writeFileSync(f, JSON.stringify(j));
+  ' "$root/proj-docs/crux.json"
+
+  env HOME="$casa" bash "$CRUX_HOME/bin/workspace.sh" new algo --repo "$root/app" >/dev/null 2>&1
+  assert_eq "feature/algo" "$(git -C "$root/app-ws-algo" rev-parse --abbrev-ref HEAD)" \
+    "la rama sigue el patrón del perfil"
+}
+
+test_usage_dice_con_que_palabras_aparecio_el_problema() {
+  sandbox >/dev/null
+  local t="$SB/transcripts/p"; mkdir -p "$t"
+  # El procedimiento se sigue a mano y nadie llama a la skill: lo que falta es
+  # saber con qué palabras se pidió, que es lo que su descripción no lleva.
+  {
+    printf '{"type":"user","message":{"role":"user","content":"esto parece espagueti y da miedo tocarlo"}}\n'
+    printf '{"name":"Bash","input":{"command":"node scripts/health.mjs ."}}\n'
+  } > "$t/s.jsonl"
+
+  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  assert_contains "$out" "code-health" "señala la skill que se siguió sin llamar"
+  assert_contains "$out" "espagueti" "y con qué palabras se pidió el trabajo"
+  assert_not_contains "$out" "duplicación" "sin repetir lo que la descripción ya dice"
+  assert_not_contains "$out" " esto" "sin las palabras vacías"
 }

@@ -3,12 +3,18 @@
   "description": "Proyecto propio con uno o varios repos de código hermanos del docs repo.",
   "pointers": {
     "write": true,
-    "files": ["AGENTS.md", "CLAUDE.md"]
+    "files": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ]
   },
   "rules": [
     "La documentación específica de un repo vive en repos/<repo>/, nunca dentro del repo de código.",
     "Al cambiar código que afecta a una doc, se actualiza la doc en el mismo turno.",
     "Las notas de proyecto y las referencias van a git, no a memoria local del agente.",
     "Los cambios en el docs repo se commitean y pushean al terminar."
-  ]
+  ],
+  "commit": {
+    "language": "en"
+  }
 }

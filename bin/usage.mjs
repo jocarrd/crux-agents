@@ -57,12 +57,24 @@ function leerDias(lista) {
 }
 const days = leerDias(args)
 
+function descripcionDe(dir) {
+  try {
+    const t = readFileSync(join(dir, 'SKILL.md'), 'utf8')
+    const m = t.match(/^description:\s*([\s\S]*?)(?:\n[a-z-]+:|\n---)/m)
+    return (m ? m[1] : '').toLowerCase()
+  } catch { return '' }
+}
+
+const DESCRIPCIONES = new Map()
+
 function catalogo() {
   const out = new Map()
   const kernel = join(CRUX_HOME, 'skills')
   if (existsSync(kernel)) {
     for (const n of readdirSync(kernel)) {
-      if (statSync(join(kernel, n)).isDirectory()) out.set(n, 'kernel')
+      if (!statSync(join(kernel, n)).isDirectory()) continue
+      out.set(n, 'kernel')
+      DESCRIPCIONES.set(n, descripcionDe(join(kernel, n)))
     }
   }
   const proyectos = PROYECTOS
@@ -75,7 +87,9 @@ function catalogo() {
         const skills = join(dir, sub, '.claude', 'skills', 'project')
         if (!existsSync(skills)) continue
         for (const n of readdirSync(skills)) {
-          if (statSync(join(skills, n)).isDirectory()) out.set(n, sub.replace('-docs', ''))
+          if (!statSync(join(skills, n)).isDirectory()) continue
+          out.set(n, sub.replace('-docs', ''))
+          DESCRIPCIONES.set(n, descripcionDe(join(skills, n)))
         }
       }
     }
@@ -130,9 +144,38 @@ function esDirectorio(ruta) {
   try { return statSync(ruta).isDirectory() } catch { return false }
 }
 
+const VACIAS = new Set(`esto esta este eso ese aqui alli para porque cuando donde
+  como cual cuanto todo toda todos todas otro otra mucho mucha muy mas menos
+  pero aunque desde hasta sobre entre segun tambien ahora antes despues siempre
+  nunca hacer haces hace tiene tener puede poder debe deja pasa sigue vuelve
+  quiero quieres vamos vale bien mal cosa cosas parte partes vez veces
+  the this that with from have has been they there their what when where which
+  would could should about into your just like make made only over such than
+  them then were will your`.split(/\s+/).filter(Boolean))
+
+// Solo el mensaje que abre la sesión: es el que escribe la persona, y es donde
+// se pide el trabajo. Tomando más, entraban pegados de código y de salida de
+// tests, y las sugerencias eran "classname", "const" y "ntests".
+function palabrasDelUsuario(texto) {
+  const palabras = []
+  let mensajes = 0
+  for (const m of texto.matchAll(/"type"\s*:\s*"user"[^\n]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
+    if (mensajes >= 1) break
+    const dicho = m[1]
+    if (dicho.length > 400) continue
+    if ((dicho.match(/\\n/g) || []).length > 2) continue
+    mensajes++
+    for (const w of dicho.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/)) {
+      if (w.length > 4 && w.length < 20 && !/\d/.test(w) && !VACIAS.has(w)) palabras.push(w)
+    }
+  }
+  return palabras
+}
+
 function invocaciones(desde) {
   const cuenta = new Map()
   const porScript = new Map()
+  const dichoAsi = new Map()
   const scripts = scriptsDelCatalogo()
   let sesiones = 0
   if (!existsSync(TRANSCRIPTS)) return { cuenta, porScript, sesiones }
@@ -168,17 +211,22 @@ function invocaciones(desde) {
           }
         }
       }
+      const dichas = scriptsAqui.size ? palabrasDelUsuario(texto) : []
       for (const skill of scriptsAqui) {
         porScript.set(skill, (porScript.get(skill) || 0) + 1)
+        if (llamadasAqui.has(skill)) continue
+        const cuentas = dichoAsi.get(skill) || new Map()
+        for (const w of dichas) cuentas.set(w, (cuentas.get(w) || 0) + 1)
+        dichoAsi.set(skill, cuentas)
       }
     }
   }
-  return { cuenta, porScript, sesiones }
+  return { cuenta, porScript, sesiones, dichoAsi }
 }
 
 const desde = Date.now() - days * 24 * 3600 * 1000
 const cat = catalogo()
-const { cuenta, porScript, sesiones } = invocaciones(desde)
+const { cuenta, porScript, sesiones, dichoAsi } = invocaciones(desde)
 
 console.log(`uso de skills — últimos ${days} días · ${sesiones} sesiones revisadas\n`)
 
@@ -214,6 +262,16 @@ if (descripcionMuda.length) {
   console.log('\nSe siguieron a mano y nadie las llamó por su nombre:\n')
   for (const [nombre, , scripts] of descripcionMuda) {
     console.log(`  ${nombre} — ${scripts} ${scripts === 1 ? 'sesión' : 'sesiones'}`)
+    // Las palabras con las que se pidió el trabajo y que su descripción no
+    // lleva: es lo que hay que meterle para que se active sola.
+    const desc = DESCRIPCIONES.get(nombre) || ''
+    const faltan = [...(dichoAsi.get(nombre) || new Map())]
+      .filter(([w]) => !desc.includes(w))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([w]) => w)
+    // Con una o dos palabras sueltas no hay señal, solo ruido con formato.
+    if (faltan.length >= 3) console.log(`      se pidió así: ${faltan.join(', ')}`)
   }
   console.log('\n  El trabajo se hizo, así que la skill no sobra: lo que falla es su')
   console.log('  descripción, que no lleva las palabras con las que aparece el problema.')

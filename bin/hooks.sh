@@ -169,9 +169,10 @@ EOF
   # imponerles los nuestros sería el mismo error que el perfil client-repo
   # existe para evitar.
   instalar_commit_msg() {
-    local repo="$1" alcance="${2:-full}" hooks
+    local repo="$1" alcance="${2:-full}" idioma="${3:-en}" hooks
     hooks="$(dir_hooks "$repo")" || return 1
-    sed "s|^SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-full}\"|SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-$alcance}\"|" \
+    sed -e "s|^SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-full}\"|SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-$alcance}\"|" \
+        -e "s|^IDIOMA=\"\${CRUX_COMMIT_MSG_LANG:-en}\"|IDIOMA=\"\${CRUX_COMMIT_MSG_LANG:-$idioma}\"|" \
       "$COMMIT_MSG" > "$hooks/commit-msg"
     chmod +x "$hooks/commit-msg"
   }
@@ -216,16 +217,17 @@ EOF
     # aparecer era precisamente el único sin la red que la quita.
     local raiz repo perfil escribe alcance
     perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo multi-repo)"
-    escribe="$(json_get "$CRUX_HOME/profiles/$perfil.json" 'pointers.write' 2>/dev/null || echo true)"
+    escribe="$(perfil_get "$perfil" "$docs" pointers.write true)"
     alcance=full
     [[ "$escribe" == "false" ]] && alcance=signature
+    local idioma; idioma="$(perfil_get "$perfil" "$docs" commit.language en)"
     raiz="$(dirname "$docs")"
     while IFS= read -r repo; do
       [[ -n "$repo" ]] || continue
       git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
       # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
       # entero por set -e, y los repos siguientes se quedarían sin enganchar.
-      if instalar_commit_msg "$raiz/$repo" "$alcance"; then
+      if instalar_commit_msg "$raiz/$repo" "$alcance" "$idioma"; then
         ok "commit-msg en $repo${alcance:+ ($alcance)}"
       fi
       # La rama principal se protegía en el kernel y en el docs repo, y no en

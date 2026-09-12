@@ -16,6 +16,7 @@
 # perfil client-repo existe para evitar. Lo que no es suyo ni nuestro es la
 # firma del agente: esa no debe aparecer en ningún sitio.
 SCOPE="${CRUX_COMMIT_MSG_SCOPE:-full}"
+IDIOMA="${CRUX_COMMIT_MSG_LANG:-en}"
 
 set -u
 
@@ -83,6 +84,8 @@ fi
 #
 # Las líneas de comentario son de git, y lo que va en backticks es código: ni
 # una cosa ni la otra dicen en qué idioma está escrito el mensaje.
+[[ "$IDIOMA" == "en" ]] || exit 0
+
 msg="$(sed -e '/^#/d' -e 's/`[^`]*`//g' "$1" | tr '[:upper:]' '[:lower:]')"
 
 pistas="$(printf '%s' "$msg" | grep -owE \

@@ -1796,3 +1796,76 @@ test_status_distingue_el_contrato_ilegible_de_la_ausencia() {
 
   assert_exit 1 "y --check sale 1, como el de memory" bash "$CRUX_HOME/bin/status.sh" --check
 }
+
+test_un_perfil_propio_sobrevive_al_kernel() {
+  sandbox >/dev/null
+  local casa="$SB/home"; mkdir -p "$casa/.crux/profiles"
+  # Un perfil entero del usuario, que el kernel no trae.
+  printf '{"name":"solo","description":"mío","pointers":{"write":false},"rules":["la mía"]}\n' \
+    > "$casa/.crux/profiles/solo.json"
+
+  local docs="$CRUX_PROJECTS_DIR/mp/mp-docs"
+  env HOME="$casa" bash "$CRUX_HOME/bin/init.sh" mp --no-remote \
+    --parent "$CRUX_PROJECTS_DIR" --profile solo >/dev/null 2>&1
+  assert_file "$docs/crux.json" "init acepta un perfil que solo existe en ~/.crux/profiles"
+
+  local out; out="$(env HOME="$casa" bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_not_contains "$out" "perfil desconocido" "y doctor lo reconoce"
+  assert_contains "$out" "perfil solo" "por su nombre"
+}
+
+test_el_proyecto_puede_solapar_un_campo_del_perfil() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project sp)"
+  # El proyecto no redefine el perfil entero: cambia un campo.
+  printf '{"pointers":{"write":false}}\n' > "$docs/profile.json"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "perfil multi-repo" "sigue siendo su perfil"
+  # multi-repo escribe punteros; con el solapado, no.
+  mkdir -p "$(dirname "$docs")/app" && git -C "$(dirname "$docs")/app" init -q
+  printf '# ajeno\n' > "$(dirname "$docs")/app/AGENTS.md"
+  git -C "$(dirname "$docs")/app" add -A
+  git -C "$(dirname "$docs")/app" commit -qm init
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const j = JSON.parse(fs.readFileSync(f, "utf8")); j.repos = ["app"];
+    fs.writeFileSync(f, JSON.stringify(j));
+  ' "$docs/crux.json"
+  out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "es del cliente" "el campo solapado manda sobre el del kernel"
+}
+
+test_un_directorio_que_no_existe_no_cuelga_los_comandos() {
+  sandbox >/dev/null
+  # find_docs_repo dejaba la ruta vacía y dirname "" devuelve "." para siempre.
+  local out
+  out="$(timeout 10 bash "$CRUX_HOME/bin/doctor.sh" "$SB/no-existe" 2>&1)"
+  local rc=$?
+  assert_eq "sí" "$([[ $rc -ne 124 ]] && echo sí || echo no)" "doctor no se queda colgado"
+  assert_contains "$out" "no" "y dice que no encuentra nada ahí"
+
+  out="$(timeout 10 bash "$CRUX_HOME/bin/link.sh" "$SB/no-existe" 2>&1)"
+  rc=$?
+  assert_eq "sí" "$([[ $rc -ne 124 ]] && echo sí || echo no)" "link tampoco"
+}
+
+test_las_reglas_del_perfil_se_escriben_y_se_verifican() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rp)"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  local agents; agents="$(cat "$docs/AGENTS.md")"
+  assert_contains "$agents" "crux:begin perfil" "link escribe el bloque de las reglas del perfil"
+  assert_contains "$agents" "La documentación específica de un repo vive" \
+    "con las reglas que declara el perfil, no copiadas a mano"
+  assert_contains "$agents" "que estén" "y dice qué comprueba doctor: que estén, no que se cumplan"
+
+  # Si alguien las borra, doctor lo dice en vez de callar.
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/<!-- crux:begin perfil[\s\S]*?crux:end -->/, ""));
+  ' "$docs/AGENTS.md"
+  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "reglas del perfil" \
+    "doctor avisa cuando el bloque no está"
+}
