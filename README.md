@@ -172,7 +172,7 @@ instala `crux hooks install`:
 | `crux adopt` | Registra un docs repo que ya existe bajo el estándar |
 | `crux add-repo <repo>` | Registra un repo nuevo en un proyecto adoptado |
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
-| `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta y fusión |
+| `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta, fusión y recogida |
 | `crux ship` | La puerta de calidad: ejecuta las comprobaciones y deja un recibo de lo que se ejecutó y con qué resultado. `workspace finish` lo exige. |
 | `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks y señales |
 | `crux merge <n>` | Mergea una propuesta tras decir cuál es y de qué repositorio |

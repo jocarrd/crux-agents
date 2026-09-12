@@ -212,8 +212,33 @@ El docs repo es propio, pero el repo de código pertenece a un cliente.
 - **Las propuestas no enseñan nuestro andamiaje.** Ni el tooling, ni los
   nombres de rama, ni los procesos internos. Ver §8.
 
-Los perfiles viven en `profiles/<nombre>.json` del kernel y `crux doctor` los
-hace cumplir. Un perfil no es prosa en un README: es una regla verificable.
+### De dónde sale un perfil
+
+De tres sitios, y se solapan campo a campo, de lo general a lo concreto:
+
+| Capa | Dónde | Para qué |
+| --- | --- | --- |
+| Kernel | `profiles/<nombre>.json` | Los que trae crux |
+| Máquina | `~/.crux/profiles/<nombre>.json` | Los tuyos, que sobreviven al upgrade |
+| Proyecto | `<docs>/profile.json` | Lo que cambia solo aquí |
+
+Un proyecto puede cambiar un campo sin copiar el resto, y un perfil propio no
+obliga a tocar el repo del kernel, que se reemplaza en cada versión.
+
+### Qué decide un perfil
+
+| Campo | Por defecto | Qué cambia |
+| --- | --- | --- |
+| `pointers.write` | `true` | Si se escriben punteros en los repos de código |
+| `propose.forbid` | la firma de la herramienta | Qué no puede aparecer en el cuerpo de una propuesta, con su motivo |
+| `branch.pattern` | `ws/{{name}}` | Cómo se llama la rama que abre un espacio |
+| `commit.language` | `en` | El idioma que exige el hook de commit |
+| `rules` | — | Las reglas de trabajo, en prosa |
+
+Los cuatro primeros los comprueban los comandos. Las `rules` no: `crux link` las
+escribe en el `AGENTS.md` del docs repo, en un bloque gestionado, y `doctor`
+comprueba que **estén escritas**, no que se cumplan. La diferencia importa, y
+decir lo contrario es la clase de verde que este estándar persigue.
 
 ---
 
