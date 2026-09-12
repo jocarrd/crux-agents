@@ -6,6 +6,7 @@
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
 #   crux workspace rm <nombre>
+#   crux workspace gc [--yes] [--con-disco]
 #   crux workspace prune [--yes]
 #
 # Un worktree de git aísla los ficheros, pero no el runtime: dos agentes sobre
@@ -287,8 +288,11 @@ cmd_new() {
   local comun; comun="$(git -C "$path" rev-parse --git-common-dir 2>/dev/null || echo "")"
   if [[ -n "$comun" ]]; then
     mkdir -p "$comun/info"
-    grep -qxF '.crux-ship' "$comun/info/exclude" 2>/dev/null \
-      || echo '.crux-ship' >> "$comun/info/exclude"
+    local ignorar
+    for ignorar in .crux-ship ${ENV_FILE:+"$ENV_FILE"}; do
+      grep -qxF "$ignorar" "$comun/info/exclude" 2>/dev/null \
+        || echo "$ignorar" >> "$comun/info/exclude"
+    done
   fi
 
   if [[ -n "$ENV_FILE" && "$ENV_TEMPLATE" != "{}" ]]; then
@@ -602,9 +606,16 @@ cmd_list() {
                         : "sin espacios activos");
       process.exit(0);
     }
+    const desde = (p) => {
+      try {
+        const dias = Math.floor((Date.now() - fs.statSync(p).mtimeMs) / 86400000);
+        return dias < 1 ? "hoy" : dias === 1 ? "ayer" : `hace ${dias} días`;
+      } catch { return ""; }
+    };
     for (const [name, w] of rows) {
-      const huerfano = fs.existsSync(w.path) ? "" : "  (sin worktree — libéralo con: crux workspace rm)";
-      console.log(`${name.padEnd(16)} slot ${w.slot}  puertos ${w.ports[0]}-${w.ports[1]}  ${w.path}${huerfano}`);
+      const vivo = fs.existsSync(w.path);
+      const cola = vivo ? desde(w.path) : "sin worktree — retíralo con: crux workspace gc";
+      console.log(`${name.padEnd(16)} slot ${String(w.slot).padStart(2)}  puertos ${w.ports[0]}-${w.ports[1]}  ${cola.padEnd(14)}  ${w.path}`);
     }
   ' "$REGISTRY" "$aqui"
 }
@@ -700,6 +711,115 @@ rama_integrada() {
   [[ -n "$estado" ]]
 }
 
+# El registro y el disco se separan en las dos direcciones: una entrada cuyo
+# worktree borró alguien a mano, y un worktree que nunca llegó al registro.
+# `prune` mira ramas; esto mira espacios.
+cmd_gc() {
+  local confirmado=0 con_disco=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes) confirmado=1; shift ;;
+      --con-disco) con_disco=1; shift ;;
+      *) die "opción desconocida: $1" ;;
+    esac
+  done
+
+  registry_init
+  local raiz; raiz="$(projects_root)"
+
+  local sin_worktree=()
+  while IFS= read -r n; do
+    [[ -n "$n" ]] && sin_worktree+=("$n")
+  done < <(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    for (const [n, w] of Object.entries(r.workspaces || {})) {
+      if (!fs.existsSync(w.path)) console.log(n);
+    }
+  ' "$REGISTRY")
+
+  local registrados; registrados="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(Object.values(r.workspaces || {}).map((w) => w.path).join("\n"));
+  ' "$REGISTRY")"
+
+  local sin_registrar=() d
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    printf '%s\n' "$registrados" | grep -qxF "$d" && continue
+    git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue
+    es_worktree "$d" || continue
+    sin_registrar+=("$d")
+  done < <(find "$raiz" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
+
+  if [[ ${#sin_worktree[@]} -eq 0 && ${#sin_registrar[@]} -eq 0 ]]; then
+    ok "registro y disco están de acuerdo"
+    return 0
+  fi
+
+  if [[ ${#sin_worktree[@]} -gt 0 ]]; then
+    echo "entradas del registro sin worktree en disco (${#sin_worktree[@]}):"
+    printf '      %s\n' "${sin_worktree[@]}"
+    echo
+  fi
+  if [[ ${#sin_registrar[@]} -gt 0 ]]; then
+    echo "worktrees en disco que el registro no conoce (${#sin_registrar[@]}):"
+    local w
+    for w in "${sin_registrar[@]}"; do
+      printf '      %s%s\n' "$(basename "$w")" "$(espacio_limpio "$w" || echo "  (con trabajo dentro)")"
+    done
+    echo
+  fi
+
+  if [[ $confirmado -eq 0 ]]; then
+    info "para retirar las entradas huérfanas: crux workspace gc --yes"
+    [[ ${#sin_registrar[@]} -gt 0 ]] \
+      && info "y los worktrees, si están limpios: crux workspace gc --yes --con-disco"
+    return 0
+  fi
+
+  local n
+  for n in ${sin_worktree[@]+"${sin_worktree[@]}"}; do
+    with_lock 50
+    borra_del_registro "$n"
+    unlock
+    ok "$n retirado del registro"
+  done
+
+  [[ $con_disco -eq 1 ]] || {
+    [[ ${#sin_registrar[@]} -gt 0 ]] && info "el disco no se toca sin --con-disco"
+    return 0
+  }
+
+  local w repo
+  for w in ${sin_registrar[@]+"${sin_registrar[@]}"}; do
+    if ! espacio_limpio "$w"; then
+      warn "$(basename "$w") tiene trabajo sin subir: se queda"
+      continue
+    fi
+    repo="$(repo_principal "$w")"
+    if git -C "$repo" worktree remove "$w" 2>/dev/null; then
+      ok "$(basename "$w") retirado del disco"
+    else
+      warn "no pude retirar $(basename "$w"): hazlo con 'git worktree remove'"
+    fi
+  done
+}
+
+# Un worktree se retira solo si no se pierde nada: ni cambios sin commitear ni
+# commits propios del espacio que no estén en ningún remoto. Contra la rama
+# principal y no contra HEAD: en un repo sin remoto, HEAD --not --remotes son
+# todos los commits del proyecto y nunca saldría limpio.
+espacio_limpio() {
+  local w="$1"
+  [[ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ]] || return 1
+  local base sueltos
+  base="$(rama_principal "$w")"
+  sueltos="$(git -C "$w" log --oneline "$base..HEAD" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${sueltos:-0}" -eq 0 ]]
+}
+
 cmd_prune() {
   local confirmado=0
   [[ "${1:-}" == "--yes" ]] && confirmado=1
@@ -760,7 +880,8 @@ case "${1:-}" in
   finish) shift; cmd_finish "$@" ;;
   merge)  shift; cmd_merge "$@" ;;
   rm)   shift; cmd_rm "$@" ;;
+  gc)   shift; cmd_gc "$@" ;;
   prune) shift; cmd_prune "$@" ;;
   help) uso ;;
-  *) uso >&2; die "uso: crux workspace {new|list|finish|merge|rm|prune}" ;;
+  *) uso >&2; die "uso: crux workspace {new|list|finish|merge|rm|gc|prune}" ;;
 esac
