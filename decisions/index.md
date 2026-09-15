@@ -223,6 +223,21 @@
   - Solo hay adaptador para un agente. La forma del contrato es independiente
     del cliente —`transport` se traduce a lo que cada uno llame—, pero mientras
     no exista el segundo adaptador eso es una intención, no una demostración.
+  - **Lo que encontró la revisión de la propuesta, antes de integrarla**: la
+    primera versión leía el nombre del servidor concatenándolo dentro de la
+    expresión que `json_get` pasa a `eval`, así que un `crux.json` clonado con un
+    nombre que llevara una comilla doble **ejecutaba código con solo pedir
+    `crux mcp status`**. De ahí salen tres cosas que ahora son parte de la
+    decisión: los nombres se validan con la misma regla que el resto del kernel,
+    ningún nombre se interpola nunca en una expresión —van como argumento, donde
+    no son código— y el docs repo recibe el fichero siempre, que es lo que
+    permite a `doctor` saber dónde *debería* haber uno. La revisión también
+    destapó que el doctor firmaba como conforme un `.mcp.json` inexistente o
+    manipulado a mano, y que las huellas de credencial se habían copiado en dos
+    sitios y ya habían nacido distintas: por ese hueco pasaba una contraseña
+    dentro de una `url`. Ahora viven en `lib/credential-prints.mjs` y la
+    traducción del formato en `lib/mcp-format.mjs`, que es lo que hace imposible
+    que el verificador y el escritor discrepen.
 - **Reversibility**: alta. El campo es aditivo: un `crux.json` sin `mcp` se
   comporta igual que antes. Los ficheros nuevos se borran y el bloque de doctor
   es uno numerado más.

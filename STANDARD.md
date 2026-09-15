@@ -219,12 +219,23 @@ mano en la configuración local del agente.
 | `env` | stdio | Variables del proceso |
 | `headers` | http, sse | Cabeceras, normalmente de autenticación |
 | `timeout` | opcional | Milisegundos |
-| `repos` | opcional | Dónde se escribe el fichero: `docs` (por defecto), `all`, o la lista de repos |
+| `repos` | opcional | Repos de código que además reciben el fichero: `all` o una lista. Por defecto `docs`, que es solo el docs repo |
+
+El docs repo recibe el fichero siempre, y `repos` dice a qué repos de código
+se copia además. Es lo que permite a `doctor` saber dónde *debería* haber un
+`.mcp.json` y avisar cuando falta —el caso de una máquina recién clonada— en vez
+de dar por bueno lo que no ha mirado.
 
 **Las credenciales se referencian, no se escriben**: `${VARIABLE}`. El
 `.mcp.json` se commitea, y `doctor` da error —no aviso— si encuentra un literal
-en una cabecera de autorización o una huella de credencial conocida. Por el
-mismo motivo, `check-secrets` mira los `.mcp.json` además de la documentación.
+en una cabecera de autorización o una huella de credencial conocida. Se miran
+`url`, `command`, `args`, `headers` y `env`: una contraseña dentro de la propia
+URL es igual de definitiva que un token en una cabecera. Por el mismo motivo,
+`check-secrets` mira los `.mcp.json` además de la documentación.
+
+El nombre de un servidor admite letras, dígitos, punto, guion y guion bajo, y
+nada más. No es estilo: el nombre viene de un contrato que se clona de un
+remoto, y acaba concatenado a rutas y a expresiones.
 
 El perfil manda sobre `repos`: donde no se escriben punteros tampoco se
 escribe esta configuración, así que en un repo de cliente se queda en el docs

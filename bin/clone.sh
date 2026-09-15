@@ -129,6 +129,14 @@ echo
   && ok "hooks enganchados" \
   || warn "no pude enganchar los hooks — hazlo con 'crux hooks install' desde $PROJECT-docs"
 
+# Y por el mismo motivo los servidores MCP que el proyecto declare: sin esto la
+# máquina nueva se queda sin ellos y el doctor no tendría con qué compararlo.
+if json_has "$DOCS/crux.json" 'mcp && Object.keys(root.mcp).length'; then
+  ( cd "$DOCS" && bash "$CRUX_HOME/bin/mcp.sh" install ) >/dev/null 2>&1 \
+    && ok "servidores MCP escritos" \
+    || warn "no pude escribir los servidores MCP — hazlo con 'crux mcp install' desde $PROJECT-docs"
+fi
+
 echo
 echo "listo: $ROOT"
 if [[ -f "$DOCS/operations/machine-onboarding.md" ]]; then

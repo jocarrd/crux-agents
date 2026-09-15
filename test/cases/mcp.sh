@@ -151,3 +151,89 @@ JSON
   assert_contains "$(node "$CRUX_HOME/lib/check-secrets.mjs" "$docs")" "token de GitHub" \
     "un token en el .mcp.json no se escapa por no ser markdown"
 }
+
+# --- Lo que encontró la revisión de la propuesta -----------------------------
+
+test_mcp_no_ejecuta_codigo_escondido_en_un_nombre() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project lambda)"
+  local marca="$SB/EJECUTADO"
+
+  # El contrato viaja en git: `crux clone` lo trae de un remoto ajeno. Si el
+  # nombre acaba dentro de una expresión que se evalúa, basta abrir el proyecto
+  # y pedir el estado para ejecutar código como el usuario.
+  node -e '
+    const fs = require("fs");
+    const [f, marca] = process.argv.slice(1);
+    const c = JSON.parse(fs.readFileSync(f, "utf8"));
+    const nombre = `x"];require("fs").writeFileSync(${JSON.stringify(marca)},"1");root.mcp["x`;
+    c.mcp = { [nombre]: { transport: "stdio", command: "node" } };
+    fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
+  ' "$docs/crux.json" "$marca"
+
+  mcp_run "$docs" status >/dev/null 2>&1 || true
+  assert_no_file "$marca" "un nombre de servidor no se evalúa como código"
+
+  assert_contains "$(mcp_run "$docs" install)" "no vale como nombre de servidor" \
+    "y además se rechaza al instalar"
+}
+
+test_mcp_para_un_secreto_en_la_url() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project mu)"
+  mcp_declara "$docs" '{"a":{"transport":"http","url":"https://jorge:S3cretoDeVerdad@interno.example/mcp"}}'
+
+  assert_contains "$(mcp_run "$docs" install)" "URL con contraseña dentro" \
+    "una credencial en la url no se cuela por no estar en una cabecera"
+  assert_no_file "$docs/.mcp.json" "y no llega a escribirse"
+}
+
+test_mcp_para_un_secreto_en_los_args() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project nu)"
+  mcp_declara "$docs" '{"b":{"transport":"stdio","command":"node","args":["./s.mjs","--token","ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"]}}'
+
+  assert_contains "$(mcp_run "$docs" install)" "token de GitHub" \
+    "un token pasado como argumento tampoco se cuela"
+  assert_no_file "$docs/.mcp.json" "y no llega a escribirse"
+}
+
+test_doctor_avisa_si_falta_el_mcp_json() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project xi)"
+  mcp_declara "$docs" '{"uno":{"transport":"http","url":"https://e.example/mcp"}}'
+
+  # Sin haber ejecutado install: en una máquina recién clonada no hay fichero, y
+  # decir "ok" ahí es el fallo que más cuesta ver, porque parece funcionar.
+  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "no tiene .mcp.json" \
+    "el doctor no da por bueno un fichero que no existe"
+}
+
+test_doctor_ve_un_mcp_json_cambiado_a_mano() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omicron)"
+  mcp_declara "$docs" '{"uno":{"transport":"http","url":"https://e.example/mcp"}}'
+  mcp_run "$docs" install >/dev/null
+
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    const j = JSON.parse(fs.readFileSync(f, "utf8"));
+    j.mcpServers.uno.url = "https://secuestrado.example/mcp";
+    fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+  ' "$docs/.mcp.json"
+
+  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "distinto de lo declarado" \
+    "una url cambiada en el fichero no pasa por conforme"
+}
+
+test_mcp_status_no_disimula_un_fichero_ilegible() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project pi)"
+  mcp_declara "$docs" '{"uno":{"transport":"http","url":"https://e.example/mcp"}}'
+  mcp_run "$docs" install >/dev/null
+  printf 'esto no es json {{{' > "$docs/.mcp.json"
+
+  assert_contains "$(mcp_run "$docs" status)" "ilegible" \
+    "el repo cuyo fichero está roto no desaparece del informe"
+}

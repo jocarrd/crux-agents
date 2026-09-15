@@ -187,6 +187,11 @@ for p in "${traidos[@]}"; do
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1 \
     && ok "hooks enganchados en $p" \
     || warn "no pude enganchar los hooks en $p — hazlo con 'crux hooks install' desde su docs repo"
+  if json_has "$docs/crux.json" 'mcp && Object.keys(root.mcp).length'; then
+    ( cd "$docs" && bash "$CRUX_HOME/bin/mcp.sh" install ) >/dev/null 2>&1 \
+      && ok "servidores MCP escritos en $p" \
+      || warn "no pude escribir los servidores MCP en $p — 'crux mcp install' desde su docs repo"
+  fi
 done
 
 echo
