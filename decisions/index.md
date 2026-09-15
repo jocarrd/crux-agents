@@ -177,3 +177,68 @@
 - **Reversibility**: alta. Quitar el `exit 2` devuelve el comportamiento de
   aviso; la comprobación de doctor es un bloque numerado más.
 - **Related**: `STANDARD.md` §7, `ADR-005`
+
+---
+
+### ADR-008: Un MCP es una capacidad del proyecto y se declara en el contrato
+
+- **Date**: 2026-09-15
+- **Status**: Accepted
+- **Context**: el kernel no tenía forma de decir que un proyecto usa un servidor
+  MCP. La única vía era `claude mcp add`, que escribe en la configuración local
+  de la máquina: se pierde al cambiar de equipo y no distingue un proyecto de
+  otro, así que lo que hace falta en uno aparece en todos. Antes de decidir se
+  midió un servidor real contra su endpoint. Los números: las definiciones de
+  sus 15 herramientas ocupan ~4.759 tokens si el cliente las carga enteras, pero
+  **~64 si carga solo los nombres**, que es lo que hace por defecto con búsqueda
+  de herramientas. En cambio **una sola respuesta suya ocupó ~15.900 tokens, y
+  una búsqueda ~38.600**. El coste no está donde parecía: está en usarlo, no en
+  tenerlo.
+- **Decision**: `crux.json` gana un campo `mcp` opcional donde el proyecto
+  declara sus servidores, y `crux mcp` los escribe como `.mcp.json` en los repos
+  que correspondan. El fichero va a git por lo mismo que los punteros de
+  contexto: clonas el proyecto y la configuración viene con él. El kernel
+  **no declara ninguno** —ninguno vale para todos los proyectos— y **no gestiona
+  el encendido y apagado**, porque el agente ya lo hace: un `.mcp.json` pide
+  aprobación la primera vez y se desactiva por proyecto sin tocar el contrato.
+  Reimplementarlo habría sido una segunda verdad sobre lo mismo. El alcance lo
+  decide `repos`, y donde el perfil no escribe punteros tampoco se escribe esto.
+- **Consequences**:
+  - El `.mcp.json` se commitea, así que las credenciales se referencian con
+    `${VARIABLE}` y nunca se escriben. `doctor` lo da como **error**, no aviso, y
+    `check-secrets` pasa a mirar también los `.mcp.json`: solo miraba `*.md`, y
+    un token ahí dentro no lo habría visto nadie.
+  - **Lo que hay que mirar antes de declarar un servidor es cuánto devuelve, no
+    cuántas herramientas tiene.** Es lo contrario de lo que sugiere la intuición
+    y es la parte de esta medición que sobrevive al servidor que la motivó.
+  - `crux mcp remove` retira solo lo que declara el contrato. Lo que haya puesto
+    alguien a mano se queda, igual que en `crux hooks remove`.
+  - **Desviación de lo planeado**: el plan decía que `doctor` comprobaría que los
+    servidores responden. No lo hace. `doctor` no abre conexiones en ningún otro
+    bloque, y uno que tarde distinto y diga distinto según haya wifi deja de ser
+    una verificación. Esa comprobación vive en `crux mcp status`, que se ejecuta
+    cuando uno quiere saberlo; `doctor` se queda con la forma y la deriva.
+  - No se declara ningún servidor en ningún proyecto con este cambio. El
+    mecanismo entra vacío a propósito: se prueba con el primero que haga falta.
+  - Solo hay adaptador para un agente. La forma del contrato es independiente
+    del cliente —`transport` se traduce a lo que cada uno llame—, pero mientras
+    no exista el segundo adaptador eso es una intención, no una demostración.
+  - **Lo que encontró la revisión de la propuesta, antes de integrarla**: la
+    primera versión leía el nombre del servidor concatenándolo dentro de la
+    expresión que `json_get` pasa a `eval`, así que un `crux.json` clonado con un
+    nombre que llevara una comilla doble **ejecutaba código con solo pedir
+    `crux mcp status`**. De ahí salen tres cosas que ahora son parte de la
+    decisión: los nombres se validan con la misma regla que el resto del kernel,
+    ningún nombre se interpola nunca en una expresión —van como argumento, donde
+    no son código— y el docs repo recibe el fichero siempre, que es lo que
+    permite a `doctor` saber dónde *debería* haber uno. La revisión también
+    destapó que el doctor firmaba como conforme un `.mcp.json` inexistente o
+    manipulado a mano, y que las huellas de credencial se habían copiado en dos
+    sitios y ya habían nacido distintas: por ese hueco pasaba una contraseña
+    dentro de una `url`. Ahora viven en `lib/credential-prints.mjs` y la
+    traducción del formato en `lib/mcp-format.mjs`, que es lo que hace imposible
+    que el verificador y el escritor discrepen.
+- **Reversibility**: alta. El campo es aditivo: un `crux.json` sin `mcp` se
+  comporta igual que antes. Los ficheros nuevos se borran y el bloque de doctor
+  es uno numerado más.
+- **Related**: `STANDARD.md` §El contrato, `ADR-001`
