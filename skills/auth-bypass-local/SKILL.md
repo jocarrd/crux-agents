@@ -1,6 +1,6 @@
 ---
 name: auth-bypass-local
-description: Saltar la autenticación en local para probar endpoints o interfaz protegidos sin sesión real, saltando a la vez la capa de servidor y la de cliente, con un doble candado que lo hace imposible de activar en producción. Usa cuando necesites reproducir o depurar un flujo autenticado —panel de administración, endpoints protegidos, roles— sin poder iniciar sesión, incluido con navegador headless.
+description: Saltar la autenticación en local para probar endpoints o interfaz protegidos sin sesión real, saltando a la vez la capa de servidor y la de cliente, con un doble candado que lo hace imposible de activar en producción. Usa cuando necesites reproducir o depurar un flujo autenticado —panel de administración, endpoints protegidos, roles— sin poder iniciar sesión, cuando quieras saltarte el login para ver una pantalla protegida en local, incluido con navegador headless.
 ---
 
 # auth-bypass-local
