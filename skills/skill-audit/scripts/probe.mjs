@@ -3,6 +3,8 @@
 //
 //   probe.mjs "la frase con la que pedirías el trabajo"
 //   probe.mjs --casos [fichero]        pasa un fichero de casos y reporta fallos
+//   probe.mjs --adaptador <skill> <kernel> "frase genérica" "frase propia"
+//                                      comprueba que un adaptador reparte con lo que adapta
 //
 // El resto del sistema se verifica: la estructura con doctor, el cambio con la
 // puerta, el idioma del commit con un hook. La activación era lo único que se
@@ -114,6 +116,30 @@ function informe(frase) {
 }
 
 const args = process.argv.slice(2)
+
+// Un adaptador bien escrito reparte: cede la frase genérica al procedimiento que
+// adapta y gana la suya. Comprobarlo con una sola frase no vale — un adaptador
+// mudo pasaría la mitad buena de la prueba y seguiría siendo inútil.
+if (args[0] === '--adaptador') {
+  const [, adaptador, kernel, generica, propia] = args
+  if (!adaptador || !kernel || !generica || !propia) {
+    console.error('uso: probe.mjs --adaptador <skill> <skill-del-kernel> "frase genérica" "frase con nombres propios"')
+    process.exit(2)
+  }
+  const gana = (frase) => puntuar(frase)[0]?.nombre || '(ninguna)'
+  const g = gana(generica)
+  const pr = gana(propia)
+  const bien = g === kernel && pr === adaptador
+
+  console.log(`\n  genérica  "${generica}"`)
+  console.log(`            gana ${g}${g === kernel ? '' : `  — debería ganar ${kernel}`}`)
+  console.log(`\n  propia    "${propia}"`)
+  console.log(`            gana ${pr}${pr === adaptador ? '' : `  — debería ganar ${adaptador}`}`)
+  console.log(bien
+    ? `\n  ${adaptador} reparte bien con ${kernel}\n`
+    : `\n  ${adaptador} NO reparte con ${kernel}: fuera de su proyecto gana el que no toca\n`)
+  process.exit(bien ? 0 : 1)
+}
 
 if (args[0] === '--casos') {
   const fichero = args[1] || join(dirname(fileURLToPath(import.meta.url)), '..', 'casos', 'activacion.tsv')

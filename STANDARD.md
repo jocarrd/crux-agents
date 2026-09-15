@@ -736,9 +736,11 @@ credenciales y nombres. Con dos guardas:
 - **El adaptador no vuelve a contar el método.** Aporta rutas, nombres y datos,
   y nombra su proyecto en la **descripción**, que es lo único que se compara al
   activar. Si repite el procedimiento, los dos pujan por la misma frase y fuera
-  de su proyecto gana el que no toca. La regla se verifica: *una frase sin
-  nombres propios tiene que activar el procedimiento del kernel, nunca el
-  adaptador de un proyecto*.
+  de su proyecto gana el que no toca. Parecerse es inevitable —hablan del mismo
+  trabajo—; lo que se exige es que **repartan**, y se verifica con dos frases:
+  la que no lleva nombres propios la gana el procedimiento del kernel, y la que
+  los lleva, el adaptador. Si pierde la primera, sobra método en la descripción;
+  si pierde la segunda, faltan nombres propios.
 
 `/skill-audit` aplica este test de forma periódica y al crear una skill nueva.
 

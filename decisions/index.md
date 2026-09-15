@@ -318,6 +318,18 @@
     proyecto». No lo medía nadie porque no había ni un caso para `flow`. La
     lección vale más que el arreglo: **tocar una descripción sin un caso que la
     cubra es exactamente lo que este ADR dice que no se debe hacer.**
+  - **Corrección posterior, con los adaptadores reales medidos.** El parecido
+    entre descripciones señalaba seis adaptadores «compitiendo» y el que fallaba
+    era **uno**. Un adaptador habla del mismo trabajo que su procedimiento: que
+    compartan vocabulario es inevitable y no prueba nada. Lo que no puede pasar
+    es que gane las frases **sin nombres propios**, porque entonces gana también
+    en los proyectos donde no aplica. De ahí sale el criterio que faltaba, que es
+    simétrico y se comprueba con dos frases: la genérica la gana el kernel, la
+    propia la gana el adaptador. Si pierde la primera, sobra método en su
+    descripción; si pierde la segunda, faltan nombres propios y no lo encuentra
+    nadie. El parecido queda como indicio —qué pares mirar— y la prueba de las
+    dos frases como veredicto, que es el orden que esta skill ya declaraba: el
+    script señala, el test decide.
 - **Reversibility**: alta. Un script, un fichero de casos y una señal más en un
   informe. Las tres descripciones corregidas son texto.
 - **Related**: `ADR-003`, `ADR-005`, `ADR-006`, `STANDARD.md` §Skills

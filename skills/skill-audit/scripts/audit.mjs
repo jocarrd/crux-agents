@@ -217,17 +217,24 @@ for (const a of adapters) {
 const mudos = adapters.filter(a => !a.hitsDesc)
 
 if (colisiones.length) {
-  console.log('\nAdaptadores que compiten con el procedimiento que adaptan:\n')
+  console.log('\nAdaptadores parecidos a su procedimiento — comprueba cómo reparten:\n')
   for (const c of colisiones.sort((x, y) => y.sim - x.sim)) {
     console.log(`  ${c.sim}  ${c.a.project}/${c.a.name}  vs  kernel/${c.k}`)
   }
-  console.log('\n  Un adaptador aporta rutas, nombres y datos; el procedimiento vive')
-  console.log('  arriba. Cuando su descripción vuelve a contar el método, los dos')
-  console.log('  pujan por la misma frase y fuera de su proyecto gana el que no')
-  console.log('  toca. Compruébalo con un enunciado real:\n')
-  console.log('    node <skill-audit>/scripts/probe.mjs "la frase con la que lo pedirías"\n')
+  // Parecerse no es competir, y medido sobre los adaptadores reales este número
+  // señaló seis cuando el que fallaba era uno. Dos skills que hablan de
+  // desplegar sin CI comparten vocabulario por fuerza; lo que decide es quién
+  // gana cada frase, y eso necesita las dos frases, que este informe no tiene.
+  console.log('\n  Compartir vocabulario es inevitable: el adaptador habla del mismo')
+  console.log('  trabajo. Lo que no puede pasar es que gane una frase sin nombres')
+  console.log('  propios, porque entonces gana también en los proyectos donde no')
+  console.log('  aplica. El veredicto lo da la prueba de las dos frases:\n')
+  for (const c of colisiones.sort((x, y) => y.sim - x.sim)) {
+    console.log(`    probe.mjs --adaptador ${c.a.name} ${c.k} "<frase genérica>" "<frase con nombres propios>"`)
+  }
+  console.log()
 } else if (adapters.length) {
-  console.log('\nNingún adaptador se pisa con su procedimiento.\n')
+  console.log('\nNingún adaptador se parece a su procedimiento.\n')
 }
 
 if (mudos.length) {

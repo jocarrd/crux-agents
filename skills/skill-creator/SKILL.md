@@ -113,6 +113,37 @@ Aplica el test de la frontera:
 
 Si no, va en las skills del proyecto y ahí se queda.
 
+### Si es un adaptador, tiene que repartir
+
+Un adaptador y el procedimiento que adapta hablan del mismo trabajo, así que
+van a compartir vocabulario: eso es inevitable y no es el problema. El problema
+aparece cuando el adaptador **gana también las frases sin nombres propios**,
+porque el catálogo es común a todos los proyectos y entonces gana en los
+proyectos donde no aplica.
+
+El reparto correcto son dos frases y dos ganadores:
+
+| La frase | Quién debe ganar |
+| -------- | ---------------- |
+| Sin nombres propios | El procedimiento del kernel |
+| Con los nombres propios del proyecto | El adaptador |
+
+Se comprueba, no se supone:
+
+```bash
+node ~/.claude/skills/skill-audit/scripts/probe.mjs --adaptador \
+  <adaptador> <skill-del-kernel> "<frase genérica>" "<frase con nombres propios>"
+```
+
+Si pierde la primera, el adaptador está robando y le sobra método en la
+descripción: lo que aporta son rutas, credenciales, dispositivos y casos
+límite, no el procedimiento otra vez. Si pierde la segunda, le faltan nombres
+propios y no lo va a encontrar nadie.
+
+Las dos frases se escriben **antes** de redactar la descripción, como se pediría
+el trabajo de verdad. Sacarlas de la descripción ya escrita hace que pase
+siempre y no prueba nada.
+
 ## Antes de darla por buena
 
 - ¿La descripción contiene las palabras con las que aparece el problema?

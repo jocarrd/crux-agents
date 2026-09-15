@@ -91,6 +91,18 @@ nombres propios tiene que activar el procedimiento del kernel, nunca el
 adaptador de un proyecto**. Si gana un adaptador, en los demás proyectos está
 ganando algo que allí no aplica.
 
+`--adaptador` comprueba el reparto entre un adaptador y el procedimiento que
+adapta, con una frase de cada tipo:
+
+```bash
+probe.mjs --adaptador <adaptador> <kernel> "<frase genérica>" "<frase propia>"
+```
+
+La genérica la gana el kernel; la propia, el adaptador. Medido sobre los
+adaptadores reales, el parecido de las descripciones señalaba seis y el que no
+repartía era **uno**: compartir vocabulario no es competir, y por eso el
+parecido es un indicio y esto el veredicto.
+
 Sirve para dos cosas concretas: comparar dos redacciones de una descripción, y
 ver si un cambio ha apagado una skill que antes se activaba. **No predice lo que
 hará el agente**: un empate es señal fiable de que dos descripciones no se
