@@ -91,7 +91,7 @@ test_activacion_los_casos_del_kernel_siguen_pasando() {
   fi
 }
 
-test_activacion_audit_ve_al_adaptador_que_repite_el_procedimiento() {
+test_activacion_audit_ve_al_adaptador_que_se_parece_a_su_procedimiento() {
   sandbox >/dev/null
   local docs; docs="$(new_project omega --repos "web")"
 
@@ -105,8 +105,9 @@ test_activacion_audit_ve_al_adaptador_que_repite_el_procedimiento() {
     "$desc" > "$docs/.claude/skills/project/omega-render/SKILL.md"
 
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/audit.mjs" "$CRUX_PROJECTS_DIR" 2>&1)"
-  assert_contains "$out" "compiten con el procedimiento" "detecta la colisión con lo que adapta"
+  assert_contains "$out" "parecidos a su procedimiento" "señala el par para comprobarlo"
   assert_contains "$out" "omega-render" "y nombra al adaptador"
+  assert_contains "$out" "--adaptador omega-render render-loop" "y da el comando que da el veredicto"
 }
 
 test_activacion_audit_ve_al_adaptador_que_no_se_nombra() {
@@ -138,4 +139,37 @@ test_activacion_check_descripcion_caza_los_defectos() {
 test_activacion_check_descripcion_pasa_el_catalogo_del_kernel() {
   local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$CRUX_HOME/skills" es 2>&1)"
   assert_eq "" "$out" "ninguna skill del kernel tiene la descripción mal formada"
+}
+
+test_activacion_un_adaptador_tiene_que_repartir() {
+  sandbox >/dev/null
+  # El procedimiento genérico y su adaptador, bien repartidos: el adaptador
+  # aporta los nombres propios y no vuelve a contar el método entero.
+  skill_falsa "$CLAUDE_SKILLS_DIR" metodo \
+    "Probar una aplicación móvil en un dispositivo físico conectado por cable. Usa cuando haya que validar en nativo."
+  skill_falsa "$CLAUDE_SKILLS_DIR" adaptador \
+    "Datos de Chispas: package, deep-link y terminal de referencia. Usa junto a metodo para el QA de Chispas."
+  skill_falsa "$CLAUDE_SKILLS_DIR" otra "Renovar certificados del correo. Usa cuando caduquen."
+
+  assert_exit 0 "un adaptador que reparte pasa la prueba" \
+    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador adaptador metodo \
+      "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal"
+}
+
+test_activacion_un_adaptador_que_roba_lo_generico_falla() {
+  sandbox >/dev/null
+  skill_falsa "$CLAUDE_SKILLS_DIR" metodo \
+    "Probar una aplicación móvil en un dispositivo físico. Usa cuando haya que validar en nativo."
+  # Este repite el método entero y además añade lo suyo: gana las dos.
+  skill_falsa "$CLAUDE_SKILLS_DIR" ladron \
+    "Probar una aplicación móvil en un dispositivo físico conectado por cable, con los datos de Chispas. Usa cuando haya que validar en nativo la aplicación en el dispositivo."
+  skill_falsa "$CLAUDE_SKILLS_DIR" otra "Renovar certificados del correo. Usa cuando caduquen."
+
+  local out
+  out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador ladron metodo \
+    "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal" 2>&1)"
+  assert_contains "$out" "NO reparte" "un adaptador que gana lo genérico se reporta"
+  assert_exit 1 "y el comando sale en rojo" \
+    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador ladron metodo \
+      "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal"
 }
