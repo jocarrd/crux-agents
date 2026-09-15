@@ -1,0 +1,36 @@
+# Casos de activación del catálogo del kernel.
+#
+# Formato:  <skill esperada> TAB <la frase con la que se pediría el trabajo>
+#
+# La regla que comprueban: una frase SIN nombres propios tiene que activar el
+# procedimiento del kernel, nunca el adaptador de un proyecto. Si gana un
+# adaptador, en los demás proyectos está ganando algo que no aplica.
+#
+# Las frases se escriben como se pide el trabajo de verdad, con su registro y
+# sus imprecisiones, no en el vocabulario de la descripción. Una frase copiada
+# de la descripción siempre pasa y no prueba nada.
+
+device-loop	probar la app en un móvil android físico conectado por cable
+oauth-reauthorize	se ha invalidado el refresh token y hay que rehacer la autorización oauth
+auth-bypass-local	saltarme el login en local para poder probar una pantalla protegida
+deploy-fallback	el CI está caído, desplegar a mano construyendo la imagen en local
+render-loop	iterar la maquetación de un documento generado mirando cómo va quedando
+visual-diff	medir cuánto se desvía la salida respecto a la referencia
+carry-env	llevarme los ficheros de entorno de este proyecto a otro portátil
+workspace	quiero trabajar en dos tareas a la vez sobre el mismo repo sin pisarme
+ship	antes de commitear, pasar las comprobaciones de calidad
+review-pr	revisar la propuesta que acabo de abrir con criterio de revisor
+adr	registrar la decisión técnica que acabamos de tomar
+root-cause	depurar esto reproduciendo el fallo antes de tocar nada
+repo-map	orientarme en un repo que no conozco y llevo meses sin tocar
+redaccion	revisar este texto para que no se lea como generado por un modelo
+write-tests	hay que añadir tests a esto, dime cuáles merecen la pena
+end-session	lo dejamos por hoy, repasa qué hay que guardar antes de cerrar
+runbook	escribir el procedimiento de la incidencia que acabamos de resolver
+explain-plan	presentar la propuesta técnica para que se pueda decidir
+skill-creator	escribir una skill nueva que se descubra cuando toque
+read-document	ponme en contexto este word que no puedo abrir
+share-local	enseñarle el entorno local a alguien de fuera sin desplegar
+code-health	medir la salud estructural del repo y su tendencia
+bug-hunt	buscar fallos que nadie ha reportado todavía en esta herramienta
+promo-video	montar un vídeo corto del producto para redes

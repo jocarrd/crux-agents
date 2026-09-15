@@ -97,10 +97,19 @@ if (!projects.length) {
 // Un adaptador de una skill del kernel también tiene baja densidad, porque su
 // contenido técnico ya está depurado de nombres propios. Sin esto, el informe
 // propone una y otra vez promover lo que ya está promovido.
-const kernelSkills = (() => {
-  const dir = join(process.env.CRUX_HOME || join(ROOT, 'crux'), 'skills')
-  return existsSync(dir) ? readdirSync(dir).filter(n => statSync(join(dir, n)).isDirectory()) : []
-})()
+const kernelDir = join(process.env.CRUX_HOME || join(ROOT, 'crux'), 'skills')
+const kernelSkills = existsSync(kernelDir)
+  ? readdirSync(kernelDir).filter(n => statSync(join(kernelDir, n)).isDirectory())
+  : []
+
+// La descripción del procedimiento, no solo su nombre: sin ella no se puede
+// medir si el adaptador que quedó abajo compite con lo que se promovió.
+const kernelDesc = new Map(
+  kernelSkills.map(n => {
+    const f = join(kernelDir, n, 'SKILL.md')
+    return [n, existsSync(f) ? (frontmatter(readFileSync(f, 'utf8')).description || '') : '']
+  }),
+)
 
 const all = []
 
@@ -120,11 +129,15 @@ for (const p of projects) {
     const lines = text.split('\n').length
     const hits = (text.match(re) || []).length
     const adapts = kernelSkills.filter(k => new RegExp(`\\b${k}\\b`).test(text))
+    // La densidad mira el fichero entero, pero al agente solo se le enseña la
+    // descripción: un adaptador con veinte nombres propios en el cuerpo y
+    // ninguno arriba es indistinguible del procedimiento que adapta.
+    const hitsDesc = ((fm.description || '').match(re) || []).length
     all.push({
       project: cfg.project,
       name: fm.name || file.split('/').slice(-2)[0],
       description: fm.description || '',
-      file, lines, hits, adapts,
+      file, lines, hits, adapts, hitsDesc,
       density: +(hits / lines).toFixed(3),
     })
   }
@@ -166,6 +179,51 @@ if (pairs.length) {
   console.log('  promoción más clara que existe: cumple la regla de las dos ocurrencias.\n')
 } else {
   console.log('Sin duplicados semánticos entre proyectos.\n')
+}
+
+// La secuela de una promoción. Hasta aquí el informe miraba hacia delante —qué
+// merece subir—, y el par que la propia promoción deja atrás no lo veía nadie:
+// el procedimiento arriba y su adaptador abajo, compitiendo por el mismo
+// enunciado. Se descubrió midiendo el ejemplo canónico del estándar,
+// device-loop y su adaptador, que daban un empate exacto.
+//
+// Dos señales, porque una sola no basta: se pisan mucho, o no se distinguen en
+// lo único que el agente compara.
+//
+// `adapts` se deduce de mencionar el nombre de una skill del kernel en el
+// texto, y nombres como `flow` o `workspace` son también palabras corrientes.
+// Por eso el solape se reporta por par —donde el falso positivo se ve y da
+// 0—, y la falta de nombres propios una sola vez por adaptador: es una
+// propiedad suya, no de la pareja.
+const colisiones = []
+for (const a of adapters) {
+  for (const k of a.adapts) {
+    const sim = +jaccard(tokens(a.description), tokens(kernelDesc.get(k) || '')).toFixed(2)
+    if (sim >= 0.25) colisiones.push({ a, k, sim })
+  }
+}
+const mudos = adapters.filter(a => !a.hitsDesc)
+
+if (colisiones.length) {
+  console.log('\nAdaptadores que compiten con el procedimiento que adaptan:\n')
+  for (const c of colisiones.sort((x, y) => y.sim - x.sim)) {
+    console.log(`  ${c.sim}  ${c.a.project}/${c.a.name}  vs  kernel/${c.k}`)
+  }
+  console.log('\n  Un adaptador aporta rutas, nombres y datos; el procedimiento vive')
+  console.log('  arriba. Cuando su descripción vuelve a contar el método, los dos')
+  console.log('  pujan por la misma frase y fuera de su proyecto gana el que no')
+  console.log('  toca. Compruébalo con un enunciado real:\n')
+  console.log('    node <skill-audit>/scripts/probe.mjs "la frase con la que lo pedirías"\n')
+} else if (adapters.length) {
+  console.log('\nNingún adaptador se pisa con su procedimiento.\n')
+}
+
+if (mudos.length) {
+  console.log('Adaptadores que no nombran su proyecto en la descripción:\n')
+  for (const a of mudos) console.log(`  ${a.project}/${a.name}`)
+  console.log('\n  La densidad de arriba mira el fichero entero, pero al agente solo se')
+  console.log('  le enseña la descripción. Un adaptador que no se nombra ahí no se')
+  console.log('  distingue del procedimiento, y puja en los demás proyectos.\n')
 }
 
 if (adapters.length) {

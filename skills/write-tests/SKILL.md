@@ -1,6 +1,6 @@
 ---
 name: write-tests
-description: Escribir tests que valgan la pena: elegir qué merece cobertura y qué no, cubrir el caso que duele antes que el feliz, mantenerlos deterministas y validarlos en negativo. Usa cuando añadas comportamiento nuevo, cuando arregles un bug y quieras que no vuelva, cuando vayas a refactorizar algo sin red, o cuando te pidan subir la cobertura.
+description: Escribir tests que valgan la pena: elegir qué merece cobertura y qué no, cubrir el caso que duele antes que el feliz, mantenerlos deterministas y validarlos en negativo. Usa cuando haya que añadir tests a algo que no los tiene, cuando añadas comportamiento nuevo, cuando arregles un bug y quieras que no vuelva, cuando vayas a refactorizar algo sin red, o cuando te pidan subir la cobertura.
 ---
 
 # write-tests
