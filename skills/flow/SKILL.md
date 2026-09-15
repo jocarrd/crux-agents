@@ -1,6 +1,6 @@
 ---
 name: flow
-description: El ciclo completo de una tarea de desarrollo: en qué orden van sus siete pasos, por qué existe cada uno y qué se paga al saltárselo. No los sustituye, los encadena. Usa al recibir cualquier tarea de desarrollo que no sea trivial, especialmente si vas a trabajar en paralelo con otra sesión sobre el mismo repo.
+description: El ciclo completo de una tarea de desarrollo: en qué orden van sus siete pasos, por qué existe cada uno y qué se paga al saltárselo. No los sustituye, los encadena. Usa al recibir cualquier tarea de desarrollo que no sea trivial —tocar código, desarrollar una funcionalidad, arreglar algo, seguir las convenciones del proyecto— y antes de planificar nada, especialmente si vas a trabajar en paralelo con otra sesión sobre el mismo repo.
 ---
 
 # flow

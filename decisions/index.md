@@ -298,6 +298,26 @@
     proyecto. Esto mide el daño y permite corregirlo escribiendo mejor, pero no
     acota el catálogo. Mover las skills de proyecto a sus repos se descartó
     porque rompe el perfil `client-repo`: en el repo de un cliente no se escribe.
+  - **Lo que encontró la revisión de la propuesta, antes de integrarla.** Cinco
+    cosas que invalidaban partes de esto. La medida tenía un suelo de ruido:
+    `log(1 + N/df)` nunca llega a cero, y `cuando` —que está en 33 de las 36
+    descripciones del kernel— pesaba 0,74, por encima del propio umbral de
+    empate; ahora es `log(N/df)` y `cuando` es palabra vacía. El margen era
+    absoluto sobre una escala que crece con la longitud de la frase, así que
+    juzgaba igual a una de cinco palabras y a una de doce: pasa a ser una
+    fracción del líder. El umbral de colisión, 0,25, **dejaba fuera el ejemplo
+    canónico que abre este ADR** —`device-loop` y su adaptador se pisan 0,1887—;
+    se iguala a 0,18. La señal de adaptadores que no se nombran acertaba 0 de 4
+    sobre el único proyecto real donde disparaba, porque `vcr` tiene tres letras
+    y el filtro de términos exigía cuatro. Y el módulo extraído de `doctor` no lo
+    usaba `doctor`: la duplicación seguía ahí y las dos copias ya habían
+    divergido en el mismo commit que las separaba.
+  - **Y una regresión propia**: al quitarle a `flow` la enumeración de los pasos
+    ajenos se le quitó también el vocabulario con el que se le pide trabajo, y
+    dejó de activarse ante «desarrollar esto siguiendo las convenciones del
+    proyecto». No lo medía nadie porque no había ni un caso para `flow`. La
+    lección vale más que el arreglo: **tocar una descripción sin un caso que la
+    cubra es exactamente lo que este ADR dice que no se debe hacer.**
 - **Reversibility**: alta. Un script, un fichero de casos y una señal más en un
   informe. Las tres descripciones corregidas son texto.
 - **Related**: `ADR-003`, `ADR-005`, `ADR-006`, `STANDARD.md` §Skills

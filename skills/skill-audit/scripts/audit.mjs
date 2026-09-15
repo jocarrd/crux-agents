@@ -64,13 +64,22 @@ function walkSkills(dir) {
   return out
 }
 
+// Un valor puede continuar en las líneas siguientes. Sin esto, una descripción
+// de dos líneas se cortaba en la primera y este informe medía un texto distinto
+// del que mide `probe.mjs`, que es con el que la SKILL.md manda contrastarlo.
 function frontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---/)
   if (!m) return {}
   const out = {}
+  let clave = null
   for (const line of m[1].split('\n')) {
-    const kv = line.match(/^(\w+):\s*(.*)$/)
-    if (kv) out[kv[1]] = kv[2]
+    const kv = line.match(/^([\w-]+):\s*(.*)$/)
+    if (kv) {
+      clave = kv[1]
+      out[clave] = kv[2]
+    } else if (clave && line.trim()) {
+      out[clave] = `${out[clave]} ${line.trim()}`.trim()
+    }
   }
   return out
 }
@@ -117,10 +126,11 @@ for (const p of projects) {
   const cfg = JSON.parse(readFileSync(p.cfg, 'utf8'))
   // Los nombres propios de un proyecto son su nombre y los de sus repos: eso
   // ya está declarado en el contrato, no hace falta mantenerlo aparte.
-  const terms = [cfg.project, ...(cfg.repos || [])]
-    .flatMap(t => [t, ...String(t).split(/[-_]/)])
-    .map(t => String(t).toLowerCase())
-    .filter(t => t.length > 3)
+  const enteros = [cfg.project, ...(cfg.repos || [])].map(t => String(t).toLowerCase())
+  const fragmentos = enteros
+    .flatMap(t => t.split(/[-_]/))
+    .filter(t => t.length > 2)
+  const terms = [...enteros, ...fragmentos]
   const re = new RegExp(`\\b(${[...new Set(terms)].join('|')})\\b`, 'gi')
 
   for (const file of walkSkills(join(p.path, '.claude', 'skills'))) {
@@ -128,7 +138,7 @@ for (const p of projects) {
     const fm = frontmatter(text)
     const lines = text.split('\n').length
     const hits = (text.match(re) || []).length
-    const adapts = kernelSkills.filter(k => new RegExp(`\\b${k}\\b`).test(text))
+    const adapts = kernelSkills.filter(k => new RegExp(`(?<![\\w-])${k}(?![\\w-]|\\.\\w)`).test(text))
     // La densidad mira el fichero entero, pero al agente solo se le enseña la
     // descripción: un adaptador con veinte nombres propios en el cuerpo y
     // ninguno arriba es indistinguible del procedimiento que adapta.
@@ -161,12 +171,14 @@ if (candidates.length) {
   console.log('Ninguna skill con densidad sospechosamente baja.\n')
 }
 
+const UMBRAL_PARECIDO = 0.18
+
 const pairs = []
 for (let i = 0; i < all.length; i++) {
   for (let j = i + 1; j < all.length; j++) {
     if (all[i].project === all[j].project) continue
     const sim = jaccard(tokens(all[i].description), tokens(all[j].description))
-    if (sim >= 0.18) pairs.push({ a: all[i], b: all[j], sim: +sim.toFixed(2) })
+    if (sim >= UMBRAL_PARECIDO) pairs.push({ a: all[i], b: all[j], sim: +sim.toFixed(2) })
   }
 }
 
@@ -198,8 +210,8 @@ if (pairs.length) {
 const colisiones = []
 for (const a of adapters) {
   for (const k of a.adapts) {
-    const sim = +jaccard(tokens(a.description), tokens(kernelDesc.get(k) || '')).toFixed(2)
-    if (sim >= 0.25) colisiones.push({ a, k, sim })
+    const sim = jaccard(tokens(a.description), tokens(kernelDesc.get(k) || ''))
+    if (sim >= UMBRAL_PARECIDO) colisiones.push({ a, k, sim: +sim.toFixed(2) })
   }
 }
 const mudos = adapters.filter(a => !a.hitsDesc)

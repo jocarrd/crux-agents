@@ -288,37 +288,22 @@ fi
 rm -f /tmp/crux-doctor-paths.$$
 
 # --- 10. Skills del proyecto --------------------------------------------------
+#
+# La comprobación vive en lib/, no aquí, porque la misma vara tiene que pasar
+# por los dos catálogos: las skills del proyecto y las del kernel, que son las
+# que están en todas las sesiones. Mientras estuvo escrita en este bloque, las
+# del kernel no las miraba nadie.
 
 section
-skills=0
-while IFS= read -r skill_md; do
-  [[ -n "$skill_md" ]] || continue
-  skills=$((skills + 1))
-  name="$(basename "$(dirname "$skill_md")")"
-  head -1 "$skill_md" | grep -q '^---$' || { fail "skill sin frontmatter: $name"; continue; }
-  # Sin la línea de cierre el frontmatter no es YAML válido y el agente carga
-  # la skill entera como cuerpo, o no la carga.
-  [[ "$(grep -c '^---$' "$skill_md")" -ge 2 ]] || { fail "skill con el frontmatter sin cerrar: $name"; continue; }
-  grep -qE '^name:'        "$skill_md" || fail "skill sin 'name' en el frontmatter: $name"
-  grep -qE '^description:' "$skill_md" || fail "skill sin 'description' en el frontmatter: $name"
-  grep -qE '^name: *'"$name"'$' "$skill_md" || note "skill '$name': el 'name' del frontmatter no coincide con el directorio"
-
-  # Una descripción sin situación de uso no se activa cuando toca: la skill
-  # existe pero es invisible.
-  # Solo el frontmatter: si se lee de más, el cuerpo de la skill contamina la
-  # comprobación y esto nunca detecta nada.
-  desc="$(awk '/^---$/{n++; next} n==1 && /^description:/{p=1} n==1 && p && /^[a-z_]+:/ && !/^description:/{p=0} n==1 && p{print} n>=2{exit}' "$skill_md" | tr '\n' ' ')"
-  echo "$desc" | grep -qiE '\b(usa|use|úsala|usar|invoca)\b' \
-    || note "skill '$name': la descripción no dice cuándo usarla — no se activará sola"
-
-  # La descripción decide la activación, así que tiene que estar en el idioma en
-  # que se pide el trabajo. Una mezcla activa peor justo donde más duele.
-  if [[ "$LANG_DECLARADO" == "es" ]]; then
-    n_en="$(echo "$desc" | grep -oiwE 'the|when|this|with|your|after|before|that|from|which' | wc -l)"
-    n_es="$(echo "$desc" | grep -oiwE 'cuando|para|que|con|desde|antes|después|del|las|los|una' | wc -l)"
-    [[ "$n_en" -gt "$n_es" ]] && note "skill '$name': la descripción parece estar en inglés y el proyecto declara español"
-  fi
-done < <(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | sort)
+skills="$(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | wc -l)"
+while IFS= read -r linea; do
+  [[ -n "$linea" ]] || continue
+  case "$linea" in
+    error\ *) fail "${linea#error }" ;;
+    aviso\ *) note "${linea#aviso }" ;;
+    *)        note "$linea" ;;
+  esac
+done < <(node "$CRUX_HOME/lib/check-skill-description.mjs" "$DOCS/.claude/skills" "$LANG_DECLARADO" 2>/dev/null || true)
 [[ $skills -gt 0 ]] && section_ok "skills del proyecto: $skills"
 
 # --- 11. Credenciales escritas en la documentación ---------------------------

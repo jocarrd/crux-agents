@@ -16,9 +16,25 @@ test_activacion_probe_senala_el_empate_entre_dos_descripciones() {
   sandbox >/dev/null
   skill_falsa "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
   skill_falsa "$CLAUDE_SKILLS_DIR" beta "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
+  # Hacen falta más skills en el catálogo, y no por decorar: una palabra que
+  # está en el 100% de las descripciones no distingue nada y pesa cero, así que
+  # con solo las dos gemelas no puntuaría ninguna.
+  skill_falsa "$CLAUDE_SKILLS_DIR" gamma "Renovar el certificado del servidor de correo. Usa cuando caduque."
+  skill_falsa "$CLAUDE_SKILLS_DIR" delta "Rotar las claves de acceso del almacenamiento. Usa cada trimestre."
 
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" "purgar la caché del radar" 2>&1)"
   assert_contains "$out" "no se distinguen" "dos descripciones idénticas dan empate"
+}
+
+test_activacion_probe_no_puntua_lo_que_esta_en_todas() {
+  sandbox >/dev/null
+  skill_falsa "$CLAUDE_SKILLS_DIR" alfa "Desplegar el servicio. Usa cuando toque."
+  skill_falsa "$CLAUDE_SKILLS_DIR" beta "Reiniciar el servicio. Usa cuando toque."
+
+  # `servicio` está en las dos: no ayuda a elegir y no debe inventar un ganador.
+  local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" "el servicio" 2>&1)"
+  assert_contains "$out" "ninguna skill comparte vocabulario" \
+    "una palabra presente en todo el catálogo no decide nada"
 }
 
 test_activacion_probe_distingue_lo_que_si_se_distingue() {
@@ -43,22 +59,36 @@ test_activacion_los_casos_fallan_cuando_gana_otra() {
 }
 
 test_activacion_los_casos_del_kernel_siguen_pasando() {
-  # Mide el catálogo del kernel de verdad, no uno de mentira: es la red que
-  # avisa si una descripción nueva apaga una que ya se activaba. El directorio
-  # va por invocación —nunca heredado— porque el caso anterior deja exportado
-  # el suyo y apunta a un sandbox ya borrado.
+  # Mide el catálogo del kernel de verdad: es la red que avisa si una descripción
+  # nueva apaga una que ya se activaba. El directorio va por invocación —nunca
+  # heredado— porque el caso anterior deja exportado el suyo, apuntando a un
+  # sandbox ya borrado.
+  #
+  # Se afirma el número de casos y la identidad del fallo tolerado, no solo un
+  # contador: con un contador suelto, un fichero vaciado, con los tabuladores
+  # convertidos en espacios, o con un fallo distinto que sustituya al conocido,
+  # pasaban los tres en verde.
   local casos="$CRUX_HOME/skills/skill-audit/casos/activacion.tsv"
   assert_file "$casos" "el fichero de casos del kernel existe"
 
+  local esperados; esperados="$(grep -cve '^[[:space:]]*$' -e '^#' "$casos")"
   local out
   out="$(env CLAUDE_SKILLS_DIR="$CRUX_HOME/skills" \
     node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --casos "$casos" 2>&1)"
+
+  assert_contains "$out" "$esperados casos ·" "se evalúan todos los casos del fichero"
+
   local fallan; fallan="$(echo "$out" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) fallan.*/\1/p')"
-  # Uno conocido y anotado: `end-session` y `promote-to-docs` se solapan porque
-  # una contiene a la otra. Si sube de ahí, algo ha apagado una skill.
   local veredicto=mal
   [[ -n "$fallan" && "$fallan" -le 1 ]] && veredicto=bien
-  assert_eq "bien" "$veredicto" "los casos del kernel no empeoran (fallan: ${fallan:-sin medir})"
+  assert_eq "bien" "$veredicto" "no empeoran (fallan: ${fallan:-sin medir})"
+
+  # `end-session` y `promote-to-docs` se solapan porque una contiene a la otra.
+  # Es el único fallo admitido, y se nombra: si el que falla pasa a ser otro, es
+  # una regresión con el contador intacto.
+  if [[ "${fallan:-0}" -eq 1 ]]; then
+    assert_contains "$out" "esperaba end-session" "el único fallo sigue siendo el anotado"
+  fi
 }
 
 test_activacion_audit_ve_al_adaptador_que_repite_el_procedimiento() {

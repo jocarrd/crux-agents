@@ -62,9 +62,11 @@ distinción el informe propondría una y otra vez promover lo ya promovido.
 una promoción, que es lo que las tres señales anteriores no veían: miran hacia
 delante —qué merece subir— y el par que la propia promoción deja atrás no lo
 mira nadie. Arriba el procedimiento, abajo su adaptador, los dos pujando por la
-misma frase. Se reporta cuando sus descripciones se pisan por encima de 0,25, o
-cuando el adaptador **no nombra su proyecto en la descripción**: la densidad
-mira el fichero entero, pero al agente solo se le enseña la descripción.
+misma frase. Se reporta cuando sus descripciones se pisan por encima de 0,18
+—el mismo umbral que los duplicados entre proyectos, y el que recoge el ejemplo
+canónico del estándar— o cuando el adaptador **no nombra su proyecto en la
+descripción**: la densidad mira el fichero entero, pero al agente solo se le
+enseña la descripción.
 
 ## Verificar la activación
 
@@ -78,8 +80,10 @@ con la puerta, el idioma del commit con un hook—. La activación era lo único
 que se confiaba, y es lo que decide si el resto llega a usarse.
 
 `probe` puntúa el solape entre una frase y cada descripción del catálogo
-instalado, y dice **por cuánto gana la primera**. Un margen por debajo de 0,5 es
-un empate: cuál gane depende del azar de una palabra.
+instalado, y dice **por cuánto gana la primera**. El margen es una fracción del
+líder, no un valor absoluto, porque la puntuación crece con la longitud de la
+frase: por debajo del 15 % es un empate, y cuál gane depende del azar de una
+palabra.
 
 `--casos` pasa el fichero `casos/activacion.tsv`, donde cada línea es una frase
 real y la skill que debería activarse. La regla que comprueban: **una frase sin
