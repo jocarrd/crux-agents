@@ -81,6 +81,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | `sections` | Carpetas opcionales activas |
 | `quality` | Cómo se ejecutan los tests aquí (opcional, ver abajo) |
 | `conventions` | Reglas de estilo comprobables mecánicamente (opcional, ver abajo) |
+| `mcp` | Servidores MCP que el proyecto declara (opcional, ver abajo) |
 
 Ningún script del kernel hardcodea nombres de proyecto ni listas de repos: todo
 sale de aquí. Si el fichero falta, el proyecto no está adoptado y `crux doctor`
@@ -180,6 +181,63 @@ Una regla declarada no se aplica si el repo no tiene ni un fichero que case con
 su `files`: la convención está escrita pero ese repo todavía no la usa, y no
 hay nada que exigir. Y un `crux.json` que no se puede leer **detiene la
 puerta**, no la deja en cero reglas.
+
+### Los servidores MCP
+
+```json
+"mcp": {
+  "referencias": {
+    "transport": "http",
+    "url": "https://ejemplo.dev/api/mcp",
+    "repos": "docs"
+  },
+  "engine": {
+    "transport": "stdio",
+    "command": "node",
+    "args": ["../engine/mcp/server.mjs"],
+    "env": { "ENGINE_TOKEN": "${ENGINE_TOKEN}" },
+    "repos": "all"
+  }
+}
+```
+
+Es opcional. Declara los servidores MCP que este proyecto quiere tener
+disponibles, y `crux mcp install` los escribe como `.mcp.json` en los repos que
+correspondan.
+
+Se declara en el contrato **porque un MCP es una capacidad del proyecto, no de
+la máquina**: el que hace falta en uno estorba en otro. Y va en git por lo
+mismo que los punteros de contexto — clonas el proyecto en otro equipo y la
+configuración viene con él, que es justo lo que se pierde cuando se añade a
+mano en la configuración local del agente.
+
+| Campo | Cuándo | Qué es |
+| ----- | ------ | ------ |
+| `transport` | siempre | `stdio` arranca un proceso en esta máquina; `http` y `sse` hablan con una URL |
+| `url` | http, sse | El endpoint |
+| `command`, `args` | stdio | Qué proceso arrancar. En ruta relativa, para que valga en cualquier máquina |
+| `env` | stdio | Variables del proceso |
+| `headers` | http, sse | Cabeceras, normalmente de autenticación |
+| `timeout` | opcional | Milisegundos |
+| `repos` | opcional | Dónde se escribe el fichero: `docs` (por defecto), `all`, o la lista de repos |
+
+**Las credenciales se referencian, no se escriben**: `${VARIABLE}`. El
+`.mcp.json` se commitea, y `doctor` da error —no aviso— si encuentra un literal
+en una cabecera de autorización o una huella de credencial conocida. Por el
+mismo motivo, `check-secrets` mira los `.mcp.json` además de la documentación.
+
+El perfil manda sobre `repos`: donde no se escriben punteros tampoco se
+escribe esta configuración, así que en un repo de cliente se queda en el docs
+repo aunque se declare `all`.
+
+Lo que **no** hace el kernel es decidir por ti. No trae ningún servidor
+declarado, porque ninguno vale para todos los proyectos; y no gestiona el
+encendido y apagado, porque el agente ya lo hace: un `.mcp.json` pide
+aprobación la primera vez y se desactiva por proyecto sin tocar el contrato.
+
+Antes de declarar uno, mira **cuánto devuelve**, no cuántas herramientas tiene.
+Un servidor presente y sin usar cuesta poco; una sola respuesta suya puede
+ocupar más contexto que la sesión entera de trabajo.
 
 ---
 
@@ -729,6 +787,7 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux release <ver>` | — | Publica una versión del kernel |
 | `crux doctor --machine` | — | Verifica el entorno de la máquina |
 | `crux hooks install` | — | Engancha el estándar al ciclo, al cierre de sesión y al commit |
+| `crux mcp` | — | Los servidores MCP que el proyecto declara, puestos donde el agente los lee |
 | `crux stg` | — | Publica una carpeta construida en un staging con clave |
 | `crux usage` | — | Mide qué skills se usan realmente |
 | `crux memory [--check]` | — | Memorias del agente que deberían estar en git |

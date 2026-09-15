@@ -390,6 +390,27 @@ else
 fi
 rm -f "$deriva_out"
 
+# --- 14. Servidores MCP declarados -------------------------------------------
+#
+# Solo la forma y la deriva: que lo declarado se pueda escribir, que no lleve
+# credenciales dentro —el .mcp.json se commitea— y que lo que hay en los repos
+# siga siendo lo que dice el contrato. Que el servidor responda no se pregunta
+# aquí: es red, y el doctor tiene que tardar lo mismo y decir lo mismo con wifi
+# y sin ella. Eso lo contesta `crux mcp status`, que se ejecuta cuando importa.
+
+section
+while IFS= read -r linea; do
+  [[ -n "$linea" ]] || continue
+  case "$linea" in
+    error\ *) fail "mcp: ${linea#error }" ;;
+    aviso\ *) note "mcp: ${linea#aviso }" ;;
+    *)        note "mcp: $linea" ;;
+  esac
+done < <(node "$CRUX_HOME/lib/check-mcp.mjs" "$DOCS" 2>/dev/null || true)
+if json_has "$DOCS/crux.json" 'mcp && Object.keys(root.mcp).length'; then
+  section_ok "servidores MCP declarados y escritos donde tocan"
+fi
+
 # --- Resumen -----------------------------------------------------------------
 
 echo
