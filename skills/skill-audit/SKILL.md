@@ -58,6 +58,48 @@ un par aquí, la regla de las dos ocurrencias ya está cumplida.
 candidatas: un adaptador legítimo también tiene baja densidad, y sin esa
 distinción el informe propondría una y otra vez promover lo ya promovido.
 
+**Adaptadores que compiten con el procedimiento que adaptan.** La secuela de
+una promoción, que es lo que las tres señales anteriores no veían: miran hacia
+delante —qué merece subir— y el par que la propia promoción deja atrás no lo
+mira nadie. Arriba el procedimiento, abajo su adaptador, los dos pujando por la
+misma frase. Se reporta cuando sus descripciones se pisan por encima de 0,18
+—el mismo umbral que los duplicados entre proyectos, y el que recoge el ejemplo
+canónico del estándar— o cuando el adaptador **no nombra su proyecto en la
+descripción**: la densidad mira el fichero entero, pero al agente solo se le
+enseña la descripción.
+
+## Verificar la activación
+
+```bash
+node <directorio-de-esta-skill>/scripts/probe.mjs "la frase con la que lo pedirías"
+node <directorio-de-esta-skill>/scripts/probe.mjs --casos
+```
+
+Todo lo demás del sistema se verifica —la estructura con `doctor`, el cambio
+con la puerta, el idioma del commit con un hook—. La activación era lo único
+que se confiaba, y es lo que decide si el resto llega a usarse.
+
+`probe` puntúa el solape entre una frase y cada descripción del catálogo
+instalado, y dice **por cuánto gana la primera**. El margen es una fracción del
+líder, no un valor absoluto, porque la puntuación crece con la longitud de la
+frase: por debajo del 15 % es un empate, y cuál gane depende del azar de una
+palabra.
+
+`--casos` pasa el fichero `casos/activacion.tsv`, donde cada línea es una frase
+real y la skill que debería activarse. La regla que comprueban: **una frase sin
+nombres propios tiene que activar el procedimiento del kernel, nunca el
+adaptador de un proyecto**. Si gana un adaptador, en los demás proyectos está
+ganando algo que allí no aplica.
+
+Sirve para dos cosas concretas: comparar dos redacciones de una descripción, y
+ver si un cambio ha apagado una skill que antes se activaba. **No predice lo que
+hará el agente**: un empate es señal fiable de que dos descripciones no se
+distinguen, pero un ganador no garantiza que gane de verdad.
+
+Al escribir un caso, la frase se escribe **como se pide el trabajo**, con su
+registro y sus imprecisiones. Una frase copiada de la descripción siempre pasa
+y no prueba nada.
+
 ## Cómo leer el resultado
 
 Son **señales, no veredictos**. La densidad no sabe de dominios: una skill

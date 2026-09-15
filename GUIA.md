@@ -556,11 +556,40 @@ Recorre todos los proyectos adoptados y reporta tres cosas:
   obvia y la más invisible: nadie ve las dos skills a la vez.
 - **Las que ya son adaptadores**, excluidas de las candidatas.
 
+- **Adaptadores que compiten con el procedimiento que adaptan.** La secuela de
+  una promoción. Las tres señales anteriores miran hacia delante —qué merece
+  subir—; esta mira lo que la promoción deja atrás.
+
 Son señales, no veredictos. El script señala, el test decide, la regla de las
 dos ocurrencias frena.
 
 Dos disparadores: **en caliente** al crear una skill —es cuando de verdad se
 sabe— y **en frío** enganchado al cierre de sesión.
+
+### Verificar que una descripción se activa
+
+```bash
+node ~/.claude/skills/skill-audit/scripts/probe.mjs "la frase con la que lo pedirías"
+node ~/.claude/skills/skill-audit/scripts/probe.mjs --casos
+```
+
+Todo lo demás del sistema se verifica. La activación era lo único que se
+confiaba, y es lo que decide si el resto llega a usarse.
+
+`probe` dice qué skill ganaría una frase y **por cuánto**. Un margen por debajo
+de 0,5 significa que dos descripciones no se distinguen: cuál gane depende del
+azar de una palabra. `--casos` pasa un fichero de frases reales con la skill que
+debería activarse, y sirve para lo que hace falta de verdad — comparar dos
+redacciones y ver si un cambio ha apagado algo que antes se activaba.
+
+Lo que encontró la primera vez que se pasó: el ejemplo canónico de promoción de
+esta misma guía, `device-loop` y `demo-co-device`, daba **empate exacto**. Y
+`flow`, que es la entrada por defecto, enumeraba en su descripción los pasos de
+las demás —«pasar la puerta de calidad, proponer el cambio y cerrar la sesión»—
+y por eso competía con sus propias piezas.
+
+No predice lo que hará el agente: puntúa solape de vocabulario. Un empate es
+señal fiable; un ganador, no.
 
 ### Cómo se promueve una skill, en cinco pasos
 

@@ -116,6 +116,10 @@ Si no, va en las skills del proyecto y ahí se queda.
 ## Antes de darla por buena
 
 - ¿La descripción contiene las palabras con las que aparece el problema?
+  Compruébalo en vez de suponerlo, con una frase que no salga de la propia
+  descripción:
+  `node ~/.claude/skills/skill-audit/scripts/probe.mjs "la frase con la que lo pedirías"`.
+  Si gana otra skill, o gana por menos del 15 %, la descripción no la distingue.
 - ¿Un agente que no estuvo en la conversación podría seguirla sin preguntar?
 - ¿Están los gotchas que te costaron tiempo, o solo el camino feliz?
 - ¿Dice cómo verificar que funcionó?

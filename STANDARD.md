@@ -733,6 +733,12 @@ credenciales y nombres. Con dos guardas:
   valor alto demostrado y acoplamiento casi nulo.
 - **Existe el camino inverso.** Si una skill del kernel empieza a acumular
   condicionales por proyecto, no era un patrón: se degrada a `project/`.
+- **El adaptador no vuelve a contar el método.** Aporta rutas, nombres y datos,
+  y nombra su proyecto en la **descripción**, que es lo único que se compara al
+  activar. Si repite el procedimiento, los dos pujan por la misma frase y fuera
+  de su proyecto gana el que no toca. La regla se verifica: *una frase sin
+  nombres propios tiene que activar el procedimiento del kernel, nunca el
+  adaptador de un proyecto*.
 
 `/skill-audit` aplica este test de forma periódica y al crear una skill nueva.
 

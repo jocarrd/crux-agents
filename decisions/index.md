@@ -242,3 +242,82 @@
   comporta igual que antes. Los ficheros nuevos se borran y el bloque de doctor
   es uno numerado más.
 - **Related**: `STANDARD.md` §El contrato, `ADR-001`
+
+---
+
+### ADR-009: La activación de una skill se verifica, no se confía
+
+- **Date**: 2026-09-15
+- **Status**: Accepted
+- **Context**: el sistema verifica todo menos lo que decide si algo llega a
+  usarse. `doctor` verifica la estructura, la puerta verifica el cambio, un hook
+  verifica el idioma del commit, `usage` mide el uso a posteriori. La
+  **activación** —que una descripción gane cuando aparece su problema— era la
+  única pieza que se daba por buena. Y ya había fallado de forma medida: `flow`
+  salía con cero invocaciones en 31 sesiones (ADR-005), y `usage` da tres skills
+  que se siguen a mano sin que nadie las llame.
+  Al medirlo apareció algo que nadie había visto: **los pares que más colisionan
+  son los que crea el propio mecanismo de promoción**. Se sube el procedimiento
+  al kernel y queda un adaptador abajo, pero si el adaptador vuelve a contar el
+  método, los dos pujan por la misma frase. El ejemplo canónico del estándar,
+  `device-loop` y `demo-co-device`, daba un **empate exacto**; `render-loop` y
+  `pdf-visual-iterate` se pisaban 0,49; `oauth-reauthorize` y su adaptador, 0,46.
+  Como el catálogo es global, el adaptador de un proyecto compite en todos los
+  demás, donde no aplica. Eso empeora justo cuando el sistema tiene éxito: cada
+  promoción añade un par, cada proyecto mete sus adaptadores en la puja ajena.
+- **Decision**: `skill-audit` gana la señal que le faltaba —mira la secuela de
+  una promoción, no solo la oportunidad— y un `probe` que contesta qué skill se
+  activaría ante una frase y **por cuánto gana**. Los casos viven en
+  `casos/activacion.tsv`, con una regla: una frase sin nombres propios tiene que
+  activar el procedimiento del kernel, nunca el adaptador de un proyecto. La
+  comprobación de forma de las descripciones sale del bloque 10 de `doctor` a
+  `lib/check-skill-description.mjs`, para que la misma vara pase por los dos
+  catálogos: antes solo alcanzaba a las skills de proyecto y las 36 del kernel
+  no las miraba nadie.
+- **Consequences**:
+  - `probe` **no predice lo que hará el agente** y no debe leerse así. Puntúa
+    solape de vocabulario ponderado. Un empate es señal fiable de que dos
+    descripciones no se distinguen; un ganador no garantiza nada. Sirve para
+    comparar dos redacciones y para ver si un cambio apagó una skill, que es
+    para lo que se escribió.
+  - **Se probó lematizar y se descartó con datos.** Dos stemmers —sufijos
+    verbales y solo plurales— empeoraron la medida sobre los mismos 24 casos, de
+    2 fallos a 3, con `oauth-reauthorize` ganando una frase de cierre de sesión.
+    Queda el precio conocido: «merece» y «merecen» cuentan como distintas.
+  - Tres descripciones del kernel se corrigieron con la medida delante:
+    `crux-doctor` decía «usa antes de cerrar sesión» y le robaba el momento a
+    `end-session`, que ya verifica conformidad; `write-tests` no reconocía
+    «añadir tests», que es como se pide de verdad; y `flow` **enumeraba los pasos
+    de las demás** —«pasar la puerta de calidad, proponer el cambio y cerrar la
+    sesión»— así que competía con sus propias piezas siendo la entrada por
+    defecto. Los casos del kernel pasaron de 2 fallos a 1.
+  - El fallo que queda está anotado a propósito: `end-session` y
+    `promote-to-docs` se solapan porque una contiene a la otra. Ajustarlo habría
+    sido sobreajustar el catálogo a mis propios casos.
+  - Lo que **no** resuelve: que el catálogo global siga creciendo con cada
+    proyecto. Esto mide el daño y permite corregirlo escribiendo mejor, pero no
+    acota el catálogo. Mover las skills de proyecto a sus repos se descartó
+    porque rompe el perfil `client-repo`: en el repo de un cliente no se escribe.
+  - **Lo que encontró la revisión de la propuesta, antes de integrarla.** Cinco
+    cosas que invalidaban partes de esto. La medida tenía un suelo de ruido:
+    `log(1 + N/df)` nunca llega a cero, y `cuando` —que está en 33 de las 36
+    descripciones del kernel— pesaba 0,74, por encima del propio umbral de
+    empate; ahora es `log(N/df)` y `cuando` es palabra vacía. El margen era
+    absoluto sobre una escala que crece con la longitud de la frase, así que
+    juzgaba igual a una de cinco palabras y a una de doce: pasa a ser una
+    fracción del líder. El umbral de colisión, 0,25, **dejaba fuera el ejemplo
+    canónico que abre este ADR** —`device-loop` y su adaptador se pisan 0,1887—;
+    se iguala a 0,18. La señal de adaptadores que no se nombran acertaba 0 de 4
+    sobre el único proyecto real donde disparaba, porque `vcr` tiene tres letras
+    y el filtro de términos exigía cuatro. Y el módulo extraído de `doctor` no lo
+    usaba `doctor`: la duplicación seguía ahí y las dos copias ya habían
+    divergido en el mismo commit que las separaba.
+  - **Y una regresión propia**: al quitarle a `flow` la enumeración de los pasos
+    ajenos se le quitó también el vocabulario con el que se le pide trabajo, y
+    dejó de activarse ante «desarrollar esto siguiendo las convenciones del
+    proyecto». No lo medía nadie porque no había ni un caso para `flow`. La
+    lección vale más que el arreglo: **tocar una descripción sin un caso que la
+    cubra es exactamente lo que este ADR dice que no se debe hacer.**
+- **Reversibility**: alta. Un script, un fichero de casos y una señal más en un
+  informe. Las tres descripciones corregidas son texto.
+- **Related**: `ADR-003`, `ADR-005`, `ADR-006`, `STANDARD.md` §Skills
