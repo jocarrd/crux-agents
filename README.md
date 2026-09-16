@@ -134,10 +134,14 @@ flowchart TD
     B --> C{"/ship<br/>la puerta del autor"}
     C -- "alguna puerta en rojo" --> B
     C -- "verde: commit" --> D["crux workspace finish &lt;tarea&gt;<br/>sube la rama y abre la propuesta"]
-    D --> E{"/review-pr<br/>la mirada del revisor"}
+    D --> CI{"crux checks --wait<br/>el CI, con el log de lo que falla"}
+    CI -- "rojo: hasta tres intentos" --> B
+    CI -- "verde" --> E{"/review-pr<br/>riesgo y especialistas que pide el diff"}
     E -- "hallazgos confirmados" --> B
     E -- "limpio" --> F["crux workspace merge &lt;tarea&gt; --yes<br/>la decisión sigue siendo de una persona"]
-    F --> G["/end-session<br/>lo que deba sobrevivir, a git"]
+    F --> W{"/deploy-watch<br/>la versión nueva, vista en producción"}
+    W -- "falla: se revierte" --> B
+    W -- "responde" --> G["/end-session<br/>lo que deba sobrevivir, a git"]
 ```
 
 Los dos pasos de revisión responden preguntas distintas, y por eso no se
@@ -174,7 +178,8 @@ instala `crux hooks install`:
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
 | `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta, fusión y recogida |
 | `crux ship` | La puerta de calidad: ejecuta las comprobaciones y deja un recibo de lo que se ejecutó y con qué resultado. `workspace finish` lo exige. |
-| `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks y señales |
+| `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks, señales, riesgo y especialistas |
+| `crux checks [n]` | Espera al CI de una propuesta y trae solo el final del log de lo que falla |
 | `crux merge <n>` | Mergea una propuesta tras decir cuál es y de qué repositorio |
 | `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
 | `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |

@@ -108,6 +108,22 @@ Se niega en dos casos, y los dos a propósito:
   **no se abre una propuesta de código que nadie ha revisado**, y la revisión
   deja de depender de que alguien se acuerde.
 
+Y en cuanto está abierta, **se espera al CI**:
+
+```bash
+crux checks --wait
+```
+
+Si algo sale en rojo, trae solo el final del log del trabajo que falló. Se lee,
+se arregla en la misma rama, se pasa `/ship` y se sube: el comando se vuelve a
+lanzar solo contra el commit nuevo. **Tres intentos como máximo.** Si al
+tercero sigue en rojo, el problema no es el que parecía y se para a contarlo:
+seguir empujando arreglos a ciegas es cómo una rama acaba con diez commits de
+"fix ci".
+
+Una propuesta sin comprobaciones automáticas no está verificada, está sin
+bloquear: el comando lo dice, y se dice también al contarla.
+
 ### 6a. Revisar la propuesta
 
 ```
@@ -123,6 +139,11 @@ No repite `/ship`. `/ship` pregunta si está listo lo que hiciste; esto pregunta
 si es correcto y completo lo que se propone, y lo pregunta alguien que no
 estaba dentro del problema. Es la diferencia entre revisar y confirmar.
 
+`crux review` termina con el **riesgo** de la propuesta y los **especialistas**
+que merece —seguridad, datos, rendimiento, interfaz—. Se lanzan solo esos, en
+paralelo, cada uno en su contexto. En un cambio pequeño o sin código no se lanza
+ninguno: el coste de revisar es el mismo de siempre.
+
 ### 6b. Fusionar, cuando tú lo autorices
 
 ```bash
@@ -134,8 +155,24 @@ Mira las comprobaciones automáticas, los conflictos y la revisión, y **no
 fusiona sin el flag**. La decisión sigue siendo de una persona; el comando solo
 se asegura de que llega informada.
 
+La única excepción la marca la revisión: si su línea `fusión:` dice que **puede
+fusionarse sin preguntar** —solo texto, proyecto propio—, se fusiona y se
+cuenta después. Con código, o en un repo de cliente, pregunta siempre.
+
 Si el repo no tiene CI, lo dice: "nada lo bloquea" no es lo mismo que "está
 verificado".
+
+### 6c. Vigilar el despliegue
+
+Si lo fusionado se despliega solo, **no se da por publicado hasta verlo**:
+
+```
+/deploy-watch
+```
+
+Espera a que la versión nueva llegue, comprueba que las rutas del proyecto
+responden y mira en producción lo que tocaba el diff. Si algo falla, se revierte
+primero y se investiga después, con `/prod-signals` y `/root-cause`.
 
 ### 7. Cerrar
 
@@ -162,7 +199,9 @@ de cada paso y qué salió distinto de lo planeado. Ver `/explain-plan`.
 | Tests durante | Los escribes para que pasen, no para que fallen |
 | La puerta | Entra trabajo roto, y se descubre en producción |
 | Proponer | El cambio no se revisa, o se revisa cuando ya está integrado |
+| Esperar al CI | El rojo se descubre al ir a fusionar, cuando ya nadie tiene el contexto |
 | Fusionar | Entra sin mirar si el CI pasó o si hay conflictos |
+| Vigilar el despliegue | El primero que ve el fallo es un usuario |
 | Cerrar | Lo aprendido muere con la sesión |
 
 Y dos inversiones que cuestan caro:
@@ -184,4 +223,5 @@ Y dos inversiones que cuestan caro:
 ## Relacionado
 
 Cada paso tiene su procedimiento: `/repo-map`, `/workspace`, `/explain-plan`,
-`/write-tests`, `/root-cause`, `/ship`, `/end-session`.
+`/write-tests`, `/root-cause`, `/ship`, `/review-pr`, `/deploy-watch`,
+`/prod-signals`, `/end-session`.

@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Revisar el código de una propuesta ya abierta con criterio de revisor y no de autor: si el diff hace lo que dice, si el arreglo está completo, si los tests prueban comportamiento, si encaja con lo que el repo ya hace, y qué deuda deja. Usa justo después de abrir una propuesta de cambio, antes de pedir revisión humana, cuando heredes la propuesta de otra sesión, o cuando el cambio lo haya escrito un agente.
+description: Revisar el código de una propuesta ya abierta con criterio de revisor y no de autor: si el diff hace lo que dice, si el arreglo está completo, si los tests prueban comportamiento, si encaja con lo que el repo ya hace, y qué deuda deja. Clasifica el riesgo y lanza en paralelo solo los revisores especialistas que el diff pide (seguridad, datos, rendimiento, interfaz). Usa justo después de abrir una propuesta de cambio, antes de pedir revisión humana, cuando heredes la propuesta de otra sesión, o cuando el cambio lo haya escrito un agente.
 ---
 
 # review-pr
@@ -49,6 +49,52 @@ acuerde de juntarlo.
 
 Falta una cosa más, que no la da ningún comando: **las convenciones del repo**.
 Están escritas en su documentación; no se adivinan.
+
+## Riesgo y especialistas
+
+`crux review` termina con el riesgo de la propuesta y los especialistas que
+merece. Lo calcula `scripts/review-scope.sh` a partir del diff:
+
+| Riesgo | Cuándo | Qué se lanza |
+| ------ | ------ | ------------ |
+| bajo | sin código, o 30 líneas de código o menos sin nada sensible | solo la revisión general |
+| medio | código normal | la general + los especialistas que toque |
+| alto | seguridad, datos, o más de 500 líneas | la general + los especialistas que toque |
+
+Los especialistas son cuatro, cada uno con su guía en `especialistas/`:
+**seguridad**, **datos**, **rendimiento** e **interfaz**. Se lanzan **solo los
+que el script nombra**, tres como máximo, y **cada uno en un contexto
+aislado y en paralelo**, con el diff, la descripción de la propuesta y su guía.
+Nada más: ni el historial de la sesión, ni las guías de los otros.
+
+La revisión general sigue siendo el recorrido de abajo. Los especialistas no la
+sustituyen: miran más hondo en un solo eje. Sus hallazgos pasan por el mismo
+filtro —confirmados o fuera— y se cuentan juntos, ordenados por gravedad.
+
+### Por qué no se lanzan todos siempre
+
+**Cuesta.** Cada especialista lee el diff, los ficheros que toca y su guía, y
+razona sobre ello: entre **20.000 y 50.000 tokens** según el tamaño del cambio.
+Cuatro en cada propuesta multiplican por cinco el coste de revisar, y la
+mayoría no encontraría nada, porque un cambio de estilos no tiene consultas ni
+permisos.
+
+Con el reparto por diff, lo habitual es:
+
+- **Docs, erratas y cambios de pocas líneas**: cero especialistas, coste igual
+  que hoy.
+- **Una pantalla o un componente**: uno, interfaz.
+- **Un endpoint con sesión o una migración**: dos o tres, y ahí es donde se
+  pagan solos, porque es donde un fallo no se ve en una captura.
+
+Si el script no nombra a ninguno y aun así ves algo que pide una mirada
+especialista, se lanza ese uno y se dice por qué.
+
+### El riesgo decide quién fusiona
+
+La línea `fusión:` del informe lo dice. **Solo se fusiona sin preguntar un
+cambio sin código en un proyecto propio.** Todo lo demás lo decide una persona,
+con la revisión delante. En un repo de cliente, siempre una persona.
 
 ## El recorrido
 

@@ -124,7 +124,17 @@ grandes="$(git diff --numstat "$BASE...$RAMA" | awk '$1 + $2 > 400 {print $3" ("
 
 [[ $hay_senal -eq 0 ]] && ok "ninguna señal automática"
 
-# --- 4. El diff -------------------------------------------------------------
+# --- 4. Riesgo y especialistas ---------------------------------------------
+#
+# Qué revisores especialistas merece la propuesta y quién la fusiona. Lo decide
+# el diff y no el humor del momento: a ojo todo parece de riesgo bajo.
+
+section_head "riesgo y especialistas"
+alcance="$(bash "$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" "$BASE" 2>&1)" \
+  || die "no se pudo clasificar la propuesta: $alcance"
+echo "$alcance" | grep -v '^base:' | sed 's/^/      /'
+
+# --- 5. El diff -------------------------------------------------------------
 
 section_head "el diff, para leerlo entero"
 echo "      git diff $BASE...$RAMA"

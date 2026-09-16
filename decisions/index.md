@@ -333,3 +333,70 @@
 - **Reversibility**: alta. Un script, un fichero de casos y una señal más en un
   informe. Las tres descripciones corregidas son texto.
 - **Related**: `ADR-003`, `ADR-005`, `ADR-006`, `STANDARD.md` §Skills
+
+---
+
+### ADR-010: El ciclo sigue después de abrir la propuesta, y los especialistas los decide el diff
+
+- **Date**: 2026-09-16
+- **Status**: Accepted
+- **Context**: el ciclo terminaba en la propuesta revisada y fusionada. Comparado
+  con cómo trabajan equipos que ya desarrollan con agentes a escala —revisión
+  con varios especialistas en paralelo, el agente arreglando el CI hasta verde,
+  despliegue vigilado hasta producción y agentes leyendo las señales de
+  producción—, quedaban cuatro huecos en los que no miraba nadie: el CI después
+  de abrir la propuesta, la revisión en los ejes que un generalista no ve, la
+  producción después de fusionar y los logs cuando algo falla en el servidor.
+  Copiar ese modelo entero no tiene sentido a escala de pocas personas: agentes
+  vigilando producción las 24 horas, despliegues graduales con feature flags y
+  fusión automática según el riesgo presuponen tráfico, equipo e
+  infraestructura que aquí no hay.
+- **Decision**: cuatro piezas, cada una con su coste acotado.
+  1. **Riesgo y especialistas en `/review-pr`.** `review-scope.sh` clasifica el
+     diff en riesgo bajo, medio o alto y nombra los especialistas que merece
+     (seguridad, datos, rendimiento, interfaz), tres como máximo. Se lanzan
+     solo esos, en paralelo y en contextos aislados, con su guía y el diff.
+  2. **`crux checks`.** Espera al CI de la propuesta y, si algo falla, trae
+     solo el final del log del trabajo, con las pilas de llamadas recortadas.
+     `/flow` fija tres intentos de arreglo como máximo.
+  3. **`/deploy-watch`.** Después de fusionar, espera a la versión nueva y
+     comprueba las rutas que el proyecto declara en `deploy`. Si falla, se
+     revierte en git antes de investigar.
+  4. **`/prod-signals`.** Lee las fuentes de solo lectura que el proyecto
+     declara en `observability` y agrupa los errores repetidos. Se lanza cuando
+     hay motivo, no de forma continua.
+
+  La fusión sin preguntar queda limitada a cambios **sin código en proyectos
+  propios**. En un repo de cliente decide siempre una persona.
+- **Consequences**:
+  - **Coste en tokens, medido por pieza.** Un especialista lee el diff, los
+    ficheros que toca y su guía (unas 60 líneas), y razona sobre ello: entre
+    20.000 y 50.000 tokens por especialista según el tamaño del cambio. Lanzar
+    los cuatro en cada propuesta multiplicaba por cinco el coste de revisar, y
+    en la mayoría no habría hallazgos: un cambio de estilos no tiene consultas
+    ni permisos. Con el reparto por diff, lo habitual es cero especialistas en
+    documentación y cambios de 30 líneas o menos (coste igual que antes), uno
+    en una pantalla, y dos o tres en un endpoint con sesión o una migración,
+    que es donde un fallo no se ve en una captura y donde se pagan solos.
+  - `crux checks` no gasta tokens mientras espera: es un bucle de shell. Solo
+    entra en el contexto un log recortado cuando algo falla, y el recorte se
+    calibró contra un fallo real: el mensaje útil («typescript-eslint does not
+    support TS 7.0») quedaba enterrado bajo la pila de llamadas y ahora aparece
+    en 14 líneas. Tres intentos acotan el peor caso.
+  - `/deploy-watch` devuelve una línea por ruta. Lo caro es mirar la interfaz
+    en producción, que es la misma revisión visual que ya se hizo en la vista
+    previa.
+  - `/prod-signals` mete en el contexto un resumen con tope de grupos por
+    fuente —unos pocos miles de tokens—, no el log.
+  - `gh pr checks --json` no existe en versiones de gh que siguen en las
+    distribuciones, y `gh run view --log-failed` sale vacío en ellas: se lee del
+    rollup de la propuesta y el log se pide a la API.
+  - El contrato gana dos bloques opcionales, `deploy` y `observability`. Un
+    proyecto que no los declara sigue conforme; las skills lo dicen y paran.
+  - **Descartado a propósito**: fusión automática de código según el riesgo,
+    feature flags, vigilancia continua de producción y un detector propio de
+    regresiones de rendimiento. Para lo último, un presupuesto de Lighthouse en
+    el `quality.gate` del proyecto da la mayor parte del valor sin tooling nuevo.
+- **Reversibility**: alta. Un comando, dos skills y un script nuevos, y texto en
+  `/flow` y `/review-pr`. Los bloques del contrato son opcionales.
+- **Related**: `ADR-005`, `ADR-009`, `STANDARD.md` §El contrato, §El ciclo de desarrollo

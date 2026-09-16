@@ -37,3 +37,6 @@ promo-video	montar un vídeo corto del producto para redes
 flow	quiero desarrollar esto siguiendo las convenciones del proyecto
 flow	me pongo a tocar código en este repo, ¿qué pasos sigo?
 crux-doctor	comprobar si la documentación de este proyecto se ha desalineado
+deploy-watch	acabo de fusionar, mira si ya está bien en producción
+prod-signals	la api da errores en el servidor, mira qué dicen los logs
+review-pr	revisa la propuesta que acabo de abrir antes de fusionarla

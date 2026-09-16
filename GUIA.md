@@ -493,6 +493,29 @@ el conjunto, no el diff, que es lo que se erosiona despacio cuando se genera
 mucho código. Y `/explain-plan` presenta una propuesta para poder pararla a
 tiempo.
 
+### Después de proponer: el CI, el riesgo y producción
+
+Abrir la propuesta no termina el trabajo. Quedan tres huecos en los que, sin
+un paso explícito, no mira nadie.
+
+**El CI.** `crux checks --wait` espera a las comprobaciones y, si algo falla,
+trae solo el final del log del trabajo que falló, con las pilas de llamadas
+recortadas. Se arregla en la rama y se vuelve a subir, tres intentos como
+máximo.
+
+**El riesgo.** `crux review` clasifica la propuesta en riesgo bajo, medio o
+alto y dice qué revisores especialistas merece: seguridad, datos, rendimiento
+o interfaz. Se lanzan solo esos, en paralelo y cada uno en su contexto. Cuesta
+entre 20.000 y 50.000 tokens por especialista, y por eso un cambio pequeño o
+sin código no lanza ninguno. La misma clasificación dice quién fusiona: sin
+código y en proyecto propio puede ir solo; lo demás lo decide una persona.
+
+**Producción.** `/deploy-watch` espera a que la versión nueva llegue y
+comprueba las rutas que el proyecto declara en `deploy`. Si algo falla, se
+revierte primero. `/prod-signals` lee los logs que el proyecto declara en
+`observability` y los resume agrupando los errores repetidos, que es por donde
+empieza `/root-cause` cuando el fallo solo ocurre en el servidor.
+
 ### `/end-session` — antes de cerrar
 
 Cuatro preguntas sobre la sesión —decisiones, gotchas, convenciones,
@@ -753,7 +776,9 @@ rompe. `crux doctor` verifica los que quedan.
 - **Trabajo en paralelo**: `crux workspace new <tarea>`. Aísla ficheros y
   runtime.
 - **Antes de commitear**: `/ship`. Ocho puertas, la cara es condicional.
-- **Con la propuesta abierta**: `/review-pr`. Revisar no es confirmar.
+- **Con la propuesta abierta**: `crux checks --wait` y `/review-pr`. Revisar no
+  es confirmar, y los especialistas los decide el diff.
+- **Después de fusionar**: `/deploy-watch`. Fusionado no es publicado.
 - **Antes de cerrar**: `/end-session`. Lo que deba sobrevivir, a git.
 - **Cuando dudes si algo cumple**: `crux doctor`. El estándar se verifica, no se
   confía.

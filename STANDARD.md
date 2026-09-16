@@ -156,6 +156,35 @@ hasta que un hook lo trajo solo.
 declara el contrato, que es lo que hace que esto sea una línea de trabajo y no
 un puñado de scripts atados a un repo concreto.
 
+### El despliegue
+
+```json
+"deploy": {
+  "url": "https://<dominio>",
+  "paths": ["/", "/<ruta-importante>"]
+}
+```
+
+Opcional. Lo consume `/deploy-watch` para comprobar, después de fusionar, que
+la versión nueva ha llegado y que esas rutas responden. Con varios repos
+desplegables va uno por repo en `deploy.repos.<repo>`. `paths` son las pocas
+rutas que se notan si fallan, no el sitemap.
+
+### Las señales de producción
+
+```json
+"observability": {
+  "sources": [
+    { "name": "app", "command": "ssh <host> docker logs --since {since} <contenedor>" }
+  ]
+}
+```
+
+Opcional. Lo consume `/prod-signals`: cada fuente es un **comando de solo
+lectura** que se ejecuta sin confirmación, con `{since}` sustituido por la
+ventana pedida. Nada que escriba, reinicie o borre, y ninguna credencial: esas
+viven en la configuración de la máquina, no en un fichero que está en git.
+
 ### Las convenciones comprobables
 
 ```json
@@ -754,6 +783,7 @@ credenciales y nombres. Con dos guardas:
 | `read-document` | Leer un documento que el agente no puede abrir |
 | `flow` | **El ciclo completo y su orden** — la entrada por defecto |
 | `workspace`, `ship`, `review-pr` | Las piezas del ciclo: aislar, verificar y revisar |
+| `deploy-watch`, `prod-signals` | Después de fusionar: ver producción y leer lo que dice |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
 | `bug-hunt` | Buscar los fallos que nadie ha reportado |
 | `code-health` | Salud estructural del conjunto y su tendencia |
@@ -768,7 +798,7 @@ credenciales y nombres. Con dos guardas:
 
 ### El ciclo de desarrollo
 
-Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
+Cinco skills sostienen el trabajo del día a día, y se usan en este orden:
 
 **El orden lo declara `/flow`**, que es lo que un agente lee primero. Resumido:
 
@@ -781,8 +811,11 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 3. **`/review-pr`** — con la propuesta ya abierta, desde un contexto
    independiente del que escribió el cambio. `/ship` pregunta si está listo lo
    que hiciste; esto, si es correcto y completo lo que se propone. Quien acaba
-   de defender cada decisión no está en posición de refutarlas.
-4. **`/end-session`** — antes de cerrar. Lo que deba sobrevivir a la sesión se
+   de defender cada decisión no está en posición de refutarlas. Clasifica el
+   riesgo y lanza solo los especialistas que el diff pide.
+4. **`/deploy-watch`** — después de fusionar lo que se despliega solo. Nada se
+   da por publicado hasta ver la versión nueva respondiendo en producción.
+5. **`/end-session`** — antes de cerrar. Lo que deba sobrevivir a la sesión se
    escribe en git, se verifica la conformidad y se commitea.
 
 ---
@@ -796,7 +829,8 @@ Cuatro skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux bootstrap` | — | Deja una máquina nueva lista: verifica, descubre los proyectos y los trae |
 | `crux adopt` | — | Registra un docs repo que ya existe |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registra un repo nuevo en el proyecto |
-| `crux review` | `/review-pr` | Reúne el material de la revisión de una propuesta |
+| `crux review` | `/review-pr` | Reúne el material de la revisión de una propuesta, con su riesgo |
+| `crux checks [n]` | `/flow` | Espera al CI de una propuesta y trae el log de lo que falla |
 | `crux merge <n>` | — | Mergea una propuesta diciendo antes cuál y de qué repo |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |

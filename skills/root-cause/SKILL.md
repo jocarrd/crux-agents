@@ -29,6 +29,10 @@ Si no reproduce en local pero sí en otro entorno, la diferencia entre los dos
 entornos **es la pista principal**. Enumérala: versiones, variables, datos,
 permisos, latencia, zona horaria.
 
+Si solo falla en producción, **se empieza por lo que producción ya sabe**:
+`/prod-signals` resume sus logs y dice qué error, cuántas veces y desde cuándo.
+Es un dato más fiable que el relato de quien lo vio.
+
 ## 2. Medir, no suponer
 
 Cada afirmación durante la depuración necesita una prueba detrás. "Debe de
@@ -101,4 +105,5 @@ estado actual.
 ## Relacionado
 
 - `/write-tests` — el test de regresión que cierra el bug
+- `/prod-signals` — lo que dicen los logs de producción, resumido
 - `/ship` — la puerta que evita que el arreglo rompa otra cosa
