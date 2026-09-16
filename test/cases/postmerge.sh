@@ -317,36 +317,36 @@ test_review_scope_gradua_la_ceremonia_segun_el_rigor() {
   sandbox >/dev/null
   local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" out
 
-  # Sin crux.json: el proyecto no está dado de alta y va en ligero.
+  # Sin crux.json: el proyecto no está dado de alta y va en `light`.
   _pm_repo_con_base "$SB/suelto"
   cd "$SB/suelto" || return
   mkdir -p src/components
   seq 1 80 | sed 's/^/const v/' > src/components/Tarjeta.tsx; _pm_commit_todo
   out="$(bash "$script" main)"
-  assert_contains "$out" "rigor: ligero — sin crux.json" "sin contrato, ligero y dice por qué"
-  assert_contains "$out" "especialistas: ninguno — rigor ligero" "una pantalla no paga especialista en ligero"
-  assert_contains "$out" "puede fusionarse sin preguntar — rigor ligero" "y se fusiona sola"
+  assert_contains "$out" "rigor: light — sin crux.json" "sin contrato, light y dice por qué"
+  assert_contains "$out" "especialistas: ninguno — rigor light" "una pantalla no paga especialista en light"
+  assert_contains "$out" "puede fusionarse sin preguntar — rigor light" "y se fusiona sola"
 
   mkdir -p src/auth
   seq 1 40 > src/auth/session.ts; _pm_commit_todo
   out="$(bash "$script" main)"
-  assert_contains "$out" "seguridad" "pero la sesión sigue pidiendo especialista en ligero"
+  assert_contains "$out" "seguridad" "pero la sesión sigue pidiendo especialista en light"
   assert_contains "$out" "fusión: decide una persona" "y no se fusiona sola"
 
   # Estricto: sin atajo por tamaño y siempre decide una persona.
   mkdir -p "$SB/serio"
-  echo '{"crux":"0.40.0","project":"serio","profile":"multi-repo","rigor":"estricto"}' > "$SB/serio/crux.json"
+  echo '{"crux":"0.40.0","project":"serio","profile":"multi-repo","rigor":"strict"}' > "$SB/serio/crux.json"
   _pm_repo_con_base "$SB/serio/app"
   cd "$SB/serio/app" || return
   mkdir -p src/components
   printf 'a\nb\n' > src/components/Boton.tsx; _pm_commit_todo
   out="$(bash "$script" main)"
-  assert_contains "$out" "riesgo: medio" "en estricto dos líneas no son riesgo bajo"
+  assert_contains "$out" "riesgo: medio" "en strict dos líneas no son riesgo bajo"
   assert_contains "$out" "especialistas: interfaz" "y piden su especialista"
   echo "texto" >> README.md; git reset -q --soft main; git commit -qm solo-texto
   git reset -q --hard main; echo "más" >> README.md; _pm_commit_todo
   out="$(bash "$script" main)"
-  assert_contains "$out" "fusión: decide una persona" "en estricto ni el texto se fusiona solo"
+  assert_contains "$out" "fusión: decide una persona" "en strict ni el texto se fusiona solo"
 
   # El kernel no tiene contrato, pero no es un repo cualquiera.
   _pm_repo_con_base "$SB/kernel"
@@ -359,7 +359,7 @@ test_review_scope_gradua_la_ceremonia_segun_el_rigor() {
   cd "$SB/serio/app" || return
 
   # Un valor que no existe para, no cae a un nivel por defecto.
-  echo '{"crux":"0.40.0","project":"serio","profile":"multi-repo","rigor":"estrictisimo"}' > "$SB/serio/crux.json"
+  echo '{"crux":"0.40.0","project":"serio","profile":"multi-repo","rigor":"strictest"}' > "$SB/serio/crux.json"
   assert_exit 1 "un rigor desconocido para" bash "$script" main
 
   cd "$CRUX_HOME" || return
@@ -370,11 +370,27 @@ test_doctor_rechaza_un_rigor_desconocido() {
   local docs; docs="$(new_project rigo --repos "api")"
   assert_exit 0 "sin rigor declarado el proyecto es conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 
-  node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="ligero";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
+  node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="light";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
   assert_exit 0 "con un rigor válido también" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 
   node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="relajado";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
   local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
   assert_contains "$out" "rigor desconocido" "un rigor mal escrito se señala"
   assert_exit 1 "y el proyecto deja de estar conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_signals_no_toma_cualquier_numero_por_un_5xx() {
+  sandbox >/dev/null
+  local p="$SB/proyecto" out
+  mkdir -p "$p"
+  cat > "$p/crux.json" <<'JSON'
+{"observability":{"sources":[{"name":"mezcla","command":"printf '%s\\n' 'responseTime: 544.97' 'Mozilla/5.0 AppleWebKit/537.36' 'GET /x?radio=500' '{\"level\":30,\"msg\":\"GET /error-page 500\"}' '{\"level\":50,\"msg\":\"db caída\"}' 'WMS fuente: HTTP 500' '\"GET / HTTP/1.1\" 502 0'"}]}}
+JSON
+  out="$(cd "$p" && bash "$CRUX_HOME/skills/prod-signals/scripts/signals.sh" 2>&1)"
+  assert_contains "$out" "3 líneas en 3 grupos" "solo cuentan el error estructurado y los dos 5xx con contexto"
+  assert_contains "$out" "db caída" "el nivel 50 de un log estructurado es un error"
+  assert_contains "$out" "HTTP 500" "un 5xx con HTTP delante es un error"
+  assert_not_contains "$out" "544.97" "un tiempo que empieza por 5 no lo es"
+  assert_not_contains "$out" "537.36" "ni una versión de navegador"
+  assert_not_contains "$out" "error-page" "ni una línea de info que menciona error en la URL"
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Lee las señales de producción que declara el proyecto y las resume.
 #
-#   signals.sh [--since <ventana>] [--todo] [--max <n>] [fuente ...]
+#   signals.sh [--since <ventana>] [--all] [--max <n>] [fuente ...]
 #
 # Las fuentes se declaran en crux.json, en `observability.sources`: cada una es
 # un comando de solo lectura con nombre. `{since}` se sustituye por la ventana
@@ -24,7 +24,7 @@ LIMITE="${CRUX_SIGNALS_TIMEOUT:-60}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --since) SINCE="${2:-}"; shift 2 ;;
-    --todo) TODO=1; shift ;;
+    --all) TODO=1; shift ;;
     --max) MAX="${2:-}"; shift 2 ;;
     -*) die "opción desconocida: $1" ;;
     *) PEDIDAS+=("$1"); shift ;;
@@ -93,7 +93,24 @@ while IFS=$'\t' read -r nombre comando; do
     const todo = process.argv[1] === "1";
     const max = Number(process.argv[2]);
     const lineas = texto.split("\n").filter((l) => l.trim());
-    const problema = /\b(error|exception|fatal|panic|critical|crit|failed|failure|refused|timeout|timed out|unhandled|traceback|restarting|unhealthy|exited|oom|killed|5\d\d)\b/i;
+    const palabra = /\b(error|exception|fatal|panic|critical|crit|failed|failure|refused|timeout|timed out|unhandled|traceback|restarting|unhealthy|exited|oom|killed)\b/i;
+    // Un 5xx solo cuenta con contexto de HTTP: un número suelto que empieza
+    // por 5 es un tiempo, una coordenada o una versión de navegador.
+    const http5xx = /(HTTP\/?[\d.]*\s+5\d\d\b|\bstatus(Code)?["\x27]?\s*[:=]\s*5\d\d\b|"\s5\d\d\s)/i;
+    // En un log estructurado manda su nivel: una línea de info que menciona
+    // la palabra "error" en una URL no es un error.
+    const nivel = (l) => {
+      const m = l.match(/"level"\s*:\s*("?)(\w+)\1/);
+      if (!m) return null;
+      const v = m[2].toLowerCase();
+      if (/^\d+$/.test(v)) return Number(v) >= 50 ? "error" : "info";
+      return ["error", "fatal", "critical", "crit", "panic"].includes(v) ? "error" : "info";
+    };
+    const problema = { test: (l) => {
+      const n = nivel(l);
+      if (n) return n === "error";
+      return palabra.test(l) || http5xx.test(l);
+    } };
     const elegidas = todo ? lineas : lineas.filter((l) => problema.test(l));
     if (!elegidas.length) {
       console.log(`      nada que parezca un problema en ${lineas.length} líneas`);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux checks — espera a las comprobaciones de una propuesta y dice por qué falla.
 #
-#   crux checks [<numero>] [--wait] [--timeout <segundos>] [--lineas <n>]
+#   crux checks [<numero>] [--wait] [--timeout <segundos>] [--lines <n>]
 #
 # Abrir la propuesta no es terminarla: el CI corre después, y si nadie lo mira
 # el rojo se descubre cuando alguien va a fusionar. Esto espera, y cuando algo
@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --wait) ESPERA=1; shift ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
-    --lineas) LINEAS="${2:-}"; shift 2 ;;
+    --lines) LINEAS="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) die "opción desconocida: $1" ;;
     *) NUM="$1"; shift ;;
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || die "--timeout son segundos enteros, no '$TIMEOUT'"
-[[ "$LINEAS" =~ ^[0-9]+$ ]] || die "--lineas es un entero, no '$LINEAS'"
+[[ "$LINEAS" =~ ^[0-9]+$ ]] || die "--lines es un entero, no '$LINEAS'"
 [[ -z "$NUM" || "$NUM" =~ ^[0-9]+$ ]] || die "el número de la propuesta es un entero, no '$NUM'"
 
 command -v gh >/dev/null || die "hace falta gh para leer las comprobaciones"
@@ -131,8 +131,9 @@ while :; do
   read -r total _ rojas pendientes <<< "$(resumen "$datos")"
 
   if [[ $total -eq 0 ]]; then
-    # Recién abierta, el CI tarda unos segundos en registrar sus trabajos.
-    if [[ $ESPERA -eq 1 && $vacias -lt 4 ]]; then
+    # Recién abierta o recién empujada, la propuesta tarda en mostrar el CI
+    # aunque ya esté en cola: con un minuto de margen se rendía antes de verlo.
+    if [[ $ESPERA -eq 1 && $vacias -lt 12 ]]; then
       vacias=$((vacias + 1)); sleep "$INTERVALO"; continue
     fi
     warn "#$NUM no tiene comprobaciones automáticas"

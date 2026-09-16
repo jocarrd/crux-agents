@@ -44,10 +44,10 @@ Las credenciales no van en el comando: van en la configuración de la máquina
 ```bash
 bash <directorio-de-esta-skill>/scripts/signals.sh                 # todas, última hora
 bash <directorio-de-esta-skill>/scripts/signals.sh --since 24h app # una fuente, un día
-bash <directorio-de-esta-skill>/scripts/signals.sh --todo contenedores
+bash <directorio-de-esta-skill>/scripts/signals.sh --all contenedores
 ```
 
-`--todo` quita el filtro de errores: para fuentes de estado, donde cada línea
+`--all` quita el filtro de errores: para fuentes de estado, donde cada línea
 importa.
 
 Salida: `0` leído, `1` alguna fuente no respondió, `2` el proyecto no declara

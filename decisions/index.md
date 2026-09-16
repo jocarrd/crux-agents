@@ -414,10 +414,10 @@
   sobreingeniería; en lo segundo, lo justo. El diff no sabe cuánto importa el
   proyecto: lo sabe quien lo da de alta.
 - **Decision**: campo opcional `rigor` en `crux.json`, con tres valores.
-  `ligero` reserva los especialistas para el riesgo alto y deja fusionar sin
+  `light` reserva los especialistas para el riesgo alto y deja fusionar sin
   preguntar lo que no lo es. `normal` es el comportamiento de ADR-010 y el
-  valor por defecto de un proyecto con contrato. `estricto` quita el atajo por
-  tamaño y no fusiona nunca solo. **Un repo sin `crux.json` es `ligero`**: si
+  valor por defecto de un proyecto con contrato. `strict` quita el atajo por
+  tamaño y no fusiona nunca solo. **Un repo sin `crux.json` es `light`**: si
   no se ha dado de alta, no se ha decidido que sea importante.
 - **Consequences**:
   - El riesgo alto (dependencias, sesión, datos, más de 500 líneas) lanza
@@ -428,6 +428,6 @@
   - `crux doctor` falla con un valor desconocido, y el clasificador para: una
     errata no puede caer a un nivel por defecto sin avisar.
   - Ningún proyecto existente cambia de comportamiento hasta que declare el
-    campo, salvo los repos sin contrato, que pasan a ligero.
+    campo, salvo los repos sin contrato, que pasan a `light`.
 - **Reversibility**: alta. Un campo opcional y tres umbrales en un script.
 - **Related**: `ADR-010`, `STANDARD.md` §El contrato

@@ -63,8 +63,8 @@ perfil_existe "$PROFILE" "$DOCS" || fail "perfil desconocido: $PROFILE"
 if json_has "$CONFIG" rigor; then
   RIGOR="$(json_get "$CONFIG" rigor 2>/dev/null || echo "")"
   case "$RIGOR" in
-    ligero|normal|estricto) ;;
-    *) fail "rigor desconocido: '$RIGOR' — vale ligero, normal o estricto" ;;
+    light|normal|strict) ;;
+    *) fail "rigor desconocido: '$RIGOR' — vale light, normal o strict" ;;
   esac
 fi
 # Solo la serie: un patch no trae plantillas ni comprobaciones, así que avisar

@@ -159,21 +159,21 @@ un puñado de scripts atados a un repo concreto.
 ### El rigor
 
 ```json
-"rigor": "ligero"
+"rigor": "light"
 ```
 
-Cuánta ceremonia merece el proyecto: `ligero`, `normal` o `estricto`. Opcional;
-sin el campo es `normal`, y un repo **sin `crux.json`** se trata como `ligero`,
+Cuánta ceremonia merece el proyecto: `light`, `normal` o `strict`. Opcional;
+sin el campo es `normal`, y un repo **sin `crux.json`** se trata como `light`,
 porque un proyecto que no se ha dado de alta no se ha tomado en serio todavía.
 
 | Rigor | Especialistas | Fusión sin preguntar |
 | ----- | ------------- | -------------------- |
-| `ligero` | solo con riesgo alto | todo lo que no es riesgo alto |
+| `light` | solo con riesgo alto | todo lo que no es riesgo alto |
 | `normal` | con riesgo medio o alto | solo cambios de texto |
-| `estricto` | con riesgo medio o alto, sin atajo por tamaño | nunca |
+| `strict` | con riesgo medio o alto, sin atajo por tamaño | nunca |
 
 Dentro de cada nivel manda el diff: una dependencia, la sesión o una migración
-son riesgo alto también en un proyecto ligero. En un repo de cliente
+son riesgo alto también en un proyecto `light`. En un repo de cliente
 (`client-repo`) la fusión la decide siempre una persona, sea cual sea el rigor.
 `crux doctor` rechaza cualquier otro valor.
 

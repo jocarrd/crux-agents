@@ -122,7 +122,7 @@ total_lineas="$(git diff --numstat "$BASE...HEAD" | grep -vE '(lock\.json|lock\.
 #
 # El rigor lo declara el proyecto: cuánta ceremonia merece. Un repo sin
 # crux.json no está dado de alta, y lo que no se ha dado de alta no se trata
-# como si fuera crítico: va en ligero. Dentro de cada nivel, lo que decide es
+# como si fuera crítico: va en `light`. Dentro de cada nivel, lo que decide es
 # el diff.
 
 perfil=""; rigor=""; origen_rigor=""; d="$PWD"
@@ -148,13 +148,13 @@ if [[ -z "$origen_rigor" && -n "$raiz" && -f "$raiz/STANDARD.md" && -f "$raiz/bi
   # proyectos lo consumen: no puede tratarse como algo que no se ha dado de alta.
   rigor="normal"; origen_rigor="el propio kernel, que consumen todos los proyectos"
 elif [[ -z "$origen_rigor" ]]; then
-  rigor="ligero"; origen_rigor="sin crux.json: proyecto no dado de alta"
+  rigor="light"; origen_rigor="sin crux.json: proyecto no dado de alta"
 elif [[ "$perfil" == "ilegible" ]]; then
   rigor="normal"; origen_rigor="el crux.json no se puede leer"
 fi
 case "$rigor" in
-  ligero|normal|estricto) ;;
-  *) echo "error: rigor desconocido '$rigor' ($origen_rigor) — vale ligero, normal o estricto" >&2; exit 1 ;;
+  light|normal|strict) ;;
+  *) echo "error: rigor desconocido '$rigor' ($origen_rigor) — vale light, normal o strict" >&2; exit 1 ;;
 esac
 
 # --- Riesgo -----------------------------------------------------------------
@@ -169,9 +169,9 @@ if [[ $codigo -eq 0 ]]; then
   riesgo="bajo"
 elif [[ -n "$seguridad" || -n "$datos" || $total_lineas -gt 500 ]]; then
   riesgo="alto"
-# En estricto no hay atajo por tamaño: treinta líneas de un cliente de banca
+# En strict no hay atajo por tamaño: treinta líneas de un cliente de banca
 # pueden ser justo las que importan.
-elif [[ $lineas_codigo -le 30 && "$rigor" != "estricto" ]]; then
+elif [[ $lineas_codigo -le 30 && "$rigor" != "strict" ]]; then
   riesgo="bajo"
 fi
 
@@ -180,9 +180,9 @@ echo "cambio: $(echo "$files" | wc -l | tr -d ' ') ficheros, $total_lineas líne
 echo "riesgo: $riesgo"
 echo "rigor: $rigor — $origen_rigor"
 
-# En ligero, los especialistas se reservan para lo que rompe en silencio.
+# En light, los especialistas se reservan para lo que rompe en silencio.
 lista=()
-if [[ "$riesgo" == "alto" || ( "$riesgo" == "medio" && "$rigor" != "ligero" ) ]]; then
+if [[ "$riesgo" == "alto" || ( "$riesgo" == "medio" && "$rigor" != "light" ) ]]; then
   [[ -n "$seguridad" ]]   && lista+=("seguridad|$seguridad")
   [[ -n "$datos" ]]       && lista+=("datos|$datos")
   [[ -n "$rendimiento" ]] && lista+=("rendimiento|$rendimiento")
@@ -191,8 +191,8 @@ fi
 
 # Tres como máximo: a partir de ahí se solapan y el coste crece sin hallazgos.
 if [[ ${#lista[@]} -eq 0 ]]; then
-  if [[ "$riesgo" == "medio" && "$rigor" == "ligero" ]]; then
-    echo "especialistas: ninguno — rigor ligero, basta la revisión general"
+  if [[ "$riesgo" == "medio" && "$rigor" == "light" ]]; then
+    echo "especialistas: ninguno — rigor light, basta la revisión general"
   else
     echo "especialistas: ninguno — basta la revisión general"
   fi
@@ -209,17 +209,17 @@ fi
 #
 # En un repo de cliente decide siempre una persona, sea cual sea el rigor: el
 # coste de equivocarse no lo paga quien fusiona. Fuera de eso, el rigor mueve
-# el umbral: en estricto nunca se fusiona solo, en normal solo el texto, y en
-# ligero todo lo que no es riesgo alto.
+# el umbral: en strict nunca se fusiona solo, en normal solo el texto, y en
+# light todo lo que no es riesgo alto.
 
 if [[ "$perfil" == "ilegible" ]]; then
   echo "fusión: decide una persona — el crux.json del proyecto no se puede leer"
-elif [[ "$perfil" == "client-repo" || "$rigor" == "estricto" ]]; then
+elif [[ "$perfil" == "client-repo" || "$rigor" == "strict" ]]; then
   echo "fusión: decide una persona"
 elif [[ $no_texto -eq 0 ]]; then
   echo "fusión: puede fusionarse sin preguntar — solo texto"
-elif [[ "$rigor" == "ligero" && "$riesgo" != "alto" ]]; then
-  echo "fusión: puede fusionarse sin preguntar — rigor ligero y riesgo $riesgo"
+elif [[ "$rigor" == "light" && "$riesgo" != "alto" ]]; then
+  echo "fusión: puede fusionarse sin preguntar — rigor light y riesgo $riesgo"
 else
   echo "fusión: decide una persona"
 fi
