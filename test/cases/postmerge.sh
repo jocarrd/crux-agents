@@ -19,6 +19,8 @@ _pm_commit_todo() {
 test_review_scope_gradua_el_riesgo_segun_el_diff() {
   sandbox >/dev/null
   local repo="$SB/riesgo" out
+  # Proyecto dado de alta sin rigor declarado: normal.
+  echo '{"crux":"0.40.0","project":"riesgo","profile":"multi-repo"}' > "$SB/crux.json"
   _pm_repo_con_base "$repo"
   cd "$repo" || return
   local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh"
@@ -291,6 +293,7 @@ test_signals_avisa_si_el_contrato_tiene_cambios_sin_commitear() {
 test_review_scope_no_toma_dependencias_ni_tests_por_texto() {
   sandbox >/dev/null
   local repo="$SB/deps" out
+  echo '{"crux":"0.40.0","project":"deps","profile":"multi-repo"}' > "$SB/crux.json"
   _pm_repo_con_base "$repo"
   cd "$repo" || return
   local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh"
@@ -308,4 +311,70 @@ test_review_scope_no_toma_dependencias_ni_tests_por_texto() {
   assert_contains "$out" "fusión: decide una persona" "un test lo ejecuta el CI: no se fusiona sin preguntar"
 
   cd "$CRUX_HOME" || return
+}
+
+test_review_scope_gradua_la_ceremonia_segun_el_rigor() {
+  sandbox >/dev/null
+  local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" out
+
+  # Sin crux.json: el proyecto no está dado de alta y va en ligero.
+  _pm_repo_con_base "$SB/suelto"
+  cd "$SB/suelto" || return
+  mkdir -p src/components
+  seq 1 80 | sed 's/^/const v/' > src/components/Tarjeta.tsx; _pm_commit_todo
+  out="$(bash "$script" main)"
+  assert_contains "$out" "rigor: ligero — sin crux.json" "sin contrato, ligero y dice por qué"
+  assert_contains "$out" "especialistas: ninguno — rigor ligero" "una pantalla no paga especialista en ligero"
+  assert_contains "$out" "puede fusionarse sin preguntar — rigor ligero" "y se fusiona sola"
+
+  mkdir -p src/auth
+  seq 1 40 > src/auth/session.ts; _pm_commit_todo
+  out="$(bash "$script" main)"
+  assert_contains "$out" "seguridad" "pero la sesión sigue pidiendo especialista en ligero"
+  assert_contains "$out" "fusión: decide una persona" "y no se fusiona sola"
+
+  # Estricto: sin atajo por tamaño y siempre decide una persona.
+  mkdir -p "$SB/serio"
+  echo '{"crux":"0.40.0","project":"serio","profile":"multi-repo","rigor":"estricto"}' > "$SB/serio/crux.json"
+  _pm_repo_con_base "$SB/serio/app"
+  cd "$SB/serio/app" || return
+  mkdir -p src/components
+  printf 'a\nb\n' > src/components/Boton.tsx; _pm_commit_todo
+  out="$(bash "$script" main)"
+  assert_contains "$out" "riesgo: medio" "en estricto dos líneas no son riesgo bajo"
+  assert_contains "$out" "especialistas: interfaz" "y piden su especialista"
+  echo "texto" >> README.md; git reset -q --soft main; git commit -qm solo-texto
+  git reset -q --hard main; echo "más" >> README.md; _pm_commit_todo
+  out="$(bash "$script" main)"
+  assert_contains "$out" "fusión: decide una persona" "en estricto ni el texto se fusiona solo"
+
+  # El kernel no tiene contrato, pero no es un repo cualquiera.
+  _pm_repo_con_base "$SB/kernel"
+  cd "$SB/kernel" || return
+  mkdir -p bin; touch STANDARD.md bin/crux
+  seq 1 80 | sed 's/^/x=/' > bin/algo.sh; _pm_commit_todo
+  out="$(bash "$script" main)"
+  assert_contains "$out" "rigor: normal — el propio kernel" "el kernel va en normal aunque no tenga crux.json"
+  assert_contains "$out" "fusión: decide una persona" "y su código no se fusiona solo"
+  cd "$SB/serio/app" || return
+
+  # Un valor que no existe para, no cae a un nivel por defecto.
+  echo '{"crux":"0.40.0","project":"serio","profile":"multi-repo","rigor":"estrictisimo"}' > "$SB/serio/crux.json"
+  assert_exit 1 "un rigor desconocido para" bash "$script" main
+
+  cd "$CRUX_HOME" || return
+}
+
+test_doctor_rechaza_un_rigor_desconocido() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rigo --repos "api")"
+  assert_exit 0 "sin rigor declarado el proyecto es conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+
+  node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="ligero";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
+  assert_exit 0 "con un rigor válido también" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+
+  node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="relajado";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "rigor desconocido" "un rigor mal escrito se señala"
+  assert_exit 1 "y el proyecto deja de estar conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }

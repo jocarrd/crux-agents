@@ -400,3 +400,34 @@
 - **Reversibility**: alta. Un comando, dos skills y un script nuevos, y texto en
   `/flow` y `/review-pr`. Los bloques del contrato son opcionales.
 - **Related**: `ADR-005`, `ADR-009`, `STANDARD.md` §El contrato, §El ciclo de desarrollo
+
+---
+
+### ADR-011: La ceremonia la declara el proyecto; sin contrato, ligera
+
+- **Date**: 2026-09-16
+- **Status**: Accepted
+- **Context**: con ADR-010 el ciclo creció después de la propuesta, y el
+  riesgo se calculaba igual en cualquier repo. Un cambio de 150 líneas en una
+  web personal y en un repo de cliente recibían el mismo trato: un especialista
+  de 20.000 a 50.000 tokens y fusión con permiso. En lo primero es
+  sobreingeniería; en lo segundo, lo justo. El diff no sabe cuánto importa el
+  proyecto: lo sabe quien lo da de alta.
+- **Decision**: campo opcional `rigor` en `crux.json`, con tres valores.
+  `ligero` reserva los especialistas para el riesgo alto y deja fusionar sin
+  preguntar lo que no lo es. `normal` es el comportamiento de ADR-010 y el
+  valor por defecto de un proyecto con contrato. `estricto` quita el atajo por
+  tamaño y no fusiona nunca solo. **Un repo sin `crux.json` es `ligero`**: si
+  no se ha dado de alta, no se ha decidido que sea importante.
+- **Consequences**:
+  - El riesgo alto (dependencias, sesión, datos, más de 500 líneas) lanza
+    especialistas en todos los niveles: bajar la ceremonia no apaga lo que
+    rompe en silencio.
+  - El perfil `client-repo` sigue mandando sobre la fusión: con cualquier
+    rigor, decide una persona.
+  - `crux doctor` falla con un valor desconocido, y el clasificador para: una
+    errata no puede caer a un nivel por defecto sin avisar.
+  - Ningún proyecto existente cambia de comportamiento hasta que declare el
+    campo, salvo los repos sin contrato, que pasan a ligero.
+- **Reversibility**: alta. Un campo opcional y tres umbrales en un script.
+- **Related**: `ADR-010`, `STANDARD.md` §El contrato

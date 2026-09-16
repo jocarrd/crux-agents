@@ -156,6 +156,27 @@ hasta que un hook lo trajo solo.
 declara el contrato, que es lo que hace que esto sea una línea de trabajo y no
 un puñado de scripts atados a un repo concreto.
 
+### El rigor
+
+```json
+"rigor": "ligero"
+```
+
+Cuánta ceremonia merece el proyecto: `ligero`, `normal` o `estricto`. Opcional;
+sin el campo es `normal`, y un repo **sin `crux.json`** se trata como `ligero`,
+porque un proyecto que no se ha dado de alta no se ha tomado en serio todavía.
+
+| Rigor | Especialistas | Fusión sin preguntar |
+| ----- | ------------- | -------------------- |
+| `ligero` | solo con riesgo alto | todo lo que no es riesgo alto |
+| `normal` | con riesgo medio o alto | solo cambios de texto |
+| `estricto` | con riesgo medio o alto, sin atajo por tamaño | nunca |
+
+Dentro de cada nivel manda el diff: una dependencia, la sesión o una migración
+son riesgo alto también en un proyecto ligero. En un repo de cliente
+(`client-repo`) la fusión la decide siempre una persona, sea cual sea el rigor.
+`crux doctor` rechaza cualquier otro valor.
+
 ### El despliegue
 
 ```json

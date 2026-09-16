@@ -58,6 +58,15 @@ LANG_DECLARADO="$(json_get "$CONFIG" language 2>/dev/null || echo "es")"
 KERNEL="$(crux_version)"
 
 perfil_existe "$PROFILE" "$DOCS" || fail "perfil desconocido: $PROFILE"
+# El rigor decide cuánta revisión se paga y quién fusiona. Una errata en el
+# valor no puede caer a un nivel por defecto sin que nadie se entere.
+if json_has "$CONFIG" rigor; then
+  RIGOR="$(json_get "$CONFIG" rigor 2>/dev/null || echo "")"
+  case "$RIGOR" in
+    ligero|normal|estricto) ;;
+    *) fail "rigor desconocido: '$RIGOR' — vale ligero, normal o estricto" ;;
+  esac
+fi
 # Solo la serie: un patch no trae plantillas ni comprobaciones, así que avisar
 # por él manda a un upgrade que no cambia nada.
 if [[ "${DECLARED%.*}" != "${KERNEL%.*}" ]]; then

@@ -90,6 +90,17 @@ Con el reparto por diff, lo habitual es:
 Si el script no nombra a ninguno y aun así ves algo que pide una mirada
 especialista, se lanza ese uno y se dice por qué.
 
+### El rigor del proyecto mueve los umbrales
+
+No todo proyecto merece la misma ceremonia. El `crux.json` declara `rigor`:
+
+- **`ligero`** —y cualquier repo sin `crux.json`—: especialistas solo con
+  riesgo alto, y se fusiona sin preguntar todo lo que no sea riesgo alto.
+- **`normal`** —el valor si no se declara—: lo descrito arriba.
+- **`estricto`**: sin el atajo de las 30 líneas, y nunca se fusiona solo.
+
+El informe dice qué rigor aplicó y de dónde lo sacó.
+
 ### El riesgo decide quién fusiona
 
 La línea `fusión:` del informe lo dice. **Solo se fusiona sin preguntar un
