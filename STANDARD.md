@@ -812,6 +812,7 @@ credenciales y nombres. Con dos guardas:
 | `ui-behaviour` | Que los controles hagan algo y se alcancen con el teclado |
 | `redaccion` | Que un texto no se lea como generado por un modelo |
 | `promo-video` | Enseñar el producto en movimiento, para redes |
+| `x-posts` | Escribir y planificar publicaciones para X que lleguen a gente |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local`, `drive-browser` | Operación |
 | `carry-env` | Llevarte a otra máquina lo que los repos no llevan |

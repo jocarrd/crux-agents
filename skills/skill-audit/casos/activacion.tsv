@@ -34,6 +34,8 @@ share-local	enseñarle el entorno local a alguien de fuera sin desplegar
 code-health	medir la salud estructural del repo y su tendencia
 bug-hunt	buscar fallos que nadie ha reportado todavía en esta herramienta
 promo-video	montar un vídeo corto del producto para redes
+x-posts	escribe un tweet para contar lo que he construido esta semana
+x-posts	quiero crecer en X con mi marca personal
 flow	quiero desarrollar esto siguiendo las convenciones del proyecto
 flow	me pongo a tocar código en este repo, ¿qué pasos sigo?
 crux-doctor	comprobar si la documentación de este proyecto se ha desalineado
