@@ -431,3 +431,49 @@
     campo, salvo los repos sin contrato, que pasan a `light`.
 - **Reversibility**: alta. Un campo opcional y tres umbrales en un script.
 - **Related**: `ADR-010`, `STANDARD.md` §El contrato
+
+---
+
+### ADR-012: El cambio es un objeto con registro, y vive en el estado local
+
+- **Date**: 2026-09-17
+- **Status**: Accepted
+- **Context**: crux tenía el conocimiento del proyecto bien resuelto —el docs
+  repo— y el ciclo después de la propuesta, pero no la unidad del medio: la
+  tarea. `/explain-plan` decía que el plan "se queda donde está" sin decir
+  dónde, y en la práctica vivía en la conversación. Una compactación, un
+  reinicio o volver al día siguiente perdían los pasos, lo comprobado y el
+  siguiente paso. Otros sistemas lo resuelven con un documento por cambio
+  (OpenSpec, el ODD de gentle-ai), pero en el repo de código, que en el de un
+  cliente no se puede tocar y que parte en dos una tarea de varios repos. Y la
+  medida de uso dice que las instrucciones en prosa no se siguen: `flow` se
+  invocó una vez en 46 sesiones; lo que funciona son mecanismos.
+- **Decision**: cada espacio de trabajo tiene una tarea, y cada tarea un
+  registro en `~/.crux/tasks/<proyecto>/<tarea>.md`: un markdown con cabecera
+  —estado, repos, espacios— y secciones fijas —objetivo, alcance, plan, pasos,
+  siguiente paso, desviaciones y decisiones, verificación, cierre—. Lo escriben
+  los comandos: `workspace new` lo crea (o se une con `--task` desde otro
+  repo), `crux task` anota pasos con su evidencia, `ship seal` vuelca el recibo
+  y lo marca verificado, `finish` saca de él la descripción de la propuesta y
+  `merge` lo marca fusionado. Un hook trae el estado y el siguiente paso al
+  retomar un espacio, una vez por sesión.
+- **Consequences**:
+  - Retomar deja de depender de la conversación: el estado está en disco y
+    llega solo.
+  - Nada se escribe en los repos: vale igual en el de un cliente, y la
+    descripción que sale de la tarea no nombra nuestro tooling.
+  - El docs repo sigue siendo lo que dura. Lo que merece sobrevivir a la tarea
+    —una decisión, una medida— se promociona al cerrar, como hasta ahora.
+  - Un registro local no viaja si se cambia de máquina a mitad de tarea. Es la
+    contrapartida aceptada: la alternativa era mezclar estado de trabajo con
+    conocimiento.
+  - Los estados solo avanzan solos; volver atrás es explícito
+    (`crux task status <estado> --force`).
+- **Descartado**: el docs repo (mezcla trabajo con conocimiento, sin
+  aislamiento entre sesiones paralelas, y los commits de casillas falsean la
+  deriva que mide `doctor`); el repo de código (imposible en un cliente, parte
+  las tareas de varios repos); una base de datos aparte (dos fuentes que
+  sincronizar); la propuesta como documento vivo (no existe hasta el final).
+- **Reversibility**: alta. Un subcomando, un hook y ficheros locales legibles a
+  mano; retirarlo no toca ningún repo.
+- **Related**: `ADR-010`, `ADR-011`, `STANDARD.md` §La tarea

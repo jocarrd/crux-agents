@@ -839,6 +839,30 @@ Cinco skills sostienen el trabajo del día a día, y se usan en este orden:
 5. **`/end-session`** — antes de cerrar. Lo que deba sobrevivir a la sesión se
    escribe en git, se verifica la conformidad y se commitea.
 
+### La tarea
+
+Cada espacio de trabajo tiene una tarea, y cada tarea **un registro** en
+`~/.crux/tasks/<proyecto>/<tarea>.md`. Es estado de trabajo, no conocimiento:
+vive junto al registro de espacios y **fuera de los repos**, así que vale igual
+en el de un cliente y en una tarea que toca varios.
+
+| Momento | Lo escribe | Estado |
+| ------- | ---------- | ------ |
+| Abrir el espacio | `crux workspace new` (o `--task <tarea>` para unirse desde otro repo) | `open` |
+| Plan aprobado | `crux task plan <fichero>` | `planned` |
+| Trabajando | `crux task add`, `done <Tn> "evidencia"`, `next`, `note` | `in-progress` |
+| Puerta cerrada | `crux ship seal`, que vuelca el recibo como evidencia | `verified` |
+| Propuesta abierta | `crux workspace finish`, que saca de ahí la descripción | `proposed` |
+| Fusionada | `crux workspace merge --yes` | `merged` |
+
+El registro se escribe en el idioma de las propuestas del repo —el de sus
+commits—, porque la descripción de la propuesta sale de él.
+
+Al retomar un espacio, el hook de la tarea trae su estado y su siguiente paso.
+Lo que merece durar más que la tarea —una decisión con alternativas, una
+medida— se promociona al docs repo al cerrar, como cualquier otra cosa de la
+sesión. Ver ADR-012.
+
 ---
 
 ## Comandos
@@ -855,6 +879,7 @@ Cinco skills sostienen el trabajo del día a día, y se usan en este orden:
 | `crux merge <n>` | — | Mergea una propuesta diciendo antes cuál y de qué repo |
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
+| `crux task` | `/workspace` | El registro de la tarea: pasos con evidencia, siguiente paso y estado |
 | `crux ship` | `/ship` | La puerta de calidad, con recibo de lo ejecutado |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | — | Re-materializa el kernel a la versión actual |

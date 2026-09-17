@@ -459,3 +459,45 @@ owner_from_template() {
   local tmpl="$1"
   [[ "$tmpl" =~ github\.com[:/]([^/]+)/ ]] && printf '%s' "${BASH_REMATCH[1]}"
 }
+
+# --- Registro de tareas --------------------------------------------------------
+#
+# Junto al registro de espacios: si una prueba redirige ese registro a su
+# sandbox, las tareas van detrás sin tener que acordarse de otra variable.
+
+task_dir() {
+  if [[ -n "${CRUX_TASKS_DIR:-}" ]]; then echo "$CRUX_TASKS_DIR"; return; fi
+  echo "$(dirname "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}")/tasks"
+}
+
+project_name_for() {
+  # project_name_for <ruta de un repo o de un espacio>
+  #
+  # El proyecto sale del layout: <raíz>/<proyecto>/<repo>. Un repo que cuelga
+  # directamente de la raíz —el propio kernel— es su propio proyecto.
+  local ruta="$1" raiz rel
+  raiz="$(projects_root)"
+  case "$ruta/" in
+    "$raiz"/*/*/*)
+      rel="${ruta#"$raiz"/}"; echo "${rel%%/*}" ;;
+    "$raiz"/*/)
+      rel="${ruta#"$raiz"/}"; rel="${rel%%/*}"; echo "${rel%%-ws-*}" ;;
+    *)
+      basename "$ruta" | sed 's/-ws-.*$//' ;;
+  esac
+}
+
+task_file_for_path() {
+  # task_file_for_path <registro> <toplevel> — el registro de la tarea del
+  # espacio que vive en esa ruta. Sale con 1 si la ruta no es un espacio.
+  local registro="$1" ruta="$2" datos
+  [[ -f "$registro" ]] || return 1
+  datos="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const e = Object.entries(r.workspaces || {}).find(([, w]) => w.path === process.argv[2]);
+    if (!e || !e[1].task || !e[1].project) process.exit(1);
+    process.stdout.write(`${e[1].project}/${e[1].task}`);
+  ' "$registro" "$ruta" 2>/dev/null)" || return 1
+  echo "$(task_dir)/$datos.md"
+}

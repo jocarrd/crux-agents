@@ -108,6 +108,28 @@ Se puede forzar con `--force` cuando el cliente lo autoriza expresamente. Que
 haga falta un flag es a propósito: obliga a que sea una decisión, no un
 descuido.
 
+## La tarea del espacio
+
+Al abrirlo, el espacio registra su tarea en `~/.crux/tasks/<proyecto>/<tarea>.md`.
+Si la tarea toca otro repo, se abre allí un espacio con el mismo `--task`, y
+los dos escriben en el mismo registro.
+
+```bash
+crux workspace new <tarea> --goal "qué y por qué"
+crux task                          # estado, pasos y siguiente paso
+crux task add "paso" "otro paso"   # devuelve T1, T2…
+crux task done T1 "lo que lo prueba"
+crux task next "lo siguiente"
+crux task note "decisión o desviación"
+```
+
+**Se escribe en el idioma de las propuestas del repo** —el de sus commits—,
+porque de ahí sale la descripción. `workspace new` lo dice al abrir el espacio.
+
+**Se anota mientras se trabaja, no al final**: es lo que permite retomar tras
+una interrupción sin reconstruir nada, y lo que después cuenta la propuesta.
+`ship seal` añade lo comprobado y `finish` saca de ahí la descripción.
+
 ## Cerrar el ciclo
 
 ```bash

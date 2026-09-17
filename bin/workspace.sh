@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux workspace — espacios de trabajo aislados para trabajar en paralelo.
 #
-#   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>] [--force]
+#   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>] [--task <tarea>] [--goal "<texto>"] [--force]
 #   crux workspace list
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
@@ -153,11 +153,12 @@ load_config() {
 escribir_espacio() {
   node -e '
     const fs = require("fs");
-    const [file, name, slot, repo, path, branch, port0, perSlot] = process.argv.slice(1);
+    const [file, name, slot, repo, path, branch, port0, perSlot, task, project] = process.argv.slice(1);
     const r = JSON.parse(fs.readFileSync(file, "utf8"));
     r.workspaces[name] = {
       slot: Number(slot), repo, path, branch,
       ports: [Number(port0), Number(port0) + Number(perSlot) - 1],
+      task, project,
     };
     fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n");
   ' "$REGISTRY" "$@"
@@ -180,10 +181,12 @@ cmd_new() {
   nombre_valido "$name" \
     || die "nombre de espacio inválido: '$name' — letras, números, punto, guion y guion bajo, sin barras ni '..'"
 
-  local repo="$PWD" base="" rama_pedida="" FORZAR=0
+  local repo="$PWD" base="" rama_pedida="" FORZAR=0 tarea="" objetivo=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) repo="$2"; shift 2 ;;
+      --task) tarea="$2"; shift 2 ;;
+      --goal) objetivo="$2"; shift 2 ;;
       --base) base="$2"; shift 2 ;;
       --branch) rama_pedida="$2"; shift 2 ;;
       --force) FORZAR=1; shift ;;
@@ -196,6 +199,11 @@ cmd_new() {
   local repo_name; repo_name="$(basename "$repo")"
   local parent; parent="$(dirname "$repo")"
   local path="$parent/${repo_name}-ws-${name}"
+  # Una tarea que toca varios repos abre un espacio en cada uno con el mismo
+  # --task: todos escriben en el mismo registro.
+  tarea="${tarea:-$name}"
+  nombre_valido "$tarea" || die "nombre de tarea inválido: '$tarea'"
+  local proyecto; proyecto="$(project_name_for "$repo")"
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
   local perfil=""
   [[ -n "$docs" && -f "$docs/crux.json" ]] &&
@@ -276,7 +284,7 @@ cmd_new() {
 
   # Reservado el slot, el cerrojo se suelta: instalar y levantar el setup tarda
   # minutos, y con el registro cogido el segundo espacio no arrancaba.
-  escribir_espacio "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT"
+  escribir_espacio "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT" "$tarea" "$proyecto"
   RESERVA="$name"
   unlock
 
@@ -286,6 +294,20 @@ cmd_new() {
 
   WORKTREE_HECHO=1
   ok "worktree $path (rama $branch)"
+
+  local registro_tarea resultado
+  registro_tarea="$(task_dir)/$proyecto/$tarea.md"
+  if resultado="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$registro_tarea" \
+      --task "$tarea" --project "$proyecto" --repo "$repo_name" --workspace "$name" 2>&1)"; then
+    [[ "$resultado" == joined ]] && ok "se une a la tarea '$tarea' ya abierta" || ok "tarea '$tarea' registrada"
+    local idioma_tarea
+    idioma_tarea="$(perfil_get "$perfil" "$docs" commit.language en 2>/dev/null || echo en)"
+    info "escríbela en '$idioma_tarea': de ella sale la descripción de la propuesta"
+    [[ -z "$objetivo" ]] || node "$CRUX_HOME/lib/task.mjs" set --file "$registro_tarea" \
+      --section Objetivo --text "$objetivo" >/dev/null 2>&1 || warn "no pude anotar el objetivo"
+  else
+    warn "no pude escribir el registro de la tarea: $resultado"
+  fi
 
   # La marca de la puerta es estado local. Va al exclude del directorio común,
   # que es el que git respeta desde un worktree, y así no toca el .gitignore
@@ -450,9 +472,23 @@ cmd_finish() {
   local base
   base="$(git -C "$path" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
 
-  local cuerpo
-  cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
-    "$(git -C "$path" log --format='- %s' "$base..$branch")" "${head:0:8}")"
+  # Si la tarea dice qué cambia y por qué, la descripción sale de ahí; si no,
+  # de los commits, como siempre. Un registro vacío no mejora la propuesta.
+  local cuerpo="" registro_tarea idioma docs_fin perfil_fin=""
+  registro_tarea="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
+  docs_fin="$(find_docs_repo "$path" 2>/dev/null || echo "")"
+  [[ -n "$docs_fin" && -f "$docs_fin/crux.json" ]] &&
+    perfil_fin="$(json_get "$docs_fin/crux.json" profile 2>/dev/null || echo "")"
+  # La descripción va en el idioma de lo que se publica en el repo, el mismo de
+  # los commits. La tarea se escribe en ese idioma porque de ahí sale el texto.
+  idioma="$(perfil_get "$perfil_fin" "$docs_fin" commit.language en 2>/dev/null || echo en)"
+  if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
+    cuerpo="$(node "$CRUX_HOME/lib/task.mjs" body --file "$registro_tarea" --lang "$idioma" 2>/dev/null || true)"
+  fi
+  if [[ -z "$cuerpo" ]]; then
+    cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
+      "$(git -C "$path" log --format='- %s' "$base..$branch")" "${head:0:8}")"
+  fi
 
   local url_pr=""
   if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
@@ -469,6 +505,10 @@ cmd_finish() {
 
   if [[ -n "$url_pr" ]]; then
     ok "propuesta abierta: $url_pr"
+    if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
+      node "$CRUX_HOME/lib/task.mjs" meta --file "$registro_tarea" --key pr --value "$url_pr" >/dev/null 2>&1 || true
+      node "$CRUX_HOME/lib/task.mjs" status --file "$registro_tarea" --to proposed >/dev/null 2>&1 || true
+    fi
   else
     info "abre la propuesta en tu proveedor desde la rama $branch"
   fi
@@ -580,6 +620,10 @@ cmd_merge() {
   fusionada="$(cd "$path" && gh pr view --json mergedAt -q '.mergedAt // ""' 2>/dev/null)"
   [[ -n "$fusionada" ]] || die "la propuesta #$PR_NUM no se fusionó"
   ok "propuesta #$PR_NUM fusionada"
+  local registro_tarea
+  registro_tarea="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
+  [[ -n "$registro_tarea" && -f "$registro_tarea" ]] &&
+    node "$CRUX_HOME/lib/task.mjs" status --file "$registro_tarea" --to merged >/dev/null 2>&1 || true
 
   git -C "$path" push -q origin --delete "$branch" 2>/dev/null \
     && ok "rama remota borrada" \
@@ -605,7 +649,12 @@ cmd_list() {
     const aqui = process.argv[2];
     let rows = Object.entries(r.workspaces);
     const total = rows.length;
-    if (aqui) rows = rows.filter(([, w]) => w.repo === aqui);
+    // Desde dentro de un espacio, "este repo" es el repo del que cuelga, no la
+    // ruta del worktree: si no, la lista decía que no había nada justo al
+    // retomar, que es cuando se mira.
+    const propio = rows.find(([, w]) => w.path === aqui);
+    const repo = propio ? propio[1].repo : aqui;
+    if (aqui) rows = rows.filter(([, w]) => w.repo === repo);
     if (!rows.length) {
       console.log(total ? `sin espacios en este repo (${total} en otros: crux workspace list --all)`
                         : "sin espacios activos");
@@ -617,12 +666,27 @@ cmd_list() {
         return dias < 1 ? "hoy" : dias === 1 ? "ayer" : `hace ${dias} días`;
       } catch { return ""; }
     };
+    // Lo que importa al volver a un espacio es en qué punto quedó: el estado y
+    // el siguiente paso de su tarea, no solo el slot.
+    const tarea = (w) => {
+      if (!w.task || !w.project) return "";
+      try {
+        const t = fs.readFileSync(`${process.argv[3]}/${w.project}/${w.task}.md`, "utf8");
+        const estado = (t.match(/^status: (.*)$/m) || [])[1] || "";
+        const sig = ((t.split(/^## Siguiente paso$/m)[1] || "").split(/^## /m)[0] || "")
+          .replace(/<!--[\s\S]*?-->/g, "").trim().split("\n")[0];
+        const pend = (t.match(/^- \[ \] (T\d+ .*)$/m) || [])[1] || "";
+        return `${estado}${(sig || pend) ? " · " + (sig || pend).slice(0, 60) : ""}`;
+      } catch { return ""; }
+    };
     for (const [name, w] of rows) {
       const vivo = fs.existsSync(w.path);
       const cola = vivo ? desde(w.path) : "sin worktree — retíralo con: crux workspace gc";
       console.log(`${name.padEnd(16)} slot ${String(w.slot).padStart(2)}  puertos ${w.ports[0]}-${w.ports[1]}  ${cola.padEnd(14)}  ${w.path}`);
+      const t = tarea(w);
+      if (t) console.log(`${"".padEnd(16)} tarea ${w.task}: ${t}`);
     }
-  ' "$REGISTRY" "$aqui"
+  ' "$REGISTRY" "$aqui" "$(task_dir)"
 }
 
 cmd_rm() {

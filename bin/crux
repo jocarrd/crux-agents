@@ -25,6 +25,7 @@ crux — kernel del sistema de trabajo con agentes
   crux merge <n>        mergea una propuesta diciendo antes cuál y de qué repo
   crux link [dir]       genera y verifica los punteros de los repos de código
   crux workspace ...    espacios aislados para trabajar en paralelo
+  crux task ...         el registro de la tarea: pasos, siguiente paso, evidencias
   crux ship ...         la puerta de calidad, con recibo de lo ejecutado
   crux hooks ...        engancha el estándar al cierre de sesión y al commit
   crux mcp ...          los servidores MCP que el proyecto declara
@@ -67,6 +68,7 @@ case "$cmd" in
   merge)   exec bash "$CRUX_HOME/bin/merge.sh" "$@" ;;
   link)    exec bash "$CRUX_HOME/bin/link.sh" "$@" ;;
   workspace) exec bash "$CRUX_HOME/bin/workspace.sh" "$@" ;;
+  task)    exec bash "$CRUX_HOME/bin/task.sh" "$@" ;;
   ship)    exec bash "$CRUX_HOME/bin/ship.sh" "$@" ;;
   hooks)   exec bash "$CRUX_HOME/bin/hooks.sh" "$@" ;;
   mcp)     exec bash "$CRUX_HOME/bin/mcp.sh" "$@" ;;

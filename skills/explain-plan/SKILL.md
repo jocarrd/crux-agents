@@ -85,6 +85,13 @@ escondido.
 Un diagrama transporta la misma información con bastante menos coste que la
 prosa equivalente — **cuando hay algo que dibujar**.
 
+## Dónde se queda el plan
+
+En el registro de la tarea, no en la conversación: una vez aprobado,
+`crux task plan <fichero>` lo vuelca a su sección y marca la tarea como
+planificada. Así sobrevive a una interrupción, y los pasos que salgan de él se
+anotan con `crux task add`.
+
 ## El plan se cierra cuando se ejecuta
 
 Un plan no es un documento que se escribe y se abandona. Al terminar el trabajo

@@ -51,6 +51,10 @@ Con un espacio propio, cada tarea tiene su rama, su worktree y su runtime. Y al
 terminar sale como una propuesta que se revisa, no como un montón de cambios
 sueltos mezclados con los de otro.
 
+El espacio abre también **el registro de la tarea**: objetivo, pasos con su
+evidencia y siguiente paso, fuera del repo. Se anota mientras se trabaja
+(`crux task`), y es lo que permite retomar sin reconstruir nada.
+
 Salta este paso solo si estás seguro de que nadie más está trabajando en ese
 repo. El comando avisa si ya hay otro espacio abierto.
 
@@ -63,7 +67,7 @@ clave de caché" se rechaza en cinco segundos. El mismo error descubierto
 después de escribir el código es un diff que revisar y probablemente revertir.
 
 El plan se aprueba antes de seguir. Si quien decide no eres tú, aquí es donde
-se pregunta.
+se pregunta. Aprobado, va al registro de la tarea: `crux task plan <fichero>`.
 
 ### 4. Desarrollar
 
@@ -184,8 +188,9 @@ Lo que se ha aprendido y no queda en el código —decisiones, gotchas,
 convenciones— se escribe donde sobreviva a la sesión. Si no, se pierde, y en
 tres meses alguien vuelve a descubrirlo.
 
-**Y se cierra el plan del paso 3.** Cabecera de estado con lo hecho, el commit
-de cada paso y qué salió distinto de lo planeado. Ver `/explain-plan`.
+**Y se cierra la tarea.** Lo hecho y lo comprobado ya están en su registro; lo
+que salió distinto de lo planeado está en sus desviaciones y decisiones, y de
+ahí sale lo que se promociona. Ver `/explain-plan`.
 
 ---
 

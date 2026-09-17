@@ -130,10 +130,10 @@ y explica por qué es ese y no otro.
 
 ```mermaid
 flowchart TD
-    A["crux workspace new &lt;tarea&gt;<br/>rama, worktree y runtime propios"] --> B["desarrollar<br/>con los tests de lo que duele si falla"]
+    A["crux workspace new &lt;tarea&gt;<br/>rama, worktree, runtime y registro de la tarea"] --> B["desarrollar<br/>anotando pasos y evidencias con crux task"]
     B --> C{"/ship<br/>la puerta del autor"}
     C -- "alguna puerta en rojo" --> B
-    C -- "verde: commit" --> D["crux workspace finish &lt;tarea&gt;<br/>sube la rama y abre la propuesta"]
+    C -- "verde: commit" --> D["crux workspace finish &lt;tarea&gt;<br/>sube la rama y abre la propuesta<br/>con la descripción sacada de la tarea"]
     D --> CI{"crux checks --wait<br/>el CI, con el log de lo que falla"}
     CI -- "rojo: hasta tres intentos" --> B
     CI -- "verde" --> E{"/review-pr<br/>riesgo y especialistas que pide el diff"}
@@ -153,6 +153,45 @@ desde un contexto independiente. Quien acaba de defender cada decisión no está
 en posición de refutarlas, y hay un hueco que solo se ve desde fuera: arreglar
 un problema por la puerta por la que se encontró y dejarlo abierto por otra.
 
+### La tarea: retomar sin reconstruir
+
+Cada espacio de trabajo tiene una tarea con su registro en
+`~/.crux/tasks/<proyecto>/<tarea>.md`: objetivo, alcance, plan, pasos con su
+evidencia, siguiente paso, decisiones tomadas por el camino y lo comprobado.
+
+```bash
+crux workspace new passkeys --goal "Entrar con passkey, sin contraseña"
+crux task add "registro de la passkey" "login" "recuperación de cuenta"
+crux task done T1 "test e2e del registro en verde, captura del diálogo"
+crux task note "La recuperación sigue por correo: el proveedor no admite passkeys de respaldo"
+crux task next "probar el login en Safari"
+crux task                          # estado, pasos y siguiente paso
+```
+
+Lo escriben los comandos, no hay que editarlo a mano:
+
+| Momento | Qué pasa en el registro | Estado |
+| ------- | ----------------------- | ------ |
+| `crux workspace new` | Se crea; con `--task` otro repo se une a la misma tarea | `open` |
+| `crux task plan <fichero>` | El plan aprobado queda escrito | `planned` |
+| `crux task done` | El paso se marca con lo que lo prueba | `in-progress` |
+| `crux ship seal` | Se vuelca el recibo de la puerta como evidencia | `verified` |
+| `crux workspace finish` | La descripción de la propuesta sale de aquí | `proposed` |
+| `crux workspace merge --yes` | Se anota la fusión | `merged` |
+
+Al retomar un espacio —otra sesión, tras un reinicio o al día siguiente— un
+hook trae el estado y el siguiente paso en dos líneas. `crux workspace list`
+enseña lo mismo por cada espacio.
+
+**Vive fuera de los repos a propósito.** En el de código no se puede escribir
+si es de un cliente, y una tarea de varios repos se partiría. En el docs repo
+se mezclaría trabajo en curso con lo que tiene que durar. Lo que merece
+sobrevivir a la tarea se promociona al docs repo al cerrar. Ver ADR-012.
+
+**Cuesta poco.** Un ciclo completo con registro tarda 0,9 s de máquina frente a
+0,35 s sin él; abrir la tarea con su objetivo y su plan son dos llamadas, y el
+hook añade unos 60 tokens una vez por sesión.
+
 ### Qué lo sostiene cuando nadie se acuerda
 
 Estas guardas hacen cumplir el ciclo sin depender de la memoria de nadie. Las
@@ -163,6 +202,7 @@ instala `crux hooks install`:
 | `pre-push` en la rama principal | Empujar a la principal sin pasar por propuesta |
 | `commit-msg` | Mensajes de commit fuera del idioma del estándar |
 | `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
+| Hook de la tarea al retomar | Seguir una tarea a medias sin saber en qué punto quedó |
 | `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
 | `crux memory` en el cierre | Cerrar sesión con conocimiento del proyecto solo en esta máquina |
 
@@ -177,6 +217,7 @@ instala `crux hooks install`:
 | `crux add-repo <repo>` | Registra un repo nuevo en un proyecto adoptado |
 | `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
 | `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta, fusión y recogida |
+| `crux task` | El registro de la tarea de cada espacio: pasos con evidencia, siguiente paso y estado, fuera de los repos |
 | `crux ship` | La puerta de calidad: ejecuta las comprobaciones y deja un recibo de lo que se ejecutó y con qué resultado. `workspace finish` lo exige. |
 | `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks, señales, riesgo y especialistas |
 | `crux checks [n]` | Espera al CI de una propuesta y trae solo el final del log de lo que falla |

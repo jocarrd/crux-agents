@@ -18,6 +18,7 @@ SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 DOC_SYNC="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
 CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
 MEMORY_GUARD="$CRUX_HOME/adapters/claude/hooks/memory-guard.sh"
+TASK_CONTEXT="$CRUX_HOME/adapters/claude/hooks/task-context.sh"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
@@ -109,8 +110,9 @@ cmd_install() {
   [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
   [[ -f "$MEMORY_GUARD" ]] || die "falta $MEMORY_GUARD"
+  [[ -f "$TASK_CONTEXT" ]] || die "falta $TASK_CONTEXT"
   [[ -f "$COMMIT_MSG" ]] || die "falta $COMMIT_MSG"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -124,6 +126,9 @@ cmd_install() {
 
   enganchar Stop "$MEMORY_GUARD" 'memory-guard'
   ok "hook de memorias de proyecto sin promover al cerrar sesión"
+
+  enganchar UserPromptSubmit "$TASK_CONTEXT" 'task-context'
+  ok "hook que trae la tarea al retomar un espacio de trabajo"
 
   info "copia previa en $SETTINGS.bak"
 
@@ -249,7 +254,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [evento, grupos] of Object.entries(s.hooks || {})) {
       s.hooks[evento] = grupos
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[evento].length) delete s.hooks[evento];
     }

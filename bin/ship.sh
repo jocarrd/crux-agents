@@ -68,6 +68,17 @@ cmd_seal() {
   grep -v '^sealed ' "$RECIBO" > "$RECIBO.tmp" && mv "$RECIBO.tmp" "$RECIBO"
   printf 'sealed %s %s\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RECIBO"
   ok "puerta cerrada sobre $(git -C "$REPO" rev-parse --short HEAD) con $total comprobaciones"
+
+  # Lo comprobado pasa a la tarea como evidencia: es lo que después dice la
+  # propuesta, y así no se reescribe de memoria.
+  local registro_tarea
+  registro_tarea="$(task_file_for_path "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}" "$REPO" 2>/dev/null || echo "")"
+  if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
+    node "$CRUX_HOME/lib/task.mjs" verify --file "$registro_tarea" --receipt "$RECIBO" \
+      --sha "$(git -C "$REPO" rev-parse HEAD)" >/dev/null 2>&1 \
+      && info "tarea verificada: $registro_tarea" \
+      || warn "no pude anotar la verificación en $registro_tarea"
+  fi
 }
 
 cmd_show() {
