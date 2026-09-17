@@ -887,6 +887,7 @@ sesión. Ver ADR-012.
 | `crux link` | — | Genera y verifica los punteros de los repos de código |
 | `crux workspace` | `/workspace` | Espacios aislados para trabajar en paralelo |
 | `crux task` | `/workspace` | El registro de la tarea: pasos con evidencia, siguiente paso y estado |
+| `crux workspace adopt <ruta>` | `/workspace` | Registra un worktree hecho a mano, con su tarea |
 | `crux ship` | `/ship` | La puerta de calidad, con recibo de lo ejecutado |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | — | Re-materializa el kernel a la versión actual |

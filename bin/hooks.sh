@@ -19,6 +19,7 @@ DOC_SYNC="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
 CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
 MEMORY_GUARD="$CRUX_HOME/adapters/claude/hooks/memory-guard.sh"
 TASK_CONTEXT="$CRUX_HOME/adapters/claude/hooks/task-context.sh"
+WORKTREE_GUARD="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
@@ -85,7 +86,7 @@ enganchar() {
   # enganchar <evento> <comando> <patrón de lo anterior>
   node -e '
     const fs = require("fs");
-    const [file, evento, cmd, patron] = process.argv.slice(1);
+    const [file, evento, cmd, patron, matcher = ""] = process.argv.slice(1);
     const s = JSON.parse(fs.readFileSync(file, "utf8"));
     s.hooks = s.hooks || {};
     const grupos = (s.hooks[evento] = s.hooks[evento] || []);
@@ -99,11 +100,11 @@ enganchar() {
       });
     }
     if (!reemplazados) {
-      grupos.push({ matcher: "", hooks: [{ type: "command", command: cmd }] });
+      grupos.push({ matcher, hooks: [{ type: "command", command: cmd }] });
     }
     fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
     console.log(reemplazados ? `      reemplazadas ${reemplazados} entradas previas` : "      entrada nueva");
-  ' "$SETTINGS" "$1" "$2" "$3"
+  ' "$SETTINGS" "$1" "$2" "$3" "${4:-}"
 }
 
 cmd_install() {
@@ -111,8 +112,9 @@ cmd_install() {
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
   [[ -f "$MEMORY_GUARD" ]] || die "falta $MEMORY_GUARD"
   [[ -f "$TASK_CONTEXT" ]] || die "falta $TASK_CONTEXT"
+  [[ -f "$WORKTREE_GUARD" ]] || die "falta $WORKTREE_GUARD"
   [[ -f "$COMMIT_MSG" ]] || die "falta $COMMIT_MSG"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -129,6 +131,9 @@ cmd_install() {
 
   enganchar UserPromptSubmit "$TASK_CONTEXT" 'task-context'
   ok "hook que trae la tarea al retomar un espacio de trabajo"
+
+  enganchar PreToolUse "$WORKTREE_GUARD" 'worktree-guard' Bash
+  ok "hook que para el borrado a mano de un espacio registrado"
 
   info "copia previa en $SETTINGS.bak"
 
@@ -254,7 +259,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [evento, grupos] of Object.entries(s.hooks || {})) {
       s.hooks[evento] = grupos
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[evento].length) delete s.hooks[evento];
     }

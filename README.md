@@ -110,7 +110,7 @@ demás.
 | ----- | ----------- | -------- |
 | `CRUX_REMOTE` | — | Plantilla del remoto para los proyectos que crees |
 | `CRUX_PROJECTS_DIR` | el padre del clon del kernel | Dónde viven los proyectos |
-| `CRUX_MERGE_CLOSE_WORKSPACE` | `false` | Cierra el espacio al fusionar, sin tener que pedir el `rm` |
+| `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Cierra el espacio al fusionar; `false` lo deja vivo |
 | `CRUX_RM_DELETE_BRANCH` | `false` | Borra también la rama local al cerrar el espacio, siempre que ya esté integrada |
 
 ### Desinstalar
@@ -207,6 +207,8 @@ instala `crux hooks install`:
 | `commit-msg` | Mensajes de commit fuera del idioma del estándar |
 | `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
 | Hook de la tarea al retomar | Seguir una tarea a medias sin saber en qué punto quedó |
+| Guardia de worktrees | Borrar a mano un espacio registrado (`git worktree remove`, `rm -rf`) y dejar el registro mintiendo |
+| Registro que se repara solo | Entradas de espacios cuya carpeta y rama ya no existen; `new`, `list` y `status` las retiran |
 | `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
 | `crux memory` en el cierre | Cerrar sesión con conocimiento del proyecto solo en esta máquina |
 

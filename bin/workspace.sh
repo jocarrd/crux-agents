@@ -3,6 +3,8 @@
 #
 #   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>] [--task <tarea>] [--goal "<texto>"] [--force]
 #   crux workspace list
+#   crux workspace adopt <ruta> [--task <tarea>]   registra un worktree hecho a mano
+#   crux workspace heal [--quiet]                  retira entradas sin carpeta ni rama
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
 #   crux workspace rm <nombre>
@@ -252,6 +254,8 @@ cmd_new() {
   fi
 
   load_config "$docs" "$repo_name"
+
+  cmd_heal --quiet
 
   registry_init
   with_lock
@@ -630,10 +634,13 @@ cmd_merge() {
     || info "la rama remota sigue ahí: bórrala desde tu proveedor si quieres"
 
   echo
-  if [[ "$(preferencia CRUX_MERGE_CLOSE_WORKSPACE false)" == "true" ]]; then
-    cmd_rm "$name"
+  # Fusionada, el espacio ya no tiene nada que hacer. Dejarlo vivo por defecto
+  # era lo que acumulaba espacios de trabajo terminado durante semanas. rm se
+  # niega solo si queda algo sin commitear, y entonces se queda y se dice.
+  if [[ "$(preferencia CRUX_MERGE_CLOSE_WORKSPACE true)" == "true" ]]; then
+    ( cmd_rm "$name" ) || warn "el espacio sigue vivo: ciérralo con 'crux workspace rm $name' cuando esté limpio"
   else
-    info "el espacio sigue vivo: 'crux workspace rm $name' libera el slot y sus recursos"
+    info "el espacio sigue vivo (CRUX_MERGE_CLOSE_WORKSPACE=false): 'crux workspace rm $name'"
   fi
 }
 
@@ -817,6 +824,110 @@ rama_integrada() {
             gh pr list --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" \
                --head "$branch" --state merged --json mergedAt -q '.[0].mergedAt // ""' 2>/dev/null)" || return 1
   [[ -n "$estado" ]]
+}
+
+# El registro se repara solo. Una entrada cuya carpeta ya no existe y cuya rama
+# tampoco no guarda nada: alguien retiró el worktree por su cuenta —un
+# `git worktree remove` para liberar disco— y el registro no se enteró. Se
+# acumularon 41 así. Si la rama sigue viva, puede haber trabajo: se avisa y se
+# deja.
+cmd_heal() {
+  local callado=0
+  [[ "${1:-}" == "--quiet" ]] && callado=1
+  [[ -f "$REGISTRY" ]] || return 0
+  local n repo branch path proyecto tarea retiradas=0
+  while IFS=$'\t' read -r n repo branch path proyecto tarea; do
+    [[ -n "$n" ]] || continue
+    if [[ -d "$repo" ]] && git -C "$repo" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
+      [[ $callado -eq 1 ]] || warn "'$n' no tiene carpeta, pero su rama $branch sigue viva: no se retira"
+      continue
+    fi
+    with_lock 50
+    borra_del_registro "$n"
+    unlock
+    retiradas=$((retiradas + 1))
+    [[ $callado -eq 1 ]] || ok "'$n' retirado del registro: ni carpeta ni rama"
+    [[ -n "$tarea" && -n "$proyecto" ]] && archivar_si_terminada "$proyecto" "$tarea" >/dev/null
+  done < <(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    for (const [n, w] of Object.entries(r.workspaces || {})) {
+      if (fs.existsSync(w.path)) continue;
+      console.log([n, w.repo, w.branch, w.path, w.project || "", w.task || ""].join("\t"));
+    }
+  ' "$REGISTRY")
+  if [[ $callado -eq 1 ]]; then
+    [[ $retiradas -gt 0 ]] && info "registro reparado: $retiradas espacio(s) sin carpeta ni rama retirados"
+  elif [[ $retiradas -eq 0 ]]; then
+    ok "el registro está al día"
+  fi
+  return 0
+}
+
+# Un worktree hecho a mano no existe para crux: ni sale en las listas ni lo
+# protege nada, y `gc --con-disco` lo trataría como basura. Pasó con uno que
+# tenía trabajo pendiente de revisión.
+cmd_adopt() {
+  local ruta="${1:-}"; shift || true
+  [[ -n "$ruta" ]] || die "uso: crux workspace adopt <ruta> [--task <tarea>]"
+  local tarea=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --task) tarea="$2"; shift 2 ;;
+      *) die "opción desconocida: $1" ;;
+    esac
+  done
+  [[ -d "$ruta" ]] || die "no existe $ruta"
+  ruta="$(cd "$ruta" && pwd)"
+  es_worktree "$ruta" || die "$ruta no es un worktree de git"
+  local base; base="$(basename "$ruta")"
+  [[ "$base" == *-ws-* ]] || die "el nombre no sigue el patrón <repo>-ws-<nombre>: $base"
+  local name="${base#*-ws-}" repo branch
+  repo="$(repo_principal "$ruta")"
+  branch="$(git -C "$ruta" rev-parse --abbrev-ref HEAD)"
+  nombre_valido "$name" || die "nombre de espacio inválido: '$name'"
+  tarea="${tarea:-$name}"
+  local proyecto; proyecto="$(project_name_for "$repo")"
+
+  registry_init
+  with_lock
+  node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const [, , name, path] = process.argv.slice(1);
+    if (r.workspaces[name]) { console.error(`ya hay un espacio llamado ${name}`); process.exit(2); }
+    if (Object.values(r.workspaces).some((w) => w.path === path)) { console.error("ese worktree ya está registrado"); process.exit(2); }
+  ' "$REGISTRY" x "$name" "$ruta" || { unlock; exit 1; }
+
+  local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
+  load_config "$docs" "$(basename "$repo")"
+  local slot
+  slot="$(node -e '
+    const fs = require("fs");
+    const [file, base, perSlot] = process.argv.slice(1);
+    const r = JSON.parse(fs.readFileSync(file, "utf8"));
+    const ws = Object.values(r.workspaces);
+    const ocupados = new Set(ws.map((w) => w.slot));
+    const rangos = ws.map((w) => w.ports).filter(Array.isArray);
+    const libre = (s) => {
+      if (ocupados.has(s)) return false;
+      const desde = Number(base) + s * Number(perSlot);
+      return !rangos.some(([a, b]) => desde <= b && a <= desde + Number(perSlot) - 1);
+    };
+    let s = 0; while (!libre(s)) s++;
+    process.stdout.write(String(s));
+  ' "$REGISTRY" "$PORT_BASE" "$PORTS_PER_SLOT")"
+  local port0=$((PORT_BASE + slot * PORTS_PER_SLOT))
+  escribir_espacio "$name" "$slot" "$repo" "$ruta" "$branch" "$port0" "$PORTS_PER_SLOT" "$tarea" "$proyecto"
+  unlock
+
+  local registro_tarea resultado
+  registro_tarea="$(task_dir)/$proyecto/$tarea.md"
+  resultado="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$registro_tarea" \
+    --task "$tarea" --project "$proyecto" --repo "$(basename "$repo")" --workspace "$name" 2>&1)" \
+    || warn "no pude escribir el registro de la tarea: $resultado"
+  ok "'$name' adoptado ($branch, slot $slot)"
+  info "tarea '$tarea': $registro_tarea"
 }
 
 # El registro y el disco se separan en las dos direcciones: una entrada cuyo
@@ -1012,12 +1123,14 @@ done
 
 case "${1:-}" in
   new)  shift; cmd_new "$@" ;;
-  list) shift; cmd_list "$@" ;;
+  list) shift; cmd_heal --quiet; cmd_list "$@" ;;
+  adopt) shift; cmd_adopt "$@" ;;
+  heal) shift; cmd_heal "$@" ;;
   finish) shift; cmd_finish "$@" ;;
   merge)  shift; cmd_merge "$@" ;;
   rm)   shift; cmd_rm "$@" ;;
   gc)   shift; cmd_gc "$@" ;;
   prune) shift; cmd_prune "$@" ;;
   help) uso ;;
-  *) uso >&2; die "uso: crux workspace {new|list|finish|merge|rm|gc|prune}" ;;
+  *) uso >&2; die "uso: crux workspace {new|list|adopt|finish|merge|rm|gc|heal|prune}" ;;
 esac

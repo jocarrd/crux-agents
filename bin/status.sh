@@ -53,6 +53,7 @@ done
 echo
 echo "espacios de trabajo"
 echo
+bash "$CRUX_HOME/bin/workspace.sh" heal --quiet 2>/dev/null | sed 's/^/  /' || true
 if [[ -f "$REGISTRY" ]]; then
   node -e '
     const fs = require("fs");
@@ -64,6 +65,34 @@ if [[ -f "$REGISTRY" ]]; then
       console.log(`  ${n.padEnd(14)} ${w.branch.padEnd(24)} slot ${w.slot}${vivo}`);
     }
   ' "$REGISTRY"
+
+  # Un espacio cuya rama ya no está en el remoto casi siempre es trabajo
+  # fusionado que nadie cerró. Sin red: se mira lo que git ya sabe del remoto.
+  node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    for (const [n, w] of Object.entries(r.workspaces || {})) {
+      if (fs.existsSync(w.path)) console.log([n, w.path, w.branch].join("\t"));
+    }
+  ' "$REGISTRY" | while IFS=$'\t' read -r n path rama; do
+    seguimiento="$(git -C "$path" for-each-ref --format='%(upstream:track)' "refs/heads/$rama" 2>/dev/null || true)"
+    if [[ "$seguimiento" == *gone* ]]; then
+      warn "'$n': su rama ya no está en el remoto, probablemente fusionada — ciérralo con 'crux workspace rm $n'"
+    fi
+  done
+
+  # Un worktree que crux no conoce no sale en ninguna lista ni lo protege nada.
+  registrados="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(Object.values(r.workspaces || {}).map((w) => w.path).join("\n"));
+  ' "$REGISTRY")"
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    printf '%s\n' "$registrados" | grep -qxF "$d" && continue
+    es_worktree "$d" || continue
+    warn "$(basename "$d") es un worktree que crux no conoce — regístralo: crux workspace adopt $d"
+  done < <(find "$RAIZ" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
 
   # Una propuesta abierta desde una rama sin recibo es el atajo tomado por la
   # espalda: legítimo si lo pidió una persona, pero tiene que verse. Sin esto,

@@ -152,6 +152,11 @@ local.
 
 ## Al terminar
 
+**Un espacio se cierra con `crux workspace rm`, nunca con `git worktree remove`
+ni `rm -rf`**: el atajo deja la entrada en el registro y la tarea sin cerrar, y
+un hook lo para. `crux workspace merge --yes` ya cierra el espacio al fusionar.
+Un worktree creado a mano se registra con `crux workspace adopt <ruta>`.
+
 `crux workspace rm <nombre>` libera el worktree y el slot. La rama sobrevive a
 propósito: el espacio es desechable, el trabajo no. Si era el último espacio de una tarea ya
 fusionada, la tarea se archiva; si no está terminada, se queda abierta.

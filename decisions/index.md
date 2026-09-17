@@ -480,3 +480,38 @@
 - **Reversibility**: alta. Un subcomando, un hook y ficheros locales legibles a
   mano; retirarlo no toca ningún repo.
 - **Related**: `ADR-010`, `ADR-011`, `STANDARD.md` §La tarea
+
+---
+
+### ADR-013: El registro de espacios se mantiene verdadero sin depender de nadie
+
+- **Date**: 2026-09-17
+- **Status**: Accepted
+- **Context**: el registro llegó a tener 41 entradas apuntando a carpetas que ya
+  no existían, y dos espacios fusionados llevaban más de una semana abiertos.
+  Las sesiones liberaban disco con `git worktree remove --force` y
+  `git branch -D`, que borran la carpeta y la rama pero no la entrada; `merge`
+  dejaba el espacio vivo por defecto; y `gc`, que lo detectaba, solo corría si
+  alguien lo pedía. Además, un worktree creado a mano con trabajo pendiente de
+  revisión era invisible para crux, y `gc --con-disco` lo habría borrado. La
+  regla de cerrar con `crux workspace rm` estaba escrita y no se cumplía.
+- **Decision**: mecanismos en lugar de instrucciones.
+  - `workspace new`, `list` y `crux status` reparan el registro: retiran las
+    entradas sin carpeta **y** sin rama local. Con la rama viva se avisa y no
+    se toca.
+  - `merge --yes` cierra el espacio al fusionar (`CRUX_MERGE_CLOSE_WORKSPACE`
+    pasa a `true`); `rm` sigue negándose si queda algo sin commitear.
+  - `crux status` avisa de espacios cuya rama ya no está en el remoto y de
+    worktrees que el registro no conoce, con el comando para arreglarlo.
+  - `crux workspace adopt <ruta>` registra un worktree hecho a mano, con tarea.
+  - Un hook del agente para `git worktree remove` y `rm -r` sobre un espacio
+    registrado y propone `crux workspace rm`.
+- **Consequences**:
+  - Borrar a mano ya no deja basura, y el atajo más habitual se para antes.
+  - Una entrada solo se retira sola cuando no queda nada que proteger; si la
+    rama existe, decide una persona.
+  - `status` mira lo que git ya sabe del remoto, sin red: una rama borrada en
+    el remoto se ve cuando alguien hizo `fetch --prune`.
+- **Reversibility**: alta. `CRUX_MERGE_CLOSE_WORKSPACE=false` recupera el
+  comportamiento de antes; el hook se retira con `crux hooks remove`.
+- **Related**: `ADR-012`
