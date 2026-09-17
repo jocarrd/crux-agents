@@ -136,6 +136,12 @@ test_la_propuesta_sale_de_la_tarea_sin_ensenar_el_andamiaje() {
   assert_contains "$b" "Kosovo inside Serbia" "y lo decidido"
   assert_not_contains "$b" "T1" "sin los identificadores internos de los pasos"
   assert_not_contains "$b" ".crux" "sin rutas de nuestro estado local"
+
+  # Lo comprobado se ejecutó en esta máquina: sus rutas no se publican.
+  node "$CRUX_HOME/lib/task.mjs" set --file "$f" --section "Verificación" \
+    --text "- ok · $HOME/Proyectos/tool --check (2s)" >/dev/null
+  assert_not_contains "$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang en)" "$HOME/" \
+    "sin las rutas de la máquina en lo comprobado"
   assert_exit 0 "y pasa el filtro de un repo de cliente" \
     env -C "$ws" bash "$CRUX_HOME/bin/ship.sh" body "$body"
 }
@@ -218,4 +224,64 @@ test_workspace_list_desde_dentro_de_un_espacio_ve_los_del_repo() {
   assert_contains "$out" "uno" "desde un espacio se ve a sí mismo"
   assert_contains "$out" "dos" "y a los demás del mismo repo"
   assert_not_contains "$out" "sin espacios en este repo" "sin decir que no hay nada"
+}
+
+test_cerrar_el_ultimo_espacio_de_una_tarea_fusionada_la_archiva() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new a --repo "$root/app" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new a-web --repo "$root/web" --task a >/dev/null 2>&1
+  local f="$SB/tasks/proj/a.md"
+  node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm a 2>&1)"
+  assert_contains "$out" "sigue en 1 espacio" "con otro espacio vivo, la tarea no se archiva"
+  assert_file "$f" "y sigue en su sitio"
+
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm a-web 2>&1)"
+  assert_contains "$out" "tarea 'a' archivada" "al cerrar el último espacio se archiva"
+  assert_no_file "$f" "sale de la lista de abiertas"
+  local archivada; archivada="$(ls "$SB"/tasks/proj/done/*-a.md 2>/dev/null | head -1)"
+  assert_file "$archivada" "y queda fechada en done/"
+  assert_contains "$(cat "$archivada")" "status: closed" "cerrada"
+
+  out="$(bash "$CRUX_HOME/bin/task.sh" list --all 2>&1)"
+  assert_not_contains "$out" "proj/a " "la lista de abiertas ya no la enseña"
+  out="$(bash "$CRUX_HOME/bin/task.sh" list --done 2>&1)"
+  assert_contains "$out" "-a" "y --done sí"
+}
+
+test_una_tarea_sin_terminar_no_se_archiva_al_cerrar_su_espacio() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$root/app" >/dev/null 2>&1
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm b 2>&1)"
+  assert_contains "$out" "sigue abierta (open)" "cerrar el espacio no esconde trabajo sin terminar"
+  assert_contains "$out" "crux task archive --task proj/b" "y dice cómo archivarla si ya no sigue"
+  assert_file "$SB/tasks/proj/b.md" "el registro se queda"
+
+  out="$(bash "$CRUX_HOME/bin/task.sh" archive --task proj/b 2>&1)"
+  assert_contains "$out" "tarea archivada" "a mano también se archiva"
+  assert_no_file "$SB/tasks/proj/b.md" "y sale de las abiertas"
+}
+
+test_gc_borra_las_tareas_archivadas_que_han_caducado() {
+  sandbox >/dev/null
+  local done_dir="$SB/tasks/proj/done"
+  mkdir -p "$done_dir"
+  printf -- '---\ntask: vieja\nstatus: closed\n---\n' > "$done_dir/2020-01-01-vieja.md"
+  local reciente; reciente="$(date +%Y-%m-%d)-reciente.md"
+  printf -- '---\ntask: reciente\nstatus: closed\n---\n' > "$done_dir/$reciente"
+
+  local out; out="$(env CRUX_TASKS_RETENTION_DAYS=180 bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
+  assert_contains "$out" "2020-01-01-vieja" "enseña lo caducado"
+  assert_file "$done_dir/2020-01-01-vieja.md" "sin --yes no borra nada"
+
+  env CRUX_TASKS_RETENTION_DAYS=180 bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
+  assert_no_file "$done_dir/2020-01-01-vieja.md" "con --yes borra lo caducado"
+  assert_file "$done_dir/$reciente" "y deja lo reciente"
+
+  assert_exit 1 "una retención que no es un número se dice" \
+    env CRUX_TASKS_RETENTION_DAYS=pronto bash "$CRUX_HOME/bin/workspace.sh" gc
 }

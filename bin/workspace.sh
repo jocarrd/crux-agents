@@ -702,11 +702,14 @@ cmd_rm() {
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const w = r.workspaces[process.argv[2]];
     if (!w) process.exit(2);
-    process.stdout.write([w.path, w.repo, w.branch].join("\n"));
+    process.stdout.write([w.path, w.repo, w.branch, w.project || "", w.task || ""].join("\n"));
   ' "$REGISTRY" "$name")" || die "no existe el espacio '$name'"
 
   repo="$(echo "$path" | sed -n 2p)"
   branch="$(echo "$path" | sed -n 3p)"
+  local proyecto_rm tarea_rm
+  proyecto_rm="$(echo "$path" | sed -n 4p)"
+  tarea_rm="$(echo "$path" | sed -n 5p)"
   path="$(echo "$path" | sed -n 1p)"
   unlock
 
@@ -755,6 +758,8 @@ cmd_rm() {
 
   ok "slot liberado"
 
+  [[ -n "$tarea_rm" && -n "$proyecto_rm" ]] && archivar_si_terminada "$proyecto_rm" "$tarea_rm"
+
   # Solo si está integrada: una rama con trabajo que no está en ningún sitio no
   # se borra por una preferencia.
   if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] && rama_integrada "$repo" "$branch"; then
@@ -764,6 +769,40 @@ cmd_rm() {
   else
     info "la rama $branch sigue existiendo; bórrala si ya no la necesitas"
   fi
+}
+
+# Una tarea se archiva sola cuando se cierra su último espacio y ya está
+# fusionada. Si sigue abierta, se queda: un espacio se puede cerrar para
+# retomarla desde otro, y archivar trabajo sin terminar lo escondería.
+archivar_si_terminada() {
+  local proyecto="$1" tarea="$2" registro estado otros destino
+  registro="$(task_dir)/$proyecto/$tarea.md"
+  [[ -f "$registro" ]] || return 0
+  otros="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const n = Object.values(r.workspaces || {}).filter((w) => w.project === process.argv[2] && w.task === process.argv[3]).length;
+    process.stdout.write(String(n));
+  ' "$REGISTRY" "$proyecto" "$tarea")"
+  if [[ "${otros:-0}" -gt 0 ]]; then
+    info "la tarea '$tarea' sigue en $otros espacio(s) más"
+    return 0
+  fi
+  estado="$(awk -F': ' '/^status:/{print $2; exit}' "$registro")"
+  case "$estado" in
+    merged|deployed)
+      if destino="$(node "$CRUX_HOME/lib/task.mjs" archive --file "$registro" 2>&1)"; then
+        ok "tarea '$tarea' archivada"
+      else
+        warn "no pude archivar la tarea: $destino"
+      fi
+      ;;
+    closed) ;;
+    *)
+      info "la tarea '$tarea' sigue abierta ($estado)"
+      info "si ya no sigue: crux task archive --task $proyecto/$tarea"
+      ;;
+  esac
 }
 
 # Una rama fusionada por squash no aparece en `git branch --merged`: su commit
@@ -822,6 +861,8 @@ cmd_gc() {
     sin_registrar+=("$d")
   done < <(find "$raiz" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
 
+  caducar_tareas "$confirmado"
+
   if [[ ${#sin_worktree[@]} -eq 0 && ${#sin_registrar[@]} -eq 0 ]]; then
     ok "registro y disco están de acuerdo"
     return 0
@@ -874,6 +915,32 @@ cmd_gc() {
       warn "no pude retirar $(basename "$w"): hazlo con 'git worktree remove'"
     fi
   done
+}
+
+# Las tareas archivadas caducan. Lo que tenía que durar ya salió: la descripción
+# está en la propuesta y las decisiones en el docs repo. La fecha va en el
+# nombre del fichero, no en la de modificación, que cambia con cualquier copia.
+caducar_tareas() {
+  local confirmado="$1" dias corte f fecha viejas=()
+  dias="${CRUX_TASKS_RETENTION_DAYS:-$(preferencia CRUX_TASKS_RETENTION_DAYS 180)}"
+  [[ "$dias" =~ ^[0-9]+$ ]] || die "CRUX_TASKS_RETENTION_DAYS tiene que ser un número de días: '$dias'"
+  corte="$(node -e 'const d = new Date(Date.now() - Number(process.argv[1]) * 86400000); process.stdout.write(d.toISOString().slice(0, 10))' "$dias")"
+  for f in "$(task_dir)"/*/done/*.md; do
+    [[ -f "$f" ]] || continue
+    fecha="$(basename "$f" | cut -c1-10)"
+    [[ "$fecha" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+    [[ "$fecha" < "$corte" ]] && viejas+=("$f")
+  done
+  [[ ${#viejas[@]} -gt 0 ]] || return 0
+  echo "tareas archivadas hace más de $dias días (${#viejas[@]}):"
+  for f in "${viejas[@]}"; do printf '      %s/%s\n' "$(basename "$(dirname "$(dirname "$f")")")" "$(basename "$f" .md)"; done
+  if [[ "$confirmado" -eq 1 ]]; then
+    rm -f "${viejas[@]}"
+    ok "${#viejas[@]} tareas caducadas borradas"
+  else
+    info "para borrarlas: crux workspace gc --yes"
+  fi
+  echo
 }
 
 # Un worktree se retira solo si no se pierde nada: ni cambios sin commitear ni

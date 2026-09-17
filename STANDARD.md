@@ -854,6 +854,13 @@ en el de un cliente y en una tarea que toca varios.
 | Puerta cerrada | `crux ship seal`, que vuelca el recibo como evidencia | `verified` |
 | Propuesta abierta | `crux workspace finish`, que saca de ahí la descripción | `proposed` |
 | Fusionada | `crux workspace merge --yes` | `merged` |
+| Cerrado su último espacio | `crux workspace rm`, que la archiva en `done/` si ya está fusionada | `closed` |
+
+Las archivadas no salen en las listas (`crux task list --done` las enseña) y
+caducan: `crux workspace gc --yes` borra las de más de 180 días
+(`CRUX_TASKS_RETENTION_DAYS`). Lo que tenía que durar ya salió a la propuesta y
+al docs repo. Una tarea sin terminar no se archiva al cerrar su espacio; si ya
+no sigue, `crux task archive`.
 
 El registro se escribe en el idioma de las propuestas del repo —el de sus
 commits—, porque la descripción de la propuesta sale de él.

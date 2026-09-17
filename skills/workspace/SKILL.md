@@ -153,7 +153,8 @@ local.
 ## Al terminar
 
 `crux workspace rm <nombre>` libera el worktree y el slot. La rama sobrevive a
-propósito: el espacio es desechable, el trabajo no.
+propósito: el espacio es desechable, el trabajo no. Si era el último espacio de una tarea ya
+fusionada, la tarea se archiva; si no está terminada, se queda abierta.
 
 ## Relacionado
 

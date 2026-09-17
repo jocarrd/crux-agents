@@ -178,6 +178,10 @@ Lo escriben los comandos, no hay que editarlo a mano:
 | `crux ship seal` | Se vuelca el recibo de la puerta como evidencia | `verified` |
 | `crux workspace finish` | La descripción de la propuesta sale de aquí | `proposed` |
 | `crux workspace merge --yes` | Se anota la fusión | `merged` |
+| `crux workspace rm` | Al cerrar su último espacio, si está fusionada, se archiva en `done/` | `closed` |
+
+**No se acumula.** Las archivadas salen de las listas y caducan a los 180 días
+con `crux workspace gc --yes` (`CRUX_TASKS_RETENTION_DAYS` para cambiarlo).
 
 Al retomar un espacio —otra sesión, tras un reinicio o al día siguiente— un
 hook trae el estado y el siguiente paso en dos líneas. `crux workspace list`

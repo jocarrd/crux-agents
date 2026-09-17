@@ -469,6 +469,9 @@
     conocimiento.
   - Los estados solo avanzan solos; volver atrás es explícito
     (`crux task status <estado> --force`).
+  - Los registros no se acumulan: al cerrar el último espacio de una tarea
+    fusionada se archiva en `done/`, fechada, y `workspace gc` borra las
+    archivadas de más de 180 días. Una tarea sin terminar nunca se archiva sola.
 - **Descartado**: el docs repo (mezcla trabajo con conocimiento, sin
   aislamiento entre sesiones paralelas, y los commits de casillas falsean la
   deriva que mide `doctor`); el repo de código (imposible en un cliente, parte

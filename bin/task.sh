@@ -11,7 +11,8 @@
 #   crux task next "<texto>"         lo siguiente que hay que hacer
 #   crux task note "<texto>"         una desviación o una decisión tomada por el camino
 #   crux task status <estado> [--force]
-#   crux task list [--all]           las tareas abiertas, con su siguiente paso
+#   crux task list [--all] [--done]  las tareas abiertas, con su siguiente paso; --done, las archivadas
+#   crux task archive                la cierra y la aparta a done/, fechada
 #
 # Fuera de un espacio de trabajo, --task <proyecto>/<tarea> dice cuál.
 #
@@ -105,8 +106,27 @@ case "$op" in
     motor status --file "$f" --to "$1" ${2:+"$2"}
     ok "estado: $(awk -F': ' '/^status:/{print $2; exit}' "$f")"
     ;;
+  archive)
+    f="$(fichero_actual)"
+    [[ -f "$f" ]] || die "no existe el registro $f"
+    destino="$(motor archive --file "$f")"
+    ok "tarea archivada: $destino"
+    ;;
   list)
-    todos=0; [[ "${1:-}" == "--all" ]] && todos=1
+    todos=0 archivadas=0
+    for a in "$@"; do
+      case "$a" in --all) todos=1 ;; --done) archivadas=1 ;; esac
+    done
+    if [[ $archivadas -eq 1 ]]; then
+      hay=0
+      for f in "$TASKS"/*/done/*.md; do
+        [[ -f "$f" ]] || continue
+        hay=1
+        printf '%-12s %s\n' "$(basename "$(dirname "$(dirname "$f")")")" "$(basename "$f" .md)"
+      done
+      [[ $hay -eq 1 ]] || echo "sin tareas archivadas"
+      exit 0
+    fi
     [[ -d "$TASKS" ]] || { echo "sin tareas abiertas"; exit 0; }
     proyecto=""
     if [[ $todos -eq 0 ]]; then
