@@ -515,3 +515,39 @@
 - **Reversibility**: alta. `CRUX_MERGE_CLOSE_WORKSPACE=false` recupera el
   comportamiento de antes; el hook se retira con `crux hooks remove`.
 - **Related**: `ADR-012`
+
+---
+
+### ADR-014: Un repo es del sistema por dónde vive, no por tener contrato
+
+- **Date**: 2026-09-18
+- **Status**: Accepted
+- **Context**: el guarda del ciclo solo avisaba en el kernel, en un docs repo o
+  en un repo que colgara de `<raíz>/<proyecto>/<repo>` con su docs repo al
+  lado. Eso dejaba fuera a los repos sueltos de la raíz, que en la máquina
+  donde se midió son cinco. El 17-09-2026 uno de ellos, `personal-site`,
+  recibió dos commits directos a la principal mientras otra sesión fusionaba
+  dos propuestas sobre el mismo repo: el push salió rechazado y hubo que
+  rebasar. El guarda estaba instalado y funcionando; ejecutado a mano en
+  `acme/app` daba el aviso y en ese repo salía vacío.
+  Con ADR-011 el estándar ya decía qué hacer sin contrato —tratarlo como
+  `light`—, y `review-pr` lo cumplía. El guarda no: para él, ausencia de
+  contrato era ausencia de repo.
+- **Decision**: separar las dos preguntas que estaban mezcladas. **Si el ciclo
+  aplica** se responde por ubicación: cualquier repo bajo la raíz de proyectos
+  es del sistema, tenga contrato o no. **Qué ceremonia merece** lo sigue
+  respondiendo el contrato, y su ausencia sigue significando `light`.
+  `CRUX_UNMANAGED` en la configuración admite rutas o patrones separados por
+  `:` para lo que viva bajo la raíz sin ser tuyo, como un clon ajeno.
+- **Consequences**:
+  - Los repos sueltos reciben el aviso desde el primer prompt, sin darlos de
+    alta ni moverlos de sitio.
+  - La regla del layout `<raíz>/<proyecto>/<repo>` desaparece del guarda por
+    redundante: lo que cubría ya está cubierto por la raíz.
+  - Un clon ajeno bajo la raíz recibirá el aviso hasta que se excluya. Es ruido
+    en un caso que hoy no se da: los 30 remotos de la raíz son propios.
+  - El aviso manda a `/ship`, y `crux ship gate` muere sin `crux.json`. Queda
+    pendiente decidir si degrada o si la puerta es solo para proyectos dados de
+    alta.
+- **Reversibility**: alta. Es una condición en un hook.
+- **Related**: `ADR-011`, `ADR-005`, `STANDARD.md` §El rigor

@@ -702,6 +702,11 @@ rama—, nunca por lo que diga el prompt: adivinar la intención por palabras
 acaba avisando cuando no toca y callando cuando sí. Y habla una vez por sesión,
 porque el ruido se aprende a ignorar antes que a obedecer.
 
+Avisa en **cualquier repo que viva bajo tu raíz de proyectos**, esté dado de
+alta o no (ADR-014). Antes pedía además el layout de proyecto con su docs repo
+al lado, y los repos sueltos de la raíz quedaban fuera justo cuando nadie los
+vigilaba. Lo que viva ahí sin ser tuyo se excluye con `CRUX_UNMANAGED`.
+
 Un hook que apunta a un fichero inexistente no falla: no hace nada. Y eso es
 peor, porque el sistema parece vigilado y no lo está. Por eso `doctor --machine`
 lo trata como error.

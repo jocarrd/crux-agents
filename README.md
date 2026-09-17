@@ -112,6 +112,7 @@ demás.
 | `CRUX_PROJECTS_DIR` | el padre del clon del kernel | Dónde viven los proyectos |
 | `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Cierra el espacio al fusionar; `false` lo deja vivo |
 | `CRUX_RM_DELETE_BRANCH` | `false` | Borra también la rama local al cerrar el espacio, siempre que ya esté integrada |
+| `CRUX_UNMANAGED` | — | Rutas o patrones separados por `:` que viven bajo la raíz sin ser tuyos, como un clon ajeno: el recordatorio del ciclo los ignora |
 
 ### Desinstalar
 

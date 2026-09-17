@@ -30,11 +30,18 @@ principal="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed
 
 # --- ¿Es un repo que gestiona crux? ------------------------------------------
 #
-# Lo es el propio kernel, un docs repo, o cualquier repo de código que cuelgue
-# de <raíz>/<proyecto>/<repo> con su docs repo al lado. La raíz sale de la
-# configuración, no de una carpeta asumida: en una máquina con otra convención
-# esto no fallaba, simplemente no hacía nada, y el sistema parecía vigilado sin
-# estarlo.
+# Lo es el propio kernel, un docs repo, o cualquier repo que viva bajo la raíz
+# de proyectos. La raíz sale de la configuración, no de una carpeta asumida: en
+# una máquina con otra convención esto no fallaba, simplemente no hacía nada, y
+# el sistema parecía vigilado sin estarlo.
+#
+# Antes se exigía además el layout <raíz>/<proyecto>/<repo> con su docs repo al
+# lado, y eso dejaba fuera a los repos sueltos de la raíz: cinco en la máquina
+# donde se midió. El estándar ya dice qué hacer sin contrato —un repo sin
+# crux.json se trata como 'light'—, así que la ausencia de docs repo rebaja el
+# rigor, no borra el repo del mapa. Medido el 17-09-2026 en personal-site:
+# sin aviso, una sesión trabajó sobre la principal mientras otra fusionaba, y
+# el push acabó en rebase.
 
 raiz="${CRUX_PROJECTS_DIR:-}"
 kernel=""
@@ -43,6 +50,10 @@ if [[ -f "$HOME/.crux/config" ]]; then
   [[ -n "$raiz" ]] || raiz="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
   [[ -n "$raiz" || -z "$kernel" ]] || raiz="$(dirname "$kernel")"
 fi
+
+# Una barra de más en la configuración dejaba el patrón sin casar y el guarda
+# callado en todas partes, que es el modo de fallo que este hook no puede tener.
+raiz="${raiz%/}"
 
 toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || silencio
 gestionado=0
@@ -55,12 +66,28 @@ gestionado=0
 
 if [[ $gestionado -eq 0 && -n "$raiz" ]]; then
   case "$toplevel/" in
-    "$raiz"/*/*/)
-      rel="${toplevel#"$raiz"/}"
-      proyecto="${rel%%/*}"
-      [[ -f "$raiz/$proyecto/$proyecto-docs/crux.json" ]] && gestionado=1
-      ;;
+    "$raiz"/*/) gestionado=1 ;;
   esac
+fi
+
+# La salida para lo que no es tuyo aunque esté ahí: un clon ajeno que se deja
+# bajo la raíz para leerlo. Rutas o patrones separados por ':' en la
+# configuración. Sin la variable no hay nada que comprobar, que es el caso
+# normal.
+if [[ $gestionado -eq 1 ]]; then
+  ajenos="${CRUX_UNMANAGED:-}"
+  if [[ -z "$ajenos" && -f "$HOME/.crux/config" ]]; then
+    ajenos="$(grep -E '^CRUX_UNMANAGED=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+  fi
+  if [[ -n "$ajenos" ]]; then
+    IFS=':' read -ra patrones <<< "$ajenos"
+    for patron in "${patrones[@]}"; do
+      [[ -n "$patron" ]] || continue
+      # Sin comillas a propósito: el patrón puede traer comodines.
+      # shellcheck disable=SC2053
+      [[ "$toplevel" == $patron ]] && silencio
+    done
+  fi
 fi
 
 [[ $gestionado -eq 1 ]] || silencio

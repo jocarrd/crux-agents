@@ -731,6 +731,21 @@ test_el_hook_recuerda_el_ciclo_en_la_rama_principal() {
   out="$(_guard "$ajeno" s4)"
   assert_eq "" "$out" "en un repo que no gestiona, callado"
 
+  # Un repo suelto en la raíz, sin proyecto ni docs repo, también es del
+  # sistema: ADR-014. Antes quedaba fuera y era donde se colaba el trabajo
+  # directo sobre la principal.
+  local suelto="$CRUX_PROJECTS_DIR/suelto"
+  mkdir -p "$suelto"; git -C "$suelto" init -q -b main
+  git -C "$suelto" config user.email t@t; git -C "$suelto" config user.name t
+  echo x > "$suelto/f"; git -C "$suelto" add -A; git -C "$suelto" commit -qm init
+  out="$(_guard "$suelto" s6)"
+  assert_contains "$out" "crux workspace new" "un repo suelto bajo la raíz recibe el aviso"
+
+  # Y lo que vive ahí sin ser tuyo se excluye por configuración, no por layout.
+  echo "CRUX_UNMANAGED=\"$CRUX_PROJECTS_DIR/suelto\"" >> "$fakehome/.crux/config"
+  out="$(_guard "$suelto" s7)"
+  assert_eq "" "$out" "un repo excluido en la configuración vuelve a callar"
+
   unset -f _guard
 }
 
