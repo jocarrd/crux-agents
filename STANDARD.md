@@ -810,6 +810,7 @@ credenciales y nombres. Con dos guardas:
 | `code-health` | Salud estructural del conjunto y su tendencia |
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
 | `ui-behaviour` | Que los controles hagan algo y se alcancen con el teclado |
+| `ui-tells` | Que una interfaz no se vea como generada por un modelo |
 | `redaccion` | Que un texto no se lea como generado por un modelo |
 | `promo-video` | Enseñar el producto en movimiento, para redes |
 | `x-posts` | Escribir y planificar publicaciones para X que lleguen a gente |
