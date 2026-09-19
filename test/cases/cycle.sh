@@ -504,6 +504,41 @@ test_finish_no_propone_codigo_sin_revisar() {
   assert_contains "$out" "SIN pasar la puerta" "con --sin-puerta lo dice en voz alta"
 }
 
+test_finish_avisa_si_la_tarea_se_cierra_sin_pasos() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/vacia"
+  mkdir -p "$root/app" "$root/vacia-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"vacia","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/vacia-docs/crux.json"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new tarea --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-tarea"
+  echo cambio > "$ws/nuevo.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: algo"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+
+  # Sin remoto la subida falla despues, pero el aviso va antes y se ve igual.
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea 2>&1)"
+  assert_contains "$out" "sin un solo paso anotado" "dice que el registro se queda vacio"
+  assert_contains "$out" "no lo recupera nadie" "y dice que es lo que se pierde"
+  assert_contains "$out" "aviso" "es un aviso y no un error: la propuesta sigue su curso"
+
+  # Con un paso anotado no molesta.
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "lo que hice" >/dev/null 2>&1 )
+  echo mas > "$ws/otro.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: mas"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea 2>&1)"
+  assert_not_contains "$out" "sin un solo paso anotado" "con pasos anotados se calla"
+}
+
 test_workspace_avisa_si_ya_hay_otra_sesion_en_el_repo() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
