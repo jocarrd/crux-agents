@@ -470,6 +470,26 @@ cmd_finish() {
     ok "puerta pasada sobre ${head:0:8} con $comandos comprobaciones"
   fi
 
+  # Aquí es donde se pierde el contexto: la propuesta sale y la sesión que sabía
+  # por qué se hizo cada cosa se acaba. Si el registro no tiene ni un paso, la
+  # tarea queda con el objetivo de una línea y nada más, y lo que se midió o se
+  # descartó por el camino no lo recupera nadie. Va antes de subir, que es
+  # cuando todavía se puede anotar. Avisa y sigue: quien decide si la tarea
+  # merecía registro es quien la hizo, no el kernel.
+  local registro_tarea
+  registro_tarea="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
+  if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
+    local pasos_tarea
+    pasos_tarea="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$registro_tarea" 2>/dev/null |
+      cut -d$'\x1f' -f3)"
+    if [[ -z "$pasos_tarea" ]]; then
+      warn "la tarea se cierra sin un solo paso anotado"
+      info "en $registro_tarea solo queda el objetivo"
+      info "lo que mediste y lo que descartaste por el camino no lo recupera nadie"
+      info "anótalo ahora: crux task add \"<paso>\" · crux task note \"<decisión>\""
+    fi
+  fi
+
   git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
   ok "$branch subida ($commits commits)"
 
@@ -478,8 +498,8 @@ cmd_finish() {
 
   # Si la tarea dice qué cambia y por qué, la descripción sale de ahí; si no,
   # de los commits, como siempre. Un registro vacío no mejora la propuesta.
-  local cuerpo="" registro_tarea idioma docs_fin perfil_fin=""
-  registro_tarea="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
+  local cuerpo="" idioma docs_fin perfil_fin=""
+
   docs_fin="$(find_docs_repo "$path" 2>/dev/null || echo "")"
   [[ -n "$docs_fin" && -f "$docs_fin/crux.json" ]] &&
     perfil_fin="$(json_get "$docs_fin/crux.json" profile 2>/dev/null || echo "")"

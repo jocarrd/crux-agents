@@ -867,6 +867,14 @@ no sigue, `crux task archive`.
 El registro se escribe en el idioma de las propuestas del repo —el de sus
 commits—, porque la descripción de la propuesta sale de él.
 
+Escribirlo es del que trabaja, y nada lo obliga. Lo que sí hace el kernel es
+avisar en el único momento en que todavía se puede: `crux workspace finish`
+dice en voz alta si la tarea se cierra sin un solo paso anotado, antes de subir
+la rama. Ahí acaba la sesión que sabía por qué se midió lo que se midió y por
+qué se descartó lo que se descartó, y sin pasos la tarea se queda con el
+objetivo de una línea. Avisa y sigue adelante, porque hay tareas de un commit
+que no dan para más y eso lo decide quien la hizo.
+
 Al retomar un espacio, el hook de la tarea trae su estado y su siguiente paso.
 Lo que merece durar más que la tarea —una decisión con alternativas, una
 medida— se promociona al docs repo al cerrar, como cualquier otra cosa de la
