@@ -1303,7 +1303,7 @@ test_el_titulo_de_una_propuesta_no_ejecuta_comandos() {
   bloque="$(sed -n '/^  eval "\$(node -e/,/^  '"'"' "\$estado")"/p' "$CRUX_HOME/bin/workspace.sh")"
   [[ -n "$bloque" ]] && PASS=$((PASS + 1)) || _fail "no encuentro el bloque del eval en workspace.sh"
 
-  ( PR_TITULO=""; estado="$estado"; eval "${bloque/\$estado/\$estado}" >/dev/null 2>&1 ) || true
+  ( estado="$estado"; eval "$bloque" >/dev/null 2>&1 ) || true
   assert_no_file "$testigo" "el titulo de la propuesta no ejecuta nada"
   assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "Comillas simples, como en load_config" \
     "y queda dicho por que"
