@@ -40,6 +40,10 @@ done
 # de todos los proyectos sin tocarlos. La copia por versión los desacopla.
 ORIGEN="$CRUX_HOME"
 VERSION_INSTALADA="$(tr -d '[:space:]' < "$ORIGEN/VERSION")"
+# Esta version es parte de la ruta que se borra unas lineas mas abajo, asi que
+# un VERSION con ../ dentro borraba lo que hubiera ahi. es_semver ya existe.
+es_semver "$VERSION_INSTALADA" ||
+  die "VERSION no es una version valida: '$VERSION_INSTALADA'"
 
 # En dev todo cuelga por symlink de este directorio: si es un worktree, al
 # cerrarlo la máquina se queda sin skills. En release da igual, porque se copia.

@@ -246,6 +246,7 @@ EOF
     raiz="$(dirname "$docs")"
     while IFS= read -r repo; do
       [[ -n "$repo" ]] || continue
+      nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
       git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
       # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
       # entero por set -e, y los repos siguientes se quedarían sin enganchar.

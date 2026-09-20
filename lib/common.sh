@@ -284,9 +284,29 @@ find_docs_repo() {
   [[ -d "$dir" ]] || return 1
   dir="$(cd "$dir" && pwd)"
 
+  # El hermano <project>-docs manda sobre un crux.json que aparezca dentro del
+  # propio repo de codigo. Si no, quien mande una propuesta con un crux.json en
+  # la raiz decide el contrato: la rama principal que vigila el hook, los
+  # comandos de la puerta de calidad y el setup que se ejecuta al abrir un
+  # espacio. El contrato es del equipo, no de la rama que tengas puesta.
+  local hermano_padre hermano_proyecto hermano
+  hermano_padre="$(dirname "$dir")"
+  hermano_proyecto="$(basename "$hermano_padre")"
+  hermano="$hermano_padre/${hermano_proyecto}-docs"
+  [[ -f "$hermano/crux.json" ]] && { echo "$hermano"; return 0; }
+
   local probe="$dir"
   while [[ "$probe" != "/" ]]; do
-    [[ -f "$probe/crux.json" ]] && { echo "$probe"; return 0; }
+    if [[ -f "$probe/crux.json" ]]; then
+      # Un crux.json en la raiz de un repo de codigo no es el contrato del
+      # proyecto: solo vale si ese repo es el de documentacion.
+      local base_probe; base_probe="$(basename "$probe")"
+      if [[ -d "$probe/.git" && "$base_probe" != *-docs && "$base_probe" != docs ]]; then
+        probe="$(dirname "$probe")"
+        continue
+      fi
+      echo "$probe"; return 0
+    fi
     probe="$(dirname "$probe")"
   done
 
