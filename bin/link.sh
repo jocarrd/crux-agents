@@ -103,6 +103,7 @@ else
   created=0; updated=0; seen=0; sin_marcadores=()
   while IFS= read -r repo; do
     [[ -n "$repo" ]] || continue
+    nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
     repo_dir="$ROOT/$repo"
     [[ -d "$repo_dir" ]] || { warn "declarado en crux.json pero no está en disco: $repo"; continue; }
     seen=$((seen + 1))

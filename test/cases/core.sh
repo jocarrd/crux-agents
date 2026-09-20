@@ -1875,3 +1875,41 @@ test_las_reglas_del_perfil_se_escriben_y_se_verifican() {
   assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "reglas del perfil" \
     "doctor avisa cuando el bloque no está"
 }
+
+test_un_crux_json_en_el_repo_de_codigo_no_es_el_contrato() {
+  # Quien manda una propuesta puede añadir un crux.json en la raiz. Si ganara,
+  # decidiria la rama que vigila el hook y los comandos de la puerta.
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/suplanta"
+  mkdir -p "$root/app" "$root/suplanta-docs"
+  git -C "$root/app" init -q
+  printf '{"crux":"0.1.0","project":"suplanta","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/suplanta-docs/crux.json"
+  printf '{"crux":"0.1.0","project":"malo","profile":"multi-repo","branch":"suya","sections":[]}\n' \
+    > "$root/app/crux.json"
+
+  source "$CRUX_HOME/lib/common.sh"
+  local encontrado; encontrado="$(find_docs_repo "$root/app")"
+  assert_eq "$root/suplanta-docs" "$encontrado" "manda el docs repo, no el crux.json del repo de codigo"
+  assert_eq "main" "$(rama_principal "$root/app")" "y la rama principal no sale del contrato suplantado"
+}
+
+test_install_no_acepta_una_version_que_sea_una_ruta() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  assert_exit 1 "una version con travesia no pasa" es_semver "../../algo"
+  assert_exit 1 "ni una vacia" es_semver ""
+  assert_exit 0 "y una normal si" es_semver "1.2.3"
+  assert_contains "$(cat "$CRUX_HOME/install.sh")" 'es_semver "$VERSION_INSTALADA"' \
+    "install.sh la comprueba antes de componer la ruta que borra"
+}
+
+test_upgrade_no_se_abre_con_una_version_que_no_sabe_comparar() {
+  sandbox >/dev/null
+  source "$CRUX_HOME/lib/common.sh"
+  assert_exit 1 "0.28 no es semver" es_semver "0.28"
+  assert_exit 1 "unknown tampoco" es_semver "unknown"
+  local up; up="$(cat "$CRUX_HOME/bin/upgrade.sh")"
+  assert_contains "$up" 'es_semver "$TO"' "upgrade comprueba la del kernel"
+  assert_contains "$up" 'es_semver "$FROM"' "y la del contrato"
+}

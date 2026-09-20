@@ -79,6 +79,10 @@ PROFILE="$(json_get "$CONFIG" profile 2>/dev/null || echo "?")"
 clonados=0; fallidos=(); sin_remoto=()
 while IFS= read -r repo; do
   [[ -n "$repo" ]] || continue
+  # El nombre sale de crux.json y se concatena a una ruta. nombre_valido existe
+  # justo para esto y solo la llamaba add-repo, o sea la puerta de entrada; un
+  # contrato que llega clonado nunca pasaba por ahi.
+  nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
   if [[ -d "$ROOT/$repo/.git" ]]; then
     info "$repo ya está"
     continue

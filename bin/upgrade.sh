@@ -37,6 +37,21 @@ echo
 
 # Degradar el contrato en la máquina que lleva el kernel viejo deja al proyecto
 # declarando menos de lo que ya tiene materializado, y sin avisar a nadie.
+#
+# version_mayor_que devuelve 1 tanto para "no es mayor" como para "no se
+# comparar esto", y tratarlas igual abria la guarda sola: un kernel sin VERSION
+# escribia "crux": "unknown" en el contrato, y a partir de ahi ninguna
+# comparacion volvia a funcionar.
+if ! es_semver "$TO"; then
+  err "este kernel no declara una versión válida: '$TO'"
+  info "reinstálalo desde el repo del kernel: bash install.sh"
+  exit 1
+fi
+if ! es_semver "$FROM"; then
+  err "el proyecto declara una versión que no se puede comparar: '$FROM'"
+  info "corrige \"crux\" en el crux.json antes de actualizar"
+  [[ $FORCE -eq 0 ]] && exit 1
+fi
 if version_mayor_que "$FROM" "$TO"; then
   err "el proyecto declara crux $FROM y este kernel es $TO"
   info "actualiza el kernel ('git pull' en $CRUX_HOME) en vez de degradar el contrato"
