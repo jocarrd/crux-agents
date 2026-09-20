@@ -1289,3 +1289,71 @@ test_usage_dice_con_que_palabras_aparecio_el_problema() {
   assert_not_contains "$out" "duplicación" "sin repetir lo que la descripción ya dice"
   assert_not_contains "$out" " esto" "sin las palabras vacías"
 }
+
+test_el_titulo_de_una_propuesta_no_ejecuta_comandos() {
+  # El titulo sale de gh, o sea de quien pueda renombrar la propuesta. Acababa
+  # en un eval entre comillas dobles, donde bash sigue expandiendo $(...).
+  sandbox >/dev/null
+  local testigo="$SB/RCE_TITULO"
+  local estado
+  estado="{\"number\":7,\"title\":\"fix: algo \$(touch $testigo)\",\"url\":\"u\",\"mergeable\":\"MERGEABLE\",\"reviewDecision\":\"\",\"statusCheckRollup\":[]}"
+
+  # el mismo bloque que usa cmd_merge, extraido del fichero para no depender de gh
+  local bloque
+  bloque="$(sed -n '/^  eval "\$(node -e/,/^  '"'"' "\$estado")"/p' "$CRUX_HOME/bin/workspace.sh")"
+  [[ -n "$bloque" ]] && PASS=$((PASS + 1)) || _fail "no encuentro el bloque del eval en workspace.sh"
+
+  ( PR_TITULO=""; estado="$estado"; eval "${bloque/\$estado/\$estado}" >/dev/null 2>&1 ) || true
+  assert_no_file "$testigo" "el titulo de la propuesta no ejecuta nada"
+  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "Comillas simples, como en load_config" \
+    "y queda dicho por que"
+}
+
+test_una_rama_principal_con_veneno_no_escribe_el_pre_push() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/veneno"
+  mkdir -p "$root/app" "$root/veneno-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  # el campo branch acaba dentro de un heredoc sin comillas
+  cat > "$root/veneno-docs/crux.json" <<'JSON'
+{"crux":"0.1.0","project":"veneno","profile":"multi-repo","repos":["app"],
+ "branch":"main\" ]] || { touch /tmp/CRUX_RCE_PREPUSH; }; : \"","sections":[]}
+JSON
+  rm -f /tmp/CRUX_RCE_PREPUSH
+
+  git -C "$root/veneno-docs" init -q
+  git -C "$root/veneno-docs" config user.email t@t
+  git -C "$root/veneno-docs" config user.name t
+  git -C "$root/veneno-docs" add -A; git -C "$root/veneno-docs" commit -qm init
+  local out
+  out="$(cd "$root/veneno-docs" && bash "$CRUX_HOME/bin/hooks.sh" install 2>&1)" || true
+  assert_no_file "/tmp/CRUX_RCE_PREPUSH" "el hook generado no ejecuta lo que traiga el contrato"
+  assert_contains "$out" "no validos" "y dice que la rama no vale"
+  assert_no_file "$root/app/.git/hooks/pre-push" "sin instalar un hook envenenado"
+}
+
+test_un_idioma_de_commit_con_veneno_cae_al_valor_por_defecto() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/idioma"
+  mkdir -p "$root/app" "$root/idioma-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"idioma","profile":"client-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/idioma-docs/crux.json"
+  printf '{"commit":{"language":"en}\\"; touch /tmp/CRUX_RCE_COMMITMSG; #"}}\n' \
+    > "$root/idioma-docs/profile.json"
+  rm -f /tmp/CRUX_RCE_COMMITMSG
+
+  bash "$CRUX_HOME/bin/hooks.sh" install "$root/idioma-docs" >/dev/null 2>&1 || true
+  local hook="$root/app/.git/hooks/commit-msg"
+  if [[ -f "$hook" ]]; then
+    printf 'feat: algo\n' > "$SB/msg"
+    bash "$hook" "$SB/msg" >/dev/null 2>&1 || true
+  fi
+  assert_no_file "/tmp/CRUX_RCE_COMMITMSG" "el commit-msg no ejecuta lo que traiga el perfil"
+}
