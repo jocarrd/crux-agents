@@ -1512,5 +1512,7 @@ Lo de /home/alguien/Proyectos/cliente/api
 MD
   local cuerpo; cuerpo="$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang es)"
   assert_not_contains "$cuerpo" "/home/alguien" "ni en el objetivo ni en la evidencia"
-  assert_contains "$cuerpo" "~/Proyectos/cliente/api" "se sustituyen por ~"
+  # La tilde aqui es el texto que se espera en la salida, no una ruta.
+  # shellcheck disable=SC2088
+  assert_contains "$cuerpo" "~/Proyectos/cliente/api" "se sustituyen por la tilde"
 }
