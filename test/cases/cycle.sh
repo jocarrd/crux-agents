@@ -504,6 +504,41 @@ test_finish_no_propone_codigo_sin_revisar() {
   assert_contains "$out" "SIN pasar la puerta" "con --sin-puerta lo dice en voz alta"
 }
 
+test_finish_sobrevive_a_una_rama_principal_que_no_es_main() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/troncal"
+  mkdir -p "$root/app" "$root/troncal-docs"
+  git -C "$root/app" init -q -b troncal
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"troncal","profile":"multi-repo","repos":["app"],"branch":"troncal","sections":[]}\n' \
+    > "$root/troncal-docs/crux.json"
+
+  # Un remoto de verdad, pero sin origin/HEAD: es lo que deja un remoto anadido
+  # a mano, y es donde el fallback a origin/main se estrellaba.
+  git init -q --bare "$SB/remoto.git"
+  git -C "$root/app" remote add origin "$SB/remoto.git"
+  git -C "$root/app" push -q origin troncal
+
+  bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-t"
+  echo cambio > "$ws/nuevo.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: algo"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "un paso" >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+
+  local out rc
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"; rc=$?
+  assert_eq "$rc" "0" "termina bien aunque la rama principal no se llame main"
+  assert_contains "$out" "subida" "sube la rama"
+  # Sin gh no hay propuesta, pero tiene que llegar hasta aqui en vez de morirse
+  # callado despues del push.
+  assert_contains "$out" "abre la propuesta" "y llega al final del comando"
+}
+
 test_finish_avisa_si_la_tarea_se_cierra_sin_pasos() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
