@@ -194,6 +194,35 @@ cmd_gate() {
     exit 1
   fi
 
+  # Estos comandos salen de un fichero versionado, asi que cambian con la rama
+  # que tengas puesta. Se recuerda su huella: mientras sea la misma no se
+  # pregunta nada, y cuando cambia se enseña lo que va a ejecutarse antes de
+  # ejecutarlo. Un contrato que llega en una propuesta no ejecuta en silencio.
+  local huella_dir="$HOME/.crux/state"
+  ( umask 077 && mkdir -p "$huella_dir" ) 2>/dev/null || true
+  local huella_f huella_ahora huella_antes=""
+  huella_f="$huella_dir/gate-$(printf '%s' "$docs/$repo_name" | cksum | tr -d ' ' | tr -c 'A-Za-z0-9' '_')"
+  huella_ahora="$(printf '%s' "$comandos" | cksum | tr -d ' ')"
+  [[ -f "$huella_f" ]] && huella_antes="$(cat "$huella_f")"
+
+  if [[ "$huella_ahora" != "$huella_antes" ]]; then
+    if [[ -n "$huella_antes" ]]; then
+      warn "la puerta de calidad de $repo_name ha cambiado desde la ultima vez"
+    else
+      info "la puerta de calidad de $repo_name, declarada en el contrato:"
+    fi
+    printf '%s\n' "$comandos" | sed 's/^/      /'
+    if [[ "${CRUX_GATE_ASSUME_YES:-0}" != "1" && -t 0 ]]; then
+      local respuesta
+      read -r -p "      ¿se ejecutan? [s/N] " respuesta
+      case "$respuesta" in
+        s|S|y|Y) : ;;
+        *) die "puerta cancelada" ;;
+      esac
+    fi
+    printf '%s' "$huella_ahora" > "$huella_f" 2>/dev/null || true
+  fi
+
   cmd_clear >/dev/null
   local fallos=0
   while IFS= read -r c; do

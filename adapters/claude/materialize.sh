@@ -12,7 +12,18 @@ claude_materialize_skill() {
   local src="$1" name="$2"
   [[ "${CRUX_DRY_RUN:-0}" == "1" ]] && { echo "      [dry-run] claude: $name"; return 0; }
   mkdir -p "$CLAUDE_SKILLS_DIR"
-  ln -sfn "$src" "$CLAUDE_SKILLS_DIR/$name"
+  # Sin -f: una skill del kernel no la reemplaza la de un proyecto. El enlace
+  # es global, asi que hacerlo dejaba el /ship de ese proyecto corriendo en
+  # todos los demas, y crux_prune_skills solo limpia enlaces rotos.
+  local destino="$CLAUDE_SKILLS_DIR/$name"
+  if [[ -L "$destino" ]]; then
+    local actual; actual="$(readlink "$destino")"
+    if [[ "$actual" != "$src" && "$actual" == "$CRUX_HOME"/* && "$src" != "$CRUX_HOME"/* ]]; then
+      echo "aviso la skill '$name' ya la trae el kernel: no se reemplaza por la del proyecto" >&2
+      return 0
+    fi
+  fi
+  ln -sfn "$src" "$destino"
 }
 
 claude_prune_skill() {
