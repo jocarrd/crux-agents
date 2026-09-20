@@ -13,12 +13,12 @@ set -uo pipefail
 CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}"
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
+source "$CRUX_HOME/lib/registry.sh"
 
 COMPROBAR=0
 [[ "${1:-}" == "--check" ]] && COMPROBAR=1
 
 RAIZ="$(projects_root)"
-REGISTRY="${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}"
 
 echo "proyectos en $RAIZ"
 echo
@@ -55,26 +55,19 @@ echo "espacios de trabajo"
 echo
 bash "$CRUX_HOME/bin/workspace.sh" heal --quiet 2>/dev/null | sed 's/^/  /' || true
 if [[ -f "$REGISTRY" ]]; then
-  node -e '
-    const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const filas = Object.entries(r.workspaces || {});
-    if (!filas.length) { console.log("  ninguno"); process.exit(0); }
-    for (const [n, w] of filas) {
-      const vivo = fs.existsSync(w.path) ? "" : "  (sin worktree)";
-      console.log(`  ${n.padEnd(14)} ${w.branch.padEnd(24)} slot ${w.slot}${vivo}`);
-    }
-  ' "$REGISTRY"
+  if [[ -z "$(registry_entries)" ]]; then
+    echo "  ninguno"
+  else
+    while IFS=$'\t' read -r n ruta rama slot; do
+      vivo=""; [[ -d "$ruta" ]] || vivo="  (sin worktree)"
+      printf '  %-14s %-24s slot %s%s\n' "$n" "$rama" "$slot" "$vivo"
+    done < <(registry_entries)
+  fi
 
   # Un espacio cuya rama ya no está en el remoto casi siempre es trabajo
   # fusionado que nadie cerró. Sin red: se mira lo que git ya sabe del remoto.
-  node -e '
-    const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    for (const [n, w] of Object.entries(r.workspaces || {})) {
-      if (fs.existsSync(w.path)) console.log([n, w.path, w.branch].join("\t"));
-    }
-  ' "$REGISTRY" | while IFS=$'\t' read -r n path rama; do
+  registry_entries | while IFS=$'\t' read -r n path rama _slot; do
+    [[ -d "$path" ]] || continue
     seguimiento="$(git -C "$path" for-each-ref --format='%(upstream:track)' "refs/heads/$rama" 2>/dev/null || true)"
     if [[ "$seguimiento" == *gone* ]]; then
       warn "'$n': su rama ya no está en el remoto, probablemente fusionada — ciérralo con 'crux workspace rm $n'"
@@ -82,11 +75,7 @@ if [[ -f "$REGISTRY" ]]; then
   done
 
   # Un worktree que crux no conoce no sale en ninguna lista ni lo protege nada.
-  registrados="$(node -e '
-    const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    process.stdout.write(Object.values(r.workspaces || {}).map((w) => w.path).join("\n"));
-  ' "$REGISTRY")"
+  registrados="$(registry_paths)"
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
     printf '%s\n' "$registrados" | grep -qxF "$d" && continue
@@ -97,14 +86,8 @@ if [[ -f "$REGISTRY" ]]; then
   # Una propuesta abierta desde una rama sin recibo es el atajo tomado por la
   # espalda: legítimo si lo pidió una persona, pero tiene que verse. Sin esto,
   # rodear la puerta no dejaba rastro en ningún sitio.
-  node -e '
-    const fs = require("fs");
-    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    for (const [n, w] of Object.entries(r.workspaces || {})) {
-      if (!fs.existsSync(w.path)) continue;
-      console.log([n, w.path, w.branch].join("\t"));
-    }
-  ' "$REGISTRY" | while IFS=$'\t' read -r n path rama; do
+  registry_entries | while IFS=$'\t' read -r n path rama _slot; do
+    [[ -d "$path" ]] || continue
     command -v gh >/dev/null || break
     origen="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
     [[ -n "$origen" ]] || continue
