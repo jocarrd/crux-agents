@@ -456,9 +456,19 @@ cmd_finish() {
     local primero
     primero="$(git -C "$path" log --format='%s' "$base..$branch" | tail -1)"
     [[ -n "$primero" ]] || primero="$(git -C "$path" log -1 --format=%s "$branch")"
+    # El error de gh se guarda en vez de tirarse: sin el, una propuesta ya
+    # abierta, una plantilla obligatoria o un permiso que falta daban el mismo
+    # mensaje que no tener gh instalado.
+    local gh_err
+    gh_err="$(mktemp "${TMPDIR:-/tmp}/crux-gh.XXXXXX")"
     url_pr="$(cd "$path" && gh pr create \
       --title "${titulo:-$primero}" \
-      --body "$cuerpo" 2>/dev/null || true)"
+      --body "$cuerpo" 2>"$gh_err" || true)"
+    if [[ -z "$url_pr" && -s "$gh_err" ]]; then
+      warn "gh no pudo abrir la propuesta"
+      head -3 "$gh_err" | sed 's/^/      /'
+    fi
+    rm -f "$gh_err"
   fi
 
   if [[ -n "$url_pr" ]]; then

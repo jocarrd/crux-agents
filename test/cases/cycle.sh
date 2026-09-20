@@ -504,6 +504,72 @@ test_finish_no_propone_codigo_sin_revisar() {
   assert_contains "$out" "SIN pasar la puerta" "con --sin-puerta lo dice en voz alta"
 }
 
+_merge_escenario() {
+  # Un espacio con propuesta abierta y un gh de mentira que responde lo que
+  # diga $1 a 'pr view'. Devuelve la ruta del worktree por la salida.
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/mrg"
+  mkdir -p "$root/app" "$root/mrg-docs" "$SB/bin"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"mrg","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/mrg-docs/crux.json"
+  bash "$CRUX_HOME/bin/workspace.sh" new m --repo "$root/app" >/dev/null 2>&1
+  echo cambio > "$root/app-ws-m/nuevo.txt"
+  git -C "$root/app-ws-m" add -A; git -C "$root/app-ws-m" commit -qm "feat: algo"
+
+  cat > "$SB/bin/gh" <<STUB
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "auth status") exit 0 ;;
+  "pr view")
+    cat <<'JSON'
+$1
+JSON
+    ;;
+  "pr merge") echo fusionada ;;
+  *) exit 0 ;;
+esac
+STUB
+  chmod +x "$SB/bin/gh"
+  echo "$root/app-ws-m"
+}
+
+test_merge_no_fusiona_con_las_comprobaciones_en_rojo() {
+  sandbox >/dev/null
+  _merge_escenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"FAILURE"}]}' >/dev/null
+
+  local out rc=0
+  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" merge m --yes 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "sale en rojo"
+  assert_contains "$out" "comprobaciones fallan" "dice cuantas fallan"
+  assert_contains "$out" "no se fusiona" "y que no fusiona"
+}
+
+test_merge_no_fusiona_con_conflictos() {
+  sandbox >/dev/null
+  _merge_escenario '{"number":7,"title":"t","url":"u","mergeable":"CONFLICTING","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}]}' >/dev/null
+
+  local out rc=0
+  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" merge m --yes 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "sale en rojo"
+  assert_contains "$out" "conflictos que resolver" "nombra el conflicto"
+}
+
+test_merge_sin_yes_informa_y_no_toca_nada() {
+  sandbox >/dev/null
+  local ws; ws="$(_merge_escenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}]}')"
+
+  local out rc=0
+  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" merge m 2>&1)" || rc=$?
+  assert_eq "0" "$rc" "sin --yes no es un error"
+  assert_contains "$out" "todo en verde" "resume el estado"
+  assert_contains "$out" "--yes" "y dice como fusionar de verdad"
+  assert_file "$ws/nuevo.txt" "el worktree sigue donde estaba"
+}
+
 test_finish_sobrevive_a_una_rama_principal_que_no_es_main() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"

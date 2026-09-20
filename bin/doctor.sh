@@ -10,6 +10,11 @@ CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/..
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
+# Los temporales van a un directorio propio con nombre imprevisible y respetando
+# TMPDIR, en vez de a /tmp/crux-doctor-*.$$ con la ruta clavada.
+DOCTOR_TMP="$(mktemp -d "${TMPDIR:-/tmp}/crux-doctor.XXXXXX")"
+trap 'rm -rf "$DOCTOR_TMP"' EXIT
+
 ERRORS=0
 WARNS=0
 SECTION_MARK=0
@@ -150,7 +155,7 @@ if [[ "$origin_docs_early" == *github.com* ]] && command -v gh >/dev/null && gh 
     if [[ "$remoto" == "$PROJECT" || "$remoto" == "$PROJECT-"* ]]; then
       found=0
       for repo in ${declared[@]+"${declared[@]}"}; do
-        [[ "${repo,,}" == "${remoto,,}" ]] && found=1
+        [[ "$repo" == "$remoto" ]] && found=1   # nocasematch, arriba
       done
       [[ $found -eq 1 ]] || note "$remoto está en el remoto y no está declarado ('crux add-repo $remoto')"
     fi
@@ -269,7 +274,7 @@ done < <(json_get "$CONFIG" sections 2>/dev/null || true)
 section
 # El estado es lo que hace navegable el registro: un "Superseded" que no dice
 # por quién corta la cadena justo donde alguien la estaba siguiendo.
-decisions_out="/tmp/crux-doctor-decisions.$$"
+decisions_out="$DOCTOR_TMP/decisions"
 node "$CRUX_HOME/lib/check-decisions.mjs" "$DOCS" >"$decisions_out" 2>&1
 decisions_rc=$?
 while IFS= read -r line; do
@@ -288,13 +293,13 @@ section_ok "estado y numeración de los ADRs"
 
 # --- 9. Enlaces markdown -----------------------------------------------------
 
-if node "$CRUX_HOME/lib/check-doc-paths.mjs" "$DOCS" >/tmp/crux-doctor-paths.$$ 2>&1; then
+if node "$CRUX_HOME/lib/check-doc-paths.mjs" "$DOCS" >"$DOCTOR_TMP/paths" 2>&1; then
   ok "enlaces markdown resuelven"
 else
   fail "enlaces markdown rotos:"
-  sed 's/^/      /' /tmp/crux-doctor-paths.$$ | head -20
+  sed 's/^/      /' "$DOCTOR_TMP/paths" | head -20
 fi
-rm -f /tmp/crux-doctor-paths.$$
+rm -f "$DOCTOR_TMP/paths"
 
 # --- 10. Skills del proyecto --------------------------------------------------
 #
@@ -305,6 +310,9 @@ rm -f /tmp/crux-doctor-paths.$$
 
 section
 skills="$(find "$DOCS/.claude/skills" -name SKILL.md 2>/dev/null | wc -l)"
+desc_out="$DOCTOR_TMP/desc"
+node "$CRUX_HOME/lib/check-skill-description.mjs" "$DOCS/.claude/skills" "$LANG_DECLARADO" >"${desc_out}" 2>&1
+desc_rc=$?
 while IFS= read -r linea; do
   [[ -n "$linea" ]] || continue
   case "$linea" in
@@ -312,7 +320,8 @@ while IFS= read -r linea; do
     aviso\ *) note "${linea#aviso }" ;;
     *)        note "$linea" ;;
   esac
-done < <(node "$CRUX_HOME/lib/check-skill-description.mjs" "$DOCS/.claude/skills" "$LANG_DECLARADO" 2>/dev/null || true)
+done <"$desc_out"
+[[ $desc_rc -eq 0 ]] || fail "no se pudo verificar la activación de las skills: $(head -1 "$desc_out")"
 [[ $skills -gt 0 ]] && section_ok "skills del proyecto: $skills"
 
 # --- 11. Credenciales escritas en la documentación ---------------------------
@@ -322,7 +331,7 @@ done < <(node "$CRUX_HOME/lib/check-skill-description.mjs" "$DOCS/.claude/skills
 # y no un descuido, y por eso avisa en lugar de bloquear.
 
 section
-secretos_out="/tmp/crux-doctor-secretos.$$"
+secretos_out="$DOCTOR_TMP/secretos"
 node "$CRUX_HOME/lib/check-secrets.mjs" "$DOCS" >"$secretos_out" 2>&1
 secretos_rc=$?
 if [[ $secretos_rc -gt 0 ]]; then
@@ -339,10 +348,14 @@ rm -f "$secretos_out"
 # Un runbook con la marca puesta hace medio año no es falso, pero tampoco se
 # sabe si sigue siendo cierto. Solo se mira operations/: es donde equivocarse
 # cuesta caro y donde nadie lo nota hasta que el comando falla.
+stale_out="$DOCTOR_TMP/stale"
+node "$CRUX_HOME/lib/check-staleness.mjs" "$DOCS" >"${stale_out}" 2>&1
+stale_rc=$?
 while IFS= read -r linea; do
   [[ -n "$linea" ]] || continue
   note "$linea"
-done < <(node "$CRUX_HOME/lib/check-staleness.mjs" "$DOCS" 2>/dev/null || true)
+done <"$stale_out"
+[[ $stale_rc -eq 0 ]] || fail "no se pudo verificar la caducidad de los runbooks: $(head -1 "$stale_out")"
 
 # --- 12. Documentos que no enlaza nadie --------------------------------------
 #
@@ -372,7 +385,7 @@ done < <(find "$DOCS" -name "*.md" -not -path "*/.git/*" -not -path "*/.claude/*
 # cierre, y esto es lo que permite ver después si la puerta se está saltando.
 
 section
-deriva_out="/tmp/crux-doctor-deriva.$$"
+deriva_out=""$DOCTOR_TMP/deriva""
 if node "$CRUX_HOME/lib/check-doc-drift.mjs" "$DOCS" >"$deriva_out" 2>/dev/null; then
   while IFS= read -r linea; do
     [[ -n "$linea" ]] || continue
@@ -393,6 +406,9 @@ rm -f "$deriva_out"
 # y sin ella. Eso lo contesta `crux mcp status`, que se ejecuta cuando importa.
 
 section
+mcp_out="$DOCTOR_TMP/mcp"
+node "$CRUX_HOME/lib/check-mcp.mjs" "$DOCS" >"${mcp_out}" 2>&1
+mcp_rc=$?
 while IFS= read -r linea; do
   [[ -n "$linea" ]] || continue
   case "$linea" in
@@ -400,7 +416,8 @@ while IFS= read -r linea; do
     aviso\ *) note "mcp: ${linea#aviso }" ;;
     *)        note "mcp: $linea" ;;
   esac
-done < <(node "$CRUX_HOME/lib/check-mcp.mjs" "$DOCS" 2>/dev/null || true)
+done <"$mcp_out"
+[[ $mcp_rc -eq 0 ]] || fail "no se pudo verificar los servidores MCP: $(head -1 "$mcp_out")"
 if json_has "$DOCS/crux.json" 'mcp && Object.keys(root.mcp).length'; then
   section_ok "servidores MCP declarados y escritos donde tocan"
 fi

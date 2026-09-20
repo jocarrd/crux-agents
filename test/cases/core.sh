@@ -1376,7 +1376,13 @@ test_el_kernel_no_usa_bash_4() {
   for f in "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/bin/crux "$CRUX_HOME"/lib/*.sh \
            "$CRUX_HOME/install.sh" "$CRUX_HOME"/test/*.sh "$CRUX_HOME"/adapters/*/*.sh; do
     [[ -f "$f" ]] || continue
-    grep -qE '^\s*(mapfile|readarray|declare -A)' "$f" && usos+=" $(basename "$f")"
+    # Sin anclar al principio de linea: la expansion en minusculas de bash 4
+    # aparece dentro de una tuberia o de un [[ ]], y con el ancla las dos que
+    # habia pasaban desapercibidas. Los comentarios se quitan antes de mirar,
+    # porque esta misma nota las nombra.
+    sed 's/#.*$//' "$f" |
+      grep -qE '(^|[^[:alnum:]_])(mapfile|readarray)[[:space:]]|declare -A|\$\{[A-Za-z_][A-Za-z_0-9]*(,,|\^\^)\}' \
+      && usos+=" $(basename "$f")"
   done
   assert_eq "" "$usos" "ningún script depende de bash 4"
 }
