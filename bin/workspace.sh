@@ -493,8 +493,17 @@ cmd_finish() {
   git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
   ok "$branch subida ($commits commits)"
 
-  local base
-  base="$(git -C "$path" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+  # La rama base sale del contrato, del remoto o de la local, en ese orden.
+  # Antes caía a origin/main cuando no habia origin/HEAD, y en un repo con otra
+  # rama principal el rango de abajo falla con 128: con set -e el script muere
+  # aqui, con la rama ya subida y sin abrir la propuesta.
+  local rama base
+  rama="$(rama_principal "$path")"
+  if git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$rama"; then
+    base="origin/$rama"
+  else
+    base="$rama"
+  fi
 
   # Si la tarea dice qué cambia y por qué, la descripción sale de ahí; si no,
   # de los commits, como siempre. Un registro vacío no mejora la propuesta.
