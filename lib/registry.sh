@@ -15,8 +15,12 @@ FLOCK="$(command -v flock 2>/dev/null || true)"
 LOCK_MIO=0
 
 registry_init() {
-  mkdir -p "$(dirname "$REGISTRY")"
-  [[ -f "$REGISTRY" ]] || echo '{"workspaces":{}}' > "$REGISTRY"
+  # 077: el registro lleva las rutas, las ramas y las tareas de todos los
+  # proyectos a la vez, incluidos los de clientes distintos. Con el umask
+  # corriente quedaba legible por cualquiera en la maquina.
+  ( umask 077 && mkdir -p "$(dirname "$REGISTRY")" )
+  [[ -f "$REGISTRY" ]] || ( umask 077 && echo '{"workspaces":{}}' > "$REGISTRY" )
+  chmod 600 "$REGISTRY" 2>/dev/null || true
 }
 
 borra_del_registro() {

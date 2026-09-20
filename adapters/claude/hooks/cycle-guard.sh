@@ -106,7 +106,14 @@ sesion="$(printf '%s' "$entrada" | node -e '
 ' 2>/dev/null || true)"
 [[ -n "$sesion" ]] || sesion="$PPID"
 
-marca="${TMPDIR:-/tmp}/crux-cycle-guard-${sesion}-$(echo "$toplevel" | tr -c 'a-zA-Z0-9' '-')"
+# La marca va a ~/.crux/state y no a /tmp: el nombre llevaba dentro la ruta
+# del repo, o sea el cliente y la tarea, en un directorio legible por
+# cualquiera en la maquina y sin que nadie las limpiara nunca.
+estado="$HOME/.crux/state"
+( umask 077 && mkdir -p "$estado" ) 2>/dev/null || true
+marca="$estado/cycle-guard-$(printf '%s' "$sesion-$toplevel" | \
+  cksum | tr -d ' ' | tr -c 'A-Za-z0-9' '_')"
+find "$estado" -name 'cycle-guard-*' -type f -mtime +2 -delete 2>/dev/null || true
 [[ -e "$marca" ]] && silencio
 : > "$marca"
 
