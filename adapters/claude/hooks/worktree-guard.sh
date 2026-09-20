@@ -25,7 +25,26 @@ resultado="$(printf '%s' "$entrada" | node -e '
   process.stdin.on("end", () => {
     let cmd = "";
     try { cmd = String(JSON.parse(s).tool_input?.command || ""); } catch { process.exit(0); }
-    if (!/\bworktree\s+remove\b|\brm\s+-[a-zA-Z]*r/.test(cmd)) process.exit(0);
+    // Lo que va detras de una almohadilla es un comentario, no un comando. Sin
+    // esto el guarda saltaba con un texto que solo mencionaba las palabras.
+    const util = cmd.replace(/(^|\s)#[^\n]*/g, " ");
+
+    // Las formas de llevarse un directorio por delante, no solo la canonica:
+    // rm -rf, rm --recursive, rm -f -r, y find ... -delete.
+    const DESTRUYE = [
+      /\bworktree\s+remove\b/,
+      /\brm\b(?=(?:\s+-{1,2}[A-Za-z-]+)*\s+-{0,2}[A-Za-z-]*r)/,
+      /\brm\b(?=[^\n]*--recursive)/,
+      /\bfind\b(?=[^\n]*\s-delete\b)/,
+      /\bfind\b(?=[^\n]*-exec\s+rm\b)/,
+    ];
+    const golpe = DESTRUYE.map((rx) => util.search(rx)).filter((i) => i >= 0);
+    if (!golpe.length) process.exit(0);
+    const desde = Math.min(...golpe);
+    // Solo cuenta lo que va DESPUES del comando destructivo: mencionar la ruta
+    // antes, en un cd o en un echo, no es borrarla.
+    const cola = util.slice(desde);
+
     let r;
     try { r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(0); }
     for (const [n, w] of Object.entries(r.workspaces || {})) {
@@ -34,7 +53,7 @@ resultado="$(printf '%s' "$entrada" | node -e '
       const base = w.path.split("/").pop();
       const porRuta = new RegExp(esc(w.path) + fin);
       const porNombre = new RegExp(`(^|[\\s/"'"'"'])${esc(base)}` + fin);
-      if (porRuta.test(cmd) || porNombre.test(cmd)) {
+      if (porRuta.test(cola) || porNombre.test(cola)) {
         process.stdout.write(n);
         process.exit(0);
       }

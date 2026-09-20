@@ -117,7 +117,11 @@ cmd_deploy() {
 
   local clave hash
   clave="$(clave_de "$nombre")"
-  hash="$(en_servidor "sudo docker exec $CRUX_STG_CONTAINER caddy hash-password --plaintext '$clave'")"
+  # Por la entrada estandar y no como argumento: `sudo` deja el comando entero
+  # escrito en /var/log/auth.log del servidor, para siempre, y mientras dura el
+  # hash cualquiera con una sesion ahi la ve en `ps`.
+  hash="$(printf '%s' "$clave" |
+    en_servidor "sudo docker exec -i $CRUX_STG_CONTAINER caddy hash-password")"
   [ -n "$hash" ] || die "no se pudo calcular el hash de la clave"
 
   en_servidor "mkdir -p '$CRUX_STG_ROOT/sites/$nombre'"

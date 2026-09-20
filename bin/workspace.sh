@@ -790,10 +790,16 @@ cmd_rm() {
   fi
 
   with_lock
-  borra_del_registro "$name"
-  unlock
-
-  ok "slot liberado"
+  if borra_del_registro "$name"; then
+    unlock
+    ok "slot liberado"
+  else
+    unlock
+    err "el worktree ya no está, pero su entrada sigue en el registro"
+    info "el slot y los puertos quedan reservados hasta que se retire"
+    info "revisa los permisos de $REGISTRY y repite: crux workspace heal"
+    exit 1
+  fi
 
   [[ -n "$tarea_rm" && -n "$proyecto_rm" ]] && archivar_si_terminada "$proyecto_rm" "$tarea_rm"
 
