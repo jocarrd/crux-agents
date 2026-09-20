@@ -449,7 +449,8 @@ normalize_git_url() {
   local u="${1%.git}"
   u="${u#ssh://}"; u="${u#git@}"; u="${u#https://}"; u="${u#http://}"
   u="${u/:/\/}"
-  printf '%s' "${u,,}"
+  # tr y no ${u,,}: esa expansion es de bash 4 y macOS trae la 3.2 de serie.
+  printf '%s' "$u" | tr '[:upper:]' '[:lower:]'
 }
 
 owner_from_template() {
