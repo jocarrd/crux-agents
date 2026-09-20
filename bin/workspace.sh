@@ -7,7 +7,7 @@
 #   crux workspace heal [--quiet]                  retira entradas sin carpeta ni rama
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
-#   crux workspace rm <nombre>
+#   crux workspace rm <nombre> [--con-ignorados]
 #   crux workspace gc [--yes] [--con-disco]
 #   crux workspace prune [--yes]
 #
@@ -185,6 +185,26 @@ cmd_new() {
   registry_init
   with_lock
 
+  # El registro esta indexado por nombre de espacio, asi que dos repos con el
+  # mismo nombre se pisaban: la entrada del primero desaparecia, su worktree
+  # quedaba vivo pero invisible, sus puertos volvian a repartirse, y un gc
+  # posterior lo borraba del disco por "no conocerlo". cmd_adopt ya comprobaba
+  # esto; cmd_new no.
+  local ocupado
+  ocupado="$(node -e '
+    const fs = require("fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const w = (r.workspaces || {})[process.argv[2]];
+    process.stdout.write(w ? w.path : "");
+  ' "$REGISTRY" "$name")" || ocupado=""
+  if [[ -n "$ocupado" ]]; then
+    unlock
+    err "ya hay un espacio llamado $name en el registro"
+    info "está en $ocupado"
+    info "usa otro nombre, o retíralo con: crux workspace rm $name"
+    exit 1
+  fi
+
   # El menor slot con su rango libre: cada proyecto parte de su propia base, y
   # dos slots distintos de dos proyectos daban el mismo rango de puertos.
   local slot
@@ -217,9 +237,20 @@ cmd_new() {
   RESERVA="$name"
   unlock
 
-  git -C "$repo" worktree add ${base:+-b "$branch"} "$path" ${base:-"$branch"} >/dev/null 2>&1 \
-    || git -C "$repo" worktree add -b "$branch" "$path" >/dev/null \
-    || die "no pude crear el worktree"
+  # Si se pidio una base concreta y no sale, se para: el camino de respaldo
+  # creaba la rama desde HEAD sin decirlo, y se trabajaban horas sobre la base
+  # equivocada. El 2>/dev/null del primer intento tiraba ademas el motivo.
+  if [[ -n "$base" ]]; then
+    git -C "$repo" show-ref --verify --quiet "refs/heads/$base" ||
+      git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$base" ||
+      die "la base $base no existe en $repo"
+    git -C "$repo" worktree add -b "$branch" "$path" "$base" >/dev/null \
+      || die "no pude crear el worktree desde $base"
+  else
+    git -C "$repo" worktree add "$path" "$branch" >/dev/null 2>&1 \
+      || git -C "$repo" worktree add -b "$branch" "$path" >/dev/null \
+      || die "no pude crear el worktree"
+  fi
 
   WORKTREE_HECHO=1
   ok "worktree $path (rama $branch)"
@@ -664,8 +695,15 @@ cmd_list() {
 }
 
 cmd_rm() {
-  local name="${1:-}"
-  [[ -n "$name" ]] || die "uso: crux workspace rm <nombre>"
+  local name="${1:-}"; shift || true
+  [[ -n "$name" ]] || die "uso: crux workspace rm <nombre> [--con-ignorados]"
+  local con_ignorados=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --con-ignorados) con_ignorados=1; shift ;;
+      *) die "opción desconocida: $1" ;;
+    esac
+  done
 
   registry_init
   with_lock
@@ -691,7 +729,6 @@ cmd_rm() {
     if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
       die "$path tiene cambios sin commitear — resuélvelos antes de borrarlo"
     fi
-
     # Instalar los hooks desde dentro de un espacio los deja apuntando a él, y
     # al cerrarlo dejan de existir sin que nada lo diga hasta la sesión
     # siguiente.
@@ -709,6 +746,16 @@ cmd_rm() {
     PORT0=0; WS_NAME="$name"; WS_BRANCH="$branch"
     local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
     load_config "$docs" "$(basename "$repo")"
+
+    # Despues de load_config: ENV_FILE sale del contrato, y ese fichero lo
+    # escribe el propio crux, asi que no cuenta como trabajo que se pierde.
+    if [[ $con_ignorados -eq 0 && -n "$(ficheros_ignorados "$path" "${ENV_FILE:-}")" ]]; then
+      err "$path tiene ficheros ignorados que se perderian al retirarlo"
+      ficheros_ignorados "$path" "${ENV_FILE:-}" | sed 's/^/      /' | head -10
+      info "sacalos de ahi, o retiralo igualmente: crux workspace rm $name --con-ignorados"
+      exit 1
+    fi
+
     if [[ -n "$TEARDOWN_CMD" ]]; then
       ( cd "$path" && eval "$(substitute "$TEARDOWN_CMD")" ) \
         && ok "teardown ejecutado" \
@@ -736,7 +783,14 @@ cmd_rm() {
 
   # Solo si está integrada: una rama con trabajo que no está en ningún sitio no
   # se borra por una preferencia.
-  if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] && rama_integrada "$repo" "$branch"; then
+  # Aqui la rama la creo crux para este espacio, asi que `--merged` si dice lo
+  # que parece: sus commits estan en la principal. Lo que no vale como prueba
+  # es para una rama cualquiera del repo, que es de lo que va prune.
+  if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] &&
+     git -C "$repo" branch --merged "$(rama_principal "$repo")" 2>/dev/null |
+       sed 's/^[ *]*//' | grep -qxF -- "$branch" &&
+     [[ -n "$(git -C "$repo" log --oneline "$(rama_principal "$repo")".."$branch" 2>/dev/null ||
+              git -C "$repo" log --oneline -1 "$branch" 2>/dev/null)" ]]; then
     git -C "$repo" branch -D "$branch" >/dev/null 2>&1 \
       && ok "rama $branch borrada (CRUX_RM_DELETE_BRANCH)" \
       || info "la rama $branch sigue existiendo"
@@ -782,15 +836,18 @@ archivar_si_terminada() {
 # Una rama fusionada por squash no aparece en `git branch --merged`: su commit
 # nunca entra en la principal. Preguntarle a la propuesta es lo único fiable en
 # un flujo que fusiona así.
-rama_integrada() {
-  local repo="$1" branch="$2"
-  git -C "$repo" branch --merged "$(rama_principal "$repo")" 2>/dev/null | grep -qx "[ *]*$branch" && return 0
-  command -v gh >/dev/null || return 1
-  local estado
-  estado="$(git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1 &&
-            gh pr list --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" \
-               --head "$branch" --state merged --json mergedAt -q '.[0].mergedAt // ""' 2>/dev/null)" || return 1
-  [[ -n "$estado" ]]
+ramas_con_propuesta_fusionada() {
+  # Las ramas que de verdad tuvieron una propuesta fusionada, en una sola
+  # llamada. Antes se usaba `git branch --merged` como atajo, y eso es cierto
+  # para cualquier rama que apunte a un ancestro de la principal: una recien
+  # creada sin un solo commit propio, o una de vida larga como develop o
+  # staging justo despues de que su release entre. Se borraban, aqui y en el
+  # remoto, diciendo "su propuesta ya fusionada" sin haber preguntado nunca.
+  local repo="$1" slug
+  slug="$(cd "$repo" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" || return 1
+  [[ -n "$slug" ]] || return 1
+  gh pr list --repo "$slug" --state merged --limit 200 --json headRefName \
+     -q '.[].headRefName' 2>/dev/null
 }
 
 # El registro se repara solo. Una entrada cuya carpeta ya no existe y cuya rama
@@ -1025,9 +1082,24 @@ caducar_tareas() {
 # commits propios del espacio que no estén en ningún remoto. Contra la rama
 # principal y no contra HEAD: en un repo sin remoto, HEAD --not --remotes son
 # todos los commits del proyecto y nunca saldría limpio.
+ficheros_ignorados() {
+  # ficheros_ignorados <dir> [fichero que crux regenera]
+  #
+  # Lo que git status normal no ensena y al retirar el worktree se borra igual:
+  # ahi viven la base de datos del espacio y lo que se haya dejado a mano. Se
+  # deja fuera lo reponible por una instalacion, el recibo de la puerta y el
+  # fichero de entorno que escribe el propio crux desde el contrato.
+  local propio="${2:-}"
+  git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
+    grep -E '^!! ' |
+    grep -vE '^!! (\.crux-ship|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
+    { [[ -n "$propio" ]] && grep -vxF "!! $propio" || cat; } || true
+}
+
 espacio_limpio() {
   local w="$1"
   [[ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ]] || return 1
+  [[ -z "$(ficheros_ignorados "$w" "${ENV_FILE:-}")" ]] || return 1
   local base sueltos
   base="$(rama_principal "$w")"
   sueltos="$(git -C "$w" log --oneline "$base..HEAD" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
@@ -1043,10 +1115,19 @@ cmd_prune() {
     || die "hace falta gh autenticado para saber qué propuestas se fusionaron"
 
   local principal; principal="$(rama_principal "$repo")"
+  local fusionadas
+  fusionadas="$(ramas_con_propuesta_fusionada "$repo")" \
+    || die "no pude preguntarle a gh que propuestas se fusionaron"
+
   local integradas=()
   while IFS= read -r b; do
     [[ -n "$b" && "$b" != "$principal" ]] || continue
-    rama_integrada "$repo" "$b" && integradas+=("$b")
+    # Nada de ramas de vida larga: aunque su propuesta se fusionara, borrarlas
+    # rompe el flujo de quien las usa.
+    case "$b" in
+      develop|development|staging|stage|next|production|prod|release|release/*|hotfix/*) continue ;;
+    esac
+    printf '%s\n' "$fusionadas" | grep -qxF -- "$b" && integradas+=("$b")
   done < <(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin |
            sed 's|^origin/||' | sort -u)
 
