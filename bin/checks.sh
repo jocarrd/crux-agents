@@ -8,6 +8,10 @@
 # falla trae solo el final del log del trabajo que falló: el log entero de un
 # CI son miles de líneas, y leerlo cuesta más que arreglar el fallo.
 #
+# --wait tarda lo que tarde el CI. Lánzalo en segundo plano y sigue con otra
+# cosa: quedarse mirando la espera no acelera el CI y para a quien esté al otro
+# lado de la sesión.
+#
 # Salida: 0 todo en verde · 1 algo falla · 2 no hay comprobaciones · 3 se agotó
 # el tiempo con comprobaciones pendientes.
 

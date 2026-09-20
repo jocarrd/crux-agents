@@ -50,6 +50,10 @@ se usa. No el sitemap entero.
 
 ### 1. Esperar a que llegue la versión nueva
 
+**Esta espera va en segundo plano.** Un despliegue tarda minutos y la sesión no
+se queda delante: se lanza el vigía ahí, se dice que está corriendo y se sigue
+con lo siguiente. Se vuelve cuando avise.
+
 Un 200 justo después de fusionar suele ser **la versión anterior** respondiendo
 mientras la nueva se construye. Hay que esperar a algo que solo tenga la nueva:
 un texto que el cambio añade, o el identificador del commit si la aplicación lo

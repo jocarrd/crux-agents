@@ -112,11 +112,21 @@ Se niega en dos casos, y los dos a propósito:
   **no se abre una propuesta de código que nadie ha revisado**, y la revisión
   deja de depender de que alguien se acuerde.
 
-Y en cuanto está abierta, **se espera al CI**:
+Y en cuanto está abierta, **se espera al CI sin quedarse parado delante**:
 
 ```bash
 crux checks --wait
 ```
+
+Ese comando tarda minutos, y son minutos en los que nadie avanza. **La espera
+va en segundo plano.** Se lanza ahí, se dice en voz alta que está corriendo y se
+sigue con lo siguiente: otra tarea, la documentación, lo que el usuario haya
+pedido después. Cuando termine se vuelve a ella.
+
+Bloquear la sesión esperando a un servicio de fuera no es rigor, es tiempo
+muerto de la persona que está al otro lado. Lo que sí es rigor es no dar por
+buena una propuesta hasta ver el resultado, y eso se cumple igual mirando
+después.
 
 Si algo sale en rojo, trae solo el final del log del trabajo que falló. Se lee,
 se arregla en la misma rama, se pasa `/ship` y se sube: el comando se vuelve a
@@ -177,6 +187,9 @@ Si lo fusionado se despliega solo, **no se da por publicado hasta verlo**:
 Espera a que la versión nueva llegue, comprueba que las rutas del proyecto
 responden y mira en producción lo que tocaba el diff. Si algo falla, se revierte
 primero y se investiga después, con `/prod-signals` y `/root-cause`.
+
+Esta espera también va en segundo plano, por lo mismo que la del CI: un
+despliegue tarda lo que tarda y la sesión no se queda mirándolo.
 
 ### 7. Cerrar
 
