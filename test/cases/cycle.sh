@@ -88,14 +88,14 @@ test_prune_no_se_para_en_la_primera_rama_que_falla() {
   git -C "$repo" commit -q --allow-empty -m init
   for b in uno dos tres; do git -C "$repo" branch "ws/$b"; done
 
-  # gh de mentira: todas las propuestas constan como fusionadas, sin red.
+  # gh de mentira: las tres constan con propuesta fusionada, sin red.
   local bin="$SB/bin"; mkdir -p "$bin"
   cat > "$bin/gh" <<'STUB'
 #!/usr/bin/env bash
 case "$1" in
   auth) exit 0 ;;
   repo) echo "test/repo" ;;
-  pr) echo "2026-08-05T00:00:00Z" ;;
+  pr) printf 'ws/uno\nws/dos\nws/tres\n' ;;
 esac
 STUB
   chmod +x "$bin/gh"
@@ -1356,4 +1356,104 @@ test_un_idioma_de_commit_con_veneno_cae_al_valor_por_defecto() {
     bash "$hook" "$SB/msg" >/dev/null 2>&1 || true
   fi
   assert_no_file "/tmp/CRUX_RCE_COMMITMSG" "el commit-msg no ejecuta lo que traiga el perfil"
+}
+
+test_prune_no_borra_una_rama_que_nunca_tuvo_propuesta() {
+  # `git branch --merged` es cierto para cualquier rama que apunte a un
+  # ancestro de la principal: una recien creada, o develop justo despues de
+  # una release. Se borraban aqui y en el remoto diciendo "ya fusionada".
+  sandbox >/dev/null
+  local repo="$SB/repo"; mkdir -p "$repo"
+  git -C "$repo" init -q -b main
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  git -C "$repo" commit -q --allow-empty -m init
+  git -C "$repo" branch develop        # de vida larga
+  git -C "$repo" branch ws/recien      # recien creada, sin un commit propio
+  git -C "$repo" branch ws/hecha       # esta si tuvo propuesta
+
+  local bin="$SB/bin"; mkdir -p "$bin"
+  cat > "$bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  auth) exit 0 ;;
+  repo) echo "test/repo" ;;
+  pr) echo "ws/hecha" ;;
+esac
+STUB
+  chmod +x "$bin/gh"
+
+  local out; out="$(cd "$repo" && PATH="$bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" prune --yes 2>&1)"
+  local quedan; quedan="$(git -C "$repo" branch --list --format='%(refname:short)' | tr '\n' ' ')"
+
+  assert_contains "$quedan" "develop" "develop no se toca"
+  assert_contains "$quedan" "ws/recien" "una rama sin propuesta tampoco"
+  assert_not_contains "$quedan" "ws/hecha" "y la que si tuvo propuesta fusionada se limpia"
+  assert_contains "$out" "1 de 1" "solo cuenta la que de verdad se fusiono"
+}
+
+_dos_repos() {
+  local root="$CRUX_PROJECTS_DIR/dosr"
+  mkdir -p "$root/app" "$root/api" "$root/dosr-docs"
+  local r
+  for r in app api; do
+    git -C "$root/$r" init -q
+    git -C "$root/$r" config user.email t@t
+    git -C "$root/$r" config user.name t
+    echo x > "$root/$r/f.txt"; git -C "$root/$r" add -A; git -C "$root/$r" commit -qm init
+  done
+  printf '{"crux":"0.1.0","project":"dosr","profile":"multi-repo","repos":["app","api"],"sections":[]}\n' \
+    > "$root/dosr-docs/crux.json"
+  echo "$root"
+}
+
+test_dos_espacios_con_el_mismo_nombre_no_se_pisan() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_dos_repos)"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new fix --repo "$root/app" >/dev/null 2>&1
+  local out rc=0
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" new fix --repo "$root/api" 2>&1)" || rc=$?
+
+  assert_eq "1" "$rc" "el segundo se niega"
+  assert_contains "$out" "ya hay un espacio llamado" "y dice por que"
+  assert_contains "$out" "app-ws-fix" "señalando cual ocupa el nombre"
+  assert_contains "$(cat "$CRUX_REGISTRY")" "app-ws-fix" "la entrada del primero sigue en pie"
+  assert_no_file "$root/api-ws-fix/f.txt" "y el segundo no deja un worktree huerfano"
+}
+
+test_un_espacio_con_ficheros_ignorados_no_se_da_por_limpio() {
+  # git status normal no los ve, pero al retirar el worktree se borran igual:
+  # el .env.local y la base de datos del espacio viven ahi.
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_dos_repos)"
+  printf 'data/\nnotas-privadas.md\n' > "$root/app/.gitignore"
+  git -C "$root/app" add -A; git -C "$root/app" commit -qm ignora
+
+  bash "$CRUX_HOME/bin/workspace.sh" new condatos --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-condatos"
+  mkdir -p "$ws/data"
+  echo "apuntes" > "$ws/notas-privadas.md"
+  echo "datos" > "$ws/data/dump.sql"
+
+  assert_eq "" "$(git -C "$ws" status --porcelain)" "para git normal el espacio esta limpio"
+  local out rc=0
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm condatos 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "pero rm se niega"
+  assert_file "$ws/notas-privadas.md" "y lo escrito a mano sigue ahi"
+  assert_file "$ws/data/dump.sql" "y los datos tambien"
+}
+
+test_una_base_que_no_existe_no_cae_a_head_en_silencio() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_dos_repos)"
+
+  local out rc=0
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" new sobrebase --repo "$root/app" --base v9-inexistente 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "se para"
+  assert_contains "$out" "no existe" "y dice que la base no existe"
+  assert_no_file "$root/app-ws-sobrebase/f.txt" "sin dejar un espacio sobre la base equivocada"
 }
