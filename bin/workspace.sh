@@ -525,7 +525,10 @@ cmd_merge() {
     const checks = d.statusCheckRollup || [];
     const fallan = checks.filter((c) => ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT"].includes(c.conclusion));
     const enCurso = checks.filter((c) => c.status && c.status !== "COMPLETED");
-    const q = (v) => `"${String(v).replace(/"/g, "")}"`;
+    // Comillas simples, como en load_config: dentro de las dobles bash sigue
+    // expandiendo $(...), y estos valores salen de gh, o sea del titulo que
+    // cualquiera puede ponerle a la propuesta.
+    const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, "")}'"'"'`;
     console.log(`PR_NUM=${d.number}`);
     console.log(`PR_URL=${q(d.url)}`);
     console.log(`PR_TITULO=${q(d.title)}`);

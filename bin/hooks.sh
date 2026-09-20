@@ -151,6 +151,14 @@ cmd_install() {
     # repo esté usando. Asumir "main" dejaba el hook vigilando una rama que no
     # existe, y entonces no bloquea nada.
     principal="$(rama_principal "$repo")"
+    # El nombre acaba dentro de un heredoc sin comillas, o sea como codigo del
+    # hook. Sale de crux.json, que es un fichero versionado: quien manda una
+    # propuesta puede cambiarlo. Un refname valido no lleva nada de esto.
+    if [[ ! "$principal" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+      warn "rama principal con caracteres no validos: '$principal'"
+      info "el pre-push de $(basename "$repo") no se instala"
+      return 1
+    fi
     cat > "$hooks/pre-push" <<EOF
 #!/usr/bin/env bash
 # Instalado por crux hooks install.
@@ -181,6 +189,10 @@ EOF
   instalar_commit_msg() {
     local repo="$1" alcance="${2:-full}" idioma="${3:-en}" hooks
     hooks="$(dir_hooks "$repo")" || return 1
+    # Los dos van a un reemplazo de sed que escribe el hook. Salen del perfil,
+    # que es otro fichero versionado.
+    [[ "$idioma" =~ ^[a-z]{2}$ ]] || { warn "idioma de commit no valido: '$idioma'"; idioma=en; }
+    [[ "$alcance" =~ ^[a-z]+$ ]] || { warn "alcance de commit no valido: '$alcance'"; alcance=full; }
     sed -e "s|^SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-full}\"|SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-$alcance}\"|" \
         -e "s|^IDIOMA=\"\${CRUX_COMMIT_MSG_LANG:-en}\"|IDIOMA=\"\${CRUX_COMMIT_MSG_LANG:-$idioma}\"|" \
       "$COMMIT_MSG" > "$hooks/commit-msg"
