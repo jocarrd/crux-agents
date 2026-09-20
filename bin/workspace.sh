@@ -446,9 +446,6 @@ cmd_finish() {
     fi
   fi
 
-  git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
-  ok "$branch subida ($commits commits)"
-
   # La rama base sale del contrato, del remoto o de la local, en ese orden.
   # Antes caía a origin/main cuando no habia origin/HEAD, y en un repo con otra
   # rama principal el rango de abajo falla con 128: con set -e el script muere
@@ -478,6 +475,25 @@ cmd_finish() {
     cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
       "$(git -C "$path" log --format='- %s' "$base..$branch")" "${head:0:8}")"
   fi
+
+  # El cuerpo pasa por el mismo filtro que ship body antes de que nada salga.
+  # Existia y no lo llamaba nadie: dependia de que el agente se acordara, y lo
+  # que se publica fuera no puede depender de eso. Va antes del push para que
+  # un cuerpo con una credencial dentro ni siquiera suba la rama.
+  local cuerpo_tmp
+  cuerpo_tmp="$(mktemp "${TMPDIR:-/tmp}/crux-cuerpo.XXXXXX")"
+  printf '%s\n' "$cuerpo" > "$cuerpo_tmp"
+  if ! ( cd "$path" && bash "$CRUX_HOME/bin/ship.sh" body "$cuerpo_tmp" >/dev/null 2>&1 ); then
+    err "el cuerpo de la propuesta no pasa el filtro"
+    ( cd "$path" && bash "$CRUX_HOME/bin/ship.sh" body "$cuerpo_tmp" 2>&1 | sed 's/^/      /' ) || true
+    info "sale del registro de la tarea: $registro_tarea"
+    rm -f "$cuerpo_tmp"
+    exit 1
+  fi
+  rm -f "$cuerpo_tmp"
+
+  git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
+  ok "$branch subida ($commits commits)"
 
   local url_pr=""
   if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then

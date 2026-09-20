@@ -117,6 +117,24 @@ cmd_body() {
   firma="$(grep -inE 'co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(generated|generado) with|🤖' "$fichero" || true)"
   [[ -n "$firma" ]] && reporta "la firma de la herramienta no va en una propuesta" "$firma"
 
+  # Las mismas huellas que la documentacion y los .mcp.json. Esto se publica
+  # fuera, asi que es el ultimo sitio donde mirar, no el primero que se salta.
+  local credenciales
+  credenciales="$(node -e '
+    import("file://" + process.argv[1] + "/lib/credential-prints.mjs").then((m) => {
+      const fs = require("fs");
+      const t = fs.readFileSync(process.argv[2], "utf8");
+      for (const h of m.huellasEn(t)) console.log(h);
+    });
+  ' "$CRUX_HOME" "$fichero" 2>/dev/null || true)"
+  [[ -n "$credenciales" ]] && reporta "hay algo con pinta de credencial" "$credenciales"
+
+  # La ruta de la maquina no le dice nada a quien lee la propuesta, y dice
+  # demasiado de como trabajamos y para quien.
+  local rutas
+  rutas="$(grep -nE "(^|[^A-Za-z0-9_])($HOME|/home/[a-z_][a-z0-9_-]*|/Users/[A-Za-z0-9_-]+)/" "$fichero" || true)"
+  [[ -n "$rutas" ]] && reporta "rutas de la maquina en el cuerpo" "$rutas"
+
   # Lo demás lo declara el perfil, que es de quien depende: en el repo de un
   # cliente no se enseña nuestro andamiaje, y en otro puede ser su nombre.
   local docs perfil=""
@@ -130,6 +148,12 @@ cmd_body() {
       hallado="$(grep -inE "$patron" "$fichero" || true)"
       [[ -n "$hallado" ]] && reporta "perfil $perfil: $motivo" "$hallado"
     done < <(perfil_forbid "$perfil" "$docs")
+  else
+    # Sin perfil no se comprueba lo que el perfil prohibe, y el repo de un
+    # cliente clonado fuera de la convencion es justo el que mas lo necesita.
+    # Decir "ok" aqui era el peor sitio para fallar en abierto.
+    warn "sin contrato a la vista: no se ha comprobado lo que prohibe el perfil"
+    info "si es el repo de un cliente, revisa el cuerpo a mano"
   fi
 
   if [[ $fallos -gt 0 ]]; then

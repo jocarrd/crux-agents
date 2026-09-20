@@ -1457,3 +1457,60 @@ test_una_base_que_no_existe_no_cae_a_head_en_silencio() {
   assert_contains "$out" "no existe" "y dice que la base no existe"
   assert_no_file "$root/app-ws-sobrebase/f.txt" "sin dejar un espacio sobre la base equivocada"
 }
+
+test_el_cuerpo_de_la_propuesta_pasa_por_el_filtro() {
+  # ship body existia y no lo llamaba nadie: el cuerpo salia del registro de la
+  # tarea directo a gh pr create.
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/filtro"
+  mkdir -p "$root/app" "$root/filtro-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"filtro","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/filtro-docs/crux.json"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new conveneno --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-conveneno"
+  echo cambio > "$ws/nuevo.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: algo"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "probado con ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/task.sh" "done" T1 "en /home/otrousuario/Proyectos/otrocliente/api" >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+
+  local out rc=0
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish conveneno 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "no publica un cuerpo que no pasa el filtro"
+  assert_contains "$out" "no pasa el filtro" "y lo dice"
+  assert_contains "$out" "credencial" "señalando el token"
+}
+
+test_las_rutas_de_la_maquina_no_salen_en_ninguna_seccion() {
+  sandbox >/dev/null
+  local f="$SB/t.md"
+  cat > "$f" <<'MD'
+---
+task: t
+project: p
+status: open
+---
+
+## Objetivo
+
+Lo de /home/alguien/Proyectos/cliente/api
+
+## Pasos
+
+- [x] T1 medir · evidencia: /home/alguien/salida.txt
+
+## Verificación
+
+- ok · cmd (1s)
+MD
+  local cuerpo; cuerpo="$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang es)"
+  assert_not_contains "$cuerpo" "/home/alguien" "ni en el objetivo ni en la evidencia"
+  assert_contains "$cuerpo" "~/Proyectos/cliente/api" "se sustituyen por ~"
+}
