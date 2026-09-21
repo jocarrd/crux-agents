@@ -336,6 +336,9 @@ test_workspace_respeta_el_perfil_de_cliente() {
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" 2>&1)"
   assert_contains "$out" "documentación de vendor" "avisa de que la documentación no va al repo del cliente"
   assert_file "$root/vendor-ws-x/f.txt" "y aun así crea el espacio de trabajo"
+  assert_file "$root/vendor-ws-x/CLAUDE.local.md" "el worktree lleva su puntero local"
+  assert_contains "$(cat "$root/vendor-ws-x/CLAUDE.local.md")" "@../cli-docs/CLAUDE.md" "apuntando al docs repo"
+  assert_eq "" "$(git -C "$root/vendor-ws-x" status --porcelain)" "sin aparecer en git status"
 
   # La rama sí se publica en su repositorio: se avisa de que lleva nuestra
   # nomenclatura, y se puede elegir otra.

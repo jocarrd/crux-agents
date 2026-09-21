@@ -316,9 +316,15 @@ punteros en todos, se aplica el ciclo completo.
 
 El docs repo es propio, pero el repo de código pertenece a un cliente.
 
-- **No se escribe nada fuera del docs repo.** Ni punteros, ni `AGENTS.md`, ni
-  carpetas del estándar en el repo del cliente. El agente abre la documentación
-  explícitamente. Si el repo del cliente **ya traía** su propio `AGENTS.md`
+- **No se escribe nada versionado fuera del docs repo.** Ni punteros, ni
+  `AGENTS.md`, ni carpetas del estándar en el repo del cliente. Lo único que
+  se escribe es `CLAUDE.local.md`: un puntero local con `@../<docs>/CLAUDE.md`
+  que `crux link` añade al `info/exclude` de git, así que no aparece en
+  `git status` ni se puede commitear. `crux workspace new` lo regenera en cada
+  worktree, porque un fichero sin versionar no viaja con `git worktree add`, y
+  `crux doctor` da error si falta o si no está excluido. Sin él, el agente no
+  carga nada nuestro al trabajar en el código y descubrir el docs repo depende
+  de que se acuerde. Si el repo del cliente **ya traía** su propio `AGENTS.md`
   versionado, no es una intrusión: se respeta y se sigue. `doctor` distingue el
   fichero del cliente del puntero nuestro, que lleva el bloque gestionado.
 - **Se registran mediciones, no diagnósticos.** No se declara algo como bug ni
@@ -349,6 +355,7 @@ obliga a tocar el repo del kernel, que se reemplaza en cada versión.
 | Campo | Por defecto | Qué cambia |
 | --- | --- | --- |
 | `pointers.write` | `true` | Si se escriben punteros en los repos de código |
+| `pointers.local` | `false` | Con `pointers.write` en `false`, si se escribe el puntero local `CLAUDE.local.md`, excluido de git |
 | `propose.forbid` | la firma de la herramienta | Qué no puede aparecer en el cuerpo de una propuesta, con su motivo |
 | `branch.pattern` | `ws/{{name}}` | Cómo se llama la rama que abre un espacio |
 | `commit.language` | `en` | El idioma que exige el hook de commit |

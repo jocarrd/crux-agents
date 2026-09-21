@@ -1,12 +1,13 @@
 {
   "name": "client-repo",
-  "description": "El docs repo es propio, pero el código pertenece a un cliente. La documentación del estándar no se escribe en el repo del cliente: ni punteros, ni AGENTS.md, ni carpetas. Trabajar en su código —ramas, worktrees, commits— es el encargo y sigue siendo normal.",
+  "description": "El docs repo es propio, pero el código pertenece a un cliente. La documentación del estándar no se escribe en el repo del cliente: ni punteros versionados, ni AGENTS.md, ni carpetas. Solo un CLAUDE.local.md sin versionar que lleva al docs repo. Trabajar en su código —ramas, worktrees, commits— es el encargo y sigue siendo normal.",
   "pointers": {
     "write": false,
+    "local": true,
     "files": []
   },
   "rules": [
-    "No se modifica el repo del cliente para acomodar esta documentación: ni punteros, ni AGENTS.md, ni carpetas del estándar. El agente abre la documentación explícitamente. Si el repo del cliente ya traía su propio AGENTS.md versionado, se respeta: no es nuestro y no se borra.",
+    "No se modifica el repo del cliente para acomodar esta documentación: ni punteros versionados, ni AGENTS.md, ni carpetas del estándar. Lo único que se escribe es CLAUDE.local.md, excluido de git, que carga el índice del docs repo al trabajar en el código. Si el repo del cliente ya traía su propio AGENTS.md versionado, se respeta: no es nuestro y no se borra.",
     "Se registran mediciones, no diagnósticos. No se declara algo como bug ni se concluye qué está mal sin validación del cliente.",
     "Toda observación lleva evidencia reproducible: fichero y línea, comando o consulta que la demuestra. Sin evidencia no se escribe.",
     "Se distingue siempre lo medido de lo heredado de documentación previa: los documentos describen la intención del momento en que se escribieron, no el estado actual.",

@@ -97,8 +97,24 @@ escribir_reglas_del_perfil
 WRITES_POINTERS="$(perfil_get "$PROFILE" "$DOCS" pointers.write true)"
 
 if [[ "$WRITES_POINTERS" != "true" ]]; then
-  warn "perfil $PROFILE: no se escribe nada fuera del docs repo"
-  info "los agentes deben abrir $DOCS_NAME/AGENTS.md explícitamente"
+  if [[ "$(perfil_get "$PROFILE" "$DOCS" pointers.local false)" != "true" ]]; then
+    warn "perfil $PROFILE: no se escribe nada fuera del docs repo"
+    info "los agentes deben abrir $DOCS_NAME/AGENTS.md explícitamente"
+  else
+    info "perfil $PROFILE: nada versionado fuera del docs repo; solo el puntero local $PUNTERO_LOCAL"
+    while IFS= read -r repo; do
+      [[ -n "$repo" ]] || continue
+      nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
+      [[ -d "$ROOT/$repo" ]] || { warn "declarado en crux.json pero no está en disco: $repo"; continue; }
+      rc=0
+      escribir_puntero_local "$ROOT/$repo" "$DOCS_NAME" || rc=$?
+      case $rc in
+        0) ok "$repo/$PUNTERO_LOCAL apunta a $DOCS_NAME (excluido de git)" ;;
+        2) warn "$repo no es un repo git: sin puntero local, no habría cómo excluirlo" ;;
+        3) info "$repo versiona su propio $PUNTERO_LOCAL — se respeta, no se toca" ;;
+      esac
+    done < <(json_get "$CONFIG" repos 2>/dev/null || true)
+  fi
 else
   created=0; updated=0; seen=0; sin_marcadores=()
   while IFS= read -r repo; do

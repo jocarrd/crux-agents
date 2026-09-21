@@ -213,6 +213,7 @@ test_perfil_cliente_respeta_el_agents_del_cliente() {
   git -C "$vendor" init -q
   git -C "$vendor" add AGENTS.md
   git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add agents"
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
 
   local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
   assert_not_contains "$out" "no debería existir" "el AGENTS.md del cliente no es intrusión"
@@ -235,6 +236,74 @@ test_perfil_cliente_detecta_el_puntero_commiteado() {
   local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
   assert_contains "$out" "no debería existir" "el bloque gestionado delata el puntero"
   assert_exit 1 "sigue siendo error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+# Sin nada que el agente cargue solo, trabajar en el repo del cliente no lleva al
+# docs repo. El puntero local lo resuelve sin versionar nada en su repositorio.
+nuevo_repo_de_cliente() {
+  local dir="$1"
+  mkdir -p "$dir"
+  git -C "$dir" init -q
+  echo x > "$dir/f.txt"
+  git -C "$dir" add f.txt
+  git -C "$dir" -c user.email=t@t -c user.name=t commit -qm "chore: init"
+}
+
+test_perfil_cliente_escribe_el_puntero_local_fuera_de_git() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project cliente5 --repos "vendor" --profile client-repo)"
+  local vendor="$CRUX_PROJECTS_DIR/cliente5/vendor"
+  nuevo_repo_de_cliente "$vendor"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+
+  assert_file "$vendor/CLAUDE.local.md" "link escribe el puntero local"
+  assert_contains "$(cat "$vendor/CLAUDE.local.md")" "@../cliente5-docs/CLAUDE.md" "el import apunta al docs repo"
+  assert_eq "" "$(git -C "$vendor" status --porcelain)" "no aparece en git status"
+  assert_no_file "$vendor/AGENTS.md" "y sigue sin escribir punteros versionados"
+  assert_no_file "$vendor/CLAUDE.md" "ni CLAUDE.md"
+}
+
+test_perfil_cliente_doctor_exige_el_puntero_local() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project cliente6 --repos "vendor" --profile client-repo)"
+  local vendor="$CRUX_PROJECTS_DIR/cliente6/vendor"
+  nuevo_repo_de_cliente "$vendor"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "sin CLAUDE.local.md" "detecta que falta el puntero local"
+  assert_exit 1 "y es error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  assert_exit 0 "con el puntero escrito doctor pasa" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_perfil_cliente_doctor_detecta_el_puntero_sin_excluir() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project cliente7 --repos "vendor" --profile client-repo)"
+  local vendor="$CRUX_PROJECTS_DIR/cliente7/vendor"
+  nuevo_repo_de_cliente "$vendor"
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  sed -i '/CLAUDE.local.md/d' "$vendor/.git/info/exclude"
+
+  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  assert_contains "$out" "no está excluido de git" "detecta que se podría commitear"
+  assert_exit 1 "y es error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+}
+
+test_perfil_cliente_respeta_su_propio_claude_local() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project cliente8 --repos "vendor" --profile client-repo)"
+  local vendor="$CRUX_PROJECTS_DIR/cliente8/vendor"
+  nuevo_repo_de_cliente "$vendor"
+  echo "# del cliente" > "$vendor/CLAUDE.local.md"
+  git -C "$vendor" add CLAUDE.local.md
+  git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add local"
+
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+
+  assert_eq "# del cliente" "$(cat "$vendor/CLAUDE.local.md")" "no pisa el fichero versionado del cliente"
+  assert_exit 0 "y doctor lo respeta" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
 test_link_crea_punteros_con_el_import() {

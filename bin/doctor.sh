@@ -201,6 +201,22 @@ else
       fi
     done
   done
+
+  # Sin el puntero local el agente no carga nada nuestro al trabajar en el repo
+  # del cliente, y descubrir el docs repo queda a su memoria.
+  if [[ "$(perfil_get "$PROFILE" "$DOCS" pointers.local false)" == "true" ]]; then
+    for repo in ${declared[@]+"${declared[@]}"}; do
+      [[ -d "$ROOT/$repo" ]] || continue
+      git -C "$ROOT/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+      if git -C "$ROOT/$repo" ls-files --error-unmatch "$PUNTERO_LOCAL" >/dev/null 2>&1; then
+        note "$repo/$PUNTERO_LOCAL es del cliente — se respeta, no se toca"
+      elif [[ ! -f "$ROOT/$repo/$PUNTERO_LOCAL" ]]; then
+        fail "$repo/ sin $PUNTERO_LOCAL: el agente no descubre $(basename "$DOCS") ('crux link')"
+      elif ! git -C "$ROOT/$repo" check-ignore -q "$PUNTERO_LOCAL"; then
+        fail "$repo/$PUNTERO_LOCAL no está excluido de git y se podría commitear ('crux link')"
+      fi
+    done
+  fi
 fi
 if [[ -n "$(perfil_get "$PROFILE" "$DOCS" rules "")" ]] &&
    ! grep -qF 'crux:begin perfil' "$DOCS/AGENTS.md" 2>/dev/null; then

@@ -282,6 +282,16 @@ cmd_new() {
     done
   fi
 
+  # Un fichero sin versionar no viaja con `git worktree add`: sin esto, el
+  # puntero local del perfil de cliente se quedaba en el repo original.
+  if [[ -n "$docs" && "$(perfil_get "$perfil" "$docs" pointers.local false)" == "true" ]]; then
+    local rc_puntero=0
+    escribir_puntero_local "$path" "$(basename "$docs")" || rc_puntero=$?
+    if [[ $rc_puntero -eq 0 ]]; then
+      ok "$PUNTERO_LOCAL apunta a $(basename "$docs") (excluido de git)"
+    fi
+  fi
+
   if [[ -n "$ENV_FILE" && "$ENV_TEMPLATE" != "{}" ]]; then
     node -e '
       const fs = require("fs");
@@ -1109,12 +1119,12 @@ ficheros_ignorados() {
   #
   # Lo que git status normal no ensena y al retirar el worktree se borra igual:
   # ahi viven la base de datos del espacio y lo que se haya dejado a mano. Se
-  # deja fuera lo reponible por una instalacion, el recibo de la puerta y el
-  # fichero de entorno que escribe el propio crux desde el contrato.
+  # deja fuera lo reponible por una instalacion, el recibo de la puerta, el
+  # puntero local y el fichero de entorno que escribe el propio crux.
   local propio="${2:-}"
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
-    grep -vE '^!! (\.crux-ship|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
+    grep -vE '^!! (\.crux-ship|CLAUDE\.local\.md$|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
     { [[ -n "$propio" ]] && grep -vxF "!! $propio" || cat; } || true
 }
 

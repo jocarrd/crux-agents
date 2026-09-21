@@ -379,6 +379,27 @@ render_managed() {
   return 1
 }
 
+# El perfil client-repo no permite escribir nada versionado en el repo ajeno,
+# pero sin un fichero que el agente cargue solo, el docs repo no se descubre.
+# CLAUDE.local.md se carga igual que CLAUDE.md y va al exclude del directorio
+# común de git: ni aparece en `git status` ni se puede commitear por error.
+PUNTERO_LOCAL="CLAUDE.local.md"
+
+escribir_puntero_local() {
+  # escribir_puntero_local <dir_del_repo> <nombre_del_docs_repo>
+  # 0 escrito · 2 no es un repo git · 3 el cliente versiona su propio fichero
+  local dir="$1" docs_name="$2" comun
+  comun="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 2
+  if git -C "$dir" ls-files --error-unmatch "$PUNTERO_LOCAL" >/dev/null 2>&1; then
+    return 3
+  fi
+  mkdir -p "$comun/info"
+  grep -qxF "$PUNTERO_LOCAL" "$comun/info/exclude" 2>/dev/null ||
+    echo "$PUNTERO_LOCAL" >> "$comun/info/exclude"
+  render_to_stdout "$CRUX_HOME/templates/code-repo/$PUNTERO_LOCAL" "DOCS=$docs_name" \
+    > "$dir/$PUNTERO_LOCAL"
+}
+
 render_to_stdout() {
   local src="$1"; shift
   local content pair key value
