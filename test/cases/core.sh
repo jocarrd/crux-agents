@@ -262,6 +262,9 @@ test_perfil_cliente_escribe_el_puntero_local_fuera_de_git() {
   assert_eq "" "$(git -C "$vendor" status --porcelain)" "no aparece en git status"
   assert_no_file "$vendor/AGENTS.md" "y sigue sin escribir punteros versionados"
   assert_no_file "$vendor/CLAUDE.md" "ni CLAUDE.md"
+  assert_eq "" "$(tail -c1 "$vendor/CLAUDE.local.md")" "termina en salto de línea"
+  local larga; larga="$(awk 'length > 80' "$vendor/CLAUDE.local.md")"
+  assert_eq "" "$larga" "ninguna línea pasa de 80, que ningún formateador la reparte"
 }
 
 test_perfil_cliente_doctor_exige_el_puntero_local() {

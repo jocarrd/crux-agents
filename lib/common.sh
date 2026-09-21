@@ -396,8 +396,12 @@ escribir_puntero_local() {
   mkdir -p "$comun/info"
   grep -qxF "$PUNTERO_LOCAL" "$comun/info/exclude" 2>/dev/null ||
     echo "$PUNTERO_LOCAL" >> "$comun/info/exclude"
-  render_to_stdout "$CRUX_HOME/templates/code-repo/$PUNTERO_LOCAL" "DOCS=$docs_name" \
-    > "$dir/$PUNTERO_LOCAL"
+  # render_to_stdout recorta el salto final, y sin él el `prettier --check`
+  # del repo del cliente, que no lee info/exclude, da el fichero por mal formado.
+  {
+    render_to_stdout "$CRUX_HOME/templates/code-repo/$PUNTERO_LOCAL" "DOCS=$docs_name"
+    echo
+  } > "$dir/$PUNTERO_LOCAL"
 }
 
 render_to_stdout() {
