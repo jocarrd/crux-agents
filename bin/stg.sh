@@ -120,9 +120,13 @@ cmd_deploy() {
   # Por la entrada estandar y no como argumento: `sudo` deja el comando entero
   # escrito en /var/log/auth.log del servidor, para siempre, y mientras dura el
   # hash cualquiera con una sesion ahi la ve en `ps`.
-  hash="$(printf '%s' "$clave" |
-    en_servidor "sudo docker exec -i $CRUX_STG_CONTAINER caddy hash-password")"
-  [ -n "$hash" ] || die "no se pudo calcular el hash de la clave"
+  # Caddy pide la clave y su confirmación: con una sola línea responde
+  # "Error: EOF". El `|| die` va en la propia asignación porque, con set -e, un
+  # fallo ahí terminaba el script sin llegar a decir qué había pasado.
+  hash="$(printf '%s\n%s\n' "$clave" "$clave" |
+    en_servidor "sudo docker exec -i $CRUX_STG_CONTAINER caddy hash-password")" ||
+    die "caddy no calculó el hash de la clave en $CRUX_STG_SSH"
+  [[ "$hash" == \$2* ]] || die "caddy devolvió algo que no es un hash bcrypt: $hash"
 
   en_servidor "mkdir -p '$CRUX_STG_ROOT/sites/$nombre'"
   rsync -a --delete -e "ssh -o BatchMode=yes" "$carpeta"/ "$CRUX_STG_SSH:$CRUX_STG_ROOT/sites/$nombre/"
