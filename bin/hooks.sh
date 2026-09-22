@@ -14,13 +14,29 @@ CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/..
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
+# Los hooks guardan una ruta absoluta. Si se instalan desde un espacio de
+# trabajo del kernel, apuntan a él y quedan rotos en cuanto se cierra: se
+# enganchan siempre al checkout principal. El kernel instalado en
+# ~/.crux/kernel/<versión> no es un repo y se queda como está.
+checkout_principal() {
+  local git_dir common
+  git_dir="$(git -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null)" || { echo "$1"; return; }
+  common="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || { echo "$1"; return; }
+  if [[ "$git_dir" != "$common" && -d "$(dirname "$common")/adapters" ]]; then
+    dirname "$common"
+  else
+    echo "$1"
+  fi
+}
+HOOKS_HOME="$(checkout_principal "$CRUX_HOME")"
+
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-DOC_SYNC="$CRUX_HOME/adapters/claude/hooks/doc-sync.sh"
-CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
-MEMORY_GUARD="$CRUX_HOME/adapters/claude/hooks/memory-guard.sh"
-TASK_CONTEXT="$CRUX_HOME/adapters/claude/hooks/task-context.sh"
-WORKTREE_GUARD="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
-COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
+DOC_SYNC="$HOOKS_HOME/adapters/claude/hooks/doc-sync.sh"
+CYCLE_GUARD="$HOOKS_HOME/adapters/claude/hooks/cycle-guard.sh"
+MEMORY_GUARD="$HOOKS_HOME/adapters/claude/hooks/memory-guard.sh"
+TASK_CONTEXT="$HOOKS_HOME/adapters/claude/hooks/task-context.sh"
+WORKTREE_GUARD="$HOOKS_HOME/adapters/claude/hooks/worktree-guard.sh"
+COMMIT_MSG="$HOOKS_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
 # En un worktree, .git es un fichero y los hooks viven en el directorio común
@@ -108,6 +124,10 @@ enganchar() {
 }
 
 cmd_install() {
+  if [[ "$HOOKS_HOME" != "$CRUX_HOME" ]]; then
+    warn "estás en un espacio de trabajo: los hooks se enganchan al checkout principal"
+    info "$HOOKS_HOME"
+  fi
   [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
   [[ -f "$MEMORY_GUARD" ]] || die "falta $MEMORY_GUARD"
