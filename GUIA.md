@@ -687,6 +687,11 @@ mensajes en español, y un recordatorio del ciclo al empezar a trabajar sobre la
 rama principal. Un estándar que hay que acordarse de comprobar se comprueba a
 veces.
 
+Para probar un hook antes de un release, instálalo desde el espacio de trabajo
+del kernel donde lo estás cambiando: los ajustes apuntan a ese espacio. Al
+cerrarlo con `crux workspace rm`, los hooks vuelven solos al checkout principal
+y se retiran los que solo existían en el espacio.
+
 El del idioma es el ejemplo más claro de por qué hace falta un hook y no una
 línea en un documento: la regla estaba escrita desde el primer commit y **los
 27 mensajes del historial del kernel estaban en español**. El `commit-msg` va a
@@ -756,7 +761,7 @@ mentir con esta métrica.
 | `perfil client-repo: ... no debería existir` | Se escribió en código ajeno | Borrar el fichero |
 | Una skill no aparece en el agente | Instalación desfasada | `~/Proyectos/crux/install.sh` |
 | `crux clone` no sabe de dónde traer algo | Sin `remote` en el contrato | Declararlo, o `crux adopt` para deducirlo |
-| Un hook no hace nada | Apunta a un fichero que ya no existe | `crux hooks install` |
+| Un hook no hace nada, o «failed with non-blocking status» en cada turno | Apunta a un fichero que ya no existe | `crux hooks status` para verlo, `crux hooks install` desde el repo principal |
 | Falta una herramienta para una skill | — | `crux doctor --machine` |
 
 ### La regla de los enlaces, que sorprende a todo el mundo
