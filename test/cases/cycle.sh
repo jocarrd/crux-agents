@@ -79,6 +79,42 @@ test_workspace_avisa_si_los_hooks_apuntan_al_espacio_que_se_borra() {
   assert_contains "$out" "crux hooks install" "y dice cómo repararlos"
 }
 
+test_workspace_rm_devuelve_los_hooks_al_checkout_principal_del_kernel() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_con_config)"
+  local kernel="$root/app" ws="$root/app-ws-probar"
+  cp -r "$CRUX_HOME/bin" "$CRUX_HOME/lib" "$CRUX_HOME/adapters" "$kernel/"
+  git -C "$kernel" add -A
+  git -C "$kernel" commit -qm kernel
+
+  bash "$CRUX_HOME/bin/workspace.sh" new probar --repo "$kernel" >/dev/null 2>&1
+  rm -f "$ws/.env.local"
+  printf '#!/usr/bin/env bash\n' > "$ws/adapters/claude/hooks/new-guard.sh"
+  git -C "$ws" add -A
+  git -C "$ws" commit -qm "hook nuevo"
+
+  echo '{}' > "$CLAUDE_SETTINGS"
+  ( cd "$ws" && CRUX_HOME="$ws" bash "$ws/bin/hooks.sh" install >/dev/null 2>&1 )
+  node -e '
+    const fs = require("fs");
+    const [file, cmd] = process.argv.slice(1);
+    const s = JSON.parse(fs.readFileSync(file, "utf8"));
+    s.hooks.Stop.push({ matcher: "", hooks: [{ type: "command", command: cmd }] });
+    fs.writeFileSync(file, JSON.stringify(s));
+  ' "$CLAUDE_SETTINGS" "$ws/adapters/claude/hooks/new-guard.sh"
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "$ws/adapters/claude/hooks/doc-sync.sh" \
+    "instalar desde el espacio engancha el espacio, que es lo que permite probar"
+
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm probar 2>&1)"
+  local settings; settings="$(cat "$CLAUDE_SETTINGS")"
+  assert_contains "$settings" "$kernel/adapters/claude/hooks/doc-sync.sh" \
+    "al cerrar el espacio los hooks vuelven al checkout principal"
+  assert_not_contains "$settings" "$ws/" "y ninguno apunta a la carpeta borrada"
+  assert_contains "$out" "devueltos al checkout principal" "y lo dice"
+  assert_contains "$out" "retirados 1" "el hook que solo existía en el espacio se retira"
+}
+
 test_prune_no_se_para_en_la_primera_rama_que_falla() {
   sandbox >/dev/null
   local repo="$CRUX_PROJECTS_DIR/podado"

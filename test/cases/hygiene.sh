@@ -120,28 +120,6 @@ test_hooks_install_engancha_el_guardia_solo_para_bash() {
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "worktree-guard" "y remove lo retira"
 }
 
-test_hooks_install_desde_un_espacio_engancha_el_checkout_principal() {
-  sandbox >/dev/null
-  echo '{}' > "$CLAUDE_SETTINGS"
-  local kernel="$SB/kernel" ws="$SB/kernel-ws-tarea"
-  mkdir -p "$kernel"
-  cp -r "$CRUX_HOME/bin" "$CRUX_HOME/lib" "$CRUX_HOME/adapters" "$kernel/"
-  git -C "$kernel" init -q
-  git -C "$kernel" add -A
-  git -C "$kernel" -c user.name=t -c user.email=t@t commit -qm base
-  git -C "$kernel" worktree add -q "$ws" -b tarea
-
-  local out; out="$(cd "$SB" && CRUX_HOME="$ws" bash "$ws/bin/hooks.sh" install 2>&1)"
-  local ajustes; ajustes="$(cat "$CLAUDE_SETTINGS")"
-  assert_contains "$ajustes" "$kernel/adapters/claude/hooks/doc-sync.sh" "engancha el checkout principal"
-  assert_not_contains "$ajustes" "$ws/" "y nada del espacio, que se borra al cerrarlo"
-  assert_contains "$out" "checkout principal" "y avisa del cambio"
-
-  echo '{}' > "$CLAUDE_SETTINGS"
-  ( cd "$SB" && CRUX_HOME="$kernel" bash "$kernel/bin/hooks.sh" install >/dev/null 2>&1 )
-  assert_contains "$(cat "$CLAUDE_SETTINGS")" "$kernel/adapters" "desde el principal, el principal"
-}
-
 test_el_registro_no_dice_ok_si_no_pudo_escribirse() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"

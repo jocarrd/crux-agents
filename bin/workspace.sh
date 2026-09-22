@@ -720,6 +720,42 @@ cmd_list() {
   ' "$REGISTRY" "$aqui" "$(task_dir)"
 }
 
+# Los hooks se prueban antes de un release instalándolos desde un espacio del
+# kernel. Al cerrarlo apuntarían a una carpeta borrada y fallarían en cada
+# mensaje, comando y cierre del agente: si el repo es el kernel, se reinstalan
+# desde el checkout principal y se retiran los que solo existían en el espacio.
+repoint_hooks() {
+  local workspace="$1" main_repo="$2" settings="$3"
+  if [[ ! -f "$main_repo/bin/hooks.sh" || ! -d "$main_repo/adapters" ]] ||
+    ! ( cd "$main_repo" && CRUX_HOME="$main_repo" CLAUDE_SETTINGS="$settings" \
+          bash "$main_repo/bin/hooks.sh" install >/dev/null 2>&1 ); then
+    warn "los hooks del agente apuntan a este espacio: quedarán rotos al borrarlo"
+    info "reinstálalos desde el repo principal: crux hooks install"
+    return 0
+  fi
+
+  local removed
+  removed="$(node -e '
+    const fs = require("fs");
+    const [file, prefix] = process.argv.slice(1);
+    const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+    let removed = 0;
+    for (const [event, groups] of Object.entries(settings.hooks || {})) {
+      for (const group of groups) {
+        const kept = (group.hooks || []).filter((h) => !(h.command || "").includes(prefix));
+        removed += (group.hooks || []).length - kept.length;
+        group.hooks = kept;
+      }
+      settings.hooks[event] = groups.filter((g) => g.hooks.length);
+    }
+    fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
+    process.stdout.write(String(removed));
+  ' "$settings" "$workspace/")"
+
+  ok "hooks del agente devueltos al checkout principal: $main_repo"
+  [[ "$removed" == "0" ]] || info "retirados $removed que solo existían en el espacio"
+}
+
 cmd_rm() {
   local name="${1:-}"; shift || true
   [[ -n "$name" ]] || die "uso: crux workspace rm <nombre> [--con-ignorados]"
@@ -759,9 +795,8 @@ cmd_rm() {
     # al cerrarlo dejan de existir sin que nada lo diga hasta la sesión
     # siguiente.
     local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-    if [[ -f "$settings" ]] && grep -qF "$path" "$settings"; then
-      warn "los hooks del agente apuntan a este espacio: quedarán rotos al borrarlo"
-      info "reinstálalos desde el repo principal: crux hooks install"
+    if [[ -f "$settings" ]] && grep -qF "$path/" "$settings"; then
+      repoint_hooks "$path" "$repo" "$settings"
     fi
 
     SLOT="$(node -e '
