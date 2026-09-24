@@ -33,7 +33,6 @@ read-document	ponme en contexto este word que no puedo abrir
 share-local	enseñarle el entorno local a alguien de fuera sin desplegar
 code-health	medir la salud estructural del repo y su tendencia
 bug-hunt	buscar fallos que nadie ha reportado todavía en esta herramienta
-promo-video	montar un vídeo corto del producto para redes
 x-posts	escribe un tweet para contar lo que he construido esta semana
 x-posts	quiero crecer en X con mi marca personal
 flow	quiero desarrollar esto siguiendo las convenciones del proyecto
@@ -42,3 +41,7 @@ crux-doctor	comprobar si la documentación de este proyecto se ha desalineado
 deploy-watch	acabo de fusionar, mira si ya está bien en producción
 prod-signals	la api da errores en el servidor, mira qué dicen los logs
 review-pr	revisa la propuesta que acabo de abrir antes de fusionarla
+grill	antes de que te pongas, hazme preguntas sobre lo que quiero
+merge-conflicts	se me ha quedado el rebase a medias y hay marcadores en los ficheros
+wizard	necesito ir sacando credenciales de un panel y metiendolas en el CI
+teach	explicame esto bien porque quiero aprenderlo, no salir del paso
