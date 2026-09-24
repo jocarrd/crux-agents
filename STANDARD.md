@@ -809,8 +809,10 @@ credenciales y nombres. Con dos guardas:
 | `promote-to-docs`, `adr`, `runbook`, `explain-plan`, `end-session` | Decidir, operar y que el conocimiento sobreviva |
 | `repo-map` | Orientarse en un repo desconocido o dormido |
 | `read-document` | Leer un documento que el agente no puede abrir |
+| `grill` | Interrogar a quien decide antes de construir nada |
 | `flow` | **El ciclo completo y su orden** — la entrada por defecto |
 | `workspace`, `ship`, `review-pr` | Las piezas del ciclo: aislar, verificar y revisar |
+| `merge-conflicts` | Sacar adelante un merge o un rebase que quedó a medias |
 | `deploy-watch`, `prod-signals` | Después de fusionar: ver producción y leer lo que dice |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
 | `bug-hunt` | Buscar los fallos que nadie ha reportado |
@@ -819,11 +821,12 @@ credenciales y nombres. Con dos guardas:
 | `ui-behaviour` | Que los controles hagan algo y se alcancen con el teclado |
 | `ui-tells` | Que una interfaz no se vea como generada por un modelo |
 | `redaccion` | Que un texto no se lea como generado por un modelo |
-| `promo-video` | Enseñar el producto en movimiento, para redes |
 | `x-posts` | Escribir y planificar publicaciones para X que lleguen a gente |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local`, `drive-browser` | Operación |
 | `carry-env` | Llevarte a otra máquina lo que los repos no llevan |
+| `wizard` | Guiar a una persona por los pasos que el agente no puede dar |
+| `teach` | Enseñar algo a lo largo de varias sesiones, sobre el código del proyecto |
 | `skill-creator`, `skill-audit` | El propio framework |
 
 ### El ciclo de desarrollo

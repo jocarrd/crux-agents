@@ -60,7 +60,11 @@ repo. El comando avisa si ya hay otro espacio abierto.
 
 ### 3. Planificar antes de tocar código
 
-`/explain-plan` para cualquier tarea que no sea evidente.
+`/grill` primero si el encargo deja decisiones abiertas: interroga a quien
+decide por rondas hasta que no quede nada asumido en silencio. Sale más barato
+un turno de preguntas que un diff construido sobre una suposición.
+
+`/explain-plan` después, para cualquier tarea que no sea evidente.
 
 **El motivo es económico**: un plan que dice "voy a cambiar el formato de la
 clave de caché" se rechaza en cinco segundos. El mismo error descubierto
@@ -213,6 +217,7 @@ ahí sale lo que se promociona. Ver `/explain-plan`.
 | ---- | --------------- |
 | Entender | Escribes código para averiguar lo que la documentación ya dice |
 | Aislar | Te mezclas con otra sesión y acabas resolviendo conflictos que no existían |
+| Preguntar | Construyes bien lo que no era, y se ve al enseñarlo |
 | Planificar | Descubres el error cuando ya es un diff |
 | Tests durante | Los escribes para que pasen, no para que fallen |
 | La puerta | Entra trabajo roto, y se descubre en producción |
@@ -240,6 +245,6 @@ Y dos inversiones que cuestan caro:
 
 ## Relacionado
 
-Cada paso tiene su procedimiento: `/repo-map`, `/workspace`, `/explain-plan`,
-`/write-tests`, `/root-cause`, `/ship`, `/review-pr`, `/deploy-watch`,
-`/prod-signals`, `/end-session`.
+Cada paso tiene su procedimiento: `/repo-map`, `/workspace`, `/grill`,
+`/explain-plan`, `/write-tests`, `/root-cause`, `/ship`, `/review-pr`,
+`/merge-conflicts`, `/deploy-watch`, `/prod-signals`, `/end-session`.
