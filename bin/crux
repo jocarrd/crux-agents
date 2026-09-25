@@ -27,6 +27,7 @@ crux — kernel del sistema de trabajo con agentes
   crux workspace ...    espacios aislados para trabajar en paralelo
   crux task ...         el registro de la tarea: pasos, siguiente paso, evidencias
   crux ship ...         la puerta de calidad, con recibo de lo ejecutado
+  crux visual ...       la revisión visual aprobada, con recibo y sección en la propuesta
   crux hooks ...        engancha el estándar al cierre de sesión y al commit
   crux mcp ...          los servidores MCP que el proyecto declara
   crux stg ...          publica una carpeta construida en un staging con clave
@@ -70,6 +71,7 @@ case "$cmd" in
   workspace) exec bash "$CRUX_HOME/bin/workspace.sh" "$@" ;;
   task)    exec bash "$CRUX_HOME/bin/task.sh" "$@" ;;
   ship)    exec bash "$CRUX_HOME/bin/ship.sh" "$@" ;;
+  visual)  exec bash "$CRUX_HOME/bin/visual.sh" "$@" ;;
   hooks)   exec bash "$CRUX_HOME/bin/hooks.sh" "$@" ;;
   mcp)     exec bash "$CRUX_HOME/bin/mcp.sh" "$@" ;;
   stg)     exec bash "$CRUX_HOME/bin/stg.sh" "$@" ;;

@@ -16,5 +16,9 @@
   ],
   "commit": {
     "language": "en"
+  },
+  "visual": {
+    "publish": "branch",
+    "branch": "crux-review"
   }
 }

@@ -99,6 +99,20 @@ desde fuera**, deriva de la documentación, y commit.
 **No se commitea con una puerta en rojo y "ya lo arreglo".** Entonces no es una
 puerta, es un adorno.
 
+### 5a. Enseñar lo que se ve
+
+```
+/before-after
+```
+
+Solo si el diff toca interfaz, y **antes de subir nada**. El antes y el después
+en escritorio, tablet y móvil, a quien decide, y se espera a su sí. Va después
+de `/ship` para que lo que se enseña sea exactamente lo que se va a proponer, y
+antes de `finish` porque proponer ya es enseñar el trabajo a otros.
+
+Con el sí, `crux visual approve` lo anota y `finish` lo pone en la propuesta.
+Si hay cambios después, se vuelve a enseñar.
+
 ### 6. Proponer
 
 ```bash
@@ -221,6 +235,7 @@ ahí sale lo que se promociona. Ver `/explain-plan`.
 | Planificar | Descubres el error cuando ya es un diff |
 | Tests durante | Los escribes para que pasen, no para que fallen |
 | La puerta | Entra trabajo roto, y se descubre en producción |
+| Enseñar | Se propone lo que quien decide no ha visto, y el rediseño se discute sobre la marcha |
 | Proponer | El cambio no se revisa, o se revisa cuando ya está integrado |
 | Esperar al CI | El rojo se descubre al ir a fusionar, cuando ya nadie tiene el contexto |
 | Fusionar | Entra sin mirar si el CI pasó o si hay conflictos |
@@ -246,5 +261,5 @@ Y dos inversiones que cuestan caro:
 ## Relacionado
 
 Cada paso tiene su procedimiento: `/repo-map`, `/workspace`, `/grill`,
-`/explain-plan`, `/write-tests`, `/root-cause`, `/ship`, `/review-pr`,
+`/explain-plan`, `/write-tests`, `/root-cause`, `/ship`, `/before-after`, `/review-pr`,
 `/merge-conflicts`, `/deploy-watch`, `/prod-signals`, `/end-session`.

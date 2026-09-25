@@ -207,6 +207,7 @@ instala `crux hooks install`:
 | `pre-push` en la rama principal | Empujar a la principal sin pasar por propuesta |
 | `commit-msg` | Mensajes de commit fuera del idioma del estándar |
 | `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
+| `.crux-visual` | Publicar en la propuesta capturas aprobadas sobre otro commit |
 | Hook de la tarea al retomar | Seguir una tarea a medias sin saber en qué punto quedó |
 | Guardia de worktrees | Borrar a mano un espacio registrado (`git worktree remove`, `rm -rf`) y dejar el registro mintiendo |
 | Registro que se repara solo | Entradas de espacios cuya carpeta y rama ya no existen; `new`, `list` y `status` las retiran |
@@ -226,6 +227,7 @@ instala `crux hooks install`:
 | `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta, fusión y recogida |
 | `crux task` | El registro de la tarea de cada espacio: pasos con evidencia, siguiente paso y estado, fuera de los repos |
 | `crux ship` | La puerta de calidad: ejecuta las comprobaciones y deja un recibo de lo que se ejecutó y con qué resultado. `workspace finish` lo exige. |
+| `crux visual` | La revisión visual aprobada: anota el sí de quien decide sobre el commit y `workspace finish` pone el antes y el después en la propuesta. |
 | `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks, señales, riesgo y especialistas |
 | `crux checks [n]` | Espera al CI de una propuesta y trae solo el final del log de lo que falla |
 | `crux merge <n>` | Mergea una propuesta tras decir cuál es y de qué repositorio |

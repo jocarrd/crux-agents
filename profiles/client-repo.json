@@ -21,5 +21,8 @@
         "motivo": "esto nombra nuestro tooling en el repo de un cliente"
       }
     ]
+  },
+  "visual": {
+    "publish": "none"
   }
 }

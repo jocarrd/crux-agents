@@ -104,12 +104,15 @@ haría sin tocar nada.
 Todos funcionan desde cualquier subdirectorio del proyecto: suben por el árbol
 buscando el `crux.json`, igual que hace git con `.git`.
 
-### El día a día, en cuatro momentos
+### El día a día, en cinco momentos
 
 **Antes de empezar**, si vas a lanzar varias tareas en paralelo sobre el mismo
 repo: `/workspace`.
 
 **Antes de commitear**: `/ship`.
+
+**Si el cambio se ve, antes de subirlo**: `/before-after`. El antes y el después
+a quien decide, y nada sale hasta su sí.
 
 **Con la propuesta abierta**: `/review-pr`, desde un contexto que no sea el que
 escribió el cambio.
@@ -786,6 +789,8 @@ rompe. `crux doctor` verifica los que quedan.
 - **Trabajo en paralelo**: `crux workspace new <tarea>`. Aísla ficheros y
   runtime.
 - **Antes de commitear**: `/ship`. Ocho puertas, la cara es condicional.
+- **Si se ve, antes de subir**: `/before-after` y `crux visual approve`. Lo que
+  aprobó una persona va a la propuesta.
 - **Con la propuesta abierta**: `crux checks --wait` y `/review-pr`. Revisar no
   es confirmar, y los especialistas los decide el diff.
 - **Después de fusionar**: `/deploy-watch`. Fusionado no es publicado.

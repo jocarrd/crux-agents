@@ -687,6 +687,16 @@ queda fuera.
 La distinción no es de tono, es de propiedad: el repo declara su perfil en
 `crux.json`, y `client-repo` es el que la activa.
 
+#### Lo que se ve lo aprueba una persona
+
+Un cambio que toca interfaz se enseña antes de proponerlo: el antes y el después
+en escritorio, tablet y móvil (`/before-after`), y nada se sube hasta el sí.
+`crux visual approve` anota esa aprobación contra el sha de HEAD, y `workspace
+finish` la añade a la propuesta —con imágenes en una rama aparte que nunca se
+fusiona, o solo como nota si el perfil declara `visual.publish: none`, que es lo
+que hace `client-repo`—. Si la aprobación es de otro commit, `finish` lo dice y
+no la publica.
+
 #### La puerta se gana, no se declara
 
 `crux ship run -- <comando>` ejecuta la comprobación y anota su código de salida;
@@ -817,7 +827,7 @@ credenciales y nombres. Con dos guardas:
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Calidad y depuración |
 | `bug-hunt` | Buscar los fallos que nadie ha reportado |
 | `code-health` | Salud estructural del conjunto y su tendencia |
-| `visual-test`, `visual-diff`, `render-loop`, `device-loop` | Verificación con los ojos |
+| `visual-test`, `visual-diff`, `render-loop`, `device-loop`, `before-after` | Verificación con los ojos; la última, la de quien decide antes de subir |
 | `ui-behaviour` | Que los controles hagan algo y se alcancen con el teclado |
 | `ui-tells` | Que una interfaz no se vea como generada por un modelo |
 | `redaccion` | Que un texto no se lea como generado por un modelo |
@@ -909,6 +919,7 @@ sesión. Ver ADR-012.
 | `crux task` | `/workspace` | El registro de la tarea: pasos con evidencia, siguiente paso y estado |
 | `crux workspace adopt <ruta>` | `/workspace` | Registra un worktree hecho a mano, con su tarea |
 | `crux ship` | `/ship` | La puerta de calidad, con recibo de lo ejecutado |
+| `crux visual` | `/before-after` | La revisión visual que aprobó una persona, con recibo y sección en la propuesta |
 | `crux doctor` | `/crux-doctor` | Verifica conformidad con el estándar |
 | `crux upgrade` | — | Re-materializa el kernel a la versión actual |
 | `crux release <ver>` | — | Publica una versión del kernel |

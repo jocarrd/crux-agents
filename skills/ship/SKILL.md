@@ -116,7 +116,7 @@ ven.
 
 | Lo que toca el diff | Qué validar |
 | ------------------- | ----------- |
-| Interfaz | Verlo. Revisión visual en los viewports que importen |
+| Interfaz | Verlo. Revisión visual en los viewports que importen; después, `/before-after` para que lo apruebe quien decide |
 | API | Llamar a los endpoints afectados, no solo sus tests |
 | Datos | Que la migración aplique **y revierta** |
 | Dependencias | Que arranque desde cero, no desde tu caché |

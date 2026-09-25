@@ -1555,3 +1555,173 @@ MD
   # shellcheck disable=SC2088
   assert_contains "$cuerpo" "~/Proyectos/cliente/api" "se sustituyen por la tilde"
 }
+
+_visual_escenario() {
+  # Un repo con remoto de mentira en GitHub y dos imágenes aprobadas. Devuelve
+  # la ruta del repo por la salida.
+  local root="$SB/vis" remoto="$SB/remoto.git"
+  git init -q --bare "$remoto"
+  mkdir -p "$root/app" "$root/capturas"
+  git -C "$root/app" init -q -b main
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  git -C "$root/app" remote add origin "$remoto"
+  git -C "$root/app" push -q origin main
+  git -C "$root/app" checkout -qb feat/portada
+  printf 'png' > "$root/capturas/01-portada-escritorio.png"
+  printf 'webp' > "$root/capturas/02-portada-movil.webp"
+  printf 'nada' > "$root/capturas/notas.txt"
+  echo "$root/app"
+}
+
+test_visual_no_hay_seccion_sin_aprobacion() {
+  sandbox >/dev/null
+  local app; app="$(_visual_escenario)"
+  local out rc=0
+  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "sin recibo no hay sección"
+  assert_contains "$out" "no hay revisión visual aprobada" "y dice qué falta"
+}
+
+test_visual_la_seccion_cuenta_las_imagenes_aprobadas() {
+  sandbox >/dev/null
+  local app; app="$(_visual_escenario)"
+  local out
+  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas --note "Portada revisada." 2>&1)"
+  assert_contains "$out" "con 2 imágenes" "solo cuenta las imágenes, no el texto"
+  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section --lang es 2>&1)"
+  assert_contains "$out" "<!-- visual-review:start -->" "abre con su marca"
+  assert_contains "$out" "Revisión visual aprobada el" "dice cuándo se aprobó"
+  assert_contains "$out" "Portada revisada." "lleva la nota"
+  assert_not_contains "$out" "![" "sin --publish no enlaza imágenes"
+}
+
+test_visual_publica_en_una_rama_aparte_sin_tocar_la_propuesta() {
+  sandbox >/dev/null
+  local app; app="$(_visual_escenario)"
+  # El remoto se hace pasar por GitHub para que la sección sepa enlazar.
+  git -C "$app" remote set-url origin "$SB/remoto.git"
+  git -C "$app" config "url.$SB/remoto.git.insteadOf" "https://github.com/acme/web.git"
+  git -C "$app" remote set-url origin "https://github.com/acme/web.git"
+  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1 )
+  local antes out
+  antes="$(git -C "$app" rev-parse HEAD)"
+  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section --publish --lang en 2>&1)"
+  assert_contains "$out" "https://github.com/acme/web/blob/crux-review/feat/portada/01-portada-escritorio.png?raw=true" "enlaza la imagen en la rama de revisión"
+  assert_contains "$out" "Before and after" "respeta el idioma"
+  assert_eq "$antes" "$(git -C "$app" rev-parse HEAD)" "la rama de la propuesta no recibe ningún commit"
+  assert_eq "" "$(git -C "$app" status --porcelain | grep -v crux-visual)" "y el árbol de trabajo sigue limpio"
+  local ficheros
+  ficheros="$(git --git-dir="$SB/remoto.git" ls-tree -r --name-only crux-review)"
+  assert_contains "$ficheros" "feat/portada/02-portada-movil.webp" "las imágenes están en la rama de revisión"
+  assert_not_contains "$ficheros" "notas.txt" "sin lo que no es imagen"
+}
+
+test_visual_no_publica_capturas_de_otro_commit() {
+  sandbox >/dev/null
+  local app; app="$(_visual_escenario)"
+  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1 )
+  echo mas > "$app/g.txt"; git -C "$app" add -A; git -C "$app" commit -qm "feat: mas"
+  local out rc=0
+  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section --publish 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "se niega"
+  assert_contains "$out" "vuelve a enseñarlas" "y pide volver a enseñarlas"
+}
+
+test_visual_en_repo_de_cliente_no_sube_imagenes() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/cli"
+  mkdir -p "$root/app" "$root/cli-docs" "$root/capturas"
+  git -C "$root/app" init -q
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/cli-docs/crux.json"
+  printf 'png' > "$root/capturas/01.png"
+  ( cd "$root/app" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1 )
+  local out
+  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/visual.sh" section --publish 2>&1)"
+  assert_contains "$out" "Revisión visual aprobada" "deja la nota de revisión"
+  assert_not_contains "$out" "![" "sin imágenes en el repo del cliente"
+  assert_not_contains "$out" "crux" "ni el nombre de nuestro tooling"
+}
+
+test_visual_una_segunda_publicacion_conserva_las_de_otras_propuestas() {
+  sandbox >/dev/null
+  local app; app="$(_visual_escenario)"
+  git -C "$app" config "url.$SB/remoto.git.insteadOf" "https://github.com/acme/web.git"
+  git -C "$app" remote set-url origin "https://github.com/acme/web.git"
+  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/visual.sh" section --publish >/dev/null 2>&1 )
+  git -C "$app" checkout -qb feat/ficha
+  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/visual.sh" section --publish >/dev/null 2>&1 )
+  local ficheros
+  ficheros="$(git --git-dir="$SB/remoto.git" ls-tree -r --name-only crux-review)"
+  assert_contains "$ficheros" "feat/portada/01-portada-escritorio.png" "sigue la de la primera propuesta"
+  assert_contains "$ficheros" "feat/ficha/01-portada-escritorio.png" "y se añade la de la segunda"
+}
+
+_finish_con_visual() {
+  # Un espacio con la puerta pasada, un remoto que se hace pasar por GitHub y
+  # un gh de mentira que guarda el cuerpo de la propuesta en $SB/cuerpo.md.
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/vis" remoto="$SB/remoto.git"
+  mkdir -p "$root/app" "$root/vis-docs" "$root/capturas" "$SB/bin"
+  git init -q --bare "$remoto"
+  git -C "$root/app" init -q -b main
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  git -C "$root/app" config "url.$remoto.insteadOf" "https://github.com/acme/web.git"
+  git -C "$root/app" remote add origin "https://github.com/acme/web.git"
+  git -C "$root/app" push -q origin main
+  printf '{"crux":"0.1.0","project":"vis","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/vis-docs/crux.json"
+  printf 'png' > "$root/capturas/01-portada.png"
+  cat > "$SB/bin/gh" <<STUB
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "auth status") exit 0 ;;
+  "pr create")
+    while [[ \$# -gt 0 ]]; do
+      [[ "\$1" == "--body" ]] && printf '%s' "\$2" > "$SB/cuerpo.md"
+      shift
+    done
+    echo "https://github.com/acme/web/pull/9" ;;
+  *) exit 0 ;;
+esac
+STUB
+  chmod +x "$SB/bin/gh"
+  bash "$CRUX_HOME/bin/workspace.sh" new portada --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-portada"
+  echo cambio > "$ws/nuevo.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: portada"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  echo "$ws"
+}
+
+test_finish_pone_la_revision_visual_en_la_propuesta() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1 )
+  local out
+  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
+  assert_contains "$out" "revisión visual añadida" "lo cuenta"
+  local cuerpo; cuerpo="$(cat "$SB/cuerpo.md" 2>/dev/null)"
+  assert_contains "$cuerpo" "blob/crux-review/ws/portada/01-portada.png?raw=true" "la propuesta enlaza la captura"
+  assert_contains "$cuerpo" "visual-review:start" "entre sus marcas"
+}
+
+test_finish_no_publica_una_revision_visual_de_otro_commit() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/visual.sh" approve ../capturas >/dev/null 2>&1 )
+  echo mas > "$ws/otro.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: mas"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  local out
+  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
+  assert_contains "$out" "no entra en la propuesta" "avisa"
+  assert_contains "$out" "vuelve a enseñarlas" "y dice qué hacer"
+  assert_contains "$out" "propuesta abierta" "pero no bloquea la propuesta"
+  assert_not_contains "$(cat "$SB/cuerpo.md" 2>/dev/null)" "crux-review" "sin las capturas viejas"
+}

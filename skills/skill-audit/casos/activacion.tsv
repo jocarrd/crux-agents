@@ -45,3 +45,5 @@ grill	antes de que te pongas, hazme preguntas sobre lo que quiero
 merge-conflicts	se me ha quedado el rebase a medias y hay marcadores en los ficheros
 wizard	necesito ir sacando credenciales de un panel y metiendolas en el CI
 teach	explicame esto bien porque quiero aprenderlo, no salir del paso
+before-after	enséñame cómo queda antes de subirlo, el antes y el después en móvil
+before-after	quiero revisar en el móvil cómo ha quedado la página nueva antes de desplegar

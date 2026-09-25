@@ -276,7 +276,7 @@ cmd_new() {
   if [[ -n "$comun" ]]; then
     mkdir -p "$comun/info"
     local ignorar
-    for ignorar in .crux-ship ${ENV_FILE:+"$ENV_FILE"}; do
+    for ignorar in .crux-ship .crux-visual ${ENV_FILE:+"$ENV_FILE"}; do
       grep -qxF "$ignorar" "$comun/info/exclude" 2>/dev/null \
         || echo "$ignorar" >> "$comun/info/exclude"
     done
@@ -381,7 +381,7 @@ cmd_finish() {
   # Nada sale de un espacio sin estar commiteado: lo que se queda fuera de git
   # no llega a la revisión, y ese es el punto de trabajar así.
   local pendiente
-  pendiente="$(git -C "$path" status --porcelain | grep -v ' \.crux-ship$' || true)"
+  pendiente="$(git -C "$path" status --porcelain | grep -vE ' \.crux-(ship|visual)$' || true)"
   if [[ -n "$pendiente" ]]; then
     err "quedan cambios sin commitear en $path"
     echo "$pendiente" | sed 's/^/      /'
@@ -484,6 +484,21 @@ cmd_finish() {
   if [[ -z "$cuerpo" ]]; then
     cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
       "$(git -C "$path" log --format='- %s' "$base..$branch")" "${head:0:8}")"
+  fi
+
+  # La revisión visual que aprobó una persona entra en la propuesta si es del
+  # commit que se propone. Si no lo es, se dice y se sigue: las capturas viejas
+  # no se publican como si fueran las de ahora, pero tampoco bloquean.
+  if [[ -f "$path/.crux-visual" ]]; then
+    local visual="" rc_visual=0
+    visual="$(cd "$path" && bash "$CRUX_HOME/bin/visual.sh" section --publish --lang "$idioma" 2>&1)" || rc_visual=$?
+    if [[ $rc_visual -eq 0 ]]; then
+      cuerpo="$(printf '%s\n\n%s' "$cuerpo" "$visual")"
+      ok "revisión visual añadida a la propuesta"
+    else
+      warn "la revisión visual no entra en la propuesta"
+      printf '%s\n' "$visual" | sed 's/^/      /'
+    fi
   fi
 
   # El cuerpo pasa por el mismo filtro que ship body antes de que nada salga.
@@ -1159,7 +1174,7 @@ ficheros_ignorados() {
   local propio="${2:-}"
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
-    grep -vE '^!! (\.crux-ship|CLAUDE\.local\.md$|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
+    grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
     { [[ -n "$propio" ]] && grep -vxF "!! $propio" || cat; } || true
 }
 
