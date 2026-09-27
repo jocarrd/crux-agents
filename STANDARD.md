@@ -700,9 +700,15 @@ no la publica.
 #### La puerta se gana, no se declara
 
 `crux ship run -- <comando>` ejecuta la comprobación y anota su código de salida;
-`crux ship seal` cierra el recibo contra el sha de HEAD. `workspace finish` lo
-lee y **se niega a proponer** si no hay recibo, si no registra ni un comando, si
-alguno está en rojo o si el sha no es el de HEAD.
+`crux ship seal` cierra el recibo contra el sha de HEAD y anota la versión de
+crux que lo selló. `workspace finish` lo lee y **se niega a proponer** si no hay
+recibo, si no registra ni un comando, si alguno está en rojo, si el sha no es el
+de HEAD o si se selló con otra versión de crux que la que se ejecuta.
+
+La versión importa porque la puerta vive en la máquina, no en el repo: lo que
+comprueba depende del kernel instalado. Sin ella, un recibo sellado no dice con
+qué reglas se ganó. `seal` avisa además si el proyecto fija en `crux.json` una
+versión distinta de la que se ejecuta; se alinea con `crux upgrade`.
 
 Antes era un sha suelto que escribía el propio agente después de afirmar que
 había verificado. Eso no prueba que verificara: prueba que escribió un sha.

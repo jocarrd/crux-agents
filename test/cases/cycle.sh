@@ -543,6 +543,41 @@ test_finish_no_propone_codigo_sin_revisar() {
   assert_contains "$out" "SIN pasar la puerta" "con --sin-puerta lo dice en voz alta"
 }
 
+test_el_recibo_dice_con_que_version_de_crux_se_sello() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/ver"
+  mkdir -p "$root/app" "$root/ver-docs"
+  git -C "$root/app" init -q
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"ver","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/ver-docs/crux.json"
+  bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-t" version
+  version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  echo cambio > "$ws/nuevo.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: algo"
+
+  # Sellar deja la versión del kernel en el recibo y avisa de que el proyecto
+  # fija otra.
+  local out
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  assert_contains "$(cat "$ws/.crux-ship")" "kernel $version" "el recibo anota la versión del kernel"
+  assert_contains "$out" "fija crux 0.1.0" "avisa si el proyecto fija otra versión"
+
+  # Un recibo sellado con otra versión no vale: las reglas pueden ser otras.
+  sed -i "s/^kernel .*/kernel 0.0.1/" "$ws/.crux-ship"
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  assert_contains "$out" "se selló con crux 0.0.1" "rechaza un recibo de otra versión"
+
+  # Y uno sin versión, del formato anterior, tampoco.
+  sed -i "/^kernel /d" "$ws/.crux-ship"
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  assert_contains "$out" "no dice con qué versión" "rechaza un recibo sin versión"
+}
+
 _merge_escenario() {
   # Un espacio con propuesta abierta y un gh de mentira que responde lo que
   # diga $1 a 'pr view'. Devuelve la ruta del worktree por la salida.

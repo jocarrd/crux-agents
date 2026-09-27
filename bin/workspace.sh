@@ -433,7 +433,19 @@ cmd_finish() {
       info "vuelve a pasarla y cierra con: crux ship seal"
       exit 1
     fi
-    ok "puerta pasada sobre ${head:0:8} con $comandos comprobaciones"
+    local kernel_recibo
+    kernel_recibo="$(recibo_kernel "$recibo")"
+    if [[ -z "$kernel_recibo" ]]; then
+      err "el recibo no dice con qué versión de crux se selló"
+      info "vuelve a cerrarlo: crux ship seal"
+      exit 1
+    fi
+    if [[ "$kernel_recibo" != "$(crux_version)" ]]; then
+      err "el recibo se selló con crux $kernel_recibo y ahora se ejecuta $(crux_version)"
+      info "las reglas de la puerta pueden haber cambiado: vuelve a pasarla"
+      exit 1
+    fi
+    ok "puerta pasada sobre ${head:0:8} con $comandos comprobaciones (crux $kernel_recibo)"
   fi
 
   # Aquí es donde se pierde el contexto: la propuesta sale y la sesión que sabía

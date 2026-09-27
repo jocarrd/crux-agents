@@ -156,6 +156,20 @@ recibo_comandos() {
   awk '$1 == "run" { n++ } END { print n + 0 }' "$1"
 }
 
+recibo_kernel() {
+  # recibo_kernel <fichero> — versión de crux con la que se selló, o nada.
+  [[ -f "$1" ]] || return 0
+  awk '$1 == "kernel" { v = $2 } END { if (v != "") print v }' "$1"
+}
+
+version_fijada() {
+  # version_fijada <ruta> — versión de crux que fija el contrato del proyecto.
+  local docs
+  docs="$(find_docs_repo "$1" 2>/dev/null)" || return 0
+  [[ -f "$docs/crux.json" ]] || return 0
+  json_get "$docs/crux.json" 'crux' 2>/dev/null || true
+}
+
 recibo_fallos() {
   # recibo_fallos <fichero> — cuántos salieron con algo distinto de cero.
   [[ -f "$1" ]] || { echo 0; return 0; }

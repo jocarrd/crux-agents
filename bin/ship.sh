@@ -65,9 +65,19 @@ cmd_seal() {
     exit 1
   fi
 
-  grep -v '^sealed ' "$RECIBO" > "$RECIBO.tmp" && mv "$RECIBO.tmp" "$RECIBO"
+  # El comportamiento de la puerta es del kernel que la ejecuta, no del repo:
+  # sin la versión, un recibo sellado no dice con qué reglas se ganó.
+  local kernel fijada
+  kernel="$(crux_version)"
+  fijada="$(version_fijada "$REPO")"
+  grep -vE '^(sealed|kernel) ' "$RECIBO" > "$RECIBO.tmp" && mv "$RECIBO.tmp" "$RECIBO"
+  printf 'kernel %s\n' "$kernel" >> "$RECIBO"
   printf 'sealed %s %s\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RECIBO"
-  ok "puerta cerrada sobre $(git -C "$REPO" rev-parse --short HEAD) con $total comprobaciones"
+  ok "puerta cerrada sobre $(git -C "$REPO" rev-parse --short HEAD) con $total comprobaciones (crux $kernel)"
+  if [[ -n "$fijada" && "$fijada" != "$kernel" ]]; then
+    warn "el proyecto fija crux $fijada y la puerta se ha pasado con $kernel"
+    info "alinéalo con: crux upgrade"
+  fi
 
   # Lo comprobado pasa a la tarea como evidencia: es lo que después dice la
   # propuesta, y así no se reescribe de memoria.
@@ -93,6 +103,13 @@ cmd_show() {
   sellado="$(awk '/^sealed /{print $2}' "$RECIBO" | tail -1)"
   sed 's/^/  /' "$RECIBO"
   echo
+  local kernel_recibo
+  kernel_recibo="$(recibo_kernel "$RECIBO")"
+  if [[ -n "$sellado" && -z "$kernel_recibo" ]]; then
+    warn "sellado sin versión de crux: el recibo no dice con qué reglas se pasó"
+  elif [[ -n "$kernel_recibo" && "$kernel_recibo" != "$(crux_version)" ]]; then
+    warn "sellado con crux $kernel_recibo, y ahora se ejecuta $(crux_version)"
+  fi
   if [[ -z "$sellado" ]]; then
     info "sin cerrar: 'crux ship seal'"
   elif [[ "$sellado" != "$head" ]]; then
