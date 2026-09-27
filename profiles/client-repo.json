@@ -20,7 +20,8 @@
         "patron": "\\bcrux\\b|\\.crux-ship|/ship\\b|workspace (new|finish)|crux doctor",
         "motivo": "esto nombra nuestro tooling en el repo de un cliente"
       }
-    ]
+    ],
+    "hideDocsRepo": true
   },
   "visual": {
     "publish": "none"

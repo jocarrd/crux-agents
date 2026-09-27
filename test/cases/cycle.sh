@@ -492,6 +492,11 @@ test_ship_body_no_deja_publicar_la_firma_ni_nuestro_andamiaje() {
   printf 'Adds the thing.\n\nChecked by passing crux ship and workspace finish.\n' > "$b"
   assert_exit 1 "y nuestro tooling en un repo de cliente" \
     env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+
+  # Ni una ruta a nuestro repo de documentación, que cambia con cada proyecto.
+  printf 'Adds the thing.\n\nSee cli-docs/repos/vendor/notes.md\n' > "$b"
+  assert_exit 1 "ni el nombre de nuestro docs repo" \
+    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
 }
 
 test_finish_no_propone_codigo_sin_revisar() {

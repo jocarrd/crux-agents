@@ -165,6 +165,15 @@ cmd_body() {
       hallado="$(grep -inE "$patron" "$fichero" || true)"
       [[ -n "$hallado" ]] && reporta "perfil $perfil: $motivo" "$hallado"
     done < <(perfil_forbid "$perfil" "$docs")
+    # El nombre del docs repo es de cada proyecto, así que no cabe en un patrón
+    # fijo del perfil: una ruta a él en la propuesta enseña dónde guardamos las
+    # notas del cliente.
+    if [[ "$(perfil_get "$perfil" "$docs" propose.hideDocsRepo false)" == "true" ]]; then
+      local nombre_docs
+      nombre_docs="$(basename "$docs")"
+      hallado="$(grep -inF "$nombre_docs" "$fichero" || true)"
+      [[ -n "$hallado" ]] && reporta "perfil $perfil: nombra nuestro repo de documentación" "$hallado"
+    fi
   else
     # Sin perfil no se comprueba lo que el perfil prohibe, y el repo de un
     # cliente clonado fuera de la convencion es justo el que mas lo necesita.
