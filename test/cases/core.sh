@@ -1048,6 +1048,11 @@ test_el_hook_rechaza_un_mensaje_de_commit_en_espanol() {
   echo "fix(workspace): take the proposal title from the first commit" > "$f"
   assert_exit 0 "deja pasar el mismo mensaje en inglés" bash "$hook" "$f"
 
+  # Un asunto corto en español tiene una sola palabra funcional; el verbo con
+  # que empieza es la segunda pista.
+  echo "feat: añade el login" > "$f"
+  assert_exit 1 "rechaza un asunto corto en español" bash "$hook" "$f"
+
   # Una sola pista no basta: un nombre propio no convierte el mensaje en
   # español, y un hook que se equivoca se desactiva a la semana.
   echo "feat(stations): add Los Angeles network ids" > "$f"

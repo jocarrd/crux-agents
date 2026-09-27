@@ -78,7 +78,8 @@ fi
 
 # --- Idioma ------------------------------------------------------------------
 #
-# Detecta por palabras funcionales que no existen en inglés, y exige dos
+# Detecta por palabras funcionales y por los verbos con que empieza un asunto en
+# español (añade, arregla, quita…), que no existen en inglés, y exige dos
 # apariciones. Con una sola, un nombre propio —"Los Angeles", "Los Angeles"— daría
 # falso positivo, y un hook que se equivoca se desactiva a la semana.
 #
@@ -89,7 +90,7 @@ fi
 msg="$(sed -e '/^#/d' -e 's/`[^`]*`//g' "$1" | tr '[:upper:]' '[:lower:]')"
 
 pistas="$(printf '%s' "$msg" | grep -owE \
-  'que|para|porque|cuando|esto|esta|este|esa|ese|del|las|los|una|unos|unas|pero|aunque|desde|tambien|segun|asi|muy|cada|donde|hasta|mientras|siempre|nunca|antes|despues|ahora|hace|hacer|tiene|tener|puede|debe|deja|pasa|sigue|vuelve|el|la|al|un|es|son|ser|su|sus|ni|se|de|en|por')"
+  'que|para|porque|cuando|esto|esta|este|esa|ese|del|las|los|una|unos|unas|pero|aunque|desde|tambien|segun|asi|muy|cada|donde|hasta|mientras|siempre|nunca|antes|despues|ahora|hace|hacer|tiene|tener|puede|debe|deja|pasa|sigue|vuelve|el|la|al|un|es|son|ser|su|sus|ni|se|de|en|por|añade|anade|arregla|corrige|quita|elimina|actualiza|mejora|cambia|mueve|evita|permite|crea|borra|sube|muestra|comprueba')"
 
 [[ "$(printf '%s' "$pistas" | grep -c .)" -lt 2 ]] && exit 0
 pistas="$(printf '%s' "$pistas" | sort -u)"
