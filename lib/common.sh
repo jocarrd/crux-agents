@@ -353,10 +353,6 @@ find_docs_repo() {
   return 1
 }
 
-project_root() {
-  dirname "$(find_docs_repo "${1:-$PWD}")"
-}
-
 # --- Plantillas --------------------------------------------------------------
 
 render_managed() {

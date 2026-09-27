@@ -2028,3 +2028,38 @@ test_upgrade_no_se_abre_con_una_version_que_no_sabe_comparar() {
   assert_contains "$up" 'es_semver "$TO"' "upgrade comprueba la del kernel"
   assert_contains "$up" 'es_semver "$FROM"' "y la del contrato"
 }
+
+test_los_comandos_que_cita_el_kernel_existen() {
+  # Un mensaje o una skill solo puede mandar a ejecutar algo que existe: si
+  # nombra una opción inventada, deja a quien la sigue en un callejón sin salida.
+  local malos="" ref sub fl script
+  while IFS= read -r ref; do
+    sub="$(awk '{print $2}' <<<"$ref")"
+    script="$(grep -E "^[[:space:]]+$sub\)" "$CRUX_HOME/bin/crux" | grep -oE 'bin/[a-z.-]+' | head -1)"
+    if [[ -z "$script" ]]; then
+      [[ "$sub" == "version" ]] || malos+="$ref (no existe el subcomando)"$'\n'
+      continue
+    fi
+    for fl in $(grep -oE -- '--[a-z-]+' <<<"$ref"); do
+      grep -qF -- "$fl" "$CRUX_HOME/$script" "$CRUX_HOME"/lib/* 2>/dev/null \
+        || malos+="$ref ($fl no está en $script)"$'\n'
+    done
+  done < <(
+    # Cuenta como comando lo citado entre comillas de código o lo que lleva
+    # alguna opción; la prosa ("crux no conoce…") no.
+    local fuentes=("$CRUX_HOME/bin" "$CRUX_HOME/lib" "$CRUX_HOME/skills" "$CRUX_HOME/adapters"
+      "$CRUX_HOME/templates" "$CRUX_HOME/STANDARD.md" "$CRUX_HOME/README.md" "$CRUX_HOME/GUIA.md")
+    { grep -rhoE '`crux [a-z]+(-[a-z]+)*( [a-z<>_"-]+)*( --[a-z]+(-[a-z]+)*)*' "${fuentes[@]}" 2>/dev/null | tr -d '`'
+      grep -rhoE 'crux [a-z]+(-[a-z]+)*( [a-z<>_-]+)*( --[a-z]+(-[a-z]+)*)+' "${fuentes[@]}" 2>/dev/null
+    } | sort -u)
+  assert_eq "" "$malos" "todo comando citado existe, con sus opciones"
+}
+
+test_las_opciones_de_crux_estan_en_ingles() {
+  local hits viejas
+  hits="$(grep -rhE -- '^[[:space:]]+--(sin|con|todo|todos|solo|forzar|nuevo|borrar)(-[a-z]+)*\)' "$CRUX_HOME/bin" \
+    | grep -vc 'ahora se llama' || true)"
+  viejas="$(grep -rhE -- '^[[:space:]]+--[a-z-]+\) die ".* ahora se llama' "$CRUX_HOME/bin" | wc -l | tr -d ' ')"
+  assert_eq "0" "$hits" "ninguna opción de crux está en castellano"
+  assert_eq "3" "$viejas" "las tres viejas solo quedan para decir su nombre nuevo"
+}

@@ -108,6 +108,11 @@ El orden importa: **simplificar código incorrecto es tirar el trabajo**.
 Los arreglos también rompen cosas, y rompen precisamente lo que no estabas
 mirando: por eso aquí no vale el subconjunto de la puerta 1.
 
+**Un test que ya existía y se pone rojo no se edita para que pase.** Se para y
+se dice. Lo normal es que el test tenga razón y el diagnóstico no: tocarlo es
+borrar la única prueba de que el cambio rompe algo. Solo se cambia si quien
+decide confirma que el comportamiento que protegía ya no es el que se quiere.
+
 ## 7. Realidad, solo si hace falta
 
 La puerta 0 ya dijo si aplica. Levantar el entorno siempre es lo que mata la
@@ -160,7 +165,7 @@ Antes esto era un `printf` del sha que escribía el propio agente después de
 afirmar que había verificado. Eso no prueba que verificara: prueba que escribió
 un sha. Por eso ya no vale.
 
-Si de verdad hay que saltarse la puerta, existe `finish --sin-puerta`, y lo dice
+Si de verdad hay que saltarse la puerta, existe `finish --skip-gate`, y lo dice
 en voz alta. **Es para obedecer a quien decide, no para ahorrarse un paso.**
 
 Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.

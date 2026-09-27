@@ -7,8 +7,8 @@
 #   crux workspace heal [--quiet]                  retira entradas sin carpeta ni rama
 #   crux workspace finish <nombre> [--title "..."]
 #   crux workspace merge <nombre> [--yes]
-#   crux workspace rm <nombre> [--con-ignorados]
-#   crux workspace gc [--yes] [--con-disco]
+#   crux workspace rm <nombre> [--include-ignored]
+#   crux workspace gc [--yes] [--include-disk]
 #   crux workspace prune [--yes]
 #
 # Un worktree de git aísla los ficheros, pero no el runtime: dos agentes sobre
@@ -351,13 +351,14 @@ cmd_new() {
 
 cmd_finish() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace finish <nombre> [--title \"...\"] [--sin-puerta]"
+  [[ -n "$name" ]] || die "uso: crux workspace finish <nombre> [--title \"...\"] [--skip-gate]"
 
-  local titulo="" SIN_PUERTA=0
+  local titulo="" SKIP_GATE=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --title) titulo="$2"; shift 2 ;;
-      --sin-puerta) SIN_PUERTA=1; shift ;;
+      --skip-gate) SKIP_GATE=1; shift ;;
+      --sin-puerta) die "--sin-puerta ahora se llama --skip-gate" ;;
       *) die "opción desconocida: $1" ;;
     esac
   done
@@ -402,7 +403,7 @@ cmd_finish() {
   # declara. El atajo existe, pero hay que pedirlo y se ve.
   local head
   head="$(git -C "$path" rev-parse HEAD)"
-  if [[ $SIN_PUERTA -eq 1 ]]; then
+  if [[ $SKIP_GATE -eq 1 ]]; then
     warn "propuesta abierta SIN pasar la puerta de calidad, a petición explícita"
   else
     local recibo="$path/.crux-ship" sellado="" comandos=0 fallos=0
@@ -414,7 +415,7 @@ cmd_finish() {
     if [[ ! -f "$recibo" ]]; then
       err "este commit no ha pasado la puerta de calidad"
       info "pásala: crux ship run -- <comando>, y después crux ship seal"
-      info "si de verdad hace falta saltarla: --sin-puerta"
+      info "si de verdad hace falta saltarla: --skip-gate"
       exit 1
     fi
     if [[ "${comandos:-0}" -eq 0 ]]; then
@@ -513,9 +514,24 @@ cmd_finish() {
   if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
     cuerpo="$(node "$CRUX_HOME/lib/task.mjs" body --file "$registro_tarea" --lang "$idioma" 2>/dev/null || true)"
   fi
+  # Si se saltó la puerta, la propuesta lo dice. Antes el cuerpo por defecto
+  # afirmaba "puerta pasada" también con --skip-gate: una evidencia falsa
+  # engaña más que una que falta.
+  local cambios gate_line
+  if [[ "$idioma" == "es" ]]; then
+    cambios="Cambios"
+    if [[ $SKIP_GATE -eq 1 ]]; then gate_line="Abierta SIN pasar la puerta de calidad, a petición explícita."
+    else gate_line="Puerta de calidad pasada sobre ${head:0:8}."; fi
+  else
+    cambios="Changes"
+    if [[ $SKIP_GATE -eq 1 ]]; then gate_line="Opened WITHOUT passing the quality gate, at explicit request."
+    else gate_line="Quality gate passed on ${head:0:8}."; fi
+  fi
   if [[ -z "$cuerpo" ]]; then
-    cuerpo="$(printf 'Cambios:\n\n%s\n\n---\nPuerta de calidad pasada sobre %s.\n' \
-      "$(git -C "$path" log --format='- %s' "$base..$branch")" "${head:0:8}")"
+    cuerpo="$(printf '%s:\n\n%s\n\n---\n%s\n' "$cambios" \
+      "$(git -C "$path" log --format='- %s' "$base..$branch")" "$gate_line")"
+  elif [[ $SKIP_GATE -eq 1 ]]; then
+    cuerpo="$(printf '%s\n\n---\n%s\n' "$cuerpo" "$gate_line")"
   fi
 
   # La revisión visual que aprobó una persona entra en la propuesta si es del
@@ -805,11 +821,12 @@ repoint_hooks() {
 
 cmd_rm() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace rm <nombre> [--con-ignorados]"
-  local con_ignorados=0
+  [[ -n "$name" ]] || die "uso: crux workspace rm <nombre> [--include-ignored]"
+  local include_ignored=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --con-ignorados) con_ignorados=1; shift ;;
+      --include-ignored) include_ignored=1; shift ;;
+      --con-ignorados) die "--con-ignorados ahora se llama --include-ignored" ;;
       *) die "opción desconocida: $1" ;;
     esac
   done
@@ -857,10 +874,10 @@ cmd_rm() {
 
     # Despues de load_config: ENV_FILE sale del contrato, y ese fichero lo
     # escribe el propio crux, asi que no cuenta como trabajo que se pierde.
-    if [[ $con_ignorados -eq 0 && -n "$(ficheros_ignorados "$path" "${ENV_FILE:-}")" ]]; then
+    if [[ $include_ignored -eq 0 && -n "$(ficheros_ignorados "$path" "${ENV_FILE:-}")" ]]; then
       err "$path tiene ficheros ignorados que se perderian al retirarlo"
       ficheros_ignorados "$path" "${ENV_FILE:-}" | sed 's/^/      /' | head -10
-      info "sacalos de ahi, o retiralo igualmente: crux workspace rm $name --con-ignorados"
+      info "sacalos de ahi, o retiralo igualmente: crux workspace rm $name --include-ignored"
       exit 1
     fi
 
@@ -1003,7 +1020,7 @@ cmd_heal() {
 }
 
 # Un worktree hecho a mano no existe para crux: ni sale en las listas ni lo
-# protege nada, y `gc --con-disco` lo trataría como basura. Pasó con uno que
+# protege nada, y `gc --include-disk` lo trataría como basura. Pasó con uno que
 # tenía trabajo pendiente de revisión.
 cmd_adopt() {
   local ruta="${1:-}"; shift || true
@@ -1072,11 +1089,12 @@ cmd_adopt() {
 # worktree borró alguien a mano, y un worktree que nunca llegó al registro.
 # `prune` mira ramas; esto mira espacios.
 cmd_gc() {
-  local confirmado=0 con_disco=0
+  local confirmado=0 include_disk=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --yes) confirmado=1; shift ;;
-      --con-disco) con_disco=1; shift ;;
+      --include-disk) include_disk=1; shift ;;
+      --con-disco) die "--con-disco ahora se llama --include-disk" ;;
       *) die "opción desconocida: $1" ;;
     esac
   done
@@ -1134,7 +1152,7 @@ cmd_gc() {
   if [[ $confirmado -eq 0 ]]; then
     info "para retirar las entradas huérfanas: crux workspace gc --yes"
     [[ ${#sin_registrar[@]} -gt 0 ]] \
-      && info "y los worktrees, si están limpios: crux workspace gc --yes --con-disco"
+      && info "y los worktrees, si están limpios: crux workspace gc --yes --include-disk"
     return 0
   fi
 
@@ -1146,8 +1164,8 @@ cmd_gc() {
     ok "$n retirado del registro"
   done
 
-  [[ $con_disco -eq 1 ]] || {
-    [[ ${#sin_registrar[@]} -gt 0 ]] && info "el disco no se toca sin --con-disco"
+  [[ $include_disk -eq 1 ]] || {
+    [[ ${#sin_registrar[@]} -gt 0 ]] && info "el disco no se toca sin --include-disk"
     return 0
   }
 

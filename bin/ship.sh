@@ -11,7 +11,7 @@
 # alguien escribió un sha. `run` ejecuta de verdad y anota el código de salida,
 # así que el recibo es evidencia y no una declaración.
 #
-# El atajo sigue existiendo —`finish --sin-puerta`— porque a veces hace falta.
+# El atajo sigue existiendo —`finish --skip-gate`— porque a veces hace falta.
 # Lo que no puede pasar es que se tome solo y sin dejar rastro.
 
 set -uo pipefail

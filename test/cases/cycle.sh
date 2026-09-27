@@ -544,8 +544,8 @@ test_finish_no_propone_codigo_sin_revisar() {
   assert_contains "$out" "el recibo es de" "y dice por qué no cuenta"
 
   # El atajo existe para obedecer a una persona, y se ve.
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea --sin-puerta 2>&1)"
-  assert_contains "$out" "SIN pasar la puerta" "con --sin-puerta lo dice en voz alta"
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish tarea --skip-gate 2>&1)"
+  assert_contains "$out" "SIN pasar la puerta" "con --skip-gate lo dice en voz alta"
 }
 
 test_el_recibo_dice_con_que_version_de_crux_se_sello() {
@@ -1337,19 +1337,19 @@ test_gc_ve_los_worktrees_que_el_registro_no_conoce() {
 
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
   assert_contains "$out" "app-ws-suelta" "ve el worktree que no está registrado"
-  assert_contains "$out" "--con-disco" "y dice cómo retirarlo"
+  assert_contains "$out" "--include-disk" "y dice cómo retirarlo"
 
   bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
-  assert_file "$root/app-ws-suelta/f.txt" "sin --con-disco no se toca el disco"
+  assert_file "$root/app-ws-suelta/f.txt" "sin --include-disk no se toca el disco"
 
   # Con trabajo dentro no se retira ni pidiéndolo.
   echo pendiente > "$root/app-ws-suelta/sin-commitear.txt"
-  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --con-disco >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --include-disk >/dev/null 2>&1
   assert_file "$root/app-ws-suelta/sin-commitear.txt" "un worktree con cambios sin commitear se queda"
 
   rm -f "$root/app-ws-suelta/sin-commitear.txt"
-  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --con-disco >/dev/null 2>&1
-  assert_no_file "$root/app-ws-suelta" "limpio y con --con-disco, se retira"
+  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --include-disk >/dev/null 2>&1
+  assert_no_file "$root/app-ws-suelta" "limpio y con --include-disk, se retira"
 }
 
 test_el_fichero_de_entorno_no_bloquea_el_cierre_del_espacio() {
@@ -1805,4 +1805,36 @@ test_finish_no_publica_una_revision_visual_de_otro_commit() {
   assert_contains "$out" "vuelve a enseñarlas" "y dice qué hacer"
   assert_contains "$out" "propuesta abierta" "pero no bloquea la propuesta"
   assert_not_contains "$(cat "$SB/cuerpo.md" 2>/dev/null)" "crux-review" "sin las capturas viejas"
+}
+
+test_finish_sin_puerta_no_dice_que_la_paso() {
+  # Antes el cuerpo por defecto afirmaba "puerta pasada" también al saltarla.
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1 )
+  env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada --skip-gate >/dev/null 2>&1
+  local cuerpo; cuerpo="$(cat "$SB/cuerpo.md" 2>/dev/null)"
+  assert_contains "$cuerpo" "WITHOUT passing the quality gate" "la propuesta dice que se saltó la puerta"
+  assert_not_contains "$cuerpo" "gate passed" "y no afirma que la pasó"
+}
+
+test_finish_con_puerta_lo_dice_en_la_propuesta() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada >/dev/null 2>&1
+  local cuerpo; cuerpo="$(cat "$SB/cuerpo.md" 2>/dev/null)"
+  assert_contains "$cuerpo" "- ok · true" "con recibo, la propuesta enseña lo comprobado"
+  assert_not_contains "$cuerpo" "WITHOUT passing" "y no dice que se saltó la puerta"
+}
+
+test_las_opciones_viejas_dicen_su_nombre_nuevo() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local out
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish x --sin-puerta 2>&1)" || true
+  assert_contains "$out" "--skip-gate" "finish --sin-puerta nombra la nueva"
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm x --con-ignorados 2>&1)" || true
+  assert_contains "$out" "--include-ignored" "rm --con-ignorados nombra la nueva"
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" gc --con-disco 2>&1)" || true
+  assert_contains "$out" "--include-disk" "gc --con-disco nombra la nueva"
 }

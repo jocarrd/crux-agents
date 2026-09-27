@@ -717,9 +717,9 @@ Antes era un sha suelto que escribía el propio agente después de afirmar que
 había verificado. Eso no prueba que verificara: prueba que escribió un sha.
 
 **El atajo existe y es legítimo cuando lo pide una persona**: `finish
---sin-puerta`, y lo dice en voz alta. Lo que no puede pasar es que un agente lo
+--skip-gate`, y lo dice en voz alta. Lo que no puede pasar es que un agente lo
 tome por su cuenta. Esa es la línea en todo el estándar —`--no-verify`,
-`--force`, `--admin`, `--sin-puerta`—: son para obedecer a quien decide, no para
+`--force`, `--admin`, `--skip-gate`—: son para obedecer a quien decide, no para
 que el agente se ahorre un paso.
 
 ---

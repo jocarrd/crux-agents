@@ -69,6 +69,9 @@ Señales de que te has quedado en el síntoma:
 Ese último es el más peligroso: **si no sabes por qué funciona, no sabes cuándo
 va a dejar de funcionar**.
 
+Y si al arreglarlo se pone rojo un test que ya existía, **no lo edites**: para
+y revisa el diagnóstico. Casi siempre es la causa la que está mal, no el test.
+
 ## 5. Escribir lo aprendido
 
 Dos salidas, y las dos importan:
