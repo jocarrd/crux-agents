@@ -79,9 +79,15 @@ cierto 'grep -q "refs/heads/main" "$DOCS/.git/hooks/pre-push"' "vigila la rama p
 paso "el push directo a la principal se bloquea"
 git_ -C "$DOCS" add -A >/dev/null 2>&1
 git_ -C "$DOCS" commit -qm "docs: initial" >/dev/null 2>&1
+# La primera subida crea la principal en el remoto vacío: se deja.
+git -C "$DOCS" push -q origin main >/dev/null 2>&1
+cierto 'git -C "$REMOTO" show-ref --verify --quiet refs/heads/main' "la primera subida crea la principal"
+antes="$(git -C "$REMOTO" rev-parse main)"
+echo "más" >> "$DOCS/README.md"
+git_ -C "$DOCS" commit -qam "docs: tweak" >/dev/null 2>&1
 salida="$(git -C "$DOCS" push origin main 2>&1)"
-cierto '[[ "$salida" == *"bloqueado"* ]]' "el hook lo impide"
-cierto '! git -C "$REMOTO" show-ref --verify --quiet refs/heads/main' "y nada llegó al remoto"
+cierto '[[ "$salida" == *"bloqueado"* ]]' "el hook impide actualizarla"
+cierto '[[ "$(git -C "$REMOTO" rev-parse main)" == "$antes" ]]' "y nada nuevo llegó al remoto"
 
 paso "el mensaje de commit fuera del idioma se rechaza"
 ( cd "$REPO" && crux hooks install >/dev/null 2>&1 )
