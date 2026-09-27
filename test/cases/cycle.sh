@@ -578,6 +578,51 @@ test_el_recibo_dice_con_que_version_de_crux_se_sello() {
   assert_contains "$out" "no dice con qué versión" "rechaza un recibo sin versión"
 }
 
+test_finish_no_propone_una_rama_que_choca_con_la_principal() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/choque"
+  mkdir -p "$root/app" "$root/choque-docs"
+  git init -q --bare -b main "$SB/remoto.git"
+  git -C "$root/app" init -q -b main
+  git -C "$root/app" config user.email t@t; git -C "$root/app" config user.name t
+  echo base > "$root/app/f.txt"; echo otro > "$root/app/g.txt"
+  git -C "$root/app" add -A; git -C "$root/app" commit -qm "chore: init"
+  git -C "$root/app" remote add origin "$SB/remoto.git"
+  git -C "$root/app" push -q -u origin main
+  printf '{"crux":"0.1.0","project":"choque","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/choque-docs/crux.json"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-t"
+  echo rama > "$ws/f.txt"; git -C "$ws" commit -qam "feat: rama"
+
+  # Mientras tanto la principal cambia la misma línea.
+  local otro="$SB/otro"
+  git clone -q "$SB/remoto.git" "$otro"
+  git -C "$otro" config user.email t@t; git -C "$otro" config user.name t
+  echo principal > "$otro/f.txt"; git -C "$otro" commit -qam "fix: principal"
+  git -C "$otro" push -q origin main
+
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  assert_contains "$out" "choca con origin/main" "no propone una rama que no se puede integrar"
+  assert_contains "$out" "f.txt" "y dice qué fichero choca"
+  assert_eq "" "$(git -C "$ws" ls-remote --heads origin ws/t)" "ni la sube"
+
+  # Rebasada, la puerta se vuelve a pasar y la propuesta sale.
+  git -C "$ws" fetch -q origin
+  git -C "$ws" reset -q --hard origin/main
+  echo nuevo > "$ws/h.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: sin choque"
+  echo mas > "$otro/g.txt"; git -C "$otro" commit -qam "fix: g"; git -C "$otro" push -q origin main
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  assert_contains "$out" "no chocan" "si solo va por detrás, avisa y sigue"
+  assert_contains "$out" "subida" "y la sube"
+}
+
 _merge_escenario() {
   # Un espacio con propuesta abierta y un gh de mentira que responde lo que
   # diga $1 a 'pr view'. Devuelve la ruta del worktree por la salida.

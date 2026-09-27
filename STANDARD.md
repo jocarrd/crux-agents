@@ -703,7 +703,9 @@ no la publica.
 `crux ship seal` cierra el recibo contra el sha de HEAD y anota la versión de
 crux que lo selló. `workspace finish` lo lee y **se niega a proponer** si no hay
 recibo, si no registra ni un comando, si alguno está en rojo, si el sha no es el
-de HEAD o si se selló con otra versión de crux que la que se ejecuta.
+de HEAD o si se selló con otra versión de crux que la que se ejecuta. Antes de
+subir trae la rama principal del remoto: si la rama choca con ella, para y dice
+qué ficheros chocan, porque la propuesta nacería sin poder integrarse.
 
 La versión importa porque la puerta vive en la máquina, no en el repo: lo que
 comprueba depende del kernel instalado. Sin ella, un recibo sellado no dice con

@@ -468,6 +468,26 @@ cmd_finish() {
     fi
   fi
 
+  # Una rama que choca con la principal sale como propuesta que no se puede
+  # integrar, y la puerta se pasó contra una base que ya no existe. Se mira
+  # antes de subir, con lo último del remoto; sin red, se sigue como antes.
+  local principal_remota
+  principal_remota="$(rama_principal "$path")"
+  if git -C "$path" fetch -q origin "$principal_remota" 2>/dev/null &&
+     git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$principal_remota"; then
+    local choques detras
+    if ! choques="$(git -C "$path" merge-tree --write-tree --name-only --no-messages \
+        HEAD "origin/$principal_remota" 2>/dev/null)"; then
+      err "la rama choca con origin/$principal_remota"
+      printf '%s\n' "$choques" | tail -n +2 | sed 's/^/      /'
+      info "rebasa y vuelve a pasar la puerta: git rebase origin/$principal_remota"
+      exit 1
+    fi
+    detras="$(git -C "$path" rev-list --count "HEAD..origin/$principal_remota" 2>/dev/null || echo 0)"
+    [[ "${detras:-0}" -gt 0 ]] &&
+      warn "origin/$principal_remota lleva $(cuenta "$detras" "commit" "commits") que esta rama no tiene; no chocan"
+  fi
+
   # La rama base sale del contrato, del remoto o de la local, en ese orden.
   # Antes caía a origin/main cuando no habia origin/HEAD, y en un repo con otra
   # rama principal el rango de abajo falla con 128: con set -e el script muere
