@@ -210,6 +210,8 @@ instala `crux hooks install`:
 | `.crux-visual` | Publicar en la propuesta capturas aprobadas sobre otro commit |
 | Hook de la tarea al retomar | Seguir una tarea a medias sin saber en qué punto quedó |
 | Guardia de worktrees | Borrar a mano un espacio registrado (`git worktree remove`, `rm -rf`) y dejar el registro mintiendo |
+| Guardia destructivo | `git reset --hard`, `push --force`, `clean -fd`, descartar el árbol, `rm -r` sobre `/`, `~`, `.` o `*`, `pkill`/`killall`, y leer claves privadas o credenciales. Quien lo quiera de verdad lo ejecuta con `! <comando>` |
+| Guardia de propuestas | Abrir a mano con `gh pr create` una propuesta en un proyecto de crux, saltándose el recibo que exige `crux workspace finish` |
 | Registro que se repara solo | Entradas de espacios cuya carpeta y rama ya no existen; `new`, `list` y `status` las retiran |
 | `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
 | `crux memory` en el cierre | Cerrar sesión con conocimiento del proyecto solo en esta máquina |

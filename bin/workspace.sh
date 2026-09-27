@@ -501,6 +501,21 @@ cmd_finish() {
     base="$rama"
   fi
 
+  # Una propuesta de más de 400 líneas escritas no se revisa bien de una
+  # sentada. Avisa y sigue: partirla es cosa de quien la hizo, y hay cambios que
+  # no se dejan partir. Lo generado no cuenta, porque nadie lo lee línea a línea.
+  local written_lines
+  written_lines="$(git -C "$path" diff --numstat "$base...$branch" 2>/dev/null | awk '
+    $1 == "-" { next }
+    $3 ~ /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|poetry\.lock|go\.sum)$/ { next }
+    $3 ~ /(^|\/)(dist|build|vendor|generated|__snapshots__)\// || $3 ~ /\.(min\.(js|css)|snap)$/ { next }
+    { n += $1 + $2 } END { print n + 0 }')"
+  if [[ "${written_lines:-0}" -gt 400 ]]; then
+    warn "la propuesta tiene $written_lines líneas escritas: pasa de 400, lo que se revisa bien de una vez"
+    info "si se puede partir en unidades que funcionen solas, pártela en propuestas encadenadas"
+    info "si no, di en la descripción por qué va entera"
+  fi
+
   # Si la tarea dice qué cambia y por qué, la descripción sale de ahí; si no,
   # de los commits, como siempre. Un registro vacío no mejora la propuesta.
   local cuerpo="" idioma docs_fin perfil_fin=""

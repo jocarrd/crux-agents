@@ -21,7 +21,12 @@ export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
 export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
 export CODEX_HOME_DIR="$SB/home/.codex"
 export CRUX_REGISTRY="$SB/workspaces.json"
+# Sin esto, `crux hooks install` reescribía los hooks reales de quien pasaba la
+# puerta y los dejaba apuntando al árbol que se estaba probando.
+export CLAUDE_SETTINGS="$SB/home/.claude/settings.json"
 mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
+real_settings="$HOME/.claude/settings.json"
+real_before="$(sha256sum "$real_settings" 2>/dev/null | cut -d' ' -f1)"
 
 PASO=0; FALLOS=0
 if [[ -t 1 ]]; then R=$'\033[31m'; G=$'\033[32m'; D=$'\033[2m'; O=$'\033[0m'; else R=""; G=""; D=""; O=""; fi
@@ -209,6 +214,10 @@ salida="$(bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" 2>&1)"
 cierto '[[ "$salida" == *"sin carpeta de doc"* ]]' "reporta el repo declarado sin doc"
 bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" >/dev/null 2>&1
 cierto '[[ $? -ne 0 ]]' "y sale con error"
+
+paso "los ajustes reales de Claude Code no se tocan"
+cierto '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
+  "el settings.json de quien ejecuta sale igual que entró"
 
 echo
 if [[ $FALLOS -eq 0 ]]; then

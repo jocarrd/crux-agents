@@ -686,8 +686,12 @@ crux hooks status
 Instala cinco cosas: un aviso de deriva de documentación al cerrar sesión, un
 aviso de las memorias de proyecto que siguen solo en local, un `pre-commit` que
 **bloquea el commit si `doctor` no pasa**, un `commit-msg` que rechaza los
-mensajes en español, y un recordatorio del ciclo al empezar a trabajar sobre la
-rama principal. Un estándar que hay que acordarse de comprobar se comprueba a
+mensajes en español, un recordatorio del ciclo al empezar a trabajar sobre la
+rama principal y un guardia que para los comandos que destruyen trabajo
+(`reset --hard`, `push --force`, `pkill`…) y la lectura de claves privadas, y
+otro que para `gh pr create` a mano: la propuesta la abre `finish`, que es
+quien exige el recibo. Con
+los permisos del agente saltados, ese guardia es el único freno que queda. Un estándar que hay que acordarse de comprobar se comprueba a
 veces.
 
 Para probar un hook antes de un release, instálalo desde el espacio de trabajo

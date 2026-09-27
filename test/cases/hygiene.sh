@@ -262,3 +262,120 @@ test_la_puerta_ensena_los_comandos_del_contrato_la_primera_vez() {
   cambiada="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
   assert_contains "$cambiada" "ha cambiado desde la ultima vez" "cuando cambia, avisa"
 }
+
+test_el_guardia_para_lo_que_destruye_trabajo() {
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
+  _bash() {
+    printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
+      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+    echo $?
+  }
+  assert_eq "2" "$(_bash "git reset --hard HEAD~1")" "reset --hard"
+  assert_eq "2" "$(_bash "git -C repo reset --hard")" "reset --hard con -C"
+  assert_eq "2" "$(_bash "git push --force origin main")" "push --force"
+  assert_eq "2" "$(_bash "git push -f")" "push -f"
+  assert_eq "2" "$(_bash "git clean -fdx")" "clean -fdx"
+  assert_eq "2" "$(_bash "git clean -f -d")" "clean -f -d"
+  assert_eq "2" "$(_bash "git checkout -- .")" "descartar el árbol con checkout"
+  assert_eq "2" "$(_bash "git restore .")" "descartar el árbol con restore"
+  assert_eq "2" "$(_bash "git stash clear")" "vaciar la pila de stash compartida"
+  assert_eq "2" "$(_bash "rm -rf ~")" "rm -rf ~"
+  assert_eq "2" "$(_bash "rm -rf \$HOME")" "rm -rf \$HOME"
+  assert_eq "2" "$(_bash "rm -rf .")" "rm -rf ."
+  assert_eq "2" "$(_bash "rm -Rf *")" "rm -Rf *"
+  assert_eq "2" "$(_bash "chmod -R 777 .")" "chmod -R 777"
+  assert_eq "2" "$(_bash "sudo chown -R me /srv")" "chown -R"
+  assert_eq "2" "$(_bash "pkill -f next-server")" "pkill"
+  assert_eq "2" "$(_bash "cd /tmp && killall node")" "killall tras otro comando"
+  assert_eq "2" "$(_bash "bash -c \"git reset --hard\"")" "dentro de bash -c"
+}
+
+test_el_guardia_deja_lo_que_se_le_parece() {
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
+  _bash() {
+    printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
+      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+    echo $?
+  }
+  assert_eq "0" "$(_bash "git push --force-with-lease")" "force-with-lease es la forma segura"
+  assert_eq "0" "$(_bash "git push -u origin feat/x")" "un push normal"
+  assert_eq "0" "$(_bash "git push --follow-tags")" "una opción larga que empieza por f"
+  assert_eq "0" "$(_bash "git reset --soft HEAD~1")" "reset --soft"
+  assert_eq "0" "$(_bash "git clean -n -d")" "clean en seco"
+  assert_eq "0" "$(_bash "git checkout -- src/a.ts")" "descartar un fichero concreto"
+  assert_eq "0" "$(_bash "rm -rf ./dist node_modules")" "rm -rf de rutas concretas"
+  assert_eq "0" "$(_bash "rm -rf ~/.cache/foo")" "rm -rf de una ruta dentro de ~"
+  assert_eq "0" "$(_bash "kill 12345")" "kill por PID"
+  assert_eq "0" "$(_bash "pgrep -a node")" "pgrep solo busca"
+  assert_eq "0" "$(_bash "echo 'nunca uses git reset --hard'")" "mencionarlo entre comillas"
+  assert_eq "0" "$(_bash "ls  # git push --force")" "mencionarlo en un comentario"
+  assert_eq "0" "$(_bash "$(printf 'git commit -F - <<EOF\nfix: no more git reset --hard\nEOF')")" \
+    "mencionarlo en el mensaje de un commit"
+  assert_eq "0" "$(_bash "ssh -i ~/.ssh/id_ed25519 host")" "usar una clave sin volcarla"
+  assert_eq "0" "$(_bash "cat ~/.ssh/id_ed25519.pub")" "leer la clave pública"
+}
+
+test_el_guardia_no_deja_leer_claves_privadas() {
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
+  _tool() {
+    printf '{"tool_name":"%s","tool_input":{"%s":%s}}' "$1" "$2" \
+      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$3")" | bash "$hook" >/dev/null 2>&1
+    echo $?
+  }
+  assert_eq "2" "$(_tool Bash command "cat ~/.ssh/id_ed25519")" "cat de la clave privada"
+  assert_eq "2" "$(_tool Bash command "base64 certs/server.pem")" "volcar un .pem"
+  assert_eq "2" "$(_tool Bash command "cat ~/.config/gh/hosts.yml")" "el token de gh"
+  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/id_ed25519_github")" "Read de la clave privada"
+  # shellcheck disable=SC2088  # la tilde literal es lo que se prueba
+  assert_eq "2" "$(_tool Read file_path "~/.aws/credentials")" "Read de las credenciales de AWS"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.pub")" "Read de la pública"
+  assert_eq "0" "$(_tool Read file_path "/repo/.env")" "el .env lo mueve carry-env y se deja"
+  assert_eq "0" "$(_tool Read file_path "/repo/src/keys.ts")" "un fichero con key en el nombre"
+}
+
+test_hooks_install_engancha_el_guardia_destructivo() {
+  sandbox >/dev/null
+  echo '{}' > "$CLAUDE_SETTINGS"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  local pre; pre="$(node -e 'const s=require(process.argv[1]); console.log(JSON.stringify(s.hooks.PreToolUse||[]))' "$CLAUDE_SETTINGS")"
+  assert_contains "$pre" "destructive-guard.sh" "install engancha el guardia"
+  assert_contains "$pre" '"matcher":"Bash|Read|Edit|Write|MultiEdit|NotebookEdit"' "sobre la shell y los ficheros"
+  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "destructive-guard" "y remove lo retira"
+}
+
+test_el_guardia_de_propuestas_manda_a_finish() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_proyecto_higiene)"
+  bash "$CRUX_HOME/bin/workspace.sh" new portada --repo "$root/app" >/dev/null 2>&1
+  local hook="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
+  mkdir -p "$SB/suelto"; git -C "$SB/suelto" init -q
+  _pr() {
+    printf '{"tool_name":"Bash","cwd":%s,"tool_input":{"command":%s}}' \
+      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" \
+      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$2")" | bash "$hook" 2>&1
+    echo "rc=$?"
+  }
+  local out
+  out="$(_pr "$root/app-ws-portada" 'gh pr create --title "x" --body "y"')"
+  assert_contains "$out" "rc=2" "en un espacio, gh pr create se para"
+  assert_contains "$out" "crux workspace finish portada" "y dice el finish exacto"
+  out="$(_pr "$root/app" "git checkout -b atajo && gh pr create --fill")"
+  assert_contains "$out" "rc=2" "en el checkout principal también"
+  assert_contains "$out" "crux workspace new <tarea>" "y ahí manda a abrir un espacio"
+  out="$(_pr "$SB" "cd $root/app-ws-portada && gh pr create --fill")"
+  assert_contains "$out" "rc=2" "entrando con cd a un repo gestionado"
+  assert_contains "$(_pr "$SB/suelto" "gh pr create --fill")" "rc=0" "un repo sin docs repo no se toca"
+  assert_contains "$(_pr "$root/app-ws-portada" "gh pr view 9")" "rc=0" "ni otros comandos de gh"
+  assert_contains "$(_pr "$root/app-ws-portada" "echo 'usa gh pr create'")" "rc=0" "ni mencionarlo"
+}
+
+test_hooks_install_engancha_el_guardia_de_propuestas() {
+  sandbox >/dev/null
+  echo '{}' > "$CLAUDE_SETTINGS"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard.sh" "install lo engancha"
+  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard" "y remove lo retira"
+}

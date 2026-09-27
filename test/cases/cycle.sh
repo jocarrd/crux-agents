@@ -1838,3 +1838,28 @@ test_las_opciones_viejas_dicen_su_nombre_nuevo() {
   out="$(bash "$CRUX_HOME/bin/workspace.sh" gc --con-disco 2>&1)" || true
   assert_contains "$out" "--include-disk" "gc --con-disco nombra la nueva"
 }
+
+test_finish_avisa_de_una_propuesta_de_mas_de_400_lineas() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  seq 1 450 > "$ws/grande.txt"; seq 1 900 > "$ws/pnpm-lock.yaml"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: grande"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
+  assert_contains "$out" "451 líneas escritas" "cuenta lo escrito, sin el lockfile"
+  assert_contains "$out" "propuesta abierta" "y avisa sin bloquear"
+}
+
+test_finish_no_avisa_de_tamano_si_lo_grande_es_generado() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  seq 1 900 > "$ws/pnpm-lock.yaml"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "chore: lock"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
+  assert_not_contains "$out" "líneas escritas" "un lockfile no cuenta como revisión"
+}

@@ -20,6 +20,8 @@ CYCLE_GUARD="$CRUX_HOME/adapters/claude/hooks/cycle-guard.sh"
 MEMORY_GUARD="$CRUX_HOME/adapters/claude/hooks/memory-guard.sh"
 TASK_CONTEXT="$CRUX_HOME/adapters/claude/hooks/task-context.sh"
 WORKTREE_GUARD="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
+DESTRUCTIVE_GUARD="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
+PROPOSAL_GUARD="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
@@ -113,8 +115,10 @@ cmd_install() {
   [[ -f "$MEMORY_GUARD" ]] || die "falta $MEMORY_GUARD"
   [[ -f "$TASK_CONTEXT" ]] || die "falta $TASK_CONTEXT"
   [[ -f "$WORKTREE_GUARD" ]] || die "falta $WORKTREE_GUARD"
+  [[ -f "$DESTRUCTIVE_GUARD" ]] || die "falta $DESTRUCTIVE_GUARD"
+  [[ -f "$PROPOSAL_GUARD" ]] || die "falta $PROPOSAL_GUARD"
   [[ -f "$COMMIT_MSG" ]] || die "falta $COMMIT_MSG"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$DESTRUCTIVE_GUARD" "$PROPOSAL_GUARD" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -134,6 +138,12 @@ cmd_install() {
 
   enganchar PreToolUse "$WORKTREE_GUARD" 'worktree-guard' Bash
   ok "hook que para el borrado a mano de un espacio registrado"
+
+  enganchar PreToolUse "$DESTRUCTIVE_GUARD" 'destructive-guard' 'Bash|Read|Edit|Write|MultiEdit|NotebookEdit'
+  ok "hook que para comandos destructivos y la lectura de claves privadas"
+
+  enganchar PreToolUse "$PROPOSAL_GUARD" 'proposal-guard' Bash
+  ok "hook que para abrir a mano una propuesta sin el recibo de la puerta"
 
   info "copia previa en $SETTINGS.bak"
 
@@ -275,7 +285,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [evento, grupos] of Object.entries(s.hooks || {})) {
       s.hooks[evento] = grupos
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[evento].length) delete s.hooks[evento];
     }

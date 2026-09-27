@@ -195,6 +195,13 @@ que cuatro son ruido, enseña a ignorar la siguiente.
   propuesta y lo decide quien la revisa.
 - **Dudoso**: no se publica. Se comprueba primero.
 
+**Dos rondas de arreglo como mucho.** Una ronda es arreglar lo confirmado y
+volver a revisar solo lo que ese arreglo toca, no el diff entero desde cero. Si
+después de la segunda sigue habiendo un hallazgo grave, se para y se le cuenta
+a quien decide qué queda abierto y qué se intentó. Una tercera vuelta no
+converge: persigue lo que la anterior rompió, y cada pasada encuentra algo
+nuevo porque vuelve a mirar entero.
+
 ## Contárselo a quien decide
 
 **La revisión no termina en la propuesta: termina contada.** Un comentario en
