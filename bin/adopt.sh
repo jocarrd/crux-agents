@@ -68,8 +68,10 @@ done
 # --- Escribir el contrato ----------------------------------------------------
 
 json_array() {
+  # Con una lista vacía bash pasa un argumento vacío, y el contrato salía con
+  # [""]: un repo sin nombre que después todo intentaba recorrer.
   local out="" item
-  for item in "$@"; do out="$out\"$item\", "; done
+  for item in "$@"; do [[ -n "$item" ]] && out="$out\"$item\", "; done
   echo "${out%, }"
 }
 
@@ -93,6 +95,13 @@ overrides="${overrides%,}"
 if [[ -n "$TMPL" ]]; then
   REMOTE_JSON="  \"remote\": {
     \"url\": \"$TMPL\"$([[ -n "$overrides" ]] && printf ',\n    "repos": {%s\n    }' "$overrides")
+  },"
+elif [[ -n "$overrides" ]]; then
+  # Sin remoto en el docs repo no hay plantilla, pero los repos de código que sí
+  # lo tienen se declaran igual: si no, clone no sabría traer ninguno.
+  REMOTE_JSON="  \"remote\": {
+    \"repos\": {$overrides
+    }
   },"
 else
   REMOTE_JSON=""

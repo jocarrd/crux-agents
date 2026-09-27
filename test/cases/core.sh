@@ -507,6 +507,28 @@ test_add_repo_registra_todo_de_una_vez() {
   assert_exit 0 "el proyecto sigue conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
+test_adopt_no_inventa_repos_vacios_y_guarda_los_remotos() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/viejo"
+  mkdir -p "$root/viejo-docs"
+  git -C "$root/viejo-docs" init -q
+  echo "# a mano" > "$root/viejo-docs/README.md"
+
+  bash "$CRUX_HOME/bin/adopt.sh" "$root/viejo-docs" >/dev/null 2>&1 || true
+  local cfg="$root/viejo-docs/crux.json"
+  assert_exit 0 "el contrato es JSON válido" node -e 'JSON.parse(require("fs").readFileSync(process.argv[1]))' "$cfg"
+  assert_eq "0" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).repos.length)' "$cfg")" \
+    "sin repos, la lista queda vacía y no con un nombre en blanco"
+
+  # Un repo con carpeta de doc y origin, sin remoto en el docs repo.
+  rm "$cfg"
+  mkdir -p "$root/viejo-docs/repos/servicio" "$root/servicio"
+  git -C "$root/servicio" init -q
+  git -C "$root/servicio" remote add origin "git@example.com:alguien/servicio.git"
+  bash "$CRUX_HOME/bin/adopt.sh" "$root/viejo-docs" >/dev/null 2>&1 || true
+  assert_contains "$(cat "$cfg")" "alguien/servicio.git" "guarda el remoto del repo aunque el docs repo no tenga"
+}
+
 test_add_repo_toma_el_remoto_del_origin() {
   sandbox >/dev/null
   local docs; docs="$(new_project tau --repos "api")"
