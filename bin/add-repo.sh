@@ -52,6 +52,25 @@ node -e '
 ' "$CONFIG" "$REPO"
 ok "declarado en crux.json"
 
+# Si el repo ya tiene origin y la plantilla del contrato no lo compone, clone no
+# sabría de dónde traerlo. adopt lo deduce igual; aquí se quedaba sin declarar.
+if [[ -d "$ROOT/$REPO/.git" ]]; then
+  ORIGEN="$(git -C "$ROOT/$REPO" remote get-url origin 2>/dev/null || true)"
+  ESPERADA="$(remote_url "$CONFIG" "$REPO" 2>/dev/null || true)"
+  if [[ -n "$ORIGEN" && "$ORIGEN" != "$ESPERADA" ]]; then
+    node -e '
+      const fs = require("fs");
+      const [file, repo, url] = process.argv.slice(1);
+      const o = JSON.parse(fs.readFileSync(file, "utf8"));
+      o.remote = o.remote || {};
+      o.remote.repos = o.remote.repos || {};
+      o.remote.repos[repo] = url;
+      fs.writeFileSync(file, JSON.stringify(o, null, 2) + "\n");
+    ' "$CONFIG" "$REPO" "$ORIGEN"
+    ok "remoto tomado de su origin: $ORIGEN"
+  fi
+fi
+
 # La tabla de repos/README.md es el índice que lee un humano; se mantiene sola
 # mientras exista, y si el proyecto la borró no se reinventa.
 INDEX="$DOCS/repos/README.md"

@@ -507,6 +507,22 @@ test_add_repo_registra_todo_de_una_vez() {
   assert_exit 0 "el proyecto sigue conforme" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
 }
 
+test_add_repo_toma_el_remoto_del_origin() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project tau --repos "api")"
+  local repo="$CRUX_PROJECTS_DIR/tau/worker"
+  git init -q "$repo"
+  git -C "$repo" remote add origin "git@example.com:otra-cuenta/worker.git"
+
+  bash "$CRUX_HOME/bin/add-repo.sh" worker "$docs" >/dev/null 2>&1
+
+  # Sin esto, clone no sabría de dónde traer el repo recién añadido.
+  assert_contains "$(cat "$docs/crux.json")" "otra-cuenta/worker.git" "apunta el remoto que ya tiene"
+  assert_eq "git@example.com:otra-cuenta/worker.git" \
+    "$(source "$CRUX_HOME/lib/common.sh"; remote_url "$docs/crux.json" worker)" \
+    "y clone lo sabe componer"
+}
+
 test_add_repo_rechaza_duplicados() {
   sandbox >/dev/null
   local docs; docs="$(new_project rho --repos "api")"
