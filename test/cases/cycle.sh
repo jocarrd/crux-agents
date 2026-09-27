@@ -775,33 +775,29 @@ test_diff_scope_entiende_la_arquitectura_por_capas() {
 
 test_el_pre_push_bloquea_la_rama_principal() {
   sandbox >/dev/null
-  local repo="$SB/protegido"
-  mkdir -p "$repo"
-  git -C "$repo" init -q -b main
-  git -C "$repo" config user.email t@t
-  git -C "$repo" config user.name t
-  echo x > "$repo/f.txt"; git -C "$repo" add -A; git -C "$repo" commit -qm init
+  local root="$CRUX_PROJECTS_DIR/protegido"
+  mkdir -p "$root/app" "$root/protegido-docs"
+  git init -q --bare "$SB/remoto.git"
+  git -C "$root/app" init -q -b main
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm "chore: init"
+  git -C "$root/app" remote add origin "$SB/remoto.git"
+  git -C "$root/protegido-docs" init -q
+  printf '{"crux":"0.1.0","project":"protegido","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/protegido-docs/crux.json"
+  ( cd "$root/protegido-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
 
-  # Se comprueba el comportamiento del hook con la entrada que git le pasa.
-  local hook="$repo/.git/hooks/pre-push"
-  mkdir -p "$(dirname "$hook")"
-  sed 's/\$principal/main/g' > "$hook" <<'HOOK'
-#!/usr/bin/env bash
-while read -r _ _ remote_ref _; do
-  [[ "$remote_ref" == "refs/heads/main" ]] || continue
-  echo "push directo a main bloqueado"
-  exit 1
-done
-exit 0
-HOOK
-  chmod +x "$hook"
+  # La primera subida crea la rama en un remoto vacío: no se salta ninguna
+  # propuesta, y sin esto la única salida era --no-verify.
+  assert_exit 0 "deja crear la principal en un remoto vacío" git -C "$root/app" push -q origin main
 
-  local out
-  out="$(echo "refs/heads/main a refs/heads/main b" | bash "$hook" origin url 2>&1)"
-  assert_contains "$out" "bloqueado" "el push a la principal se detiene"
+  echo y >> "$root/app/f.txt"; git -C "$root/app" commit -qam "fix: tweak"
+  local out; out="$(git -C "$root/app" push origin main 2>&1)"
+  assert_contains "$out" "bloqueado" "pero no actualizarla sin propuesta"
 
-  assert_exit 0 "una rama de trabajo pasa sin problema" \
-    bash -c 'echo "refs/heads/ws/x a refs/heads/ws/x b" | bash "$1" origin url' _ "$hook"
+  git -C "$root/app" checkout -q -b ws/x
+  assert_exit 0 "una rama de trabajo pasa sin problema" git -C "$root/app" push -q origin ws/x
 }
 
 test_el_titulo_de_la_propuesta_sale_del_primer_commit() {

@@ -163,8 +163,11 @@ cmd_install() {
 #!/usr/bin/env bash
 # Instalado por crux hooks install.
 # El trabajo entra por propuesta, no por push directo a $principal.
-while read -r _ _ remote_ref _; do
+while read -r _ _ remote_ref remote_sha; do
   [[ "\$remote_ref" == "refs/heads/$principal" ]] || continue
+  # Si el remoto aún no tiene la rama, este push la crea: es la primera subida
+  # de un repo nuevo, no trabajo que se salta la propuesta.
+  [[ "\$remote_sha" =~ ^0+\$ ]] && continue
   echo
   echo "push directo a $principal bloqueado"
   echo
