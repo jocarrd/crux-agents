@@ -33,7 +33,7 @@ resultado="$(printf '%s' "$entrada" | node -e '
     // rm -rf, rm --recursive, rm -f -r, y find ... -delete.
     const DESTRUYE = [
       /\bworktree\s+remove\b/,
-      /\brm\b(?=(?:\s+-{1,2}[A-Za-z-]+)*\s+-{0,2}[A-Za-z-]*r)/,
+      /\brm\b(?=(?:\s+-{1,2}[A-Za-z-]+)*\s+-{0,2}[A-Za-z-]*[rR])/,
       /\brm\b(?=[^\n]*--recursive)/,
       /\bfind\b(?=[^\n]*\s-delete\b)/,
       /\bfind\b(?=[^\n]*-exec\s+rm\b)/,
@@ -45,6 +45,20 @@ resultado="$(printf '%s' "$entrada" | node -e '
     // antes, en un cd o en un echo, no es borrarla.
     const cola = util.slice(desde);
 
+    // Un comodín (web-ws-*, proyecto/*) borra los espacios que casen con él
+    // aunque su nombre no aparezca escrito.
+    const porComodin = (texto, ruta) => {
+      for (const t of texto.split(/[\s;&|]+/)) {
+        const limpio = t.replace(/^["'"'"']|["'"'"']$/g, "").replace(/\/+$/, "");
+        if (!/[*?[]/.test(limpio)) continue;
+        const rx = new RegExp("^" + limpio.split("").map((c) =>
+          c === "*" ? "[^/]*" : c === "?" ? "[^/]" : c.replace(/[.+^${}()|\\]/g, "\\$&")).join("") + "$");
+        const base = ruta.split("/").pop();
+        if (limpio.startsWith("/") ? rx.test(ruta) : rx.test(base) || rx.test(ruta)) return true;
+      }
+      return false;
+    };
+
     let r;
     try { r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(0); }
     for (const [n, w] of Object.entries(r.workspaces || {})) {
@@ -53,7 +67,7 @@ resultado="$(printf '%s' "$entrada" | node -e '
       const base = w.path.split("/").pop();
       const porRuta = new RegExp(esc(w.path) + fin);
       const porNombre = new RegExp(`(^|[\\s/"'"'"'])${esc(base)}` + fin);
-      if (porRuta.test(cola) || porNombre.test(cola)) {
+      if (porRuta.test(cola) || porNombre.test(cola) || porComodin(cola, w.path)) {
         process.stdout.write(n);
         process.exit(0);
       }

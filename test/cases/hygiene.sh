@@ -107,6 +107,12 @@ test_el_guardia_cubre_las_otras_formas_de_llevarse_un_espacio() {
   assert_eq "0" "$(_corta "echo listo  # ojo con rm -rf $ws")" "la ruta en un comentario no cuenta"
   assert_eq "0" "$(_corta "grep -n 'worktree remove' $ws/notas.md")" "ni mencionar las palabras"
   assert_eq "0" "$(_corta "cd $ws && rm -rf node_modules")" "ni nombrarla antes de borrar otra cosa"
+
+  assert_eq "2" "$(_corta "rm -Rf $ws")" "con la R mayúscula"
+  assert_eq "2" "$(_corta "rm -rf $root/app-ws-*")" "con un comodín que casa con el espacio"
+  assert_eq "2" "$(_corta "rm -rf $root/*")" "y con uno que se lleva la carpeta del proyecto entera"
+  assert_eq "0" "$(_corta "rm -rf $root/*.log")" "pero no con uno que no alcanza ningún espacio"
+  assert_eq "0" "$(_corta "rm -rf ./dist/*")" "ni con uno relativo a otra carpeta"
 }
 
 test_hooks_install_engancha_el_guardia_solo_para_bash() {
