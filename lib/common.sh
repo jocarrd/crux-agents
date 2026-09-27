@@ -251,6 +251,20 @@ perfil_get() {
   echo "$valor"
 }
 
+idioma_commits() {
+  # idioma_commits <perfil> <docs> — en qué idioma van los commits y las
+  # propuestas. Manda lo que declare el proyecto en crux.json, después el
+  # perfil, y si nadie dice nada, inglés.
+  local perfil="$1" docs="$2" propio=""
+  [[ -n "$docs" && -f "$docs/crux.json" ]] &&
+    propio="$(json_get "$docs/crux.json" 'commit && root.commit.language' 2>/dev/null || true)"
+  if [[ -n "$propio" && "$propio" != "false" && "$propio" != "undefined" ]]; then
+    echo "$propio"
+  else
+    perfil_get "$perfil" "$docs" commit.language en 2>/dev/null || echo en
+  fi
+}
+
 perfil_forbid() {
   # perfil_forbid <nombre> [docs] — un patrón por línea, con su motivo detrás
   # de un tabulador.

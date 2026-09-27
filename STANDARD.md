@@ -73,6 +73,7 @@ Cada docs repo declara su relación con el kernel en un `crux.json` en la raíz:
 | ----- | ----------- |
 | `crux` | Versión del kernel con la que se materializó este proyecto |
 | `language` | Idioma de la documentación y de las descripciones de skills |
+| `commit` | `{"language": "es"}`: idioma de los commits y de las propuestas. Inglés si no se declara |
 | `branch` | Rama principal del proyecto. `main` por defecto; se declara porque el hook que la protege y los espacios de trabajo la leen de aquí |
 | `remote` | De dónde se clonan los repos del proyecto |
 | `project` | Nombre del proyecto, igual que la carpeta padre |
@@ -732,7 +733,8 @@ proyecto**, declarada en `crux.json` con `"language"`.
 | --- | ------ |
 | Descripciones de skills | El del proyecto |
 | Cuerpo de skills y documentación | El del proyecto |
-| Nombres de skills, comandos, ficheros, ramas y commits | Inglés |
+| Nombres de skills, comandos, ficheros y ramas | Inglés |
+| Commits y descripciones de las propuestas | Inglés, salvo que `crux.json` declare `commit.language` |
 | Términos técnicos | Sin traducir: `worktree`, `commit`, `hook`, `deploy` |
 
 Lo de los commits **se verifica**: `crux hooks install` pone un `commit-msg`

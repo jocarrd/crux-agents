@@ -189,6 +189,15 @@ test_el_perfil_decide_el_idioma_del_commit() {
   ( cd "$otro/en-docs" && env HOME="$casa" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
   assert_exit 1 "y sin declararlo se sigue pidiendo inglés" \
     bash "$otro/app/.git/hooks/commit-msg" "$f"
+
+  # El proyecto también lo puede declarar en su contrato, sin un perfil propio.
+  local propio="$CRUX_PROJECTS_DIR/es"; mkdir -p "$propio/app" "$propio/es-docs"
+  git -C "$propio/app" init -q; git -C "$propio/es-docs" init -q
+  printf '{"crux":"0.1.0","project":"es","profile":"multi-repo","repos":["app"],"sections":[],"commit":{"language":"es"}}\n' \
+    > "$propio/es-docs/crux.json"
+  ( cd "$propio/es-docs" && env HOME="$casa" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  assert_exit 0 "el contrato que declara español deja pasar el commit en español" \
+    bash "$propio/app/.git/hooks/commit-msg" "$f"
 }
 
 test_el_perfil_declara_que_no_puede_salir_en_una_propuesta() {

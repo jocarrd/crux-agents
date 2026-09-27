@@ -261,7 +261,7 @@ cmd_new() {
       --task "$tarea" --project "$proyecto" --repo "$repo_name" --workspace "$name" 2>&1)"; then
     [[ "$resultado" == joined ]] && ok "se une a la tarea '$tarea' ya abierta" || ok "tarea '$tarea' registrada"
     local idioma_tarea
-    idioma_tarea="$(perfil_get "$perfil" "$docs" commit.language en 2>/dev/null || echo en)"
+    idioma_tarea="$(idioma_commits "$perfil" "$docs")"
     info "escríbela en '$idioma_tarea': de ella sale la descripción de la propuesta"
     [[ -z "$objetivo" ]] || node "$CRUX_HOME/lib/task.mjs" set --file "$registro_tarea" \
       --section Objetivo --text "$objetivo" >/dev/null 2>&1 || warn "no pude anotar el objetivo"
@@ -509,7 +509,7 @@ cmd_finish() {
     perfil_fin="$(json_get "$docs_fin/crux.json" profile 2>/dev/null || echo "")"
   # La descripción va en el idioma de lo que se publica en el repo, el mismo de
   # los commits. La tarea se escribe en ese idioma porque de ahí sale el texto.
-  idioma="$(perfil_get "$perfil_fin" "$docs_fin" commit.language en 2>/dev/null || echo en)"
+  idioma="$(idioma_commits "$perfil_fin" "$docs_fin")"
   if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
     cuerpo="$(node "$CRUX_HOME/lib/task.mjs" body --file "$registro_tarea" --lang "$idioma" 2>/dev/null || true)"
   fi

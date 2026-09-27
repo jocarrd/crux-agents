@@ -245,7 +245,7 @@ EOF
     escribe="$(perfil_get "$perfil" "$docs" pointers.write true)"
     alcance=full
     [[ "$escribe" == "false" ]] && alcance=signature
-    local idioma; idioma="$(perfil_get "$perfil" "$docs" commit.language en)"
+    local idioma; idioma="$(idioma_commits "$perfil" "$docs")"
     raiz="$(dirname "$docs")"
     while IFS= read -r repo; do
       [[ -n "$repo" ]] || continue
