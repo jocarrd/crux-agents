@@ -164,7 +164,7 @@ else
   if [[ $seen -eq 0 ]]; then
     info "ningún repo de código en disco todavía"
   elif [[ $((created + updated)) -eq 0 && ${#sin_marcadores[@]} -eq 0 ]]; then
-    ok "punteros al día ($seen repos)"
+    ok "punteros al día ($(cuenta "$seen" repo repos))"
   fi
 
 fi

@@ -423,7 +423,7 @@ cmd_finish() {
       exit 1
     fi
     if [[ "${fallos:-0}" -gt 0 ]]; then
-      err "el recibo registra $fallos comprobaciones en rojo"
+      err "el recibo registra $(cuenta "$fallos" comprobación comprobaciones) en rojo"
       recibo_en_rojo "$recibo" | sed 's/^/      /'
       exit 1
     fi
@@ -445,7 +445,7 @@ cmd_finish() {
       info "las reglas de la puerta pueden haber cambiado: vuelve a pasarla"
       exit 1
     fi
-    ok "puerta pasada sobre ${head:0:8} con $comandos comprobaciones (crux $kernel_recibo)"
+    ok "puerta pasada sobre ${head:0:8} con $(cuenta "$comandos" comprobación comprobaciones) (crux $kernel_recibo)"
   fi
 
   # Aquí es donde se pierde el contexto: la propuesta sale y la sesión que sabía
@@ -530,7 +530,7 @@ cmd_finish() {
   rm -f "$cuerpo_tmp"
 
   git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
-  ok "$branch subida ($commits commits)"
+  ok "$branch subida ($(cuenta "$commits" commit commits))"
 
   local url_pr=""
   if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then

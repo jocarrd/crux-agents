@@ -191,7 +191,7 @@ if [[ $rojas -gt 0 ]]; then
 fi
 
 if [[ $pendientes -gt 0 ]]; then
-  warn "$pendientes comprobaciones siguen pendientes"
+  warn "$(cuenta "$pendientes" "comprobación sigue pendiente" "comprobaciones siguen pendientes")"
   [[ $ESPERA -eq 1 ]] && info "se agotaron los ${TIMEOUT}s de espera"
   exit 3
 fi

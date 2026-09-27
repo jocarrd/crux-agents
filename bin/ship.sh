@@ -73,7 +73,7 @@ cmd_seal() {
   grep -vE '^(sealed|kernel) ' "$RECIBO" > "$RECIBO.tmp" && mv "$RECIBO.tmp" "$RECIBO"
   printf 'kernel %s\n' "$kernel" >> "$RECIBO"
   printf 'sealed %s %s\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RECIBO"
-  ok "puerta cerrada sobre $(git -C "$REPO" rev-parse --short HEAD) con $total comprobaciones (crux $kernel)"
+  ok "puerta cerrada sobre $(git -C "$REPO" rev-parse --short HEAD) con $(cuenta "$total" comprobación comprobaciones) (crux $kernel)"
   if [[ -n "$fijada" && "$fijada" != "$kernel" ]]; then
     warn "el proyecto fija crux $fijada y la puerta se ha pasado con $kernel"
     info "alinéalo con: crux upgrade"
@@ -247,7 +247,7 @@ cmd_gate() {
     ETIQUETA="$c" cmd_run -- bash -c "$c" || fallos=$((fallos+1))
   done <<< "$comandos"
 
-  [[ $fallos -eq 0 ]] || { err "$fallos comprobaciones en rojo: la puerta no se cierra"; exit 1; }
+  [[ $fallos -eq 0 ]] || { err "$(cuenta "$fallos" "comprobación" "comprobaciones") en rojo: la puerta no se cierra"; exit 1; }
   info "commitea y cierra con: crux ship seal"
 }
 

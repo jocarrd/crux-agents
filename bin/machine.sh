@@ -141,7 +141,7 @@ if [[ -f "$registro" ]]; then
     process.stdout.write(`${e.length}|${muertos.join(",")}`);
   ' "$registro" 2>/dev/null || echo "0|")"
   total="${vivos%%|*}"; muertos="${vivos#*|}"
-  [[ "$total" -gt 0 ]] && ok "$total espacios de trabajo registrados"
+  [[ "$total" -gt 0 ]] && ok "$(cuenta "$total" "espacio de trabajo registrado" "espacios de trabajo registrados")"
   [[ -n "$muertos" ]] && note "espacios en el registro sin directorio: $muertos — 'crux workspace gc'"
 
   # El registro y el disco también se separan al revés, y así no se ve nunca.

@@ -82,7 +82,7 @@ cmd_approve() {
     printf 'approved %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     [[ -n "$nota" ]] && printf 'note %s\n' "$nota"
   } > "$RECIBO"
-  ok "revisión visual anotada sobre $(git -C "$REPO" rev-parse --short HEAD) con $total imágenes"
+  ok "revisión visual anotada sobre $(git -C "$REPO" rev-parse --short HEAD) con $(cuenta "$total" imagen imágenes)"
 }
 
 cmd_show() {

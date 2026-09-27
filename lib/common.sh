@@ -46,6 +46,9 @@ else
   C_RED=""; C_GRN=""; C_YEL=""; C_DIM=""; C_OFF=""
 fi
 
+# cuenta <n> <singular> <plural> — "1 commit", "2 commits".
+cuenta() { if [[ "$1" == 1 ]]; then echo "1 $2"; else echo "$1 $3"; fi; }
+
 ok()   { echo "${C_GRN}ok${C_OFF}    $*"; }
 warn() { echo "${C_YEL}aviso${C_OFF} $*"; }
 err()  { echo "${C_RED}error${C_OFF} $*"; }

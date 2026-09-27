@@ -45,6 +45,6 @@ echo
 [[ "$borrador" != "true" ]] || die "la propuesta es un borrador"
 
 sucio="$(git -C "$REPO_DIR" status --porcelain | wc -l)"
-[[ "$sucio" -eq 0 ]] || warn "hay $sucio ficheros sin commitear en el repo (no impide el merge)"
+[[ "$sucio" -eq 0 ]] || warn "hay $(cuenta "$sucio" fichero ficheros) sin commitear en el repo (no impide el merge)"
 
 gh pr merge "$NUM" --repo "$slug" --merge --delete-branch "${@:2}"

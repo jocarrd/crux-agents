@@ -131,8 +131,8 @@ for repo in "$RAIZ"/*/*/; do
   [[ "$sucio" -eq 0 && "$sin_subir" -eq 0 ]] && continue
   pendiente=$((pendiente + 1))
   detalle=""
-  [[ "$sin_subir" -gt 0 ]] && detalle="$sin_subir commits sin subir"
-  [[ "$sucio" -gt 0 ]] && detalle="${detalle:+$detalle, }$sucio ficheros tocados"
+  [[ "$sin_subir" -gt 0 ]] && detalle="$(cuenta "$sin_subir" commit commits) sin subir"
+  [[ "$sucio" -gt 0 ]] && detalle="${detalle:+$detalle, }$(cuenta "$sucio" "fichero tocado" "ficheros tocados")"
   printf '  %-34s %-22s %s\n' "$nombre" "$rama" "$detalle"
 done
 if [[ $pendiente -eq 0 ]]; then

@@ -1592,7 +1592,7 @@ test_status_reune_proyectos_espacios_y_lo_que_no_esta_subido() {
   assert_contains "$out" "mirador" "lista el proyecto"
   assert_contains "$out" "1 repos" "y cuántos repos declara"
   assert_contains "$out" "mirador/api" "señala el repo con trabajo pendiente"
-  assert_contains "$out" "ficheros tocados" "y qué tiene pendiente"
+  assert_contains "$out" "1 fichero tocado" "y qué tiene pendiente, en singular si es uno"
 }
 
 test_status_no_confunde_un_espacio_con_trabajo_perdido() {
