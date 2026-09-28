@@ -247,6 +247,7 @@ instala `crux hooks install`:
 | `crux mcp` | Escribe en cada repo los servidores MCP que el proyecto declara, y dice si responden |
 | `crux stg` | Publica una carpeta construida en un staging con clave, para enseñar trabajo sin publicarlo |
 | `crux usage` | Qué skills se usan de verdad |
+| `crux skill test <skill> [--against <ref>]` | Pasa los escenarios de una skill y marca lo que cambia respecto a otra versión |
 | `crux memory` | Memorias del agente que son del proyecto y siguen solo en local |
 | `crux status` | Qué hay abierto ahora mismo en todos los proyectos |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |

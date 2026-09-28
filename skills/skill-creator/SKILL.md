@@ -89,13 +89,13 @@ interpretarlo). Un script que encapsula el criterio se vuelve una caja negra.
    propia descripción. Si gana otra skill, o gana por menos del 15 %, no la
    distingue.
 2. **El tamaño:** `wc -w SKILL.md` dentro del presupuesto.
-3. **Tres escenarios con respuesta conocida.** Escribe tres preguntas cuya
-   respuesta correcta sepas (un caso normal, un caso límite y uno que la skill
-   deba rechazar). Dáselas a un agente en un contexto limpio, con solo la skill y
-   el modelo más pequeño que tengas, y compara. Si estás acortando una skill,
-   pásalas también a la versión anterior: **la nueva tiene que responder
-   igual**. Si difiere, falta un matiz; añádelo a `SKILL.md`, no a la
-   referencia.
+3. **Tres escenarios con respuesta conocida**, en `tests/escenarios.md`: un
+   caso normal, un caso límite y uno que la skill deba rechazar, cada uno con su
+   `Pregunta:` y sus comprobaciones `Debe:` / `No debe:` (expresiones
+   regulares). Pásalos con `crux skill test <skill>`; si estás acortando o
+   cambiando una skill, con `--against <ref>` y `--runs 3`: **la nueva tiene que
+   responder igual**. Una regresión es un matiz perdido; va en `SKILL.md`, no en
+   la referencia.
 4. **Ejecútala** siguiendo lo que dice, no lo que recuerdas.
 
 ## Anti-patterns

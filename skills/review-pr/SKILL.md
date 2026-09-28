@@ -55,7 +55,8 @@ por qué.
 **Quién fusiona** lo dice la línea `fusión:`, y manda sobre tu criterio. Solo se
 fusiona sin preguntar un cambio que sea **solo texto** (`.md`, `.txt`, licencias,
 `.gitignore`) en un proyecto propio. CSS, estilos, plantillas y tests cuentan
-como código. En un repo de cliente, siempre una persona.
+como código: un cambio de CSS, por pequeño que sea, lo fusiona una persona. En un
+repo de cliente, siempre una persona.
 
 ## El recorrido
 

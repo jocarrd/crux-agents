@@ -804,6 +804,10 @@ de **1.000 palabras**; el porqué, la historia y los ejemplos largos van en
 skill se comprueba que no exista otra que gane la misma frase; si la hay, se
 amplía esa. Cómo se escribe y se prueba: `/skill-creator`.
 
+Una skill se prueba con escenarios de respuesta conocida en
+`tests/escenarios.md` y `crux skill test`, que compara con la versión anterior:
+acortar sin probar pierde matices que leyendo no se ven.
+
 Lo comprueba el mismo verificador de descripciones, en el kernel (la suite) y
 en cada proyecto (`crux doctor`). Las skills del kernel que ya pasaban del tope
 están en `skills/.oversized` y solo pueden encoger.
@@ -951,6 +955,7 @@ sesión. Ver ADR-012.
 | `crux mcp` | — | Los servidores MCP que el proyecto declara, puestos donde el agente los lee |
 | `crux stg` | — | Publica una carpeta construida en un staging con clave |
 | `crux usage` | — | Mide qué skills se usan realmente |
+| `crux skill test <skill>` | — | Prueba una skill con sus escenarios; `--against <ref>` marca regresiones |
 | `crux memory [--check]` | — | Memorias del agente que deberían estar en git |
 | `crux status` | `--check` | Proyectos, espacios y trabajo sin publicar |
 
