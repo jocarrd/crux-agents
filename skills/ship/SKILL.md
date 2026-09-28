@@ -5,170 +5,105 @@ description: Puerta de calidad antes de commitear, graduada según lo que toca e
 
 # ship
 
-Cadena de puertas antes de commitear. Cualquiera puede abortar el proceso, y la
-gracia está en parar en cuanto una falla.
+Cadena de puertas antes de commitear. Se para en cuanto una falla. El porqué de
+cada regla está en `<directorio-de-esta-skill>/references/por-que.md`; léelo si
+dudas de alguna o vas a proponer una excepción.
 
 ## 0. Qué puertas hacen falta
 
-**Primero esto, antes de la puerta 1.**
+Antes que nada:
 
 ```bash
 bash <directorio-de-esta-skill>/scripts/diff-scope.sh
 ```
 
-Clasifica el diff y responde tres cosas: **qué puertas aplican**, **qué tests
-correr en la 1** y **si hace falta levantar el entorno**.
+Dice qué puertas aplican, qué tests correr en la 1 y si hay que levantar el
+entorno. Lo decide el clasificador, no tu criterio.
 
 | Lo que toca el diff | Puertas |
 | ------------------- | ------- |
-| Solo texto —documentación, licencias, `.gitignore` | 2, 8, 9 |
+| Solo texto (documentación, licencias, `.gitignore`) | 2, 8, 9 |
 | Código que no se ve desde fuera | 1 a 6, 8, 9 |
 | Superficie observable: interfaz, API, datos, dependencias, integración | todas |
 
-La razón es aritmética. **Si esto cuesta lo mismo para una errata que para un
-cambio de esquema, dejarás de invocarlo en dos semanas** y la puerta habrá
-fracasado. Un cambio de solo documentación no tiene código que
-pueda estar incorrecto ni tests que puedan regresar; hacerle las nueve puertas
-no lo verifica más, solo lo encarece.
-
-Lo decide el clasificador y no tu criterio en el momento: a ojo todo parece
-pequeño, y así es como se salta justo la que hacía falta.
-
 ## 1. Sanidad
 
-Pasa los tests **antes de mirar nada** — los afectados por el diff, no la suite
-entera. El clasificador los dice en su línea `tests:`.
+Pasa los tests afectados (línea `tests:` del clasificador), no la suite entera,
+antes de mirar nada. Si ya estaban rojos, no es tu diff: dilo y para.
 
-Aquí solo se responde a una pregunta: **¿el rojo ya venía de antes?** Para eso
-basta lo afectado. La suite completa es la puerta 6; correrla en las dos es
-pagar la más cara dos veces para responder dos preguntas distintas.
-
-Si ya estaban rojos, no es cosa de tu diff: dilo y para. Es la puerta más
-barata y la que más tiempo ahorra, porque evita depurar durante media hora un
-fallo que ya venía de antes.
-
-### Artefactos colados
-
-Si el informe abre una sección `artefactos:`, míralos antes de nada. Son
-ficheros sueltos en la raíz —capturas que una herramienta dejó en el directorio
-de trabajo, volcados, temporales— que un `git add -A` se lleva a la rama sin
-que los vea ningún test ni el linter. Se sacan del stage o se añaden al
-`.gitignore`; lo que no se hace es commitearlos "por ahora".
+Si el informe trae `artefactos:` (capturas, volcados, temporales sueltos en la
+raíz), sácalos del stage o añádelos al `.gitignore`. Nunca se commitean.
 
 ## 2. Leer el diff
 
-Entero, no en diagonal. Aquí se busca **la intención**: qué se pretendía
-cambiar y si el diff hace exactamente eso. Los bugs vienen en el paso
-siguiente.
-
-Señales de que hay que parar y preguntar: ficheros tocados que no venían a
-cuento, cambios de formato mezclados con cambios de lógica, código muerto que
-se ha quedado, restos de depuración.
+Entero. Comprueba que hace exactamente lo que se pretendía. Para y pregunta si
+hay ficheros que no venían a cuento, formato mezclado con lógica, código muerto
+o restos de depuración.
 
 ## 3. Correctitud
 
-Revisión centrada en fallos: casos límite, valores nulos, errores no
-gestionados, condiciones invertidas, concurrencia. Si tienes una revisión
-automática disponible, este es su sitio.
+Casos límite, nulos, errores no gestionados, condiciones invertidas,
+concurrencia. Si hay revisión automática, va aquí.
 
 ## 4. Convenciones
-
-Las convenciones del proyecto están escritas —estilo, naming, dónde va cada
-declaración— y aun así se leen **después** de escribir el código, cuando ya solo
-sirven para reordenar. Esta puerta las pone delante.
 
 ```bash
 bash <directorio-de-esta-skill>/scripts/conventions.sh
 ```
 
-Imprime dos cosas: **qué documentos de convenciones aplican** al diff, y
-**señales concretas** —un literal que se repite y pide un diccionario, un tipo
-declarado dentro de un fichero de constantes, un catálogo que ya existía en el
-repo y se está redeclarando—.
-
-Las señales son heurísticas, no veredictos: algunas serán deliberadas. Lo que
-no es opcional es **abrir el documento que lista**. Preguntarse "¿esto sigue el
-estilo?" sin leerlo siempre se responde que sí.
-
-Va antes de la calidad por el mismo motivo que la correctitud: **reestructurar
-dos veces es tirar el trabajo**, y una convención aplicada después obliga a
-mover lo que la puerta siguiente iba a simplificar.
+Lista los documentos de convenciones que aplican y señales concretas (literales
+repetidos, tipos en ficheros de constantes, catálogos redeclarados). Las señales
+son heurísticas; **abrir los documentos que lista no es opcional**.
 
 ## 5. Calidad
 
-Ahora, y no antes, la pregunta de si hay una forma más simple. Reutilización de
-lo que ya existe en el proyecto, altura de abstracción correcta, nombres que
-dicen lo que hacen.
-
-El orden importa: **simplificar código incorrecto es tirar el trabajo**.
+Solo ahora: ¿hay una forma más simple? Reutilizar lo que existe, abstracción a
+la altura correcta, nombres que dicen lo que hacen.
 
 ## 6. Regresión
 
-**Ahora sí, la suite entera**, después de los arreglos de las puertas 3 a 5.
-Los arreglos también rompen cosas, y rompen precisamente lo que no estabas
-mirando: por eso aquí no vale el subconjunto de la puerta 1.
+La suite entera, después de los arreglos de 3 a 5.
 
-**Un test que ya existía y se pone rojo no se edita para que pase.** Se para y
-se dice. Lo normal es que el test tenga razón y el diagnóstico no: tocarlo es
-borrar la única prueba de que el cambio rompe algo. Solo se cambia si quien
-decide confirma que el comportamiento que protegía ya no es el que se quiere.
+**Un test que ya existía y se pone rojo no se edita para que pase.** Para y
+dilo. Solo se cambia si quien decide confirma que ese comportamiento ya no se
+quiere.
 
-## 7. Realidad, solo si hace falta
-
-La puerta 0 ya dijo si aplica. Levantar el entorno siempre es lo que mata la
-costumbre; no levantarlo nunca es lo que deja pasar los fallos que los tests no
-ven.
+## 7. Realidad, solo si la puerta 0 lo pide
 
 | Lo que toca el diff | Qué validar |
 | ------------------- | ----------- |
-| Interfaz | Verlo. Revisión visual en los viewports que importen; después, `/before-after` para que lo apruebe quien decide |
+| Interfaz | Verlo en los viewports que importen; después, `/before-after` para que lo apruebe quien decide |
 | API | Llamar a los endpoints afectados, no solo sus tests |
 | Datos | Que la migración aplique **y revierta** |
 | Dependencias | Que arranque desde cero, no desde tu caché |
 
-Si el proyecto tiene espacios de trabajo aislados, levanta el entorno en el
-suyo: así no chocas con tu propio servidor de desarrollo.
+Levanta el entorno en el espacio de trabajo de la tarea.
 
 ## 8. Deriva de la documentación
 
-¿Este cambio invalida alguna documentación? Si sí, se actualiza **en el mismo
-turno**, no después. Es la disciplina que sostiene todo el estándar.
-
-El clasificador avisa cuando el diff toca superficie y no hay documentación
-tocada. Es una señal, no un veredicto: muchos cambios no afectan a ninguna doc.
+Si el cambio invalida alguna documentación, se actualiza en el mismo turno. El
+aviso del clasificador es una señal, no un veredicto.
 
 ## 9. Commit
 
-Conventional commit, en imperativo y minúscula, con un cuerpo que explique **el
-porqué** — el qué ya está en el diff. Si el cambio es de varios tipos, son
-varios commits.
+Conventional commit, imperativo y minúscula, con un cuerpo que explique el
+porqué. Un tipo de cambio por commit.
 
 ## Dejar constancia
 
-Las comprobaciones de los pasos anteriores no se ejecutan a mano y se anotan
-después: **se ejecutan a través de `crux ship run`, que anota el resultado real**.
+Las comprobaciones se ejecutan a través de crux, que anota el resultado real:
 
 ```bash
-crux ship gate          # ejecuta lo que declara quality.gate del contrato
-crux ship seal          # después del commit
+crux ship gate                  # lo que declara quality.gate del contrato
+crux ship run -- <comando>      # una comprobación suelta
+crux ship seal                  # después del commit
 ```
 
-Si el proyecto aún no lo declara, `gate` dice cómo hacerlo. Para una
-comprobación suelta que no esté en el contrato: `crux ship run -- <comando>`.
+`seal` se niega si algo quedó en rojo y cierra el recibo contra HEAD. `crux
+workspace finish` no abre la propuesta sin ese recibo. `finish --skip-gate`
+existe solo para obedecer a quien decide, nunca para ahorrarse un paso.
 
-`seal` se niega a cerrar si algún comando quedó en rojo, y cierra el recibo
-contra el sha de HEAD. **`crux workspace finish` lo lee y no abre una propuesta
-sin él**: sin recibo, sin comandos registrados, con alguno fallando o con un sha
-que ya no es el de HEAD, se para.
-
-Antes esto era un `printf` del sha que escribía el propio agente después de
-afirmar que había verificado. Eso no prueba que verificara: prueba que escribió
-un sha. Por eso ya no vale.
-
-Si de verdad hay que saltarse la puerta, existe `finish --skip-gate`, y lo dice
-en voz alta. **Es para obedecer a quien decide, no para ahorrarse un paso.**
-
-Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.
+`.crux-ship` va en el `.gitignore` del repo.
 
 ## Antes de publicar la propuesta
 
@@ -176,28 +111,22 @@ Añade `.crux-ship` al `.gitignore` del repo: es estado local, no del proyecto.
 crux ship body <fichero con el cuerpo>
 ```
 
-Busca la firma de la herramienta y, si el perfil es `client-repo`, cualquier
-mención de nuestro tooling. Era el único artefacto del flujo que no comprobaba
-nadie, y es el que acaba delante del cliente.
+Busca la firma de la herramienta y, en perfil `client-repo`, cualquier mención
+de nuestro tooling.
 
 ## Anti-patterns
 
-- **Saltarse la puerta 0 y decidir a ojo.** Acaba siempre en el mismo sitio:
-  "esto es pequeño" y la puerta que hacía falta sin pasar.
-- **Pasar las nueve a un cambio de documentación.** No lo verifica más, solo
-  encarece la puerta hasta que dejas de pasarla.
-- **Empezar por la puerta 3.** Sin la 1 no sabes si el rojo es tuyo.
-- **Cerrar la 4 sin abrir el documento.** Autoevaluarse el estilo siempre sale
-  que sí; por eso la puerta lista ficheros y no hace preguntas.
-- **Simplificar antes de verificar.** Puertas 5 después de 3, siempre.
-- **Saltarse la 6 porque "el cambio era pequeño".** Los arreglos rompen cosas.
-- **Marcar la 7 como hecha sin haber mirado nada.** Si no viste la pantalla ni
-  llamaste al endpoint, esa puerta no está pasada.
-- **Commitear con una puerta en rojo y "ya lo arreglo".** Entonces la cadena
-  queda en adorno.
+- Decidir las puertas a ojo en vez de con la puerta 0.
+- Pasar las nueve a un cambio de documentación.
+- Empezar por la 3: sin la 1 no sabes si el rojo es tuyo.
+- Cerrar la 4 sin abrir el documento.
+- Simplificar (5) antes de verificar (3).
+- Saltarse la 6 porque el cambio era pequeño.
+- Dar por pasada la 7 sin haber visto la pantalla ni llamado al endpoint.
+- Commitear con una puerta en rojo.
 
 ## Relacionado
 
-- `/workspace` — el entorno aislado donde levantar la puerta 7
-- `/visual-test` — la revisión visual de la puerta 7 cuando toca interfaz
-- `/end-session` — el cierre de la sesión, aguas abajo de esto
+- `/workspace` — el entorno aislado de la puerta 7
+- `/visual-test` — la revisión visual de la puerta 7
+- `/end-session` — el cierre de la sesión
