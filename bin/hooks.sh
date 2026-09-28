@@ -222,10 +222,10 @@ EOF
 
   local docs
   if docs="$(find_docs_repo "$PWD" 2>/dev/null)" && git -C "$docs" rev-parse --git-dir >/dev/null 2>&1; then
-    # El docs repo se sube directo, como dice la regla del perfil. Cerrarle la
-    # principal no paraba nada: en septiembre, 326 de 336 commits de un docs
-    # repo entraron así igualmente, con --no-verify, y el agente aprendía a
-    # saltarse hooks. El que puso antes crux se retira.
+    # El docs repo se sube directo, como dice la regla del perfil, y es lo que
+    # se hace: en septiembre, 326 de 336 commits de un docs repo entraron
+    # directos a la principal. El hook contradecía la regla y solo servía para
+    # tener que saltárselo. El que puso antes crux se retira.
     local pre_push_docs; pre_push_docs="$(dir_hooks "$docs")/pre-push"
     if [[ -f "$pre_push_docs" ]] && grep -q "Instalado por crux hooks install" "$pre_push_docs"; then
       rm -f "$pre_push_docs"
