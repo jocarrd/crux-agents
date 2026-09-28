@@ -173,3 +173,29 @@ test_activacion_un_adaptador_que_roba_lo_generico_falla() {
     node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador ladron metodo \
       "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal"
 }
+
+test_activacion_una_skill_no_pasa_de_mil_palabras() {
+  # Se carga entera en el contexto cada vez que se usa: lo que sobra suele ser
+  # el porqué de cada regla, que va en references/.
+  sandbox >/dev/null
+  local dir="$SB/catalogo"
+  _skill_de() {
+    mkdir -p "$dir/$1"
+    { printf -- '---\nname: %s\ndescription: Hacer algo. Usa cuando haga falta.\n---\n\n' "$1"
+      yes palabra | head -n "$2" | tr '\n' ' '; } > "$dir/$1/SKILL.md"
+  }
+  _skill_de corta 300
+  _skill_de larga 1200
+  _skill_de vieja-crece 1300
+  _skill_de vieja-cabe 800
+  _skill_de vieja-igual 1100
+  printf '# heredadas\nvieja-crece 1150\nvieja-cabe 1100\nvieja-igual 1200\n' > "$dir/.oversized"
+
+  local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$dir" es 2>&1)"
+  assert_contains "$out" "skill 'larga':" "una nueva que pasa del tope da aviso"
+  assert_contains "$out" "references/" "y dice cómo arreglarla"
+  assert_contains "$out" "skill 'vieja-crece': ha crecido" "una heredada no puede crecer"
+  assert_contains "$out" "skill 'vieja-cabe': ya cabe" "una heredada que ya cabe tiene que salir de la lista"
+  assert_not_contains "$out" "'vieja-igual'" "una heredada que no crece no molesta"
+  assert_not_contains "$out" "'corta'" "ni una que cabe"
+}

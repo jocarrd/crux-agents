@@ -795,6 +795,19 @@ disparador.
 - **Proyecto** — interactúa con la infraestructura concreta: sus servidores,
   sus cuentas cloud, los datos de su producto, su voz editorial.
 
+### Tamaño
+
+Una skill se carga entera en el contexto cada vez que se usa. `SKILL.md` lleva
+lo que el agente tiene que hacer (pasos, comandos, reglas, gotchas) y no pasa
+de **1.000 palabras**; el porqué, la historia y los ejemplos largos van en
+`references/por-que.md`, que solo se abre si hace falta. Antes de crear una
+skill se comprueba que no exista otra que gane la misma frase; si la hay, se
+amplía esa. Cómo se escribe y se prueba: `/skill-creator`.
+
+Lo comprueba el mismo verificador de descripciones, en el kernel (la suite) y
+en cada proyecto (`crux doctor`). Las skills del kernel que ya pasaban del tope
+están en `skills/.oversized` y solo pueden encoger.
+
 ### Promoción de skills
 
 Para decidir si una skill del proyecto merece subir al kernel:

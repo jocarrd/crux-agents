@@ -1,0 +1,12 @@
+# Skills que ya pasaban de 1.000 palabras cuando entró el tope (28-09-2026),
+# con su tamaño de entonces. Solo pueden encoger: al bajar del tope, se quitan
+# de aquí. Lo comprueba lib/check-skill-description.mjs.
+before-after 1096
+device-loop 1047
+drive-browser 1221
+explain-plan 1101
+read-document 1087
+redaccion 1089
+skill-audit 1140
+ui-tells 1045
+workspace 1260

@@ -5,176 +5,77 @@ description: El ciclo completo de una tarea de desarrollo: en qué orden van sus
 
 # flow
 
-Las skills sueltas no se encadenan solas. Esto es el orden en que se usan, y
-**por qué ese orden y no otro**.
+El orden en que se usan las skills del ciclo. El porqué de cada paso y lo que
+cuesta saltárselo están en `<directorio-de-esta-skill>/references/por-que.md`.
 
-## Cuándo aplica
+**Aplica** a cualquier tarea que vaya a producir un commit. **No aplica** a
+preguntas o lectura de código, a cambios de una línea evidentes (una errata, un
+valor de configuración) ni a una emergencia en producción, donde manda el
+playbook de incidencias y el orden se recupera después. Si dudas, aplícalo.
 
-Cualquier tarea de desarrollo que vaya a producir un commit. Es decir, casi
-todas.
+## 1. Entender el terreno
 
-## Cuándo no aplica
+Si no conoces el repo: `/repo-map`. Si el proyecto sigue el estándar, su
+documentación va primero: `repos/<repo>/` del docs repo. No se escribe código
+para averiguar cómo funciona algo.
 
-- Preguntas, exploración, leer código sin cambiarlo.
-- Cambios de una línea evidentes: una errata, un valor de configuración.
-- Emergencia en producción: ahí manda el playbook de incidencias del proyecto,
-  y el orden se recupera después.
-
-Si dudas, el coste de aplicarlo es bajo y el de saltárselo se paga en el diff.
-
----
-
-## El ciclo
-
-### 1. Entender el terreno
-
-Si no conoces el repo o llevas meses sin tocarlo: `/repo-map`. Si el proyecto
-sigue el estándar, su documentación va primero — `repos/<repo>/` del docs repo.
-
-**No se empieza a escribir código para averiguar cómo funciona algo.**
-
-### 2. Aislar el espacio
+## 2. Aislar el espacio
 
 ```bash
 crux workspace new <nombre-de-la-tarea>
 ```
 
-**La rama se crea aquí, antes de tocar una sola línea.** Es la misma que al
-final se convierte en la propuesta de cambio, así que todo lo que hagas nace ya
-separado de lo que esté haciendo cualquier otra sesión.
+La rama se crea aquí, antes de tocar una línea, con su worktree, sus puertos y
+su base de datos. Abre también el registro de la tarea, que se va anotando
+mientras se trabaja (`crux task`). Sáltalo solo si estás seguro de que nadie más
+trabaja en ese repo; el comando avisa si hay otro espacio abierto.
 
-Esto es lo que evita el problema más caro de trabajar con varios agentes: dos
-sesiones sobre el mismo directorio se pisan los ficheros, mezclan sus cambios
-en el mismo commit y acaban peleándose por el puerto y por la base de datos.
+## 3. Planificar antes de tocar código
 
-Con un espacio propio, cada tarea tiene su rama, su worktree y su runtime. Y al
-terminar sale como una propuesta que se revisa, no como un montón de cambios
-sueltos mezclados con los de otro.
+- `/grill` si el encargo deja decisiones abiertas.
+- `/explain-plan` para cualquier tarea que no sea evidente.
 
-El espacio abre también **el registro de la tarea**: objetivo, pasos con su
-evidencia y siguiente paso, fuera del repo. Se anota mientras se trabaja
-(`crux task`), y es lo que permite retomar sin reconstruir nada.
+El plan se aprueba antes de seguir; si no decides tú, se pregunta aquí.
+Aprobado, se guarda: `crux task plan <fichero>`.
 
-Salta este paso solo si estás seguro de que nadie más está trabajando en ese
-repo. El comando avisa si ya hay otro espacio abierto.
+## 4. Desarrollar
 
-### 3. Planificar antes de tocar código
+Con las convenciones del proyecto, que están en su docs repo. Durante el
+desarrollo, no al final:
 
-`/grill` primero si el encargo deja decisiones abiertas: interroga a quien
-decide por rondas hasta que no quede nada asumido en silencio. Sale más barato
-un turno de preguntas que un diff construido sobre una suposición.
+- Tests de lo que duele si falla: `/write-tests`.
+- Si algo se rompe y no sabes por qué: `/root-cause` antes de arreglar.
 
-`/explain-plan` después, para cualquier tarea que no sea evidente.
+## 5. La puerta
 
-**El motivo es económico**: un plan que dice "voy a cambiar el formato de la
-clave de caché" se rechaza en cinco segundos. El mismo error descubierto
-después de escribir el código es un diff que revisar y probablemente revertir.
-
-El plan se aprueba antes de seguir. Si quien decide no eres tú, aquí es donde
-se pregunta. Aprobado, va al registro de la tarea: `crux task plan <fichero>`.
-
-### 4. Desarrollar
-
-Siguiendo lo que el proyecto ya tiene escrito: convenciones de código, de
-tests, de commits. Están en su docs repo, no hay que inventarlas.
-
-Dos cosas que se hacen **durante**, no al final:
-
-- **Tests de lo que duele si falla** (`/write-tests`). Escribirlos después es
-  escribirlos para que pasen.
-- **Si algo se rompe y no sabes por qué**: `/root-cause` antes de proponer un
-  arreglo. Cambiar cosas a ver si funciona es lo que convierte un bug en dos.
-
-### 5. La puerta
-
-```
-/ship
-```
-
-Ocho puertas y cualquiera aborta: tests en verde antes de mirar nada, leer el
-diff entero, correctitud, simplificación —después de la correctitud, nunca
-antes—, regresión, validación en el entorno real **solo si el cambio se ve
-desde fuera**, deriva de la documentación, y commit.
-
-**No se commitea con una puerta en rojo y "ya lo arreglo".** Entonces no es una
-puerta, es un adorno.
+`/ship`. Ninguna puerta en rojo se deja "para luego".
 
 ### 5a. Enseñar lo que se ve
 
-```
-/before-after
-```
+Solo si el diff toca interfaz, después de `/ship` y antes de subir nada:
+`/before-after` en escritorio, tablet y móvil, y se espera al sí de quien
+decide. Con el sí, `crux visual approve`. Si hay cambios después, se vuelve a
+enseñar.
 
-Solo si el diff toca interfaz, y **antes de subir nada**. El antes y el después
-en escritorio, tablet y móvil, a quien decide, y se espera a su sí. Va después
-de `/ship` para que lo que se enseña sea exactamente lo que se va a proponer, y
-antes de `finish` porque proponer ya es enseñar el trabajo a otros.
-
-Con el sí, `crux visual approve` lo anota y `finish` lo pone en la propuesta.
-Si hay cambios después, se vuelve a enseñar.
-
-### 6. Proponer
+## 6. Proponer
 
 ```bash
 crux workspace finish <nombre>
+crux checks --wait        # en segundo plano
 ```
 
-Sube la rama y abre la propuesta con el resumen de los commits.
+`finish` se niega si queda algo sin commitear o si el commit no ha pasado la
+puerta. La espera del CI va **en segundo plano**: se dice que está corriendo y
+se sigue con otra cosa.
 
-Se niega en dos casos, y los dos a propósito:
-
-- **Si queda algo sin commitear.** Lo que no está en git no llega a la
-  revisión, y esa es la razón de trabajar así.
-- **Si el commit no ha pasado la puerta.** `/ship` deja constancia de qué
-  commit verificó; si no coincide con el actual, hay que volver a pasarla. Así
-  **no se abre una propuesta de código que nadie ha revisado**, y la revisión
-  deja de depender de que alguien se acuerde.
-
-Y en cuanto está abierta, **se espera al CI sin quedarse parado delante**:
-
-```bash
-crux checks --wait
-```
-
-Ese comando tarda minutos, y son minutos en los que nadie avanza. **La espera
-va en segundo plano.** Se lanza ahí, se dice en voz alta que está corriendo y se
-sigue con lo siguiente: otra tarea, la documentación, lo que el usuario haya
-pedido después. Cuando termine se vuelve a ella.
-
-Bloquear la sesión esperando a un servicio de fuera no es rigor, es tiempo
-muerto de la persona que está al otro lado. Lo que sí es rigor es no dar por
-buena una propuesta hasta ver el resultado, y eso se cumple igual mirando
-después.
-
-Si algo sale en rojo, trae solo el final del log del trabajo que falló. Se lee,
-se arregla en la misma rama, se pasa `/ship` y se sube: el comando se vuelve a
-lanzar solo contra el commit nuevo. **Tres intentos como máximo.** Si al
-tercero sigue en rojo, el problema no es el que parecía y se para a contarlo:
-seguir empujando arreglos a ciegas es cómo una rama acaba con diez commits de
-"fix ci".
-
-Una propuesta sin comprobaciones automáticas no está verificada, está sin
-bloquear: el comando lo dice, y se dice también al contarla.
+Si el CI sale en rojo: se lee solo el final del log, se arregla en la misma
+rama, se pasa `/ship` y se sube. **Tres intentos como máximo**; al tercero, se
+para y se cuenta. Una propuesta sin CI no está verificada, y se dice así.
 
 ### 6a. Revisar la propuesta
 
-```
-/review-pr
-```
-
-Con la propuesta ya abierta y **desde un contexto independiente del que escribió
-el cambio**: si el diff hace lo que promete, si el arreglo está completo por
-todas las puertas por las que entra el problema, si los tests fallan sin él, y
-qué deuda deja.
-
-No repite `/ship`. `/ship` pregunta si está listo lo que hiciste; esto pregunta
-si es correcto y completo lo que se propone, y lo pregunta alguien que no
-estaba dentro del problema. Es la diferencia entre revisar y confirmar.
-
-`crux review` termina con el **riesgo** de la propuesta y los **especialistas**
-que merece —seguridad, datos, rendimiento, interfaz—. Se lanzan solo esos, en
-paralelo, cada uno en su contexto. En un cambio pequeño o sin código no se lanza
-ninguno: el coste de revisar es el mismo de siempre.
+`/review-pr`, desde un contexto distinto del que escribió el cambio. Lanza
+solo los especialistas que `crux review` nombra.
 
 ### 6b. Fusionar, cuando tú lo autorices
 
@@ -183,83 +84,31 @@ crux workspace merge <nombre>          # enseña el estado
 crux workspace merge <nombre> --yes    # fusiona
 ```
 
-Mira las comprobaciones automáticas, los conflictos y la revisión, y **no
-fusiona sin el flag**. La decisión sigue siendo de una persona; el comando solo
-se asegura de que llega informada.
-
-La única excepción la marca la revisión: si su línea `fusión:` dice que **puede
-fusionarse sin preguntar** —solo texto, proyecto propio—, se fusiona y se
-cuenta después. Con código, o en un repo de cliente, pregunta siempre.
-
-Si el repo no tiene CI, lo dice: "nada lo bloquea" no es lo mismo que "está
-verificado".
+Sin `--yes` no fusiona. Solo se fusiona sin preguntar si la línea `fusión:` de
+la revisión lo permite (solo texto, proyecto propio). Con código o en un repo
+de cliente, se pregunta siempre.
 
 ### 6c. Vigilar el despliegue
 
-Si lo fusionado se despliega solo, **no se da por publicado hasta verlo**:
+Si lo fusionado se despliega solo: `/deploy-watch`, también en segundo plano.
+No se da por publicado hasta verlo. Si falla, se revierte primero y se
+investiga después con `/prod-signals` y `/root-cause`.
 
-```
-/deploy-watch
-```
+## 7. Cerrar
 
-Espera a que la versión nueva llegue, comprueba que las rutas del proyecto
-responden y mira en producción lo que tocaba el diff. Si algo falla, se revierte
-primero y se investiga después, con `/prod-signals` y `/root-cause`.
-
-Esta espera también va en segundo plano, por lo mismo que la del CI: un
-despliegue tarda lo que tarda y la sesión no se queda mirándolo.
-
-### 7. Cerrar
-
-```
-/end-session
-```
-
-Lo que se ha aprendido y no queda en el código —decisiones, gotchas,
-convenciones— se escribe donde sobreviva a la sesión. Si no, se pierde, y en
-tres meses alguien vuelve a descubrirlo.
-
-**Y se cierra la tarea.** Lo hecho y lo comprobado ya están en su registro; lo
-que salió distinto de lo planeado está en sus desviaciones y decisiones, y de
-ahí sale lo que se promociona. Ver `/explain-plan`.
-
----
-
-## El orden importa
-
-| Paso | Si te lo saltas |
-| ---- | --------------- |
-| Entender | Escribes código para averiguar lo que la documentación ya dice |
-| Aislar | Te mezclas con otra sesión y acabas resolviendo conflictos que no existían |
-| Preguntar | Construyes bien lo que no era, y se ve al enseñarlo |
-| Planificar | Descubres el error cuando ya es un diff |
-| Tests durante | Los escribes para que pasen, no para que fallen |
-| La puerta | Entra trabajo roto, y se descubre en producción |
-| Enseñar | Se propone lo que quien decide no ha visto, y el rediseño se discute sobre la marcha |
-| Proponer | El cambio no se revisa, o se revisa cuando ya está integrado |
-| Esperar al CI | El rojo se descubre al ir a fusionar, cuando ya nadie tiene el contexto |
-| Fusionar | Entra sin mirar si el CI pasó o si hay conflictos |
-| Vigilar el despliegue | El primero que ve el fallo es un usuario |
-| Cerrar | Lo aprendido muere con la sesión |
-
-Y dos inversiones que cuestan caro:
-
-- **Simplificar antes de verificar** es tirar el trabajo: puliste código
-  incorrecto.
-- **Aislar después de empezar** obliga a mover cambios ya hechos entre ramas,
-  que es justo el lío que se quería evitar.
+`/end-session`: lo aprendido que no queda en el código se escribe donde
+sobreviva a la sesión, y se cierra la tarea. Las decisiones anotadas con
+`crux task note --why` pasan solas al docs repo al archivarla.
 
 ## Anti-patterns
 
-- **Encadenar los pasos sin pensar.** Esto es un orden, no un ritual: una
-  errata no necesita plan, y una emergencia no necesita espacio aislado.
-- **Anunciar el paso en vez de darlo.** Decir "voy a pasar la puerta de
-  calidad" y no ejecutarla es peor que no tenerla.
-- **Dejar el espacio abierto para siempre.** Un espacio es desechable; si lleva
-  semanas vivo, o la tarea era demasiado grande o ya no interesa.
+- Encadenar los pasos sin pensar: una errata no necesita plan.
+- Anunciar un paso en vez de darlo.
+- Simplificar antes de verificar, o aislar después de empezar.
+- Dejar un espacio abierto semanas.
 
 ## Relacionado
 
-Cada paso tiene su procedimiento: `/repo-map`, `/workspace`, `/grill`,
-`/explain-plan`, `/write-tests`, `/root-cause`, `/ship`, `/before-after`, `/review-pr`,
-`/merge-conflicts`, `/deploy-watch`, `/prod-signals`, `/end-session`.
+`/repo-map`, `/workspace`, `/grill`, `/explain-plan`, `/write-tests`,
+`/root-cause`, `/ship`, `/before-after`, `/review-pr`, `/merge-conflicts`,
+`/deploy-watch`, `/prod-signals`, `/end-session`.

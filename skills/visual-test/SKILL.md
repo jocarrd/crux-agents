@@ -5,27 +5,15 @@ description: Inspeccionar visualmente páginas y componentes web en viewport mó
 
 # Visual test
 
-Inspección visual headless con el Chrome del sistema. Sirve para **ver** la
-página como en un móvil real, **detectar scroll
-horizontal** y **cazar el elemento culpable** sin teorizar.
-
-## Cuándo usar
-
-- Te reportan que en móvil se ve mal o aparece scroll horizontal.
-- Vas a pulir responsive y quieres iterar viendo el resultado.
-- Quieres confirmar que un arreglo de layout se ve bien en los dos viewports.
-
-## Precondiciones
-
-- `google-chrome` o `chromium` instalado. Se autodetecta; se puede forzar con
-  `CHROME_BIN`.
-- La aplicación corriendo en local, y su puerto a mano.
+Inspección visual headless con el Chrome del sistema: ver la página como en un
+móvil real, detectar scroll horizontal y cazar el elemento culpable. Los casos
+reales detrás de cada comprobación y los gotchas completos están en
+`<directorio-de-esta-skill>/references/por-que.md`.
 
 ## Preparación, una vez
 
-`playwright-core` lanza el Chrome del sistema en vez de descargar un navegador.
-Se instala en un directorio de caché junto al script, porque ESM resuelve el
-import relativo al fichero:
+Hace falta `google-chrome` o `chromium` (se autodetecta; se fuerza con
+`CHROME_BIN`) y la aplicación corriendo en local.
 
 ```bash
 mkdir -p ~/.cache/visual-test && cd ~/.cache/visual-test
@@ -37,135 +25,59 @@ cp "<directorio-de-esta-skill>/scripts/visual.mjs" .
 
 ```bash
 cd ~/.cache/visual-test
-
-# Captura móvil, opcionalmente con scroll a un offset
-node visual.mjs shot http://localhost:3000/ruta /tmp/a.png --scroll 560
-# Captura escritorio
-node visual.mjs shot http://localhost:3000/ruta /tmp/a-d.png --desktop
-
-# Auditar scroll horizontal en una o varias páginas
-node visual.mjs audit http://localhost:3000/ http://localhost:3000/otra
-
-# Localizar el elemento que desborda: oculta cada nodo y mide
-node visual.mjs bisect http://localhost:3000/ruta
-
-# Señales objetivas de usabilidad móvil
-node visual.mjs checks http://localhost:3000/ruta
-
-# Auditoría WCAG real con axe-core
-node visual.mjs a11y http://localhost:3000/ruta
-node visual.mjs a11y http://localhost:3000/ruta --desktop
-
-# Contenido que se queda invisible: recorre la página con pausas y busca
-# lo que sigue en opacity 0. Devuelve código 1 si encuentra algo.
-node visual.mjs invisible http://localhost:3000/a http://localhost:3000/b
-
-# Fallos de hidratación: escucha la consola mientras recorre
-node visual.mjs hydration http://localhost:3000/a http://localhost:3000/b
-
-# Contraste de los controles en reposo y en hover
-node visual.mjs states http://localhost:3000/ruta
-
-# Ritmo vertical: aire entre secciones y en el cambio de banda
-node visual.mjs rhythm http://localhost:3000/ruta
+node visual.mjs shot http://localhost:3000/ruta /tmp/a.png [--scroll 560] [--desktop]
+node visual.mjs audit <url> [<url>…]       # scroll horizontal
+node visual.mjs bisect <url>               # qué elemento desborda
+node visual.mjs checks <url>               # señales de usabilidad móvil
+node visual.mjs a11y <url> [--desktop]     # WCAG con axe-core (necesita red)
+node visual.mjs invisible <url> [<url>…]   # contenido que se queda en opacity 0
+node visual.mjs hydration <url> [<url>…]   # fallos de hidratación
+node visual.mjs states <url>               # contraste en reposo y en hover
+node visual.mjs rhythm <url>               # aire entre secciones
 ```
 
-Después, abre las capturas para mirarlas. Ese paso no es opcional: el objetivo
-de la skill es ver, no deducir.
+**Abre las capturas y míralas.** No es opcional: la skill es para ver, no para
+deducir. Ninguna página se da por buena sin haber mirado su captura en móvil y
+en escritorio, pasen lo que pasen los comandos.
 
-## Los dos niveles de análisis
+## Cómo leer los resultados
 
-**A ojo.** `shot` genera la captura; ábrela y juzga jerarquía, espaciado,
-alineación y legibilidad. El criterio es insustituible aquí.
+- `checks` da pistas, no veredictos (áreas táctiles < 44px, texto < 12px,
+  imágenes sin alt, texto pegado al borde); algunas son intencionadas. `a11y` es
+  la fuente fiable de accesibilidad.
+- `audit`: `innerWidth=390 overflowH=0px ok` está bien; un `innerWidth` mayor
+  significa que algo fuerza ese ancho. Entonces `bisect`.
+- `bisect`: el culpable es el nodo con `kids=0`; sus ancestros salen porque al
+  ocultarlos también desaparece.
+- `invisible` sale con código 1 si encuentra algo.
+- `states`: el estado activo de pestañas y similares hay que provocarlo a mano;
+  axe solo ve el que viene seleccionado.
 
-**Señales objetivas.** `checks` reporta lo medible: áreas táctiles por debajo
-de 44px, texto por debajo de 12px, imágenes sin alt y texto pegado a los
-bordes. Da pistas, no veredictos: algunos resultados son intencionados —texto
-solo para lectores de pantalla, leyendas pequeñas— y hay que filtrarlos.
-
-`a11y` inyecta axe-core y agrupa las violaciones por impacto con su selector y
-su motivo. Necesita red. Es mucho más fiable que las heurísticas de `checks`
-para accesibilidad real.
-
-## Las cuatro comprobaciones que nadie más hace
-
-Ni el build, ni el typecheck, ni axe ven ninguna de estas. Las cuatro salieron
-de fallos reales.
-
-**`invisible` — contenido inaccesible para siempre.** Una animación de entrada
-oculta el elemento y lo revela al entrar en pantalla. Si el disparador se
-pierde —porque el contenido carga solo y cambia el alto de la página después de
-calcular las posiciones—, ese elemento se queda en `opacity: 0` para siempre.
-Es el peor fallo posible y no lo ve nadie: el HTML está ahí, el test pasa, y el
-usuario no ve nada.
-
-Dos reglas que salieron de esto: **no ocultes nunca un contenedor entero**
-—si a un item se le escapa el disparador se nota poco, si es una sección es un
-tramo de página inaccesible—, y **excluye lo que viva dentro de un carrusel**,
-porque una diapositiva fuera de pantalla en horizontal no intersecta nunca.
-
-**`hydration` — el HTML del servidor descartado.** Un desajuste entre lo que
-pinta el servidor y lo que pinta el cliente hace que el framework tire el HTML
-y repinte entero. Solo se ve escuchando `pageerror` mientras se recorre.
-
-**`states` — contraste en hover.** axe mide el estado en reposo. Un botón puede
-pasar parado y fallar al pasar el ratón. **Y el estado activo hay que
-provocarlo a mano**: si solo hay una pestaña activa a la vez, axe únicamente ve
-la que viene seleccionada por defecto, y las otras pueden estar fallando sin
-que nada lo diga.
-
-**`rhythm` — el aire entre secciones.** Señala las que tienen el titular pegado
-al canto. El caso típico: una regla que no suma el aire de dos bandas seguidas
-del mismo fondo, aplicada a una página que pinta su banda con una clase propia
-en vez de declararla, y que por tanto pierde el aire justo donde el fondo
-cambia.
-
-## Cómo leer la auditoría
-
-- `innerWidth=390 overflowH=0px ok` — sin scroll horizontal.
-- `innerWidth=509 ... scroll horizontal` — algo fuerza un ancho mínimo de
-  509px y el navegador hace zoom-out. Lanza `bisect` para encontrarlo.
-- `bisect` ordena los nodos cuyo ocultado recorta más ancho. **El culpable real
-  es el que tiene `kids=0`** (una hoja); los ancestros aparecen porque
-  ocultarlos también lo elimina.
+Dos reglas de las animaciones de entrada: no ocultes nunca un contenedor entero,
+y excluye lo que viva dentro de un carrusel.
 
 ## Causas típicas de scroll horizontal
 
-- **Un flex-item sin `min-width: 0`** que contiene texto truncado o sin
-  saltos: el `min-width: auto` por defecto impide encoger, y el ancho mínimo
-  del contenido manda. Se arregla en el contenedor, no en el texto.
-- **Un elemento a sangre completa con márgenes negativos** colocado fuera del
-  contenedor que aporta el padding: el margen negativo se sale. Se arregla
-  envolviéndolo en un elemento con el padding correspondiente.
-- **`overflow-x: hidden` en la raíz** enmascara el problema en esa página pero
-  no lo arregla, y reaparece en cualquier otra. Busca la causa con `bisect`.
+- Un flex-item sin `min-width: 0` con texto que no se parte. Se arregla en el
+  contenedor.
+- Un elemento a sangre con márgenes negativos fuera del contenedor que pone el
+  padding. Se envuelve en un elemento con ese padding.
+- `overflow-x: hidden` en la raíz lo tapa pero no lo arregla. Busca la causa con
+  `bisect`.
 
 ## Gotchas
 
-- **Nada se mide hasta que el componente hidrata.** Con islas o carga diferida,
-  un barrido rápido mide el marcado del servidor: el mismo bloque puede dar
-  4.766 px o 1.463 según eso. Baja en tramos con pausa y espera al selector que
-  solo existe hidratado.
-- **Recorre sin volver arriba.** Al volver al principio, lo del fondo queda por
-  debajo del pliegue y la comprobación de invisibles da un falso positivo.
-- **`node script | head` mata el proceso por SIGPIPE** antes de que escriba su
-  salida, y acabas comparando contra datos viejos. Redirige a fichero.
-- **Un servidor estático no avisa si el puerto ya está ocupado**: puedes estar
-  midiendo otra aplicación. Verifica el contenido servido antes de medir.
-- **Algunos bundlers en modo desarrollo no recompilan de forma fiable los
-  cambios del layout raíz.** Tras tocarlo, reinicia el servidor de desarrollo
-  antes de volver a auditar, o medirás el estado anterior.
-- **Los errores de carga de chunks dinámicos** en el primer render headless
-  pueden disparar el error boundary. El script calienta dos veces para
-  evitarlo; si aun así ves la página de error, reintenta.
-- **Los elementos decorativos en `position: absolute`** que sobresalen dentro
-  de un contenedor con `overflow: hidden` son falsos positivos. El script ya
-  ignora `absolute` y `fixed`.
-- **Para matar el servidor de desarrollo, mata por PID.** Un `pkill` por
-  patrón puede llevarse por delante tu propia shell.
+- Mide después de hidratar: baja en tramos con pausa y espera a un selector que
+  solo exista hidratado.
+- Recorre sin volver arriba, o `invisible` da falsos positivos.
+- No encadenes `| head`: el proceso muere antes de escribir. Redirige a fichero.
+- Comprueba que el puerto sirve la aplicación que crees.
+- Tras tocar el layout raíz, reinicia el servidor de desarrollo.
+- Si sale la página de error por chunks dinámicos, reintenta.
+- Mata el servidor de desarrollo por PID, nunca con `pkill`.
 
 ## Relacionado
 
-- `/device-loop` — la hermana nativa: ver la app real en un dispositivo físico
-- `/render-loop` — iterar sobre una salida renderizada sin referencia
-- `/ui-behaviour` — la otra mitad: que los controles hagan algo útil al pulsarlos
+- `/device-loop` — la app real en un dispositivo físico
+- `/render-loop` — iterar sobre una salida renderizada
+- `/ui-behaviour` — que los controles hagan algo útil

@@ -379,3 +379,20 @@ test_hooks_install_engancha_el_guardia_de_propuestas() {
   bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard" "y remove lo retira"
 }
+
+test_ninguna_skill_manda_un_comando_que_el_guardia_bloquea() {
+  # Una skill que manda ejecutar lo que el guardia para deja al agente contra
+  # un muro: share-local cerraba el túnel con pkill.
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh" malos="" f linea
+  for f in "$CRUX_HOME"/skills/*/SKILL.md; do
+    while IFS= read -r linea; do
+      [[ -n "${linea// }" ]] || continue
+      if ! printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
+          "$(node -e 'console.log(JSON.stringify(process.argv[1]))' -- "$linea")" \
+          | bash "$hook" >/dev/null 2>&1; then
+        malos+="${f#"$CRUX_HOME"/}: $linea"$'\n'
+      fi
+    done < <(awk '/^```/{ if (dentro) { dentro = 0; cmd = 0 } else { dentro = 1; cmd = ($0 ~ /^```(bash|sh)?[[:space:]]*$/) } ; next } dentro && cmd' "$f")
+  done
+  assert_eq "" "$malos" "ningún bloque de comandos de una skill choca con el guardia"
+}
