@@ -60,9 +60,11 @@ gestionado=0
 
 [[ -n "$kernel" && "$toplevel" == "$kernel" ]] && gestionado=1
 
-# El docs repo también tiene cerrada su rama principal, así que también le toca
-# el aviso: si no, el bloqueo aparece al hacer push y ya es tarde.
-[[ $gestionado -eq 0 && -f "$toplevel/crux.json" ]] && gestionado=1
+# En el docs repo se trabaja sobre la principal y se sube directo: ahí el
+# aviso del ciclo sobra.
+if [[ -f "$toplevel/crux.json" ]]; then
+  case "$(basename "$toplevel")" in *-docs|docs) silencio ;; esac
+fi
 
 if [[ $gestionado -eq 0 && -n "$raiz" ]]; then
   case "$toplevel/" in

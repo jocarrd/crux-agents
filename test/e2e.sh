@@ -78,21 +78,29 @@ cierto '[[ $? -eq 0 ]]' "doctor pasa sobre el proyecto recién creado"
 
 paso "instalar las guardas"
 ( cd "$DOCS" && crux hooks install >/dev/null 2>&1 )
-cierto '[[ -x "$DOCS/.git/hooks/pre-push" ]]' "pre-push instalado"
-cierto 'grep -q "refs/heads/main" "$DOCS/.git/hooks/pre-push"' "vigila la rama principal declarada"
+cierto '[[ -x "$REPO/.git/hooks/pre-push" ]]' "pre-push instalado en el repo de código"
+cierto 'grep -q "refs/heads/main" "$REPO/.git/hooks/pre-push"' "vigila la rama principal declarada"
+cierto '[[ ! -e "$DOCS/.git/hooks/pre-push" ]]' "el docs repo no lo lleva: se sube directo"
 
-paso "el push directo a la principal se bloquea"
+paso "el push directo a la principal se bloquea en el código, no en la doc"
 git_ -C "$DOCS" add -A >/dev/null 2>&1
 git_ -C "$DOCS" commit -qm "docs: initial" >/dev/null 2>&1
-# La primera subida crea la principal en el remoto vacío: se deja.
 git -C "$DOCS" push -q origin main >/dev/null 2>&1
-cierto 'git -C "$REMOTO" show-ref --verify --quiet refs/heads/main' "la primera subida crea la principal"
-antes="$(git -C "$REMOTO" rev-parse main)"
 echo "más" >> "$DOCS/README.md"
 git_ -C "$DOCS" commit -qam "docs: tweak" >/dev/null 2>&1
-salida="$(git -C "$DOCS" push origin main 2>&1)"
-cierto '[[ "$salida" == *"bloqueado"* ]]' "el hook impide actualizarla"
-cierto '[[ "$(git -C "$REMOTO" rev-parse main)" == "$antes" ]]' "y nada nuevo llegó al remoto"
+git -C "$DOCS" push -q origin main >/dev/null 2>&1
+cierto '[[ "$(git -C "$REMOTO" rev-parse main)" == "$(git -C "$DOCS" rev-parse HEAD)" ]]' \
+  "la documentación llega al remoto sin propuesta"
+# Un remoto aparte para no tocar el que usa la propuesta más abajo.
+git init -q --bare "$SB/remotos/api-bloqueo.git"
+git -C "$REPO" push -q "$SB/remotos/api-bloqueo.git" HEAD:refs/heads/main >/dev/null 2>&1
+cierto 'git -C "$SB/remotos/api-bloqueo.git" show-ref --verify --quiet refs/heads/main' "la primera subida crea la principal"
+antes="$(git -C "$SB/remotos/api-bloqueo.git" rev-parse main)"
+echo "// más" >> "$REPO/src/index.js"
+git_ -C "$REPO" commit -qam "feat: tweak" >/dev/null 2>&1
+salida="$(git -C "$REPO" push "$SB/remotos/api-bloqueo.git" HEAD:refs/heads/main 2>&1)"
+cierto '[[ "$salida" == *"bloqueado"* ]]' "el hook impide actualizar la principal del código"
+cierto '[[ "$(git -C "$SB/remotos/api-bloqueo.git" rev-parse main)" == "$antes" ]]' "y nada nuevo llegó al remoto"
 
 paso "el mensaje de commit fuera del idioma se rechaza"
 ( cd "$REPO" && crux hooks install >/dev/null 2>&1 )

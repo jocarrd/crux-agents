@@ -970,14 +970,13 @@ test_el_hook_recuerda_el_ciclo_en_la_rama_principal() {
   out="$(_guard "$repo" s3)"
   assert_eq "" "$out" "fuera de la rama principal calla"
 
-  # El docs repo también tiene cerrada su principal: si el aviso no llega ahí,
-  # el bloqueo aparece al hacer push y ya es tarde.
+  # En el docs repo se trabaja sobre la principal: el aviso sería ruido.
   local docs="$CRUX_PROJECTS_DIR/proy/proy-docs"
   git -C "$docs" init -q -b main
   git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
   git -C "$docs" add -A; git -C "$docs" commit -qm init
   out="$(_guard "$docs" s5)"
-  assert_contains "$out" "crux workspace new" "el docs repo también recibe el aviso"
+  assert_eq "" "$out" "el docs repo no recibe el aviso"
 
   # Un repo cualquiera que crux no gestiona no es asunto suyo.
   local ajeno="$SB/ajeno"
@@ -1862,4 +1861,33 @@ test_finish_no_avisa_de_tamano_si_lo_grande_es_generado() {
     bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
   local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
   assert_not_contains "$out" "líneas escritas" "un lockfile no cuenta como revisión"
+}
+
+test_finish_avisa_de_un_cambio_grande_sin_plan() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  seq 1 150 > "$ws/grande.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: grande"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
+  assert_contains "$out" "la tarea no tiene plan" "avisa del cambio grande sin plan"
+  assert_contains "$out" "crux task plan" "y dice cómo guardarlo"
+  assert_contains "$out" "propuesta abierta" "sin bloquear"
+}
+
+test_finish_no_avisa_del_plan_si_esta_guardado() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_con_visual)"
+  printf 'Qué cambia: el fichero grande.\n' > "$SB/plan.md"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" plan "$SB/plan.md" >/dev/null 2>&1 )
+  seq 1 150 > "$ws/grande.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: grande"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish portada 2>&1)"
+  assert_not_contains "$out" "no tiene plan" "con plan guardado no avisa"
+  assert_contains "$out" "propuesta abierta" "y la propuesta se abre"
 }

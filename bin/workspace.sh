@@ -465,7 +465,7 @@ cmd_finish() {
       warn "la tarea se cierra sin un solo paso anotado"
       info "en $registro_tarea solo queda el objetivo"
       info "lo que mediste y lo que descartaste por el camino no lo recupera nadie"
-      info "anótalo ahora: crux task add \"<paso>\" · crux task note \"<decisión>\""
+      info "anótalo ahora: crux task add \"<paso>\" · crux task note \"<decisión>\" --why \"<porqué>\""
     fi
   fi
 
@@ -514,6 +514,18 @@ cmd_finish() {
     warn "la propuesta tiene $written_lines líneas escritas: pasa de 400, lo que se revisa bien de una vez"
     info "si se puede partir en unidades que funcionen solas, pártela en propuestas encadenadas"
     info "si no, di en la descripción por qué va entera"
+  fi
+
+  # Nada obliga a presentar el plan antes de escribir código, y bloquearlo
+  # sería peor: una errata no lo necesita. Pero un cambio de este tamaño sin
+  # plan en el registro es justo el que nadie pudo parar a tiempo.
+  if [[ "${written_lines:-0}" -gt 100 && -n "$registro_tarea" && -f "$registro_tarea" ]]; then
+    local plan_lines
+    plan_lines="$(awk '/^## /{on = ($0 == "## Plan"); next} on && NF && !/^<!--.*-->$/' "$registro_tarea" | wc -l | tr -d ' ')"
+    if [[ "$plan_lines" -eq 0 ]]; then
+      warn "$written_lines líneas escritas y la tarea no tiene plan"
+      info "si se aprobó en la conversación, guárdalo: crux task plan <fichero>"
+    fi
   fi
 
   # Si la tarea dice qué cambia y por qué, la descripción sale de ahí; si no,
@@ -965,6 +977,7 @@ archivar_si_terminada() {
   estado="$(awk -F': ' '/^status:/{print $2; exit}' "$registro")"
   case "$estado" in
     merged|deployed)
+      promote_decisions "$registro"
       if destino="$(node "$CRUX_HOME/lib/task.mjs" archive --file "$registro" 2>&1)"; then
         ok "tarea '$tarea' archivada"
       else

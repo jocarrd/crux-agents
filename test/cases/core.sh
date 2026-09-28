@@ -1393,10 +1393,35 @@ test_el_hook_protege_la_rama_que_declara_el_proyecto() {
   local docs; docs="$(new_project heredado --branch master)"
   assert_eq "master" "$(git -C "$docs" rev-parse --abbrev-ref HEAD)" "el repo nace en la declarada"
 
+  local app; app="$(dirname "$docs")/app"
+  mkdir -p "$app"; git -C "$app" init -q -b master
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.repos = ["app"];
+    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+  ' "$docs/crux.json"
+
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
-  local hook="$docs/.git/hooks/pre-push"
-  assert_contains "$(cat "$hook")" "refs/heads/master" "y el hook vigila esa"
+  local hook="$app/.git/hooks/pre-push"
+  assert_contains "$(cat "$hook")" "refs/heads/master" "el hook del repo de código vigila esa"
   assert_not_contains "$(cat "$hook")" "refs/heads/main" "no una que no existe"
+}
+
+test_el_docs_repo_se_sube_directo() {
+  # La regla del perfil dice que la documentación se sube al terminar. Cerrarle
+  # la principal solo enseñaba a usar --no-verify.
+  sandbox >/dev/null
+  local docs; docs="$(new_project directo)"
+  mkdir -p "$docs/.git/hooks"
+  printf '#!/usr/bin/env bash\n# Instalado por crux hooks install.\nexit 1\n' > "$docs/.git/hooks/pre-push"
+  local out; out="$(cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install 2>&1)"
+  assert_no_file "$docs/.git/hooks/pre-push" "install retira el pre-push que puso crux"
+  assert_contains "$out" "pre-push retirado" "y lo dice"
+  assert_file "$docs/.git/hooks/pre-commit" "el pre-commit del doctor se queda"
+
+  printf '#!/usr/bin/env bash\n# mío\nexit 0\n' > "$docs/.git/hooks/pre-push"
+  ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  assert_file "$docs/.git/hooks/pre-push" "un pre-push que no es de crux no se toca"
 }
 
 # Un proyecto anterior al campo no declara nada: manda lo que el repo usa.

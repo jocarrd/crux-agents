@@ -164,10 +164,17 @@ evidencia, siguiente paso, decisiones tomadas por el camino y lo comprobado.
 crux workspace new passkeys --goal "Entrar con passkey, sin contraseña"
 crux task add "registro de la passkey" "login" "recuperación de cuenta"
 crux task done T1 "test e2e del registro en verde, captura del diálogo"
-crux task note "La recuperación sigue por correo: el proveedor no admite passkeys de respaldo"
+crux task note "La recuperación sigue por correo" --why "el proveedor no admite passkeys de respaldo" \
+  --where "src/auth/recovery.ts" --learned "Safari pide el gesto del usuario para crear la passkey"
 crux task next "probar el login en Safari"
 crux task                          # estado, pasos y siguiente paso
 ```
+
+Una nota con `--why` es una **decisión**: al archivar la tarea, crux la pasa a
+`repos/<repo>/notes.md` del docs repo y la commitea, porque el registro de la
+tarea es local y la siguiente sesión no lo lee. Las notas sin porqué son
+desviaciones del plan y se quedan en la tarea. Se anotan en el momento, no al
+cerrar.
 
 Lo escriben los comandos, no hay que editarlo a mano:
 
@@ -204,7 +211,7 @@ instala `crux hooks install`:
 
 | Guarda | Qué impide |
 | ------ | ---------- |
-| `pre-push` en la rama principal | Empujar a la principal sin pasar por propuesta |
+| `pre-push` en la rama principal | Empujar a la principal de un repo de código o del kernel sin pasar por propuesta. El repo de docs se sube directo, como dice su regla |
 | `commit-msg` | Mensajes de commit fuera del idioma del estándar |
 | `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
 | `.crux-visual` | Publicar en la propuesta capturas aprobadas sobre otro commit |
@@ -212,6 +219,7 @@ instala `crux hooks install`:
 | Guardia de worktrees | Borrar a mano un espacio registrado (`git worktree remove`, `rm -rf`) y dejar el registro mintiendo |
 | Guardia destructivo | `git reset --hard`, `push --force`, `clean -fd`, descartar el árbol, `rm -r` sobre `/`, `~`, `.` o `*`, `pkill`/`killall`, y leer claves privadas o credenciales. Quien lo quiera de verdad lo ejecuta con `! <comando>` |
 | Guardia de propuestas | Abrir a mano con `gh pr create` una propuesta en un proyecto de crux, saltándose el recibo que exige `crux workspace finish` |
+| Aviso de plan en `finish` | Nada: avisa cuando una propuesta pasa de 100 líneas escritas y su tarea no tiene plan guardado (`crux task plan`) |
 | Registro que se repara solo | Entradas de espacios cuya carpeta y rama ya no existen; `new`, `list` y `status` las retiran |
 | `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
 | `crux memory` en el cierre | Cerrar sesión con conocimiento del proyecto solo en esta máquina |

@@ -538,6 +538,56 @@ owner_from_template() {
 # Junto al registro de espacios: si una prueba redirige ese registro a su
 # sandbox, las tareas van detrás sin tener que acordarse de otra variable.
 
+# Las decisiones de una tarea (las notas con porqué) viven en su registro, que
+# es local y se archiva. Antes de archivarlo pasan a repos/<repo>/notes.md del
+# docs repo, que es lo que lee la siguiente sesión, y se commitean ahí solas.
+# Devuelve 0 aunque no haya nada que pasar: archivar no depende de esto.
+promote_decisions() {
+  local record="$1" project docs data repo target entry
+  [[ -f "$record" ]] || return 0
+  project="$(awk -F': ' '/^project:/{print $2; exit}' "$record")"
+  [[ -n "$project" ]] || return 0
+  docs="$(projects_root)/$project/$project-docs"
+  [[ -f "$docs/crux.json" ]] || return 0
+  data="$(node "$CRUX_HOME/lib/task.mjs" decisions --file "$record" 2>/dev/null)" || return 0
+  entry="$(node -e '
+    const d = JSON.parse(process.argv[1]);
+    if (!d.items.length) process.exit(0);
+    const day = new Date().toISOString().slice(0, 10);
+    const out = [];
+    for (const i of d.items) {
+      out.push(`## ${i.what}, ${day}`, "", `Task: \`${d.task}\``, "");
+      for (const k of ["why", "where", "learned"]) {
+        if (i[k]) out.push(`- **${k[0].toUpperCase() + k.slice(1)}**: ${i[k]}`);
+      }
+      out.push("");
+    }
+    process.stdout.write(out.join("\n"));
+  ' "$data")"
+  [[ -n "$entry" ]] || return 0
+
+  while IFS= read -r repo; do
+    [[ -n "$repo" && -d "$docs/repos/$repo" ]] && { target="$docs/repos/$repo/notes.md"; break; }
+  done < <(node -e 'for (const r of JSON.parse(process.argv[1]).repos) console.log(r)' "$data")
+  if [[ -z "${target:-}" ]]; then
+    warn "la tarea tiene decisiones, pero su repo no tiene carpeta en $(basename "$docs")/repos/"
+    info "pásalas a mano desde: $record"
+    return 0
+  fi
+
+  [[ -f "$target" ]] && [[ -s "$target" ]] && printf '\n' >> "$target"
+  printf '%s\n' "$entry" >> "$target"
+  local rel="${target#"$docs"/}"
+  if git -C "$docs" add -- "$rel" >/dev/null 2>&1 &&
+     git -C "$docs" commit -q -m "docs($repo): decisions from task $(basename "$record" .md)" -- "$rel" >/dev/null 2>&1; then
+    ok "decisiones de la tarea en $(basename "$docs")/$rel (commit hecho; súbelo con git push)"
+  else
+    warn "decisiones escritas en $(basename "$docs")/$rel, pero el commit no se pudo hacer"
+    info "revísalo y commitéalo a mano"
+  fi
+  return 0
+}
+
 task_dir() {
   if [[ -n "${CRUX_TASKS_DIR:-}" ]]; then echo "$CRUX_TASKS_DIR"; return; fi
   echo "$(dirname "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}")/tasks"

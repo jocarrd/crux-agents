@@ -9,7 +9,10 @@
 #   crux task add "<paso>" [...]     añade pasos y devuelve su id (T1, T2…)
 #   crux task done <Tn> ["evidencia"] marca un paso hecho con lo que lo prueba
 #   crux task next "<texto>"         lo siguiente que hay que hacer
-#   crux task note "<texto>"         una desviación o una decisión tomada por el camino
+#   crux task note "<qué>" [--why "…"] [--where "…"] [--learned "…"]
+#                                    una desviación o una decisión tomada por el camino;
+#                                    con --why es una decisión, y al archivar la tarea
+#                                    pasa a repos/<repo>/notes.md del docs repo
 #   crux task status <estado> [--force]
 #   crux task list [--all] [--done]  las tareas abiertas, con su siguiente paso; --done, las archivadas
 #   crux task archive                la cierra y la aparta a done/, fechada
@@ -100,7 +103,27 @@ case "$op" in
     [[ -n "${2:-}" ]] || info "sin evidencia: un paso marcado sin lo que lo prueba es una declaración"
     ;;
   next)  f="$(fichero_actual)"; [[ -n "${1:-}" ]] || die "uso: crux task next \"<texto>\""; motor set --file "$f" --section "Siguiente paso" --text "$1"; ok "siguiente paso anotado" ;;
-  note)  f="$(fichero_actual)"; [[ -n "${1:-}" ]] || die "uso: crux task note \"<texto>\""; motor note --file "$f" --text "$1"; ok "anotado en desviaciones y decisiones" ;;
+  note)
+    f="$(fichero_actual)"
+    [[ -n "${1:-}" && "$1" != --* ]] || die "uso: crux task note \"<qué>\" [--why \"…\"] [--where \"…\"] [--learned \"…\"]"
+    que="$1"; shift
+    extra=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --why|--where|--learned)
+          [[ -n "${2:-}" && "$2" != --* ]] || die "$1 necesita un texto"
+          extra+=("$1" "$2"); shift 2 ;;
+        *) die "opción desconocida: $1" ;;
+      esac
+    done
+    motor note --file "$f" --text "$que" ${extra[@]+"${extra[@]}"}
+    if [[ " ${extra[*]:-} " == *" --why "* ]]; then
+      ok "decisión anotada: al archivar la tarea pasa a las notas del repo en el docs repo"
+    else
+      ok "anotado en desviaciones y decisiones"
+      info "si es una decisión que debe durar, añade su porqué: --why \"…\""
+    fi
+    ;;
   status)
     f="$(fichero_actual)"; [[ -n "${1:-}" ]] || die "uso: crux task status <estado> [--force]"
     motor status --file "$f" --to "$1" ${2:+"$2"}
@@ -109,6 +132,7 @@ case "$op" in
   archive)
     f="$(fichero_actual)"
     [[ -f "$f" ]] || die "no existe el registro $f"
+    promote_decisions "$f"
     destino="$(motor archive --file "$f")"
     ok "tarea archivada: $destino"
     ;;

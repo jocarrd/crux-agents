@@ -120,8 +120,13 @@ crux task                          # estado, pasos y siguiente paso
 crux task add "paso" "otro paso"   # devuelve T1, T2…
 crux task done T1 "lo que lo prueba"
 crux task next "lo siguiente"
-crux task note "decisión o desviación"
+crux task note "desviación del plan"
+crux task note "qué se decidió" --why "por qué" --where "dónde vive" --learned "qué se aprendió"
 ```
+
+**Una decisión se anota en el momento y con su porqué.** Las notas con `--why`
+pasan solas a `repos/<repo>/notes.md` del docs repo al archivar la tarea; las
+que no lo llevan se quedan en el registro, que es local.
 
 **Se escribe en el idioma de las propuestas del repo** —el de sus commits—,
 porque de ahí sale la descripción. `workspace new` lo dice al abrir el espacio.

@@ -285,3 +285,52 @@ test_gc_borra_las_tareas_archivadas_que_han_caducado() {
   assert_exit 1 "una retención que no es un número se dice" \
     env CRUX_TASKS_RETENTION_DAYS=pronto bash "$CRUX_HOME/bin/workspace.sh" gc
 }
+
+test_las_decisiones_de_la_tarea_pasan_al_docs_repo_al_archivar() {
+  # El registro de la tarea es local y se archiva: lo que se decidió por el
+  # camino se quedaba ahí y la siguiente sesión no lo veía.
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  local docs="$root/proj-docs"
+  mkdir -p "$docs/repos/app"; echo "# Notas" > "$docs/repos/app/notes.md"
+  git -C "$docs" init -q; git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
+  git -C "$docs" add -A; git -C "$docs" commit -qm init
+  bash "$CRUX_HOME/bin/workspace.sh" new dec --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-dec" out
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" note "Cache keys get a version prefix" \
+    --why "changing the format broke existing keys" --where "src/cache.ts" \
+    --learned "old keys expire in 24h, so no migration is needed" 2>&1)"
+  assert_contains "$out" "decisión anotada" "con porqué, es una decisión"
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" note "Skipped the retry, not needed yet" 2>&1)"
+  assert_contains "$out" "--why" "sin porqué, sugiere añadirlo"
+
+  local f="$SB/tasks/proj/dec.md"
+  assert_contains "$(cat "$f")" "Cache keys get a version prefix · Why: changing the format broke existing keys · Where: src/cache.ts" \
+    "el registro guarda la decisión en una línea"
+  node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm dec 2>&1)"
+  assert_contains "$out" "decisiones de la tarea en proj-docs/repos/app/notes.md" "al archivar lo dice"
+
+  local notes; notes="$(cat "$docs/repos/app/notes.md")"
+  assert_contains "$notes" "## Cache keys get a version prefix," "la decisión llega a las notas del repo"
+  assert_contains "$notes" "- **Why**: changing the format broke existing keys" "con su porqué"
+  assert_contains "$notes" "- **Learned**: old keys expire in 24h" "y lo aprendido"
+  assert_not_contains "$notes" "Skipped the retry" "la desviación sin porqué se queda en la tarea"
+  assert_contains "$(git -C "$docs" log -1 --format=%s)" "decisions from task dec" "y queda commiteada"
+  assert_eq "" "$(git -C "$docs" status --porcelain)" "sin dejar nada suelto"
+}
+
+test_una_tarea_sin_decisiones_no_toca_el_docs_repo() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  local docs="$root/proj-docs"
+  mkdir -p "$docs/repos/app"
+  git -C "$docs" init -q; git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
+  git -C "$docs" add -A; git -C "$docs" commit -qm init
+  bash "$CRUX_HOME/bin/workspace.sh" new sin --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/sin.md"
+  node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
+  bash "$CRUX_HOME/bin/workspace.sh" rm sin >/dev/null 2>&1
+  assert_no_file "$docs/repos/app/notes.md" "no crea notas vacías"
+  assert_eq "init" "$(git -C "$docs" log -1 --format=%s)" "ni commits"
+}
