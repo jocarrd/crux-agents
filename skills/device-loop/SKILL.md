@@ -12,9 +12,8 @@ Para ver cambios de código en vivo hace falta un **development build** con
 Metro y Fast Refresh. Para validar un APK ya construido basta instalar,
 lanzar y capturar.
 
-Es la hermana nativa de `/visual-test`. Se usa dispositivo físico y no
-emulador porque sin virtualización por hardware el emulador va por software y
-cualquier superficie GL sufre hasta ser inservible.
+Es la hermana nativa de `/visual-test`. Dispositivo físico, no emulador; el
+porqué de eso y de cada gotcha, en `<directorio-de-esta-skill>/references/por-que.md`.
 
 ## Cuándo usar
 
@@ -134,19 +133,10 @@ adb exec-out screencap -p > shot.png
 
 ## 5. Navegar por la app
 
-**En algunas capas de fabricante, `adb shell input tap` no llega a la app.**
-Exigen un permiso extra de depuración que a su vez pide cuenta del fabricante
-y SIM. El síntoma es que los toques no hacen nada, o que el gesto lo recibe el
-fondo en vez del control. Los `keyevent` sí suelen funcionar.
-
-El método que funciona en cualquier dispositivo es **abrir la pantalla por
-código** en vez de navegar con toques: instrumenta temporalmente el montaje
-para abrir la pantalla objetivo, deja que el Fast Refresh lo aplique, captura
-y revierte el cambio.
-
-Para que el efecto se ejecute hace falta un **montaje limpio**: Fast Refresh
-preserva el estado y no vuelve a lanzar efectos con dependencias estables. Es
-decir, forzar la parada de la app y relanzarla:
+**`adb shell input tap` no llega a la app en algunas capas de fabricante.** No
+intentes navegar con toques ni con teclas: **abre la pantalla por código**
+(instrumenta temporalmente el montaje, o usa su deep link), captura y revierte.
+Hace falta un montaje limpio, así que fuerza la parada y relanza:
 
 ```bash
 adb shell am force-stop <package>

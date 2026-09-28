@@ -5,13 +5,10 @@ description: Enseñar a quien decide el antes y el después de un cambio visual 
 
 # before-after
 
-Un cambio visual no está terminado cuando pasa los tests, sino cuando lo ha
-visto **quien decide**. Esta skill prepara lo que esa persona necesita para
-decidir en un minuto, desde el móvil: la versión de antes y la de ahora, pegadas,
-en los tres tamaños de pantalla.
-
-Los tests no ven la pantalla. Y la puerta 7 de `/ship` la pasa el agente: aquí
-aprueba una persona.
+Un cambio visual está terminado cuando lo ha visto **quien decide**. Esta skill
+le prepara el antes y el después, pegados, en tres tamaños de pantalla, para
+decidir en un minuto desde el móvil. El porqué de cada paso y de cada gotcha:
+`<directorio-de-esta-skill>/references/por-que.md`.
 
 ## Cuándo usar
 
@@ -36,11 +33,9 @@ un PDF, una imagen descargable—, se generan y se enseñan también, como fiche
 
 ### 2. Capturar las dos versiones con el mismo script
 
-El **antes** sale de lo publicado si la rama base es lo que está desplegado; si
-no, se levanta la base en otro puerto desde el checkout principal. El
-**después**, de la rama, idealmente con el build de producción servido en local.
-Los dos lados con el mismo script y los mismos datos: si no, se comparan dos
-formas de capturar, no dos versiones.
+El **antes**, de lo publicado si la base es lo desplegado; si no, la base en
+otro puerto desde el checkout principal. El **después**, de la rama, mejor con
+el build de producción en local. Los dos con el mismo script y los mismos datos.
 
 ```bash
 mkdir -p ~/.cache/visual-test && cd ~/.cache/visual-test
@@ -58,15 +53,14 @@ node capture.mjs --base https://<publicado> --head http://localhost:<puerto> \
 python3 "<directorio-de-esta-skill>/scripts/compose.py" <carpeta> --lang es
 ```
 
-Deja en `<carpeta>/compare/` un montaje por página y ancho: antes a la izquierda,
-después a la derecha, barra roja de 14 px, rótulos en rojo y verde, y la página,
-el dispositivo y el tramo debajo. Parte en tramos de unos 3.000 px, en WebP, para
-que se lean y se descarguen bien en un teléfono.
+Deja en `<carpeta>/compare/` un montaje por página y ancho (antes a la
+izquierda, después a la derecha, barra roja), en tramos de unos 3.000 px y en
+WebP.
 
 ### 4. Mirarlas antes de mandarlas
 
-Abre cada montaje. Si tú ves un fallo, lo ve la persona: se arregla antes de
-enseñar. Es también donde aparecen los artefactos de captura (ver Gotchas).
+Abre cada montaje. Lo que veas mal se arregla antes de enseñar; distingue los
+artefactos de captura (ver Gotchas).
 
 ### 5. Enseñarlas y esperar
 
@@ -99,35 +93,27 @@ Si la propuesta ya está abierta y se vuelve a enseñar tras comentarios:
 
 ## Gotchas
 
-- **La captura de página completa reinicia las animaciones de las gráficas y las
-  pilla vacías.** Cambia el tamaño de la ventana, la gráfica se redibuja desde
-  cero y la foto sale con los ejes y sin datos. `capture.mjs` agranda la ventana
-  a toda la altura, espera y después dispara. Una gráfica vacía en una captura
-  no es un bug de la página hasta verlo en el navegador.
-- **Lo que carga al entrar en pantalla no existe si no se recorre la página.** El
-  script baja a tramos antes de capturar.
-- **Con un servidor de desarrollo, el Chrome del sistema puede no pintar nunca**
-  (una transición de vista que no termina). El script usa primero el navegador
-  que trae Playwright; mejor aún, captura el build de producción.
-- **El consentimiento de cookies no es universal.** Una cookie de mentira no
-  siempre basta; `--hide` oculta el aviso, el chat y cualquier capa flotante por
-  selector. Los selectores de cada proyecto van en su adaptador.
-- **Los elementos fijos salen una vez, al final de la captura completa.** La
-  barra de navegación inferior de móvil aparece abajo del todo: es de la captura,
-  no del diseño.
-- **Veintisiete imágenes no las revisa nadie.** Tramos de unos 3.000 px, y solo
-  las páginas que tocó el diff.
+- **Una gráfica vacía en la captura** suele ser la animación reiniciada al
+  cambiar el tamaño de la ventana; `capture.mjs` ya espera. Compruébala en el
+  navegador antes de llamarlo bug.
+- **Lo que carga al entrar en pantalla** necesita recorrer la página; el script
+  lo hace.
+- **Con servidor de desarrollo, el Chrome del sistema puede no pintar;** mejor
+  el build de producción.
+- **Avisos de cookies, chat y capas flotantes:** `--hide` con sus selectores,
+  que van en el adaptador del proyecto.
+- **Los elementos fijos salen al final** de la captura completa: son de la
+  captura, no del diseño.
+- **Solo las páginas que tocó el diff:** veintisiete imágenes no las revisa
+  nadie.
 
 ## Anti-patterns
 
-- **Mandar solo el escritorio.** La mitad del tráfico es móvil y es donde se
-  rompe.
-- **Enseñar el después sin el antes.** Sin comparación, la persona tiene que
-  recordar cómo era, y no decide: opina.
-- **Subir "para que lo vea en la propuesta".** La propuesta es para lo aprobado;
-  lo que se enseña para aprobar va antes.
-- **Publicar capturas de un commit anterior** como si fueran las de ahora.
-  `crux visual` lo impide; no se esquiva borrando el recibo.
+- Mandar solo el escritorio.
+- Enseñar el después sin el antes.
+- Subir "para que lo vea en la propuesta": lo que se enseña para aprobar va
+  antes de subir.
+- Publicar capturas de un commit anterior (no se esquiva borrando el recibo).
 
 ## Relacionado
 

@@ -5,52 +5,27 @@ description: Pilotar un navegador CON la sesión ya iniciada del usuario desde l
 
 # drive-browser
 
-Controlar el Chrome del usuario —con sus cookies de sesión— desde la terminal,
-por CDP (`--remote-debugging-port`). Es lo que hace falta cuando el trabajo es
-"entra en mi Vercel y conéctame la base de datos" y **no hay MCP de navegador**:
-no tienes una herramienta nativa de "navega/clica", así que fabricas el puente.
+Controlar el Chrome del usuario, con sus cookies de sesión, desde la terminal
+por CDP (`--remote-debugging-port`), cuando hay que operar una web autenticada
+y no hay herramienta de navegador. Por qué cada restricción:
+`<directorio-de-esta-skill>/references/por-que.md`.
 
-La idea central: **una sesión de Chrome viva y autenticada** más un cliente CDP
-que le manda `Page.navigate`, `Runtime.evaluate` y `Page.captureScreenshot`.
+**No usar** para capturas de tu propia app en local (`/visual-test`), ni si hay
+un MCP de navegador disponible: compruébalo con `claude mcp list`. Si vas a
+repetir, instala uno (carga al reiniciar el agente):
+`claude mcp add chrome-devtools -s user -- npx -y chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222`.
 
-## Cuándo usar / Cuándo no usar
+## Hace falta
 
-**Usar** cuando necesites operar una web **autenticada** con la sesión del
-usuario: clicar por un panel, rellenar un formulario, leer un valor tras login.
-
-**No usar** si:
-- Solo quieres **capturas de tu propia app** en localhost para pulir responsive
-  → usa `visual-test` (Chrome headless nuevo, sin sesión: es otro problema).
-- **Hay un MCP de navegador** (`claude mcp list` lo muestra) → úsalo, es mejor
-  que esto. Si no lo hay y vas a repetir, instala uno (ver abajo).
-
-## Antes de nada: ¿hay MCP de navegador?
-
-```bash
-claude mcp list        # ¿aparece chrome-devtools / playwright / browser?
-```
-
-Si no aparece **y quieres que sea fácil de aquí en adelante**, instala uno (se
-carga al **reiniciar** el agente, no en la sesión actual):
-
-```bash
-# Conecta a un Chrome por su endpoint de depuración (reusa sesión):
-claude mcp add chrome-devtools -s user -- npx -y chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222
-```
-
-Para **ahora mismo**, sin reiniciar, sigue con CDP a mano (el resto de la skill).
-
-## Precondiciones
-
-- `google-chrome` instalado y **sesión de escritorio activa** (`echo $DISPLAY`
-  no vacío). Headed es obligatorio: ver gotcha del llavero.
-- `python3` con `websockets` (`python3 -c "import websockets"`).
+- `google-chrome` y **sesión de escritorio** (`echo $DISPLAY` no vacío): tiene
+  que ser headed.
+- `python3` con `websockets`.
 - El llavero desbloqueado (lo está si el usuario tiene Chrome abierto).
 
-## El procedimiento
+## Procedimiento
 
-1. **Encuentra el perfil que tiene la sesión.** No suele ser `Default`. Mira en
-   cuál están las cookies del sitio:
+1. **El perfil con la sesión** (no suele ser `Default`):
+
    ```bash
    python3 - <<'PY'
    import sqlite3, glob, os
@@ -62,104 +37,61 @@ Para **ahora mismo**, sin reiniciar, sigue con CDP a mano (el resto de la skill)
    PY
    ```
 
-2. **Lanza Chrome headed con puerto de depuración sobre una COPIA del perfil**,
-   desacoplado para que sobreviva entre llamadas (background task del harness):
-   ```bash
-   <dir-de-esta-skill>/scripts/chrome-session.sh ~/.config/google-chrome/"Profile 1"
-   ```
-   Espera a CDP: `curl -s http://127.0.0.1:9222/json/version`.
+2. **Lanza Chrome headed sobre una copia del perfil**, como tarea en segundo
+   plano persistente:
+   `<directorio-de-esta-skill>/scripts/chrome-session.sh ~/.config/google-chrome/"Profile 1"`.
+   Espera a `curl -s http://127.0.0.1:9222/json/version`.
 
-3. **Verifica que la sesión viajó** (no login): navega y lee la URL final.
-   ```bash
-   python3 <dir-de-esta-skill>/scripts/cdp.py goto https://vercel.com/dashboard /tmp/dash.png 6
-   # URL: https://vercel.com/<equipo>...  -> logueado. Si es /login -> falló el descifrado.
-   ```
+3. **Comprueba que la sesión viajó:**
+   `python3 <directorio-de-esta-skill>/scripts/cdp.py goto https://vercel.com/dashboard /tmp/dash.png 6`.
+   Si acaba en la página de login, el descifrado falló (casi siempre por lanzar headless).
 
-4. **Pilota**: navega, clica y rellena. En SPA modernas usa `click`, que manda
-   eventos de puntero de verdad; el `element.click()` de JS no basta.
-   ```bash
-   python3 .../cdp.py evalshot '[...document.querySelectorAll("button,a")].find(e=>e.textContent.trim()==="Create Database")?.click()??"no"' /tmp/x.png 3
-   python3 .../cdp.py eval 'location.href'
-   ```
+4. **Pilota** con llamadas cortas y separadas:
+   - Clic: **la acción `click` de `cdp.py`**, que manda eventos de ratón reales.
+     El `.click()` de JS o un `MouseEvent` sintético no disparan nada en muchas
+     SPA; úsalos solo si `click` no encuentra el elemento.
+   - Leer y ejecutar: `cdp.py eval '<js>'` y `cdp.py evalshot '<js>' <png> <s>`.
+   - Inputs controlados: el setter nativo y `input`/`change`. Con
+     autocompletado, el valor a "" con el setter y luego `type`; si no sale el
+     desplegable, Enter.
+   - En React muchos botones son `div`: búscalos por texto.
 
-5. **Al terminar, limpia**: cierra por puerto y borra la copia (tiene cookies):
+5. **Al terminar**, cierra por puerto y borra la copia, que tiene cookies:
+
    ```bash
    fuser -k 9222/tcp; rm -rf /tmp/cdp-profile
    ```
 
-## Gotchas (lo que cuesta tiempo)
-
-- **Google ya no entra con el perfil copiado, por muy bien que lo copies.** Las
-  cookies viajan y se descifran —se ven `SID`, `HSID`, `__Secure-1PSID`— pero
-  Google las ata al dispositivo de origen y el selector de cuentas sale con
-  "Sesión cerrada". Para servicios de Google, o para un "entrar con Google", hay
-  que **pedirle al usuario que inicie sesión una vez** en la ventana headed que ya
-  tienes abierta; después ya pilotas tú. Otras webs (Malt, Vercel) sí aceptan las
-  cookies copiadas.
-- **`element.click()` de JS no dispara nada en muchas SPA.** Ni él ni
-  `dispatchEvent` con MouseEvent sintético: React ignora eventos no confiables en
-  algunos componentes. Usa la acción `click` de `cdp.py`, que va por
-  `Input.dispatchMouseEvent`. Fue la diferencia entre avanzar y no avanzar en un
-  alta completa.
-- **Una pestaña puede dejar colgado `Runtime.evaluate`** y entonces todo `eval`
-  se queda esperando, aunque CDP siga respondiendo por HTTP. No mates Chrome, que
-  pierdes la sesión: abre pestaña nueva y cierra la vieja.
-  ```bash
-  curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"
-  curl -s "http://127.0.0.1:9222/json/close/<targetId>"
-  ```
-- **Los inputs con autocompletado necesitan tecleo real** para que salgan las
-  sugerencias: pon el valor a "" con el setter nativo, y luego `type`. Con el
-  setter solo, el desplegable no aparece. Si aun así no aparece, prueba Enter:
-  algunos widgets confirman el texto tal cual.
-
-- **El agente de terminal no suele traer MCP de navegador por defecto.** Solo
-  aparecen los de claude.ai (Gmail/Drive/…). La extensión de Claude para Chrome
-  **no** es invocable desde aquí. Confírmalo con `claude mcp list` antes de
-  teorizar por qué "no puedes navegar".
-- **Chrome RECHAZA depurar el perfil por defecto**: `DevTools remote debugging
-  requires a non-default data directory`. Por eso se copia el perfil a un
-  `--user-data-dir` aparte. No hay forma de saltárselo.
-- **Las cookies van cifradas con el llavero del sistema.** Headless **no** las
-  descifra (sale la pantalla de login aunque copies las cookies). Tiene que ser
-  **headed** (con `DISPLAY`) y `--password-store=gnome-libsecret`. Y hay que
-  copiar **`Local State`** (lleva la clave envuelta) además de `Cookies`.
-- **Auto-kill al matar Chrome.** `pkill -f "remote-debugging-port=9222"` coincide
-  con **tu propia línea de comando** y se manda SIGTERM a sí mismo (sale 143/144
-  sin hacer nada). **Mata por puerto**: `fuser -k 9222/tcp`.
-- **El harness mata los procesos en segundo plano** al terminar la llamada. Por
-  eso Chrome se lanza como *background task* persistente y se pilota con llamadas
-  CDP cortas y separadas; la copia del perfil conserva las cookies entre ellas.
-- **No puedes adjuntarte al Chrome real del usuario**: un perfil no admite dos
-  instancias, y encima es el perfil por defecto (prohibido depurar). Copia el
-  perfil; dos Chrome coexisten en `--user-data-dir` distintos.
-- **`urllib` a 127.0.0.1 puede irse por un proxy** del entorno → usa
-  `build_opener(ProxyHandler({}))` (ya está en `cdp.py`).
-- **UIs de React**: muchos "botones" son `div`. Clica por texto con
-  `querySelector(...).click()` (burbujea a React). Para inputs controlados, pon
-  el valor con el setter nativo y dispara `input`/`change`. El contenedor con
-  scroll es el `div` cuyo `scrollHeight>clientHeight`.
-
 ## Secretos: nunca los imprimas
 
-Para sacar una cadena de conexión o token de la web sin que pase por el
-contexto: que el JS lo deje en `window.__X__`, y vuélcalo a fichero con la
-acción `writefile` (lee el valor y lo escribe a disco con `chmod 600`, imprime
-solo la longitud). Luego consúmelo desde el fichero.
+Deja el valor en `window.__X__` y vuélcalo a fichero con `writefile`, que
+escribe con `chmod 600` e imprime solo la longitud:
 
 ```bash
 python3 .../cdp.py eval 'window.__X__=document.body.innerText.match(/DATABASE_URL=(\S+)/)[1]; "len="+window.__X__.length'
-python3 .../cdp.py writefile 'window.__X__' /tmp/secret   # no imprime el valor
+python3 .../cdp.py writefile 'window.__X__' /tmp/secret
 ```
 
-## Cómo verificar que funcionó
+## Gotchas
 
-La URL final tras `goto` a una página protegida: si redirige a login, el
-descifrado de cookies falló (casi siempre por lanzar headless). Si carga el
-panel, la sesión viajó y puedes pilotar.
+- **Google no acepta el perfil copiado:** pide al usuario que inicie sesión una
+  vez en la ventana headed y sigue tú. Otras webs sí aceptan las cookies.
+- **Chrome no depura el perfil por defecto** ni puedes adjuntarte al Chrome
+  real del usuario: siempre una copia en otro `--user-data-dir`.
+- **Headless no descifra las cookies:** headed, con
+  `--password-store=gnome-libsecret` y copiando también `Local State` (el
+  script ya lo hace).
+- **Si `eval` se queda colgado,** no mates Chrome: abre pestaña nueva
+  (`curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"`) y cierra la vieja
+  (`/json/close/<targetId>`).
+- **Mata por puerto (`fuser -k 9222/tcp`), nunca con `pkill`.**
+- **El entorno mata los procesos en segundo plano** al terminar cada llamada:
+  Chrome va como tarea persistente.
+- `urllib` a `127.0.0.1` puede salir por un proxy; `cdp.py` ya lo evita.
+- El contenedor con scroll es el `div` con `scrollHeight > clientHeight`.
 
 ## Relacionado
 
-- `visual-test` — capturas headless de TU app (sin sesión). Otro problema.
-- `share-local` — abrir tu local al exterior con un túnel.
-- `oauth-reauthorize` — cuando lo que falla es un token OAuth, no la sesión web.
+- `/visual-test` — capturas headless de tu app, sin sesión
+- `/share-local` — abrir tu local al exterior
+- `/oauth-reauthorize` — cuando falla un token OAuth, no la sesión web
