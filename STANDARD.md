@@ -859,6 +859,7 @@ credenciales y nombres. Con dos guardas:
 | `ui-tells` | Que una interfaz no se vea como generada por un modelo |
 | `redaccion` | Que un texto no se lea como generado por un modelo |
 | `x-posts` | Escribir y planificar publicaciones para X que lleguen a gente |
+| `motion-video` | Vídeos de motion graphics renderizados desde código, con sonido y bucle de crítica |
 | `css-to-components` | Mover estilos a los componentes sin cambiar el diseño |
 | `auth-bypass-local`, `oauth-reauthorize`, `deploy-fallback`, `share-local`, `drive-browser` | Operación |
 | `carry-env` | Llevarte a otra máquina lo que los repos no llevan |
