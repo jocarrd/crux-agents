@@ -175,3 +175,16 @@ test_sync_hook_no_repite_un_remoto_que_ya_no_existe() {
   assert_contains "$out" "beta/huerfano" "pero a mano sí se lista"
   teardown
 }
+
+test_sync_no_trae_proyectos_que_la_maquina_no_tiene() {
+  sandbox >/dev/null
+  _dos_maquinas
+  # Un gh con sesión que anuncia un proyecto con contrato. Cada máquina tiene
+  # los suyos: sync pone al día lo que hay, no clona lo que no está.
+  _maquina_lista
+  _gh_falso "otro-docs" "otro"
+
+  crux sync >/dev/null 2>&1
+  assert_no_file "$CRUX_PROJECTS_DIR/otro" "un proyecto del remoto que no está aquí se queda fuera"
+  teardown
+}

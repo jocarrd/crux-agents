@@ -93,7 +93,7 @@ piezas que falten.
 ### 6. Alternar entre dos máquinas
 
 ```bash
-crux sync                # al llegar: repos al día, proyectos nuevos y kernel
+crux sync                # al llegar: lo que hay en esta máquina, al día, y el kernel
 crux sync --leave        # al irte: falla si algo se quedaría solo aquí
 ```
 
@@ -101,9 +101,12 @@ crux sync --leave        # al irte: falla si algo se quedaría solo aquí
 Al volver a un ordenador después de un tiempo, decían "ya está" y dejaban el
 código tal como lo dejaste la última vez que lo usaste. `sync` cubre ese caso.
 
-Al llegar trae todos los remotos y avanza cada rama limpia que va por detrás.
-También clona los proyectos y los repos que se crearon desde la otra máquina, e
-instala la última versión publicada del kernel con sus hooks. Si una rama tiene
+Al llegar recorre lo que ya hay en la raíz de proyectos —docs repos, repos de
+código y repos sueltos—, trae sus remotos y avanza cada rama limpia que va por
+detrás. No trae proyectos que esta máquina no tenga: cada una tiene los suyos, y
+para traer uno está `crux clone`. Si un proyecto de aquí declara un repo que se
+añadió desde la otra máquina, ese sí lo clona, porque es del mismo proyecto.
+También instala la última versión publicada del kernel con sus hooks. Si una rama tiene
 cambios sin commitear o se ha separado de su remoto, lo dice y no la toca:
 juntarlas es una decisión y no la toma un script.
 

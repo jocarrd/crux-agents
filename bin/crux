@@ -35,7 +35,7 @@ crux — kernel del sistema de trabajo con agentes
   crux skill test <sk>  prueba una skill con sus escenarios y la compara con otra versión
   crux memory [--check] memorias del agente que deberían estar en git
   crux status [--check] qué hay abierto ahora mismo en todos los proyectos
-  crux sync [--leave]   al día con el remoto al llegar; nada atrapado al irte
+  crux sync [--leave]   pone al día lo que hay en esta máquina; nada atrapado al irte
   crux doctor [dir]     verifica la conformidad con el estándar
   crux doctor --machine verifica que esta máquina puede con todo
   crux upgrade [dir]    re-materializa el kernel a la versión actual
