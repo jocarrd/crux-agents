@@ -568,9 +568,12 @@
 - **Decision**: `crux sync` con dos sentidos.
   - **Al llegar** trae todos los remotos y avanza solo lo que no pide decidir:
     una rama limpia que va por detrás. Si hay cambios sin commitear o las
-    ramas se han separado, avisa y no toca. También trae los proyectos y los
-    repos creados desde la otra máquina, e instala el kernel si hay una
-    versión publicada más nueva.
+    ramas se han separado, avisa y no toca. Solo recorre lo que ya está en la
+    máquina: los proyectos que no están no se traen, porque cada máquina
+    tiene los suyos (`crux clone` para eso). Sí clona un repo que un proyecto
+    de aquí declara y falta, y el kernel si hay una versión publicada más
+    nueva. La primera versión (0.60.0) traía también los proyectos del remoto
+    que no estaban; se quitó en 0.60.1.
   - **Al irse** (`--leave`) falla si algo se quedaría solo en la máquina.
     `end-session` lo ejecuta.
   - Un hook de inicio de sesión hace lo de llegar, como mucho cada diez

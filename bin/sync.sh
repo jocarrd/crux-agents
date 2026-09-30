@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux sync — trabajar en dos máquinas sin que ninguna se quede atrás.
 #
-#   crux sync            al llegar: repos al día, proyectos nuevos y kernel
+#   crux sync            al llegar: lo que hay en esta máquina, al día, y el kernel
 #   crux sync --leave    al irte: falla si algo se quedaría solo en esta máquina
 #   crux sync --hook     lo mismo que al llegar, en silencio salvo novedades;
 #                        es lo que corre el hook de inicio de sesión
@@ -10,6 +10,9 @@
 # pero ninguno actualiza lo que ya hay: al volver a un ordenador después de un
 # mes, los dos decían "ya está" y dejaban el código de hace un mes. Esto cubre
 # el caso de alternar, que es el de todos los días.
+#
+# Trabaja sobre lo que ya hay en la raíz de proyectos. No trae proyectos que no
+# estén: cada máquina tiene los suyos, y para traer uno está `crux clone`.
 #
 # Al llegar solo avanza lo que se puede avanzar sin decidir nada: una rama
 # limpia que va por detrás de su remoto. Si hay cambios sin commitear o las
@@ -152,28 +155,10 @@ avanzar() {
   fi
 }
 
-# Los proyectos del remoto se piden a la vez que los fetch: son varias llamadas
-# a la API y, en serie, sumaban otro tanto al hook de inicio de sesión.
-pedir_proyectos() {
-  command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 || return 0
-  local owner
-  owner="$(owner_por_defecto)"
-  [[ -n "$owner" ]] && proyectos_con_contrato "$owner"
-}
-
-# Proyectos del remoto que no están en disco, y repos que un contrato declara
-# y faltan: los dos aparecen cuando se crearon desde la otra máquina.
-traer_lo_nuevo() {
-  local lista="$1" p docs repo falta
-  while IFS= read -r p; do
-    [[ -n "$p" && ! -d "$RAIZ/$p/$p-docs" ]] || continue
-    if bash "$CRUX_HOME/bin/clone.sh" "$p" --parent "$RAIZ" >/dev/null 2>&1; then
-      echo "nuevo	$p: proyecto traído"
-    else
-      echo "fallo	$p: no pude traer el proyecto — 'crux clone $p'"
-    fi
-  done < "$lista"
-
+# Repos que el contrato de un proyecto de esta máquina declara y no están en
+# disco: aparecen cuando se añadieron desde la otra. Son del mismo proyecto.
+traer_repos_nuevos() {
+  local p docs repo falta
   for docs in "$RAIZ"/*/*-docs; do
     [[ -f "$docs/crux.json" ]] || continue
     p="$(basename "$(dirname "$docs")")"
@@ -214,17 +199,13 @@ kernel_al_dia() {
 }
 
 sincronizar_llegada() {
-  local sin_red lineas repo remotos
-  remotos="$(mktemp)"
-  pedir_proyectos > "$remotos" 2>/dev/null &
+  local sin_red lineas repo
   sin_red="$(traer_todo)"
-  wait
   lineas=""
   while IFS= read -r repo; do
     lineas+="$(avanzar "$repo")"$'\n'
   done < <(repos_principales)
-  lineas+="$(traer_lo_nuevo "$remotos")"$'\n'
-  rm -f "$remotos"
+  lineas+="$(traer_repos_nuevos)"$'\n'
   lineas+="$(kernel_al_dia)"$'\n'
   lineas="$(printf '%s' "$lineas" | sed '/^$/d')"
 
