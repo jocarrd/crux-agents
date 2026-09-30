@@ -959,6 +959,7 @@ sesión. Ver ADR-012.
 | `crux skill test <skill>` | — | Prueba una skill con sus escenarios; `--against <ref>` marca regresiones |
 | `crux memory [--check]` | — | Memorias del agente que deberían estar en git |
 | `crux status` | `--check` | Proyectos, espacios y trabajo sin publicar |
+| `crux sync` | `--leave`, `--hook` | Al llegar, avanza lo que va por detrás y trae lo nuevo sin decidir nada; al irse, falla si algo se queda solo en la máquina |
 
 ---
 

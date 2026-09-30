@@ -533,6 +533,42 @@ owner_from_template() {
   [[ "$tmpl" =~ github\.com[:/]([^/]+)/ ]] && printf '%s' "${BASH_REMATCH[1]}"
 }
 
+# --- Proyectos del remoto -----------------------------------------------------
+#
+# Los usan `bootstrap`, que trae todos, y `sync`, que trae los que faltan. La
+# lista sale del remoto y no de un inventario: uno escrito a mano se queda viejo
+# en cuanto creas un proyecto desde la otra máquina.
+
+owner_por_defecto() {
+  # Sale del mismo sitio que las URL de clonado, para que no haya dos fuentes
+  # de verdad que puedan discrepar.
+  local remoto="" cfg="${CRUX_CONFIG:-$HOME/.crux/config}"
+  [[ -f "$cfg" ]] && remoto="$(grep -E '^CRUX_REMOTE=' "$cfg" | cut -d= -f2- | tr -d '"')"
+  local owner
+  owner="$(owner_from_template "$remoto")"
+  [[ -n "$owner" ]] && { echo "$owner"; return; }
+  gh api user --jq .login 2>/dev/null || true
+}
+
+proyectos_candidatos() {
+  # proyectos_candidatos <owner> — los repos <algo>-docs del owner, sin sufijo.
+  gh repo list "$1" --limit 300 --json name --jq '.[].name' 2>/dev/null \
+    | grep -E -- '-docs$' | sed -E 's/-docs$//' | sort -u
+}
+
+tiene_contrato() {
+  # tiene_contrato <owner> <proyecto> — sin crux.json, cualquier repo que acabe
+  # en -docs entraría como proyecto.
+  gh api "repos/$1/$2-docs/contents/crux.json" --silent >/dev/null 2>&1
+}
+
+proyectos_con_contrato() {
+  local p
+  while IFS= read -r p; do
+    [[ -n "$p" ]] && tiene_contrato "$1" "$p" && echo "$p"
+  done < <(proyectos_candidatos "$1")
+}
+
 # --- Registro de tareas --------------------------------------------------------
 #
 # Junto al registro de espacios: si una prueba redirige ese registro a su

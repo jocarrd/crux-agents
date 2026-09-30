@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Se carga con `source`. Deja en FF un ffmpeg con libx264 o para con un mensaje.
 # El ffmpeg de Playwright esta recortado y solo saca WebM: hay que buscar uno
 # con libx264 antes de dar por hecho que "hay ffmpeg".
@@ -24,6 +25,8 @@ buscar_ffmpeg() {
   return 1
 }
 
+# FF lo usa el script que carga este.
+# shellcheck disable=SC2034
 FF=$(buscar_ffmpeg) || {
   echo "No hay ffmpeg con libx264. Instala ffmpeg, 'pip install imageio-ffmpeg' o exporta FFMPEG." >&2
   exit 1

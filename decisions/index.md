@@ -551,3 +551,42 @@
     alta.
 - **Reversibility**: alta. Es una condición en un hook.
 - **Related**: `ADR-011`, `ADR-005`, `STANDARD.md` §El rigor
+
+---
+
+### ADR-015: Alternar de máquina es un caso propio, y al llegar no se decide nada
+
+- **Date**: 2026-09-30
+- **Status**: Accepted
+- **Context**: `bootstrap` monta una máquina vacía y `clone` trae un proyecto
+  que no está. Ninguno actualiza lo que ya hay: con el repo en disco dicen "ya
+  está" y siguen. Al volver a una torre que llevaba un mes sin usarse, los
+  proyectos se habrían quedado con el código de hace un mes y el kernel en la
+  0.27, con la 0.59 publicada. En el portátil, a la vez, había trabajo que no
+  estaba en ningún remoto: cuatro commits en una principal, dos ramas nunca
+  subidas y cambios sin commitear en cuatro repos. Nada lo avisaba al cerrar.
+- **Decision**: `crux sync` con dos sentidos.
+  - **Al llegar** trae todos los remotos y avanza solo lo que no pide decidir:
+    una rama limpia que va por detrás. Si hay cambios sin commitear o las
+    ramas se han separado, avisa y no toca. También trae los proyectos y los
+    repos creados desde la otra máquina, e instala el kernel si hay una
+    versión publicada más nueva.
+  - **Al irse** (`--leave`) falla si algo se quedaría solo en la máquina.
+    `end-session` lo ejecuta.
+  - Un hook de inicio de sesión hace lo de llegar, como mucho cada diez
+    minutos, y solo habla si algo cambió.
+  - No viajan las credenciales, que tienen `carry-env`, ni las memorias
+    personales del agente (`user` y `feedback`). Se valoró un repo privado
+    para ellas y se descartó: son de cada máquina. Las de proyecto ya van al
+    docs repo.
+- **Consequences**:
+  - Abrir sesión en la otra máquina basta para trabajar sobre lo último.
+  - El hook cuesta un `fetch` de cada repo en paralelo al abrir sesión. Sin
+    red no bloquea: dice qué repos no respondieron.
+  - Solo se avanza la rama en la que está cada repo. Las demás ramas locales se
+    quedan donde estaban, con su remoto ya traído.
+  - La primera vez en una máquina con un kernel anterior hay que instalarlo a
+    mano, porque el comando todavía no existe allí.
+- **Reversibility**: alta. El hook se retira con `crux hooks remove` y el
+  comando no cambia nada que `git` no deje deshacer.
+- **Related**: `ADR-013`, skill `carry-env`
