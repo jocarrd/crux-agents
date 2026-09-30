@@ -90,6 +90,20 @@ remotos_que_faltan() {
 
 # --- Al irse ------------------------------------------------------------------
 
+# Al irse no hay un fetch previo del que tirar: cada proyecto va al remoto, y
+# en paralelo, porque cada viaje por ssh cuesta segundos.
+tareas_en_paralelo() {
+  node "$CRUX_HOME/lib/task-sync.mjs" projects 2>/dev/null \
+    | xargs -P 8 -I{} node "$CRUX_HOME/lib/task-sync.mjs" sync --project {} 2>/dev/null \
+    | node -e '
+      let s = "";
+      process.stdin.on("data", (d) => (s += d));
+      process.stdin.on("end", () => {
+        const todo = s.split("\n").filter(Boolean).flatMap((l) => { try { return JSON.parse(l); } catch { return []; } });
+        process.stdout.write(JSON.stringify(todo));
+      });'
+}
+
 sincronizar_salida() {
   local atrapado=0 avisos=0 repo nombre b up delante sucio stash
   echo "lo que se quedaría solo en esta máquina"
@@ -170,7 +184,7 @@ sincronizar_salida() {
   while IFS=$'\t' read -r p linea; do
     [[ -n "$p" ]] || continue
     warn "$p: $linea"
-  done < <(node "$CRUX_HOME/lib/task-sync.mjs" sync --all 2>/dev/null | node -e '
+  done < <(tareas_en_paralelo | node -e '
     let s = "";
     process.stdin.on("data", (d) => (s += d));
     process.stdin.on("end", () => {
@@ -308,7 +322,7 @@ kernel_al_dia() {
 # traen las de la otra máquina y se publica lo que aquí quedó pendiente.
 tareas_al_dia() {
   local salida rc=0
-  salida="$(node "$CRUX_HOME/lib/task-sync.mjs" sync --all 2>&1)" || rc=$?
+  salida="$(node "$CRUX_HOME/lib/task-sync.mjs" sync --all --fetched 2>&1)" || rc=$?
   if [[ $rc -ne 0 ]]; then
     echo "fallo	tareas: $(printf '%s' "$salida" | head -1)"
     return
