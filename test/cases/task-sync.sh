@@ -406,3 +406,19 @@ test_tareas_la_fusionada_en_la_otra_maquina_se_reconcilia_al_llegar() {
   assert_no_file "$(registro B t1)" "B la trae, ve que está fusionada y la archiva en la misma ronda"
   teardown
 }
+
+test_tareas_con_la_rama_ya_traida_desfasada_no_se_pisa_nada() {
+  sandbox >/dev/null
+  _tareas_dos_maquinas
+  _nueva_tarea A de-a "a"
+  replica A >/dev/null
+  # B no ha traído nada y confía en lo que tiene: su publicación choca con la de
+  # A, y la segunda vuelta tiene que ir a buscarla.
+  _nueva_tarea B de-b "b"
+  en B node "$CRUX_HOME/lib/task-sync.mjs" sync --all --fetched >/dev/null
+  replica A >/dev/null
+
+  assert_file "$(registro B de-a)" "B acaba con la de A"
+  assert_file "$(registro A de-b)" "y A con la de B"
+  teardown
+}
