@@ -3,6 +3,7 @@
 #
 #   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>] [--task <tarea>] [--goal "<texto>"] [--force]
 #   crux workspace list
+#   crux workspace resume <tarea> [--project <p>]   la retoma aquí desde el remoto
 #   crux workspace adopt <ruta> [--task <tarea>]   registra un worktree hecho a mano
 #   crux workspace heal [--quiet]                  retira entradas sin carpeta ni rama
 #   crux workspace finish <nombre> [--title "..."]
@@ -260,6 +261,8 @@ cmd_new() {
   if resultado="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$registro_tarea" \
       --task "$tarea" --project "$proyecto" --repo "$repo_name" --workspace "$name" 2>&1)"; then
     [[ "$resultado" == joined ]] && ok "se une a la tarea '$tarea' ya abierta" || ok "tarea '$tarea' registrada"
+    node "$CRUX_HOME/lib/task.mjs" branch --file "$registro_tarea" --repo "$repo_name" --branch "$branch" \
+      >/dev/null 2>&1 || warn "no pude anotar la rama en la tarea: sin ella, otra máquina no sabrá retomarla"
     local idioma_tarea
     idioma_tarea="$(idioma_commits "$perfil" "$docs")"
     info "escríbela en '$idioma_tarea': de ella sale la descripción de la propuesta"
@@ -1230,6 +1233,12 @@ caducar_tareas() {
   echo "tareas archivadas hace más de $dias días (${#viejas[@]}):"
   for f in "${viejas[@]}"; do printf '      %s/%s\n' "$(basename "$(dirname "$(dirname "$f")")")" "$(basename "$f" .md)"; done
   if [[ "$confirmado" -eq 1 ]]; then
+    # Apuntadas como borradas, o la réplica de otra máquina las devolvería. Con
+    # su fecha de creación, que se lee antes de borrarlas.
+    for f in "${viejas[@]}"; do
+      printf 'done/%s %s\n' "$(basename "$f")" "$(sed -n 's/^created: //p' "$f" | head -1)" \
+        >> "$(dirname "$(dirname "$f")")/.removed"
+    done
     rm -f "${viejas[@]}"
     ok "${#viejas[@]} tareas caducadas borradas"
   else
@@ -1321,6 +1330,94 @@ cmd_prune() {
   ok "$limpiadas de ${#integradas[@]} ramas limpiadas"
 }
 
+# Retomar en esta máquina una tarea empezada en otra. El registro ya llegó con
+# `crux sync`; aquí se abre, en cada repo que declara, un espacio sobre la misma
+# rama traída del remoto, y el espacio se une a la tarea en vez de empezar una
+# vacía. No se decide nada que no diga el registro.
+cmd_resume() {
+  local tarea="${1:-}" proyecto=""
+  shift || true
+  [[ -n "$tarea" ]] || die "uso: crux workspace resume <tarea> [--project <proyecto>]"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --project) proyecto="$2"; shift 2 ;;
+      *) die "opción desconocida: $1" ;;
+    esac
+  done
+  nombre_valido "$tarea" || die "nombre de tarea inválido: '$tarea'"
+
+  local candidatos=() f
+  for f in "$(task_dir)"/*/"$tarea".md; do
+    [[ -f "$f" ]] || continue
+    [[ -z "$proyecto" || "$(basename "$(dirname "$f")")" == "$proyecto" ]] && candidatos+=("$f")
+  done
+  if [[ ${#candidatos[@]} -eq 0 ]]; then
+    err "no hay ninguna tarea abierta '$tarea' en esta máquina"
+    info "si se abrió en otra, trae las tareas antes: crux sync"
+    exit 1
+  fi
+  if [[ ${#candidatos[@]} -gt 1 ]]; then
+    err "hay una tarea '$tarea' en varios proyectos:"
+    for f in "${candidatos[@]}"; do info "$(basename "$(dirname "$f")")"; done
+    die "elige con --project <proyecto>"
+  fi
+  local registro="${candidatos[0]}"
+  proyecto="$(basename "$(dirname "$registro")")"
+
+  local datos
+  datos="$(node "$CRUX_HOME/lib/task.mjs" places --file "$registro" 2>&1)" \
+    || die "no pude leer el registro $registro: $datos"
+  [[ -n "$datos" ]] || die "la tarea '$tarea' no declara ningún repo: ábrela con crux workspace new"
+
+  local raiz repo_nombre rama espacio dir_repo n_repos hechos=0
+  raiz="$(projects_root)"
+  n_repos="$(printf '%s\n' "$datos" | wc -l | tr -d ' ')"
+  while IFS=$'\t' read -r repo_nombre rama espacio; do
+    dir_repo="$raiz/$proyecto/$repo_nombre"
+    [[ -d "$dir_repo/.git" ]] || dir_repo="$raiz/$repo_nombre"
+    if [[ ! -d "$dir_repo/.git" ]]; then
+      err "$repo_nombre no está en esta máquina"
+      info "tráelo con: crux clone $proyecto"
+      continue
+    fi
+    [[ -n "$espacio" ]] || { [[ "$n_repos" -gt 1 ]] && espacio="$tarea-$repo_nombre" || espacio="$tarea"; }
+    # Una tarea registrada antes de que se anotara la rama: la del patrón.
+    [[ -n "$rama" ]] || rama="ws/$espacio"
+
+    local ya
+    ya="$(node -e '
+      const fs = require("fs");
+      try {
+        const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        const w = (r.workspaces || {})[process.argv[2]];
+        if (w && fs.existsSync(w.path)) process.stdout.write(w.path);
+      } catch {}
+    ' "$REGISTRY" "$espacio")"
+    if [[ -n "$ya" ]]; then
+      ok "$repo_nombre: el espacio ya está aquí — $ya"
+      hechos=$((hechos + 1)); continue
+    fi
+
+    git -C "$dir_repo" fetch -q origin "+refs/heads/$rama:refs/remotes/origin/$rama" 2>/dev/null || true
+    if ! git -C "$dir_repo" show-ref --verify --quiet "refs/heads/$rama" \
+       && ! git -C "$dir_repo" show-ref --verify --quiet "refs/remotes/origin/$rama"; then
+      err "$repo_nombre: la rama $rama no está ni aquí ni en el remoto"
+      info "en la otra máquina: crux sync --leave te dice qué falta por subir"
+      continue
+    fi
+    ( cmd_new "$espacio" --repo "$dir_repo" --branch "$rama" --task "$tarea" ) && hechos=$((hechos + 1))
+  done <<< "$datos"
+
+  [[ $hechos -gt 0 ]] || exit 1
+  echo
+  local resumen
+  resumen="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$registro" 2>/dev/null || true)"
+  IFS=$'\x1f' read -r _ estado pasos siguiente <<< "$resumen"
+  ok "tarea '$tarea' retomada · $estado${pasos:+ · pasos $pasos}"
+  [[ -n "$siguiente" ]] && info "siguiente: $siguiente"
+  info "registro: $registro"
+}
+
 uso() {
   awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
 }
@@ -1332,6 +1429,7 @@ done
 case "${1:-}" in
   new)  shift; cmd_new "$@" ;;
   list) shift; cmd_heal --quiet; cmd_list "$@" ;;
+  resume) shift; cmd_resume "$@" ;;
   adopt) shift; cmd_adopt "$@" ;;
   heal) shift; cmd_heal "$@" ;;
   finish) shift; cmd_finish "$@" ;;
@@ -1340,5 +1438,5 @@ case "${1:-}" in
   gc)   shift; cmd_gc "$@" ;;
   prune) shift; cmd_prune "$@" ;;
   help) uso ;;
-  *) uso >&2; die "uso: crux workspace {new|list|adopt|finish|merge|rm|gc|heal|prune}" ;;
+  *) uso >&2; die "uso: crux workspace {new|list|resume|adopt|finish|merge|rm|gc|heal|prune}" ;;
 esac

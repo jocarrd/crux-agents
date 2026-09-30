@@ -103,6 +103,9 @@ sandbox() {
   # Sin esto, un caso que use workspace y olvide declararlo escribe en el
   # registro real de quien ejecuta la suite.
   export CRUX_REGISTRY="$SB/registry.json"
+  # Y el estado local —marcas, candados, la base de la réplica de tareas—, que
+  # si no se escribiría en el ~/.crux de quien ejecuta la suite.
+  export CRUX_STATE_DIR="$SB/state"
   mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
   echo "$SB"
 }

@@ -437,7 +437,7 @@
 ### ADR-012: El cambio es un objeto con registro, y vive en el estado local
 
 - **Date**: 2026-09-17
-- **Status**: Accepted
+- **Status**: Amended by ADR-016
 - **Context**: crux tenía el conocimiento del proyecto bien resuelto —el docs
   repo— y el ciclo después de la propuesta, pero no la unidad del medio: la
   tarea. `/explain-plan` decía que el plan "se queda donde está" sin decir
@@ -593,3 +593,64 @@
 - **Reversibility**: alta. El hook se retira con `crux hooks remove` y el
   comando no cambia nada que `git` no deje deshacer.
 - **Related**: `ADR-013`, skill `carry-env`
+
+---
+
+### ADR-016: Las tareas viajan en una rama aparte del docs repo
+
+- **Date**: 2026-09-30
+- **Status**: Accepted
+- **Context**: enmienda la consecuencia de ADR-012 que dejaba el registro solo
+  en local. ADR-012 separó bien el estado de trabajo del conocimiento, pero
+  de ahí sacó que el registro tenía que ser local, y eso mezclaba dos preguntas:
+  dónde tiene sentido una cosa y por dónde viaja. Con varias máquinas, una
+  tarea empezada en una no existía en la otra. El sistema acabó empujando a lo
+  que quería evitar: el estado de trabajo se copiaba a mano en el docs repo
+  (una sección "ABIERTO" en unas notas) porque era lo único que viajaba. Al
+  medirlo, además, 8 de 14 registros locales seguían en `proposed` con la
+  propuesta ya fusionada fuera de `crux merge`.
+  Se estudiaron otros sistemas. Gentle AI guardaba la tarea en el árbol del
+  producto y la está sacando por árboles sucios y commits accidentales, con
+  Engram como transporte; su modo híbrido derivaba porque el agente elegía en
+  cada momento qué almacén mandaba. Beads replicó con una rama gestionada por
+  worktrees y acumuló fallos (JSONL divergente, hooks que rompían el push, un
+  daemon que no traía) hasta pasar a un ref propio. Las tareas de Claude Code
+  no salen de la máquina.
+- **Decision**:
+  - El fichero local sigue siendo la fuente de verdad. Su réplica vive en la
+    rama `crux/tasks` del docs repo del proyecto, o del repo suelto sin docs
+    repo. La escribe `lib/task-sync.mjs` con plumbing de git —sin worktree,
+    checkout ni daemon—, sin firma y sin hooks, con `[skip ci]`.
+  - Fusión en tres vías contra lo último sincronizado. Si cambió en las dos
+    máquinas, gana el `updated` más reciente y la otra se guarda como
+    `.conflicto-`. Los borrados viajan en `.removed`, con la fecha de creación
+    para que reutilizar un nombre no borre la tarea nueva.
+  - Se publica en segundo plano tras cada escritura, con una marca de
+    pendiente previa. `crux sync` trae y reintenta; `--leave` falla si algo
+    sigue sin publicar.
+  - Al abrir, retomar o volver tras horas a una sesión, las tareas abiertas se
+    enseñan a la persona como recordatorio, y al agente se le dice que no las
+    empuje. `crux workspace resume` las abre en otra máquina.
+  - Las que tienen la propuesta fusionada se marcan y, sin espacio vivo, se
+    archivan: al medirlo, 8 de 14 registros seguían en `proposed` con la
+    propuesta ya fusionada.
+  - En un repo público de GitHub no se publica —un registro lleva decisiones a
+    medio pensar—, salvo con `"tasks": { "sync": true }`. Si no se puede
+    comprobar la visibilidad, tampoco, y queda pendiente.
+- **Consequences**:
+  - Cerrar en una máquina y abrir en otra deja la tarea donde estaba, sin que
+    nadie haga nada.
+  - `main` del docs repo sigue siendo solo conocimiento, y `doctor` no ve la
+    rama.
+  - Quien tenga acceso al docs repo ve las tareas en esa rama. En un proyecto
+    compartido es transparencia; si no se quiere, `tasks.sync: false`.
+  - Las fechas del registro pasan a llevar segundos: la de creación identifica
+    una tarea archivada, y una nueva con el mismo nombre en el mismo minuto se
+    borraba.
+  - La primera ronda en una máquina con historia tarda más (9 s con 8
+    propuestas que consultar); las siguientes, alrededor de un segundo.
+  - El espacio de trabajo en sí —puertos, ruta del worktree— sigue siendo de
+    cada máquina: `resume` lo crea de nuevo.
+- **Reversibility**: alta. Con `tasks.sync: false` o `CRUX_TASK_SYNC=0` todo
+  vuelve a ser local, y la rama se borra sin tocar nada más.
+- **Related**: `ADR-012`, `ADR-015`, `STANDARD.md` §La tarea

@@ -107,6 +107,31 @@ else
   echo "  ninguno"
 fi
 
+# Las tareas abiertas que no tienen espacio en esta máquina: empezadas en otra,
+# o cuyo espacio se cerró sin terminarlas. Se retoman con `workspace resume`.
+sin_espacio="$(node -e '
+  const fs = require("fs");
+  const tareas = JSON.parse(process.argv[1] || "[]");
+  let vivos = new Set();
+  try {
+    const r = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+    vivos = new Set(Object.entries(r.workspaces || {}).filter(([, w]) => fs.existsSync(w.path)).map(([n]) => n));
+  } catch {}
+  for (const t of tareas) {
+    if (t.espacios.some((e) => vivos.has(e))) continue;
+    console.log(`${t.proyecto}/${t.tarea}\t${t.estado}\t${t.siguiente || ""}`);
+  }
+' "$(node "$CRUX_HOME/lib/task-sync.mjs" open 2>/dev/null)" "$REGISTRY" 2>/dev/null)"
+if [[ -n "$sin_espacio" ]]; then
+  echo
+  echo "tareas abiertas sin espacio en esta máquina"
+  echo
+  while IFS=$'\t' read -r t estado siguiente; do
+    printf '  %-34s %-12s %s\n' "$t" "$estado" "${siguiente:0:60}"
+  done <<< "$sin_espacio"
+  info "se retoman con: crux workspace resume <tarea>"
+fi
+
 echo
 echo "trabajo sin publicar"
 echo

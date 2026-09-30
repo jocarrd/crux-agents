@@ -893,8 +893,24 @@ Cinco skills sostienen el trabajo del día a día, y se usan en este orden:
 
 Cada espacio de trabajo tiene una tarea, y cada tarea **un registro** en
 `~/.crux/tasks/<proyecto>/<tarea>.md`. Es estado de trabajo, no conocimiento:
-vive junto al registro de espacios y **fuera de los repos**, así que vale igual
-en el de un cliente y en una tarea que toca varios.
+vive junto al registro de espacios y **fuera de los repos de código**, así que
+vale igual en el de un cliente y en una tarea que toca varios.
+
+**Viaja entre máquinas** en la rama `crux/tasks` del docs repo del proyecto —o
+del propio repo, si es uno suelto sin docs repo—. Esa rama es una réplica que
+escribe `lib/task-sync.mjs` y nunca el agente; `main` no la ve, y el árbol de
+trabajo del docs repo no se toca. Se publica en segundo plano tras cada
+escritura del registro, y `crux sync` la trae al llegar y reintenta lo
+pendiente al irse. Si una tarea cambió en dos máquinas, se queda la más
+reciente y la otra se guarda al lado como `.conflicto-`. Un proyecto la
+desactiva con `"tasks": { "sync": false }` en su contrato. En un repo público de
+GitHub no se publica salvo con `"sync": true`, y si no se puede comprobar la
+visibilidad, tampoco. Ver ADR-016.
+
+Al abrir, retomar o volver tras horas a una sesión, un hook enseña las tareas
+abiertas **como recordatorio**: la persona decide si retoma alguna, y si pide
+otra cosa, se hace otra cosa. `crux workspace resume <tarea>` la abre en otra
+máquina desde su rama remota, uniéndose al registro que ya llegó.
 
 | Momento | Lo escribe | Estado |
 | ------- | ---------- | ------ |

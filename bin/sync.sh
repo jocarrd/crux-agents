@@ -18,6 +18,8 @@
 # limpia que va por detrás de su remoto. Si hay cambios sin commitear o las
 # ramas se han separado, lo dice y no toca nada. Nunca mezcla ni reescribe.
 #
+# Las tareas también viajan, en la rama crux/tasks de cada docs repo (ADR-016).
+#
 # Lo que NO sincroniza, y a propósito: las credenciales (ver `carry-env`) y las
 # memorias personales del agente, que son de cada máquina.
 
@@ -162,6 +164,28 @@ sincronizar_salida() {
     while IFS= read -r r; do info "$(nombre_de "$r")"; done <<< "$sin_comprobar"
   fi
 
+  # Las tareas se publican solas al escribirlas, pero una escritura sin red se
+  # queda pendiente. Aquí se reintenta, y lo que siga sin subir no llega.
+  local p linea
+  while IFS=$'\t' read -r p linea; do
+    [[ -n "$p" ]] || continue
+    warn "$p: $linea"
+  done < <(node "$CRUX_HOME/lib/task-sync.mjs" sync --all 2>/dev/null | node -e '
+    let s = "";
+    process.stdin.on("data", (d) => (s += d));
+    process.stdin.on("end", () => {
+      for (const r of JSON.parse(s || "[]")) {
+        if (r.estado === "sin-transporte") console.log(`${r.proyecto}\tsus tareas no tienen docs repo por el que viajar: se quedan en esta máquina`);
+        if (r.estado === "sin-remoto") console.log(`${r.proyecto}\tsu docs repo no tiene remoto: las tareas se quedan en esta máquina`);
+        if (r.estado === "publico") console.log(`${r.proyecto}\tsu repo es público: las tareas no se publican ahí y se quedan en esta máquina ("tasks": {"sync": true} en crux.json para forzarlo)`);
+      }
+    });' 2>/dev/null)
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    err "$p: tareas sin publicar — la otra máquina no las verá"
+    atrapado=$((atrapado + 1))
+  done < <(node "$CRUX_HOME/lib/task-sync.mjs" pending 2>/dev/null)
+
   echo
   if [[ $avisos -gt 0 ]]; then
     info "$(cuenta "$avisos" "rama sigue" "ramas siguen") a una rama borrada del remoto (fusionadas, casi seguro): no bloquean"
@@ -280,6 +304,34 @@ kernel_al_dia() {
   fi
 }
 
+# Las tareas viajan en la rama crux/tasks del docs repo de cada proyecto: se
+# traen las de la otra máquina y se publica lo que aquí quedó pendiente.
+tareas_al_dia() {
+  local salida rc=0
+  salida="$(node "$CRUX_HOME/lib/task-sync.mjs" sync --all 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo "fallo	tareas: $(printf '%s' "$salida" | head -1)"
+    return
+  fi
+  printf '%s' "$salida" | node -e '
+    let s = "";
+    process.stdin.on("data", (d) => (s += d));
+    process.stdin.on("end", () => {
+      const n = (k, uno, varios) => (k === 1 ? `1 ${uno}` : `${k} ${varios}`);
+      for (const r of JSON.parse(s || "[]")) {
+        for (const c of r.cerradas || []) console.log(`tareas\t${c}`);
+        for (const a of r.avisos || []) console.log(`aviso\t${a}`);
+        if (r.estado === "ok") {
+          if (r.traidas) console.log(`tareas\t${r.proyecto}: ${n(r.traidas, "tarea traída", "tareas traídas")}`);
+        } else if (r.estado === "rechazado") {
+          console.log(`aviso\t${r.proyecto}: las tareas no se pudieron publicar, se reintenta en la próxima`);
+        } else if (r.estado === "fallo") {
+          console.log(`fallo\t${r.proyecto}: tareas — ${r.motivo}`);
+        }
+      }
+    });'
+}
+
 sincronizar_llegada() {
   local sin_red lineas repo
   sin_red="$(traer_todo)"
@@ -290,6 +342,7 @@ sincronizar_llegada() {
   done < <(repos_principales)
   lineas+="$(traer_repos_nuevos)"$'\n'
   lineas+="$(kernel_al_dia)"$'\n'
+  lineas+="$(tareas_al_dia)"$'\n'
   lineas="$(printf '%s' "$lineas" | sed '/^$/d')"
 
   local n_sin_red=0
@@ -317,8 +370,8 @@ sincronizar_llegada() {
   else
     while IFS=$'\t' read -r tipo texto; do
       case "$tipo" in
-        ok|nuevo|kernel) ok "$texto" ;;
-        separada|sucia)  warn "$texto" ;;
+        ok|nuevo|kernel|tareas) ok "$texto" ;;
+        separada|sucia|aviso)  warn "$texto" ;;
         *)               err "$texto" ;;
       esac
     done <<< "$lineas"
@@ -330,7 +383,7 @@ sincronizar_llegada() {
   fi
   # Separadas y sucias piden una decisión: se sale con error para que un
   # script que lo encadene no siga como si estuviera todo al día.
-  printf '%s\n' "$lineas" | grep -qE '^(separada|sucia|fallo)' && return 1
+  printf '%s\n' "$lineas" | grep -qE '^(separada|sucia|fallo|aviso)' && return 1
   return 0
 }
 
