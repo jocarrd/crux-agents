@@ -49,10 +49,16 @@ quedan locales por diseño: son sobre la persona, no sobre el proyecto.
 
 ## Flujo
 
-### 1. Inventario de cambios sin commitear
+### 1. Inventario de lo que no está en el remoto
 
-Recorre los repos hermanos del proyecto y reporta los que tengan cambios
-pendientes, para no cerrar dejándose trabajo fuera de git.
+```bash
+crux sync --leave
+```
+
+Recorre todos los repos y dice lo que se quedaría solo en esta máquina:
+cambios sin commitear, commits sin subir, ramas que no están en ningún remoto y
+stashes. Si mañana se trabaja desde otro ordenador, lo que salga aquí no estará
+allí.
 
 ### 2. Higiene de la memoria del agente
 

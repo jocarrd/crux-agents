@@ -90,6 +90,40 @@ Si el proyecto ya está en disco pero todavía no sigue el estándar, ejecuta
 `crux adopt` en su docs repo y después `crux upgrade`, que materializa las
 piezas que falten.
 
+### 6. Alternar entre dos máquinas
+
+```bash
+crux sync                # al llegar: repos al día, proyectos nuevos y kernel
+crux sync --leave        # al irte: falla si algo se quedaría solo aquí
+```
+
+`bootstrap` y `clone` traen lo que no está, pero no actualizan lo que ya hay.
+Al volver a un ordenador después de un tiempo, decían "ya está" y dejaban el
+código tal como lo dejaste la última vez que lo usaste. `sync` cubre ese caso.
+
+Al llegar trae todos los remotos y avanza cada rama limpia que va por detrás.
+También clona los proyectos y los repos que se crearon desde la otra máquina, e
+instala la última versión publicada del kernel con sus hooks. Si una rama tiene
+cambios sin commitear o se ha separado de su remoto, lo dice y no la toca:
+juntarlas es una decisión y no la toma un script.
+
+`crux hooks install` engancha lo mismo al inicio de sesión del agente. Como
+mucho una vez cada diez minutos, para que varias sesiones abiertas a la vez no
+repitan la ronda. Solo habla si algo cambió o hay algo que decidir.
+
+`--leave` enumera lo que no llegaría a la otra máquina: cambios sin commitear,
+commits sin subir y ramas que no están en ningún remoto. Los stashes salen como
+aviso, porque no viajan. Las ramas que seguían a una rama ya borrada del
+remoto, que casi siempre son propuestas fusionadas con squash, no bloquean.
+
+La primera vez en una máquina con un kernel anterior a este comando, `sync` no
+existe todavía: actualiza el clon del kernel (`git -C ~/Proyectos/crux pull`),
+ejecuta su `install.sh` y `crux hooks install`, y lanza `crux sync`. A partir de
+ahí lo hace el hook.
+
+No sincroniza credenciales, que se llevan con `carry-env`, ni las memorias
+personales del agente, que son de cada máquina.
+
 ### Cuando algo no sale como esperabas
 
 | Síntoma | Qué pasa y qué hacer |
@@ -250,6 +284,7 @@ instala `crux hooks install`:
 | `crux skill test <skill> [--against <ref>]` | Pasa los escenarios de una skill y marca lo que cambia respecto a otra versión |
 | `crux memory` | Memorias del agente que son del proyecto y siguen solo en local |
 | `crux status` | Qué hay abierto ahora mismo en todos los proyectos |
+| `crux sync` | Al día con el remoto al llegar a una máquina; `--leave` comprueba que no dejas nada atrapado al irte |
 | `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
 | `crux release <ver>` | Publica una versión, comprobando antes que los proyectos siguen conformes |
 

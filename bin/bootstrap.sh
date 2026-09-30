@@ -58,20 +58,6 @@ command -v gh >/dev/null 2>&1 \
 gh auth status >/dev/null 2>&1 \
   || die "gh sin autenticar — 'gh auth login' y vuelve"
 
-owner_por_defecto() {
-  # Sale del mismo sitio del que ya salen las URL de clonado, así que no hay dos
-  # fuentes de verdad que puedan discrepar.
-  local remoto=""
-  local cfg="${CRUX_CONFIG:-$HOME/.crux/config}"
-  [[ -f "$cfg" ]] \
-    && remoto="$(grep -E '^CRUX_REMOTE=' "$cfg" | cut -d= -f2- | tr -d '"')"
-  if [[ "$remoto" =~ github\.com[:/]([^/]+)/ ]]; then
-    echo "${BASH_REMATCH[1]}"
-    return
-  fi
-  gh api user --jq .login 2>/dev/null || true
-}
-
 [[ -n "$OWNER" ]] || OWNER="$(owner_por_defecto)"
 [[ -n "$OWNER" ]] || die "no sé bajo qué cuenta buscar — pásalo con --owner"
 
@@ -85,7 +71,7 @@ echo "2. proyectos de $OWNER"
 echo
 
 todos_los_repos="$(gh repo list "$OWNER" --limit 300 --json name --jq '.[].name' 2>/dev/null | sort -u)"
-candidatos="$(echo "$todos_los_repos" | grep -E -- '-docs$' | sed -E 's/-docs$//' | sort -u)"
+candidatos="$(proyectos_candidatos "$OWNER")"
 
 if [[ -n "$SOLO" ]]; then
   filtro="$(echo "$SOLO" | tr ',' '\n' | sed '/^$/d' | sort -u)"
@@ -97,7 +83,7 @@ fi
 proyectos=()
 while IFS= read -r p; do
   [[ -n "$p" ]] || continue
-  if gh api "repos/$OWNER/$p-docs/contents/crux.json" --silent >/dev/null 2>&1; then
+  if tiene_contrato "$OWNER" "$p"; then
     proyectos+=("$p")
     ok "$p"
   else
