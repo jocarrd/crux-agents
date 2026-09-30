@@ -38,6 +38,12 @@ esac
 RAIZ="$(projects_root)"
 [[ -d "$RAIZ" ]] || die "la raíz de proyectos no existe: $RAIZ"
 
+# En una máquina recién montada, ssh pregunta por la huella de cada host y git
+# por usuario y contraseña. Sin terminal que conteste, cada repo esperaba hasta
+# el tiempo límite: mejor que falle al momento y salga como sin respuesta.
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
+
 # Los repos de la raíz y los de dentro de cada proyecto. Los worktrees se
 # devuelven aparte: al llegar no se tocan, porque su rama es trabajo en curso;
 # al irse cuentan igual que cualquier otro.
@@ -62,6 +68,24 @@ worktrees() {
 
 nombre_de() { local r="${1#"$RAIZ"/}"; echo "$r"; }
 
+# Lee repos por la entrada y saca "x<TAB>repo" si su remoto ya no existe y
+# "?<TAB>repo" si no se pudo saber. Sin red no se afirma que falte nada.
+remotos_que_faltan() {
+  local repo
+  while IFS= read -r repo; do
+    [[ -n "$(git -C "$repo" remote)" ]] || continue
+    echo "$repo"
+  done | xargs -P 16 -I{} bash -c '
+    r="$(git -C "$1" config "branch.$(git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null).remote" 2>/dev/null)"
+    [ -n "$r" ] || r="$(git -C "$1" remote | grep -x origin || git -C "$1" remote | head -1)"
+    salida="$(LC_ALL=C timeout 20 git -C "$1" ls-remote -q "$r" 2>&1 >/dev/null)" && exit 0
+    if printf "%s" "$salida" | grep -qiE "repository not found|does not appear to be a git repository|repository .* does not exist"; then
+      printf "x\t%s\n" "$1"
+    else
+      printf "?\t%s\n" "$1"
+    fi' _ {}
+}
+
 # --- Al irse ------------------------------------------------------------------
 
 sincronizar_salida() {
@@ -79,6 +103,15 @@ sincronizar_salida() {
     sucio="$(git -C "$repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
     if [[ "$sucio" -gt 0 ]]; then
       err "$nombre: $(cuenta "$sucio" "fichero sin commitear" "ficheros sin commitear")"
+      atrapado=$((atrapado + 1))
+    fi
+
+    # Un commit hecho con HEAD separado no está en ninguna rama, así que el
+    # repaso de ramas de abajo no lo ve. Cada worktree tiene su propio HEAD.
+    if ! git -C "$repo" symbolic-ref -q HEAD >/dev/null \
+       && git -C "$repo" rev-parse -q --verify HEAD >/dev/null \
+       && [[ -z "$(git -C "$repo" for-each-ref --contains HEAD refs/heads refs/remotes 2>/dev/null)" ]]; then
+      err "$nombre: HEAD separado con commits que no están en ninguna rama — crea una: git switch -c <rama>"
       atrapado=$((atrapado + 1))
     fi
 
@@ -112,6 +145,23 @@ sincronizar_salida() {
     fi
   done < <(repos_principales; worktrees)
 
+  # Con el remoto borrado, las referencias locales siguen diciendo que todo
+  # está subido: git no se entera hasta que pregunta. Es la única comprobación
+  # de la salida que necesita red, y se hace en paralelo.
+  local desaparecidos sin_comprobar r
+  desaparecidos="$(repos_principales | remotos_que_faltan)"
+  sin_comprobar="$(printf '%s\n' "$desaparecidos" | sed -n 's/^?\t//p')"
+  desaparecidos="$(printf '%s\n' "$desaparecidos" | sed -n 's/^x\t//p')"
+  while IFS= read -r r; do
+    [[ -n "$r" ]] || continue
+    err "$(nombre_de "$r"): su remoto ya no existe — lo que tiene solo vive aquí"
+    atrapado=$((atrapado + 1))
+  done <<< "$desaparecidos"
+  if [[ -n "$sin_comprobar" ]]; then
+    warn "no pude comprobar si siguen existiendo los remotos de:"
+    while IFS= read -r r; do info "$(nombre_de "$r")"; done <<< "$sin_comprobar"
+  fi
+
   echo
   if [[ $avisos -gt 0 ]]; then
     info "$(cuenta "$avisos" "rama sigue" "ramas siguen") a una rama borrada del remoto (fusionadas, casi seguro): no bloquean"
@@ -130,8 +180,14 @@ sincronizar_salida() {
 # Trae todos los remotos en paralelo: en serie, con treinta repos, el hook de
 # inicio de sesión tardaba lo bastante como para notarse cada vez.
 traer_todo() {
-  repos_principales | xargs -P 16 -I{} sh -c \
-    'GIT_TERMINAL_PROMPT=0 timeout 30 git -C "$1" fetch -q --all --prune --tags >/dev/null 2>&1 || echo "$1"' _ {}
+  repos_principales | xargs -P 16 -I{} bash -c '
+    repo="$1"
+    remoto="$(git -C "$repo" config "branch.$(git -C "$repo" symbolic-ref -q --short HEAD 2>/dev/null).remote" 2>/dev/null)"
+    [ -n "$remoto" ] || remoto="$(git -C "$repo" remote | grep -x origin || git -C "$repo" remote | head -1)"
+    timeout 30 git -C "$repo" fetch -q --all --prune --tags >/dev/null 2>&1 && exit 0
+    # Con --all basta que falle un remoto secundario para que falle todo.
+    [ -n "$remoto" ] && timeout 30 git -C "$repo" fetch -q --prune --tags "$remoto" >/dev/null 2>&1 && exit 0
+    echo "$repo"' _ {}
 }
 
 # Avanza la rama actual si va por detrás y no hay nada que decidir.
@@ -148,20 +204,46 @@ avanzar() {
     echo "separada	$nombre: la rama local y $up se han separado ($delante aquí, $detras allí) — decide tú cómo juntarlas"
   elif [[ -n "$(git -C "$repo" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
     echo "sucia	$nombre: va $(cuenta "$detras" commit commits) por detrás, pero tiene cambios sin commitear — no la toco"
-  elif git -C "$repo" merge -q --ff-only "$up" >/dev/null 2>&1; then
+  # En C: el mensaje se compara, y git lo traduce al idioma del sistema.
+  elif salida="$(LC_ALL=C git -C "$repo" merge -q --ff-only "$up" 2>&1)"; then
     echo "ok	$nombre: $(cuenta "$detras" "commit nuevo" "commits nuevos")"
+  elif [[ "$salida" == *"untracked working tree files would be overwritten"* ]]; then
+    echo "sucia	$nombre: un fichero sin seguir de aquí choca con uno que llega — muévelo y repite: $(printf '%s\n' "$salida" | sed -n 's/^[[:space:]]\{1,\}//p' | head -3 | tr '\n' ' ')"
   else
-    echo "fallo	$nombre: no pude avanzar a $up"
+    echo "fallo	$nombre: no pude avanzar a $up — $(printf '%s' "$salida" | head -1)"
   fi
+}
+
+# Las otras ramas locales que van por detrás de su remoto: sin esto, al cambiar
+# a main en la otra máquina se empezaba sobre lo viejo, con sync diciendo que
+# todo estaba al día. `fetch .` no avanza una rama que esté en uso en algún
+# worktree ni la que se haya separado, que es exactamente lo que se quiere.
+avanzar_las_demas() {
+  local repo="$1" nombre actual b up detras
+  nombre="$(nombre_de "$repo")"
+  actual="$(git -C "$repo" symbolic-ref -q HEAD 2>/dev/null || true)"
+  while IFS=$'\t' read -r b up; do
+    [[ -n "$up" && "$b" != "$actual" ]] || continue
+    git -C "$repo" rev-parse -q --verify "$up" >/dev/null || continue
+    detras="$(git -C "$repo" rev-list --count "$b..$up" 2>/dev/null || echo 0)"
+    [[ "$detras" -gt 0 ]] || continue
+    [[ "$(git -C "$repo" rev-list --count "$up..$b" 2>/dev/null || echo 1)" -eq 0 ]] || continue
+    git -C "$repo" fetch -q . "$up:$b" >/dev/null 2>&1 \
+      && echo "ok	$nombre: ${b#refs/heads/}, $(cuenta "$detras" "commit nuevo" "commits nuevos")"
+  done < <(git -C "$repo" for-each-ref --format='%(refname)%09%(upstream)' refs/heads)
 }
 
 # Repos que el contrato de un proyecto de esta máquina declara y no están en
 # disco: aparecen cuando se añadieron desde la otra. Son del mismo proyecto.
 traer_repos_nuevos() {
-  local p docs repo falta
+  local p docs repo falta motivo
   for docs in "$RAIZ"/*/*-docs; do
     [[ -f "$docs/crux.json" ]] || continue
     p="$(basename "$(dirname "$docs")")"
+    if ! motivo="$(json_valido "$docs/crux.json")"; then
+      echo "fallo	$p: crux.json ilegible, no sé qué repos declara — $motivo"
+      continue
+    fi
     falta=0
     while IFS= read -r repo; do
       nombre_valido "$repo" 2>/dev/null || continue
@@ -204,6 +286,7 @@ sincronizar_llegada() {
   lineas=""
   while IFS= read -r repo; do
     lineas+="$(avanzar "$repo")"$'\n'
+    lineas+="$(avanzar_las_demas "$repo")"$'\n'
   done < <(repos_principales)
   lineas+="$(traer_repos_nuevos)"$'\n'
   lineas+="$(kernel_al_dia)"$'\n'
@@ -256,14 +339,35 @@ sincronizar_llegada() {
 # Varias sesiones abiertas a la vez lanzarían la misma ronda de fetch en
 # paralelo. Con una marca de diez minutos, la primera sincroniza y el resto no.
 
+estado="${CRUX_STATE_DIR:-$HOME/.crux/state}"
+( umask 077 && mkdir -p "$estado" ) 2>/dev/null || true
+
+# Dos llegadas a la vez —el hook de una sesión y un `crux sync` a mano— se
+# pisaban el índice de git: una avanzaba y la otra decía que no había podido.
+# mkdir es atómico y existe en todas partes, a diferencia de flock.
+candado="$estado/sync.lock"
+tomar_candado() {
+  local espera=0
+  while ! mkdir "$candado" 2>/dev/null; do
+    # Un candado de hace más de diez minutos es de un proceso que murió.
+    if [[ -n "$(find "$candado" -maxdepth 0 -mmin +10 2>/dev/null)" ]]; then
+      rmdir "$candado" 2>/dev/null; continue
+    fi
+    [[ "$MODO" == "hook" ]] && return 1
+    [[ $espera -eq 0 ]] && info "otra sincronización en marcha, espero a que acabe"
+    espera=1; sleep 1
+  done
+  trap 'rmdir "$candado" 2>/dev/null' EXIT
+}
+
 if [[ "$MODO" == "hook" ]]; then
-  cat >/dev/null 2>&1 || true
-  estado="$HOME/.crux/state"
-  ( umask 077 && mkdir -p "$estado" ) 2>/dev/null || true
+  # A mano y en una terminal, leer la entrada esperaría a un Ctrl-D.
+  [[ -t 0 ]] || cat >/dev/null 2>&1 || true
   marca="$estado/sync-last"
   if [[ -f "$marca" ]] && [[ -n "$(find "$marca" -mmin -"${CRUX_SYNC_EVERY_MIN:-10}" 2>/dev/null)" ]]; then
     exit 0
   fi
+  tomar_candado || exit 0
   : > "$marca"
   sincronizar_llegada
   exit 0
@@ -274,5 +378,6 @@ if [[ "$MODO" == "irse" ]]; then
   exit $?
 fi
 
+tomar_candado
 sincronizar_llegada
 exit $?

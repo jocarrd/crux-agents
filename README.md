@@ -103,7 +103,9 @@ código tal como lo dejaste la última vez que lo usaste. `sync` cubre ese caso.
 
 Al llegar recorre lo que ya hay en la raíz de proyectos —docs repos, repos de
 código y repos sueltos—, trae sus remotos y avanza cada rama limpia que va por
-detrás. No trae proyectos que esta máquina no tenga: cada una tiene los suyos, y
+detrás, también las que no están en uso, como `main` mientras trabajas en otra.
+Dos sincronizaciones no corren a la vez: la segunda espera, o se retira si es
+la del hook. No trae proyectos que esta máquina no tenga: cada una tiene los suyos, y
 para traer uno está `crux clone`. Si un proyecto de aquí declara un repo que se
 añadió desde la otra máquina, ese sí lo clona, porque es del mismo proyecto.
 También instala la última versión publicada del kernel con sus hooks. Si una rama tiene
@@ -115,8 +117,10 @@ mucho una vez cada diez minutos, para que varias sesiones abiertas a la vez no
 repitan la ronda. Solo habla si algo cambió o hay algo que decidir.
 
 `--leave` enumera lo que no llegaría a la otra máquina: cambios sin commitear,
-commits sin subir y ramas que no están en ningún remoto. Los stashes salen como
-aviso, porque no viajan. Las ramas que seguían a una rama ya borrada del
+commits sin subir, ramas que no están en ningún remoto, commits hechos con HEAD
+separado y repos cuyo remoto ya no existe. Esto último es lo único que necesita
+red: con el remoto borrado, git sigue creyendo que todo está subido. Los
+stashes salen como aviso, porque no viajan. Las ramas que seguían a una rama ya borrada del
 remoto, que casi siempre son propuestas fusionadas con squash, no bloquean.
 
 La primera vez en una máquina con un kernel anterior a este comando, `sync` no
