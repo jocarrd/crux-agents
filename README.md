@@ -128,6 +128,14 @@ existe todavía: actualiza el clon del kernel (`git -C ~/Proyectos/crux pull`),
 ejecuta su `install.sh` y `crux hooks install`, y lanza `crux sync`. A partir de
 ahí lo hace el hook.
 
+Las tareas también viajan: `sync` trae las de la otra máquina y publica lo que
+aquí quedó pendiente, y `--leave` falla si alguna no se ha podido publicar. Al
+abrir o retomar una sesión, el hook enseña las tareas abiertas como
+recordatorio, sin empujar a retomarlas; también al volver a una sesión que
+llevaba más de tres horas parada (`CRUX_TASKS_IDLE_HOURS`). Las que tienen su
+propuesta fusionada fuera de `crux merge` se cierran solas en vez de aparecer
+en cada recordatorio.
+
 No sincroniza credenciales, que se llevan con `carry-env`, ni las memorias
 personales del agente, que son de cada máquina.
 
@@ -236,10 +244,16 @@ Al retomar un espacio —otra sesión, tras un reinicio o al día siguiente— u
 hook trae el estado y el siguiente paso en dos líneas. `crux workspace list`
 enseña lo mismo por cada espacio.
 
-**Vive fuera de los repos a propósito.** En el de código no se puede escribir
-si es de un cliente, y una tarea de varios repos se partiría. En el docs repo
-se mezclaría trabajo en curso con lo que tiene que durar. Lo que merece
-sobrevivir a la tarea se promociona al docs repo al cerrar. Ver ADR-012.
+**Vive fuera de los repos de código a propósito.** En el de un cliente no se
+puede escribir, y una tarea de varios repos se partiría. Tampoco va en `main`
+del docs repo, que es lo que se lee como verdad: un plan a medias se leería como
+una decisión. Lo que merece sobrevivir a la tarea se promociona allí al cerrar.
+
+**Y aun así viaja.** Se replica en la rama `crux/tasks` del docs repo, que
+`main` no ve: se publica sola tras cada escritura y `crux sync` la trae al
+llegar a otra máquina. Allí, `crux workspace resume <tarea>` abre el espacio
+desde la rama remota y lo une a la tarea con su plan y su siguiente paso. Ver
+ADR-016.
 
 **Cuesta poco.** Un ciclo completo con registro tarda 0,9 s de máquina frente a
 0,35 s sin él; abrir la tarea con su objetivo y su plan son dos llamadas, y el
