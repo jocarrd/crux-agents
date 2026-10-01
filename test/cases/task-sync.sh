@@ -195,6 +195,9 @@ test_tareas_el_recordatorio_informa_sin_empujar() {
   assert_contains "$out" "por si quieres retomar alguna" "a la persona se le ofrece"
   assert_contains "$out" "No retomes ninguna" "y al agente se le dice que no empuje"
   assert_contains "$out" "crux workspace resume t1" "con cómo retomarla aquí"
+  # Los mismos datos, estructurados, para quien los pinte de otra forma
+  assert_contains "$out" '"tareas":[{"tarea":"alfa/t1"' "el recordatorio trae las tareas como datos"
+  assert_contains "$out" '"aqui":false' "y dice si tienen espacio en esta máquina"
 
   assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P")" "sin tareas, no dice nada"
   teardown

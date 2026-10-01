@@ -2105,3 +2105,42 @@ test_install_mueve_los_hooks_del_kernel_anterior() {
   assert_not_contains "$ajustes" "kernel/0.0.1/" "y no queda ninguno en la anterior"
   assert_contains "$ajustes" "/opt/otro.sh" "los hooks que no son de crux no se tocan"
 }
+
+test_install_mueve_el_plugin_de_claude_del_kernel_anterior() {
+  sandbox >/dev/null
+  local casa="$SB/casa-plugin"; mkdir -p "$casa/.claude"
+  printf '{"env":{"CLAUDE_CODE_PLUGIN_DIRS":"/opt/otro:%s"}}' "$casa/.crux/kernel/0.0.1/adapters/claude/plugin" > "$casa/.claude/settings.json"
+
+  env HOME="$casa" CLAUDE_SETTINGS="$casa/.claude/settings.json" bash "$CRUX_HOME/install.sh" >/dev/null 2>&1
+
+  local version; version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  local ajustes; ajustes="$(cat "$casa/.claude/settings.json")"
+  assert_contains "$ajustes" "/opt/otro:$casa/.crux/kernel/$version/adapters/claude/plugin" \
+    "el plugin pasa a la versión instalada y los demás se quedan donde estaban"
+}
+
+test_hooks_install_carga_el_plugin_solo_en_claude() {
+  sandbox >/dev/null
+  printf '{"env":{"CLAUDE_CODE_PLUGIN_DIRS":"/opt/otro"}}' > "$CLAUDE_SETTINGS"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "/opt/otro:$CRUX_HOME/adapters/claude/plugin" \
+    "install añade el plugin de Claude junto a los que ya había"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  assert_eq 1 "$(grep -o 'adapters/claude/plugin' "$CLAUDE_SETTINGS" | wc -l | tr -d ' ')" "reinstalar no lo duplica"
+  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  local ajustes; ajustes="$(cat "$CLAUDE_SETTINGS")"
+  assert_not_contains "$ajustes" "adapters/claude/plugin" "remove lo quita"
+  assert_contains "$ajustes" "/opt/otro" "y deja los plugins que no son de crux"
+}
+
+test_el_plugin_de_claude_pasa_sus_propios_tests() {
+  # Los tests del mod los ejecuta Claude Code: sin él en la máquina no hay con qué.
+  command -v claude >/dev/null 2>&1 || { echo "  (sin claude en el PATH: se omite)"; return 0; }
+  local out rc=0
+  out="$(claude plugin validate "$CRUX_HOME/adapters/claude/plugin" 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "el manifiesto y el módulo del mod se validan"
+  rc=0
+  out="$(cd "$CRUX_HOME/adapters/claude/plugin" && claude plugin test 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "los tests del mod pasan"
+  assert_contains "$out" " 0 fail" "sin ninguno fallido"
+}

@@ -153,6 +153,11 @@ if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$AJUSTES" ]]; then
       const cmd = (h.command || "").replace(viejo, `${destino}/adapters/`);
       if (cmd !== h.command) { h.command = cmd; n++; }
     }
+    const dirs = s.env?.CLAUDE_CODE_PLUGIN_DIRS;
+    if (dirs) {
+      const nuevo = dirs.replace(new RegExp(`${esc}/[^/:]+/adapters/`, "g"), `${destino}/adapters/`);
+      if (nuevo !== dirs) { s.env.CLAUDE_CODE_PLUGIN_DIRS = nuevo; n++; }
+    }
     if (n) fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
     process.stdout.write(String(n));
   ' "$AJUSTES" "$HOME/.crux/kernel" "$CRUX_HOME")"
