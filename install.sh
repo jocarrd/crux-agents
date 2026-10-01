@@ -164,6 +164,26 @@ if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$AJUSTES" ]]; then
   [[ "$movidos" != "0" ]] && ok "hooks del agente movidos a $VERSION_INSTALADA ($movidos)"
 fi
 
+# Lo mismo para los hooks de Codex, que llevan la versión en la ruta igual.
+CODEX_HOOKS="${CODEX_HOME_DIR:-${CODEX_HOME:-$HOME/.codex}}/hooks.json"
+if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$CODEX_HOOKS" ]]; then
+  movidos="$(node -e '
+    const fs = require("fs");
+    const [file, kernels, destino] = process.argv.slice(1);
+    const s = JSON.parse(fs.readFileSync(file, "utf8"));
+    const esc = kernels.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const viejo = new RegExp(`${esc}/[^/]+/adapters/`, "g");
+    let n = 0;
+    for (const grupos of Object.values(s.hooks || {})) for (const g of grupos) for (const h of g.hooks || []) {
+      const cmd = (h.command || "").replace(viejo, `${destino}/adapters/`);
+      if (cmd !== h.command) { h.command = cmd; n++; }
+    }
+    if (n) fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+    process.stdout.write(String(n));
+  ' "$CODEX_HOOKS" "$HOME/.crux/kernel" "$CRUX_HOME")"
+  [[ "$movidos" != "0" ]] && ok "hooks de Codex movidos a $VERSION_INSTALADA ($movidos)"
+fi
+
 # --- 4. Contexto global por agente ------------------------------------------
 
 codex_materialize_global "$CRUX_HOME"

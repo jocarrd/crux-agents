@@ -25,6 +25,9 @@ PROPOSAL_GUARD="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
 SESSION_SYNC="$CRUX_HOME/adapters/claude/hooks/session-sync.sh"
 SESSION_IDLE="$CRUX_HOME/adapters/claude/hooks/session-idle.sh"
 CLAUDE_PLUGIN="$CRUX_HOME/adapters/claude/plugin"
+CODEX_DIR="${CODEX_HOME_DIR:-${CODEX_HOME:-$HOME/.codex}}"
+CODEX_HOOKS="$CODEX_DIR/hooks.json"
+CODEX_CONTEXTO="$CRUX_HOME/adapters/codex/hooks/contexto.sh"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
@@ -132,6 +135,45 @@ plugin_claude() {
   ' "$SETTINGS" "$1" "$CLAUDE_PLUGIN"
 }
 
+# Codex lee los hooks de ~/.codex/hooks.json con el mismo formato que Claude
+# Code, así que se registran los mismos scripts. Diferencias: Codex no tiene
+# herramientas de ficheros propias (edita con apply_patch y lee por Bash), los
+# hooks que dan contexto en texto pasan por adapters/codex/hooks/contexto.sh, y
+# el guardián de memorias no va porque revisa las de Claude.
+codex_hooks() {
+  # codex_hooks add|remove
+  node -e '
+    const fs = require("fs");
+    const [file, accion, ctx, sync, idle, cycle, task, destr, wt, prop, doc] = process.argv.slice(1);
+    const s = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+    s.hooks = s.hooks || {};
+    const deCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|contexto\.sh/;
+    for (const [ev, grupos] of Object.entries(s.hooks)) {
+      s.hooks[ev] = grupos
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !deCrux.test(h.command || "")) }))
+        .filter((g) => g.hooks.length);
+      if (!s.hooks[ev].length) delete s.hooks[ev];
+    }
+    if (accion === "add") {
+      const cmd = (c) => ({ type: "command", command: c });
+      const q = (p) => JSON.stringify(p);
+      const poner = (ev, matcher, comandos) =>
+        (s.hooks[ev] = s.hooks[ev] || []).push({ ...(matcher ? { matcher } : {}), hooks: comandos.map(cmd) });
+      poner("SessionStart", "startup|resume|clear", [sync]);
+      poner("UserPromptSubmit", "", [
+        `${q(ctx)} UserPromptSubmit ${q(cycle)}`,
+        `${q(ctx)} UserPromptSubmit ${q(task)}`,
+        idle,
+      ]);
+      poner("PreToolUse", "Bash", [destr, wt, prop]);
+      poner("Stop", "", [doc]);
+    }
+    if (!Object.keys(s.hooks).length) delete s.hooks;
+    fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+  ' "$CODEX_HOOKS" "$1" "$CODEX_CONTEXTO" "$SESSION_SYNC" "$SESSION_IDLE" "$CYCLE_GUARD" "$TASK_CONTEXT" \
+    "$DESTRUCTIVE_GUARD" "$WORKTREE_GUARD" "$PROPOSAL_GUARD" "$DOC_SYNC"
+}
+
 cmd_install() {
   [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
@@ -175,6 +217,13 @@ cmd_install() {
 
   enganchar UserPromptSubmit "$SESSION_IDLE" 'session-idle'
   ok "hook que hace lo mismo al volver a una sesión que llevaba horas parada"
+
+  # Solo si Codex está en la máquina: crear su carpeta no instala nada.
+  if [[ -d "$CODEX_DIR" && -f "$CODEX_CONTEXTO" ]]; then
+    chmod +x "$CODEX_CONTEXTO"
+    codex_hooks add
+    ok "hooks de Codex en $CODEX_HOOKS (apruébalos la primera vez que abras Codex)"
+  fi
 
   if [[ -f "$CLAUDE_PLUGIN/.claude-plugin/plugin.json" ]]; then
     plugin_claude add
@@ -335,6 +384,7 @@ cmd_remove() {
     fs.writeFileSync(process.argv[1], JSON.stringify(s, null, 2) + "\n");
   ' "$SETTINGS"
   plugin_claude remove
+  [[ -f "$CODEX_HOOKS" ]] && codex_hooks remove
   ok "hooks de crux retirados (el resto queda como estaba)"
 
   local docs
