@@ -12,6 +12,7 @@ declare module 'claude-code' {
       }[]
       mas: number
       oculto: boolean
+      enCurso: string
     }
   }
 }

@@ -59,3 +59,38 @@ test('al compactar no vuelve a sacar el panel', async ($, on) => {
   expect(await ui.find({ key: 'ocultar' })).toBeUndefined()
   await ui.unmount()
 })
+
+// La tarea en curso: dentro de un espacio de trabajo, entre las etiquetas de
+// modo del pie; fuera, nada.
+function entornoTarea(on, raiz) {
+  on('env.set', async () => ({ value: undefined }))
+  on('session.cwd', async () => ({ value: raiz }))
+  on('process.run', async (_$, e) => {
+    const argv = e.argv ?? []
+    if (argv[0] === 'git') return { value: { exitCode: 0, stdout: raiz + '\n', stderr: '' } }
+    if (argv[0] === 'bash') return { value: { exitCode: 0, stdout: JSON.stringify({ tarea: 'checkout-un-paso', estado: 'open', pasos: '2/5', siguiente: 'Probar el pago en el móvil' }), stderr: '' } }
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  on('classic.SessionStart', async () => ({}))
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: [(e.props.modes ?? []).join(' & ')] }))
+}
+
+const PIE = { component: 'SessionMode', props: { modes: ['focus'] } } as const
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`el pie enseña la tarea del espacio de trabajo (${surface})`, async ($, on) => {
+    entornoTarea(on, '/proyectos/tienda-ws-checkout-un-paso')
+    await $.classic.SessionStart(INICIO)
+    const ui = await $.ui.mount({ plugin: 'crux', surface, ...PIE })
+    expect(await ui.find({ type: 'Text', text: 'focus & ▸ checkout-un-paso · pasos 2/5' })).toBeDefined()
+    await ui.unmount()
+  })
+}
+
+test('fuera de un espacio de trabajo el pie queda como estaba', async ($, on) => {
+  entornoTarea(on, '/proyectos/tienda')
+  await $.classic.SessionStart(INICIO)
+  const ui = await $.ui.mount({ plugin: 'crux', surface: 'terminal', ...PIE })
+  expect(await ui.find({ type: 'Text', text: /checkout/ })).toBeUndefined()
+  await ui.unmount()
+})

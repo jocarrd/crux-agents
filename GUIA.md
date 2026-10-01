@@ -378,6 +378,25 @@ De ahí sale una regla dura: **ninguna skill del kernel puede nombrar
 herramientas de un agente concreto**. Se describe *la acción*, no *quién la
 ejecuta*. Y hay un test que lo vigila.
 
+### Lo que solo existe en Claude: el plugin con mods
+
+Desde la 2.1.287, Claude Code admite *mods*: módulos de TypeScript que viajan
+dentro de un plugin, reciben los eventos de la sesión y pueden dibujar en la
+interfaz. `adapters/claude/plugin` trae uno, y es una capa encima de lo común,
+no un sustituto:
+
+- **El recordatorio de tareas como panel** encima del prompt, con un número
+  para retomar cada una. Los datos salen de `lib/task-sync.mjs`, igual que el
+  texto del hook `session-sync`. El mod pone `CRUX_REMINDER_UI=panel` antes de
+  que corra el hook, y el hook deja entonces su texto solo para el modelo.
+- **La tarea del espacio de trabajo en el pie del prompt**, entre las etiquetas
+  de modo, al día al acabar cada turno.
+
+`crux hooks install` lo carga con `CLAUDE_CODE_PLUGIN_DIRS` en el
+`settings.json` de Claude, que ningún otro agente lee: en Codex, la web o el
+móvil todo sigue llegando como texto. Los tests del mod los corre
+`claude plugin test`, y la suite del kernel los lanza cuando hay `claude`.
+
 ### Qué pasa cuando ejecutas `crux doctor`
 
 ```

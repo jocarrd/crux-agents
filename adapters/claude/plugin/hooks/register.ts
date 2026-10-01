@@ -11,6 +11,7 @@ const titulo = atom({ plugin: 'crux', key: 'titulo' }, '')
 const tareas = atom({ plugin: 'crux', key: 'tareas' }, [])
 const mas = atom({ plugin: 'crux', key: 'mas' }, 0)
 const oculto = atom({ plugin: 'crux', key: 'oculto' }, false)
+const enCurso = atom({ plugin: 'crux', key: 'enCurso' }, '')
 
 // El plugin vive en <kernel>/adapters/claude/plugin.
 const kernelDe = (root: string) => root.replace(/\/adapters\/claude\/plugin\/?$/, '')
@@ -28,7 +29,40 @@ async function cargar($) {
   await update($, oculto, () => false)
 }
 
+// La tarea del espacio de trabajo en que está la sesión, con la misma búsqueda
+// que el hook task-context: common.sh la encuentra y task.mjs la resume.
+const RESUMEN = `
+  source "$1/lib/common.sh"
+  f="$(task_file_for_path "\${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}" "$2")" || exit 0
+  node "$1/lib/task.mjs" summary --file "$f" --json`
+
+async function estadoTarea($) {
+  const cwd = await $.session.cwd()
+  const git = await $.process.run(['git', '-C', cwd, 'rev-parse', '--show-toplevel'])
+  const raiz = git.exitCode === 0 ? git.stdout.trim() : ''
+  let etiqueta = ''
+  if (raiz.includes('-ws-')) {
+    const { exitCode, stdout } = await $.process.run(
+      ['bash', '-c', RESUMEN, 'crux', kernelDe($.plugin.root), raiz],
+      { timeoutMs: 10000 },
+    )
+    if (exitCode === 0 && stdout.trim()) {
+      const t = JSON.parse(stdout)
+      etiqueta = [t.tarea, t.pasos ? 'pasos ' + t.pasos : t.estado].filter(Boolean).join(' · ')
+    }
+  }
+  await update($, enCurso, () => etiqueta)
+}
+
 export function register(on) {
+  // La línea de estado se pone al día al acabar cada turno: es cuando el
+  // agente ha podido marcar pasos o cambiar el siguiente con crux task.
+  on('turn.complete', async ($, e, next) => {
+    const r = await next(e)
+    await estadoTarea($)
+    return r
+  })
+
   // Corre antes que los hooks de settings.json del mismo evento: la variable
   // ya está puesta cuando el hook de Crux decide si pinta el texto.
   on('classic.SessionStart', async ($, e, next) => {
@@ -36,6 +70,7 @@ export function register(on) {
     const resultado = await next(e)
     // Tras compactar la sesión sigue a medias: el hook calla y el panel también.
     if (e.source !== 'compact') await cargar($)
+    await estadoTarea($)
     return resultado
   })
 
@@ -43,6 +78,14 @@ export function register(on) {
   on('prompt.submit', async ($, e, next) => {
     await update($, oculto, () => true)
     return next(e)
+  })
+
+  // La tarea del espacio, entre las etiquetas de modo del pie del prompt:
+  // discreta y siempre a la vista, sin pasar por la conversación.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const etiqueta = await read($, enCurso)
+    if (!etiqueta) return next(e)
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, '▸ ' + etiqueta] } })
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
