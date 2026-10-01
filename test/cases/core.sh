@@ -2088,3 +2088,20 @@ test_las_opciones_de_crux_estan_en_ingles() {
   assert_eq "0" "$hits" "ninguna opción de crux está en castellano"
   assert_eq "3" "$viejas" "las tres viejas solo quedan para decir su nombre nuevo"
 }
+
+test_install_mueve_los_hooks_del_kernel_anterior() {
+  sandbox >/dev/null
+  local casa="$SB/casa-hooks"; mkdir -p "$casa/.claude"
+  local viejo="$casa/.crux/kernel/0.0.1/adapters/claude/hooks/session-sync.sh"
+  printf '{"hooks":{"SessionStart":[{"matcher":"","hooks":[{"type":"command","command":"%s"},{"type":"command","command":"/opt/otro.sh"}]}]}}' \
+    "$viejo" > "$casa/.claude/settings.json"
+
+  env HOME="$casa" CLAUDE_SETTINGS="$casa/.claude/settings.json" bash "$CRUX_HOME/install.sh" >/dev/null 2>&1
+
+  local version; version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  local ajustes; ajustes="$(cat "$casa/.claude/settings.json")"
+  assert_contains "$ajustes" "$casa/.crux/kernel/$version/adapters/claude/hooks/session-sync.sh" \
+    "el hook pasa a la versión recién instalada"
+  assert_not_contains "$ajustes" "kernel/0.0.1/" "y no queda ninguno en la anterior"
+  assert_contains "$ajustes" "/opt/otro.sh" "los hooks que no son de crux no se tocan"
+}
