@@ -138,6 +138,27 @@ esac
 crux_materialize_skills "$CRUX_HOME/skills" "kernel"
 ok "skills del kernel materializadas (Claude + Codex)"
 
+# Los hooks del agente llevan la versión en la ruta: sin esto, la sesión seguía
+# ejecutando el kernel anterior hasta un 'crux hooks install' que nadie lanzaba.
+AJUSTES="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$AJUSTES" ]]; then
+  movidos="$(node -e '
+    const fs = require("fs");
+    const [file, kernels, destino] = process.argv.slice(1);
+    const s = JSON.parse(fs.readFileSync(file, "utf8"));
+    const esc = kernels.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const viejo = new RegExp(`${esc}/[^/]+/adapters/`, "g");
+    let n = 0;
+    for (const grupos of Object.values(s.hooks || {})) for (const g of grupos) for (const h of g.hooks || []) {
+      const cmd = (h.command || "").replace(viejo, `${destino}/adapters/`);
+      if (cmd !== h.command) { h.command = cmd; n++; }
+    }
+    if (n) fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+    process.stdout.write(String(n));
+  ' "$AJUSTES" "$HOME/.crux/kernel" "$CRUX_HOME")"
+  [[ "$movidos" != "0" ]] && ok "hooks del agente movidos a $VERSION_INSTALADA ($movidos)"
+fi
+
 # --- 4. Contexto global por agente ------------------------------------------
 
 codex_materialize_global "$CRUX_HOME"
