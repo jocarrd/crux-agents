@@ -2144,3 +2144,53 @@ test_el_plugin_de_claude_pasa_sus_propios_tests() {
   assert_eq 0 "$rc" "los tests del mod pasan"
   assert_contains "$out" " 0 fail" "sin ninguno fallido"
 }
+
+test_hooks_install_registra_los_hooks_en_codex() {
+  sandbox >/dev/null
+  local f="$CODEX_HOME_DIR/hooks.json"
+  mkdir -p "$CODEX_HOME_DIR"
+  printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/opt/mio.sh"}]}]}}' > "$f"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  local h; h="$(cat "$f")"
+  assert_contains "$h" "$CRUX_HOME/adapters/claude/hooks/session-sync.sh" "Codex recibe el recordatorio al abrir sesión"
+  assert_contains "$h" "adapters/codex/hooks/contexto.sh" "los hooks de contexto pasan por el envoltorio JSON"
+  assert_contains "$h" "destructive-guard.sh" "y los guardianes"
+  assert_not_contains "$h" "memory-guard" "el de memorias no, que revisa las de Claude"
+  assert_contains "$h" "/opt/mio.sh" "los hooks propios se quedan"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  assert_eq 1 "$(grep -o 'session-sync.sh' "$f" | wc -l | tr -d ' ')" "reinstalar no los duplica"
+  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  h="$(cat "$f")"
+  assert_not_contains "$h" "session-sync" "remove los quita"
+  assert_contains "$h" "/opt/mio.sh" "y deja los propios"
+}
+
+test_hooks_install_no_crea_codex_si_no_esta() {
+  sandbox >/dev/null
+  rm -rf "$CODEX_HOME_DIR"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  assert_eq "no" "$([[ -e "$CODEX_HOME_DIR/hooks.json" ]] && echo si || echo no)" "sin Codex en la máquina no se escribe nada"
+}
+
+test_el_envoltorio_de_codex_da_el_contexto_en_json() {
+  sandbox >/dev/null
+  local ctx="$CRUX_HOME/adapters/codex/hooks/contexto.sh" h="$SB/hook.sh" out rc
+  printf '#!/usr/bin/env bash\ncat >/dev/null\necho "Tarea x · open"\n' > "$h"
+  out="$(echo '{}' | bash "$ctx" UserPromptSubmit "$h")"
+  assert_eq '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"Tarea x · open"}}' "$out" "el texto pasa a additionalContext"
+  printf '#!/usr/bin/env bash\ncat >/dev/null\n' > "$h"
+  assert_eq "" "$(echo '{}' | bash "$ctx" UserPromptSubmit "$h")" "sin salida no dice nada"
+  printf '#!/usr/bin/env bash\ncat >/dev/null\necho "no" >&2\nexit 2\n' > "$h"
+  rc=0; out="$(echo '{}' | bash "$ctx" UserPromptSubmit "$h" 2>&1)" || rc=$?
+  assert_eq 2 "$rc" "un bloqueo sigue siendo un bloqueo"
+  assert_contains "$out" "no" "con su motivo"
+}
+
+test_install_mueve_los_hooks_de_codex_del_kernel_anterior() {
+  sandbox >/dev/null
+  local casa="$SB/casa-codex"; mkdir -p "$casa/.codex"
+  printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"%s"}]}]}}' "$casa/.crux/kernel/0.0.1/adapters/claude/hooks/session-sync.sh" > "$casa/.codex/hooks.json"
+  env HOME="$casa" CODEX_HOME_DIR="$casa/.codex" bash "$CRUX_HOME/install.sh" >/dev/null 2>&1
+  local version; version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  assert_contains "$(cat "$casa/.codex/hooks.json")" "$casa/.crux/kernel/$version/adapters/claude/hooks/session-sync.sh" "los hooks de Codex pasan a la versión instalada"
+}

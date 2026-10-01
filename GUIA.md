@@ -378,6 +378,24 @@ De ahí sale una regla dura: **ninguna skill del kernel puede nombrar
 herramientas de un agente concreto**. Se describe *la acción*, no *quién la
 ejecuta*. Y hay un test que lo vigila.
 
+### Los hooks en los dos agentes
+
+Codex lee hooks de `~/.codex/hooks.json` con el mismo formato que Claude Code,
+así que `crux hooks install` registra allí los mismos scripts de shell: el
+recordatorio y la sincronización al abrir sesión, la tarea y el ciclo al
+escribir, los guardianes antes de cada comando y la puerta de documentación al
+cerrar. Tres diferencias:
+
+- Codex no tiene herramientas de ficheros propias (edita con `apply_patch`),
+  así que los guardianes miran solo `Bash`.
+- Los hooks que dan contexto en texto pasan por
+  `adapters/codex/hooks/contexto.sh`, que lo envuelve en
+  `additionalContext`: Codex solo lo garantiza en JSON.
+- El guardián de memorias no va, porque revisa las memorias de Claude.
+
+Codex pide aprobar cada hook la primera vez que lo ve; hasta entonces no corre.
+Si Codex no está en la máquina, no se escribe nada.
+
 ### Lo que solo existe en Claude: el plugin con mods
 
 Desde la 2.1.287, Claude Code admite *mods*: módulos de TypeScript que viajan
