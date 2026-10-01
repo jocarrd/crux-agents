@@ -44,10 +44,14 @@ recordatorio="$(node "$kernel/lib/task-sync.mjs" remind --cwd "${cwd:-$PWD}" 2>/
 node -e '
   const [sinc, rec] = process.argv.slice(1);
   const r = rec ? JSON.parse(rec) : null;
-  const usuario = [r?.usuario, sinc].filter(Boolean).join("\n\n");
+  // Con el mod de Claude Code activo, el recordatorio lo pinta él como panel;
+  // al modelo le sigue llegando igual. Sin el mod (Codex, la web, el móvil),
+  // la persona lo lee aquí.
+  const panel = process.env.CRUX_REMINDER_UI === "panel";
+  const usuario = [panel ? null : r?.usuario, sinc].filter(Boolean).join("\n\n");
   const agente = [sinc, r?.agente].filter(Boolean).join("\n\n");
   process.stdout.write(JSON.stringify({
-    systemMessage: usuario,
+    ...(usuario ? { systemMessage: usuario } : {}),
     hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: agente },
   }));
 ' "$sincronizado" "$recordatorio"

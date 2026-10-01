@@ -24,6 +24,7 @@ DESTRUCTIVE_GUARD="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
 PROPOSAL_GUARD="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
 SESSION_SYNC="$CRUX_HOME/adapters/claude/hooks/session-sync.sh"
 SESSION_IDLE="$CRUX_HOME/adapters/claude/hooks/session-idle.sh"
+CLAUDE_PLUGIN="$CRUX_HOME/adapters/claude/plugin"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
@@ -111,6 +112,26 @@ enganchar() {
   ' "$SETTINGS" "$1" "$2" "$3" "${4:-}"
 }
 
+# El plugin de Claude Code (adapters/claude/plugin) solo existe para Claude: se
+# carga por CLAUDE_CODE_PLUGIN_DIRS en el settings.json de Claude, que ningún
+# otro agente lee. Lleva el mod que pinta el recordatorio de tareas como panel.
+plugin_claude() {
+  # plugin_claude add|remove
+  node -e '
+    const fs = require("fs");
+    const [file, accion, dir] = process.argv.slice(1);
+    const s = JSON.parse(fs.readFileSync(file, "utf8"));
+    s.env = s.env || {};
+    const otras = (s.env.CLAUDE_CODE_PLUGIN_DIRS || "").split(":")
+      .filter((d) => d && !/\/adapters\/claude\/plugin\/?$/.test(d));
+    if (accion === "add") otras.push(dir);
+    if (otras.length) s.env.CLAUDE_CODE_PLUGIN_DIRS = otras.join(":");
+    else delete s.env.CLAUDE_CODE_PLUGIN_DIRS;
+    if (!Object.keys(s.env).length) delete s.env;
+    fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+  ' "$SETTINGS" "$1" "$CLAUDE_PLUGIN"
+}
+
 cmd_install() {
   [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
   [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
@@ -154,6 +175,11 @@ cmd_install() {
 
   enganchar UserPromptSubmit "$SESSION_IDLE" 'session-idle'
   ok "hook que hace lo mismo al volver a una sesión que llevaba horas parada"
+
+  if [[ -f "$CLAUDE_PLUGIN/.claude-plugin/plugin.json" ]]; then
+    plugin_claude add
+    ok "plugin de Claude Code: el recordatorio de tareas como panel (solo Claude)"
+  fi
 
   info "copia previa en $SETTINGS.bak"
 
@@ -308,6 +334,7 @@ cmd_remove() {
     }
     fs.writeFileSync(process.argv[1], JSON.stringify(s, null, 2) + "\n");
   ' "$SETTINGS"
+  plugin_claude remove
   ok "hooks de crux retirados (el resto queda como estaba)"
 
   local docs
