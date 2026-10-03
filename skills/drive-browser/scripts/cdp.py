@@ -11,6 +11,7 @@ Actions:
   click <selector-or-text> [out.png]  REAL browser click on the element's center
   type  <text> [out.png]              types into the focused element (real events)
   clickxy <x> <y> [out.png]           real click at viewport coordinates
+  upload <selector> <file> [index]    put a file into an input[type=file] (DOM.setFileInputFiles)
 
 CDP listens on $CDP_URL or http://127.0.0.1:9222.
 """
@@ -35,7 +36,21 @@ class C:
         s.i += 1; mid = s.i
         await s.ws.send(json.dumps({"id": mid, "method": method, "params": p}))
         while True:
-            m = json.loads(await s.ws.recv())
+            # A page that stops painting —the screen locked, a frozen tab— never
+            # answers, and the call used to wait forever without saying why.
+            try:
+                raw = await asyncio.wait_for(s.ws.recv(), float(os.environ.get("CDP_TIMEOUT", "45")))
+            except asyncio.TimeoutError:
+                raise SystemExit(f"{method}: the page does not answer. Look at the screen: a native "
+                                 "dialog or a lock screen; otherwise open a new tab (/json/new) and close this one.")
+            m = json.loads(raw)
+            # "Leave site?" after a click of ours —a form that navigates on
+            # submit— blocks the page until someone answers, and is invisible
+            # to the page's own JS. Only that kind is accepted; alerts and
+            # confirms are left for whoever is driving.
+            if m.get("method") == "Page.javascriptDialogOpening" and m["params"].get("type") == "beforeunload":
+                await s.ws.send(json.dumps({"id": 0, "method": "Page.handleJavaScriptDialog", "params": {"accept": True}}))
+                print("accepted a 'leave site?' dialog")
             if m.get("id") == mid:
                 if "error" in m: raise RuntimeError(f"{method}: {m['error']}")
                 return m.get("result", {})
@@ -46,6 +61,13 @@ class C:
             ex = r["exceptionDetails"].get("exception", {})
             return {"__err__": ex.get("description") or str(r["exceptionDetails"])}
         return r.get("result", {}).get("value")
+    async def settle(s, seconds):
+        # Waits while still reading events, so a dialog opened by the click is
+        # seen and handled instead of freezing the next call.
+        try:
+            await s.cmd("Runtime.evaluate", expression=f"new Promise(r=>setTimeout(r,{int(seconds*1000)}))", awaitPromise=True)
+        except SystemExit:
+            pass
     async def click_xy(s, x, y):
         for t in ("mousePressed", "mouseReleased"):
             await s.cmd("Input.dispatchMouseEvent", type=t, x=x, y=y,
@@ -102,12 +124,12 @@ async def main():
                 print("not found:", sys.argv[2], box); return
             await asyncio.sleep(0.3)
             await c.click_xy(box["x"], box["y"])
-            await asyncio.sleep(2)
+            await c.settle(2)
             print(f'click at ({int(box["x"])},{int(box["y"])}) on: {box["t"]}')
             if len(sys.argv) > 3: await c.shot(sys.argv[3])
         elif action == "clickxy":
             await c.click_xy(float(sys.argv[2]), float(sys.argv[3]))
-            await asyncio.sleep(2)
+            await c.settle(2)
             print(f"click at ({sys.argv[2]},{sys.argv[3]})")
             if len(sys.argv) > 4: await c.shot(sys.argv[4])
         elif action == "type":
@@ -115,6 +137,15 @@ async def main():
             await asyncio.sleep(1)
             print("typed", len(sys.argv[2]), "chars")
             if len(sys.argv) > 3: await c.shot(sys.argv[3])
+        elif action == "upload":
+            # A file chooser cannot be driven: the file goes straight into the input.
+            doc = await c.cmd("DOM.getDocument", depth=-1, pierce=True)
+            ids = (await c.cmd("DOM.querySelectorAll", nodeId=doc["root"]["nodeId"], selector=sys.argv[2]))["nodeIds"]
+            idx = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+            if idx >= len(ids):
+                print(f"no input matches {sys.argv[2]} (found {len(ids)})"); return
+            await c.cmd("DOM.setFileInputFiles", nodeId=ids[idx], files=[os.path.abspath(sys.argv[3])])
+            print(f"uploaded {sys.argv[3]} into {sys.argv[2]} #{idx} of {len(ids)}")
         else:
             print("unknown action:", action)
 

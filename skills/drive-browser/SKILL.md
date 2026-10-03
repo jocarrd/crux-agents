@@ -17,8 +17,8 @@ repeat this, install one (it loads when the agent restarts):
 
 ## Needed
 
-- `google-chrome` and a **desktop session** (`echo $DISPLAY` non-empty): it has
-  to be headed.
+- `google-chrome` and a **desktop session** (`echo $DISPLAY` non-empty), ideally
+  with the screen unlocked so you can look at it when something hangs.
 - `python3` with `websockets`.
 - The keyring unlocked (it is if the user has Chrome open).
 
@@ -44,8 +44,8 @@ repeat this, install one (it loads when the agent restarts):
 
 3. **Check that the session came across:**
    `python3 <this-skill-directory>/scripts/cdp.py goto https://vercel.com/dashboard /tmp/dash.png 6`.
-   If it ends up on the login page, decryption failed (almost always from
-   launching headless).
+   If it ends up on the login page, the keyring is locked or the site binds the
+   session to the device: sign in once in that window.
 
 4. **Drive** with short, separate calls:
    - Click: **the `click` action of `cdp.py`**, which sends real mouse events.
@@ -56,12 +56,24 @@ repeat this, install one (it loads when the agent restarts):
      autocomplete, set the value to "" with the setter and then `type`; if the
      dropdown does not appear, Enter.
    - In React many buttons are `div`: find them by text.
+   - Files: `cdp.py upload '<css selector>' <file> [index]`. The native file
+     chooser cannot be driven.
+   - Rich editors (ProseMirror, Tiptap) keep their instance on the element:
+     `document.querySelector(".tiptap").editor.commands.setContent(...)` instead
+     of typing.
 
-5. **When finished**, close by port and delete the copy, which has cookies:
+5. **When finished**, close by port and delete the copy, which has cookies,
+   unless it is the fixed one you keep for repeating:
 
    ```bash
    fuser -k 9222/tcp; rm -rf /tmp/cdp-profile
    ```
+
+**To repeat**, keep the copy in a fixed directory and relaunch it with
+`KEEP_PROFILE=1 chrome-session.sh <profile> ~/.config/cdp-<site> [port]`: a
+Google sign-in done once there is a single click the next time, without the
+password. A second
+session goes on another port, with `CDP_URL=http://127.0.0.1:<port>`.
 
 ## Secrets: never print them
 
@@ -79,9 +91,15 @@ python3 .../cdp.py writefile 'window.__X__' /tmp/secret
   the headed window and carry on yourself. Other sites do accept the cookies.
 - **Chrome does not debug the default profile** and you cannot attach to the
   user's real Chrome: always a copy in another `--user-data-dir`.
-- **Headless does not decrypt the cookies:** headed, with
-  `--password-store=gnome-libsecret` and also copying `Local State` (the script
-  already does).
+- **Headless decrypts the cookies** as long as the keyring is unlocked
+  (`--password-store=gnome-libsecret` and `Local State`, which the script
+  copies), but sites behind a bot check (Cloudflare's "Verify you are human")
+  stop it. Then it is headed, and the check is not to be got around.
+- **If every call hangs, look at the screen** (`gnome-screenshot -f /tmp/s.png`).
+  It was a native "Leave site?" dialog after a publish button: the page waits
+  for an answer and its own JS cannot see it. `cdp.py` accepts that kind after
+  its own clicks; one opened outside it, the user answers. `cdp.py` gives up
+  after `CDP_TIMEOUT` seconds (45) and says so.
 - **If `eval` hangs,** do not kill Chrome: open a new tab
   (`curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"`) and close the old one
   (`/json/close/<targetId>`).

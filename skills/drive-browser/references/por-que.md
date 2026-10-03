@@ -20,15 +20,27 @@ in different `--user-data-dir`s.
 
 ## Why headed
 
-Cookies are encrypted with the system keyring. Headless does not decrypt them
-and the login screen appears even though you copied them. `Local State` carries
-the wrapped key, which is why it is copied together with `Cookies`.
+Cookies are encrypted with the system keyring, and `Local State` carries the
+wrapped key, which is why it is copied together with `Cookies`. On 2026-10-04 a
+headless copy of a profile decrypted them and reached a logged-in dashboard: the
+login screen seen earlier came from a locked keyring, not from headless itself.
+What does stop headless is the bot check in front of many sites: Malt answered
+with Cloudflare's "Verify you are human" as soon as the copy ran headless.
+
+A publish button on Malt froze the tab three times: screenshots hung and
+`Page.enable` never answered. The first time the screen was locked and that got
+the blame; the third time, unlocked, a screenshot of the desktop showed the real
+cause, a native "Leave site? Changes may not be saved" dialog. It does not show
+up to `Page.handleJavaScriptDialog` from a session opened after it, which is why
+`cdp.py` now reads events while it waits after a click.
 
 ## Google
 
 The cookies travel and are decrypted (`SID`, `HSID`, `__Secure-1PSID` are seen),
 but Google binds them to the originating device and the account chooser comes up
-with "Sesión cerrada". Malt and Vercel do accept them.
+with "Sesión cerrada". Malt and Vercel do accept them. Once the user has signed
+in to Google inside a persistent copy, it stays: on 2026-10-04 "Sign in with
+Google" on Malt took one click and no password from such a profile.
 
 ## The click
 
