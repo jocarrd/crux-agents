@@ -978,6 +978,13 @@ archivar_si_terminada() {
     return 0
   fi
   estado="$(awk -F': ' '/^status:/{print $2; exit}' "$registro")"
+  # Fusionada pero esperando una respuesta: sigue viva hasta que llegue.
+  local waiting_on
+  waiting_on="$(awk -F': ' '/^waiting_on:/{print $2; exit}' "$registro")"
+  if [[ -n "$waiting_on" ]]; then
+    info "la tarea '$tarea' espera a $waiting_on: no se archiva"
+    return 0
+  fi
   case "$estado" in
     merged|deployed)
       promote_decisions "$registro"
@@ -1399,6 +1406,18 @@ cmd_resume() {
     fi
 
     git -C "$dir_repo" fetch -q origin "+refs/heads/$rama:refs/remotes/origin/$rama" 2>/dev/null || true
+    # Una rama retirada al ponerse a esperar no falta: se abre una nueva desde
+    # la principal, porque lo que tenía ya estaba integrado.
+    local retired_branch
+    retired_branch="$(node "$CRUX_HOME/lib/task.mjs" retired --file "$registro" | awk -F'\t' -v r="$repo_nombre" '$1 == r {print $2; exit}')"
+    if [[ -n "$retired_branch" ]]; then
+      rama="$retired_branch"
+      if ( cmd_new "$espacio" --repo "$dir_repo" --branch "$rama" --base "$(rama_principal "$dir_repo")" --task "$tarea" ); then
+        node "$CRUX_HOME/lib/task.mjs" reopen --file "$registro" --repo "$repo_nombre"
+        hechos=$((hechos + 1))
+      fi
+      continue
+    fi
     if ! git -C "$dir_repo" show-ref --verify --quiet "refs/heads/$rama" \
        && ! git -C "$dir_repo" show-ref --verify --quiet "refs/remotes/origin/$rama"; then
       err "$repo_nombre: la rama $rama no está ni aquí ni en el remoto"
@@ -1409,6 +1428,10 @@ cmd_resume() {
   done <<< "$datos"
 
   [[ $hechos -gt 0 ]] || exit 1
+  # Retomarla es que la respuesta llegó: deja de esperar.
+  if [[ "$(node "$CRUX_HOME/lib/task.mjs" unwait --file "$registro")" == "cleared" ]]; then
+    ok "la tarea ya no espera respuesta"
+  fi
   echo
   local resumen
   resumen="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$registro" 2>/dev/null || true)"

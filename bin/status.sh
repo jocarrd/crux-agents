@@ -118,6 +118,7 @@ sin_espacio="$(node -e '
     vivos = new Set(Object.entries(r.workspaces || {}).filter(([, w]) => fs.existsSync(w.path)).map(([n]) => n));
   } catch {}
   for (const t of tareas) {
+    if (t.waiting) continue;
     if (t.espacios.some((e) => vivos.has(e))) continue;
     console.log(`${t.proyecto}/${t.tarea}\t${t.estado}\t${t.siguiente || ""}`);
   }
@@ -130,6 +131,32 @@ if [[ -n "$sin_espacio" ]]; then
     printf '  %-34s %-12s %s\n' "$t" "$estado" "${siguiente:0:60}"
   done <<< "$sin_espacio"
   info "se retoman con: crux workspace resume <tarea>"
+fi
+
+# Las que esperan a otra persona: no son trabajo pendiente nuestro, pero no se
+# pueden perder de vista. Pasado el plazo se sugiere insistir.
+waiting_tasks="$(node -e '
+  const tasks = JSON.parse(process.argv[1] || "[]");
+  const nudge = Number(process.env.CRUX_WAIT_NUDGE_DAYS) > 0 ? Number(process.env.CRUX_WAIT_NUDGE_DAYS) : 7;
+  for (const t of tasks) {
+    if (!t.waiting) continue;
+    const since = Date.parse(t.waiting.since);
+    const days = Number.isNaN(since) ? null : Math.max(0, Math.floor((Date.now() - since) / 86400000));
+    const age = days === null ? "" : days === 0 ? "hoy" : days === 1 ? "ayer" : `hace ${days} días`;
+    console.log([`${t.proyecto}/${t.tarea}`, t.waiting.on, age, t.waiting.ask, days !== null && days >= nudge ? "1" : "", t.waiting.ref].join("\t"));
+  }
+' "$(node "$CRUX_HOME/lib/task-sync.mjs" open 2>/dev/null)")"
+if [[ -n "$waiting_tasks" ]]; then
+  echo
+  echo "esperando respuesta"
+  echo
+  while IFS=$'\t' read -r task on age ask nudge ref; do
+    printf '  %-34s a %s, %s\n' "$task" "$on" "$age"
+    printf '  %-34s %s\n' "" "${ask:0:70}"
+    [[ -n "$ref" ]] && printf '  %-34s %s\n' "" "$ref"
+    [[ -n "$nudge" ]] && warn "$task lleva el plazo cumplido: conviene insistir"
+  done <<< "$waiting_tasks"
+  info "cuando llegue la respuesta: crux workspace resume <tarea>"
 fi
 
 echo

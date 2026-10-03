@@ -654,3 +654,36 @@
 - **Reversibility**: alta. Con `tasks.sync: false` o `CRUX_TASK_SYNC=0` todo
   vuelve a ser local, y la rama se borra sin tocar nada más.
 - **Related**: `ADR-012`, `ADR-015`, `STANDARD.md` §La tarea
+
+### ADR-017: Esperar a otra persona es un dato de la tarea, no un estado
+
+- **Date**: 2026-10-03
+- **Status**: Accepted
+- **Context**: el ciclo de una tarea (`open` → … → `closed`) describe trabajo
+  propio y solo avanza. No tenía forma de decir «el código ya está, falta que
+  conteste alguien». Medido el 03-10-2026 en una máquina con 4 proyectos: dos
+  tareas abiertas esperaban a un cliente (una con un espacio y una rama vacíos
+  que nadie iba a tocar), tres ya fusionadas seguían sin archivar y otro espacio
+  tenía su rama borrada del remoto. El recordatorio las mezclaba con el trabajo
+  pendiente, y cerrar dependía de que el agente se acordase.
+- **Decision**:
+  - La espera va en campos propios de la cabecera (`waiting_on`,
+    `waiting_ask`, `waiting_since`, `waiting_ref`) y no en `ESTADOS`: una tarea
+    `merged` puede estar esperando, y meterlo en la secuencia habría obligado a
+    retroceder estados.
+  - `crux task wait` retira los espacios limpios y borra las ramas sin commits
+    propios o con la propuesta fusionada, y las apunta en `retired` para que
+    `workspace resume` abra una rama nueva desde la principal en vez de acusar
+    que falta. Lo que tiene trabajo sin publicar no se toca.
+  - Una tarea en espera no se archiva al cerrar su último espacio, sigue en el
+    recordatorio aunque esté fusionada y va en un bloque aparte, después del
+    trabajo propio. Pasado el plazo (7 días, `CRUX_WAIT_NUDGE_DAYS`) se sugiere
+    insistir, una vez.
+  - Retomarla con `resume` es la señal de que llegó la respuesta: quita la
+    espera. `crux task unwait` la quita sin abrir espacio.
+- **Consequences**: la lista de tareas distingue lo que depende de nosotros de
+  lo que depende de otro, y una espera no deja espacios ni ramas colgando. El
+  plazo de insistir es uno para todas; si hiciera falta por tarea, iría en un
+  campo más. La espera no avisa a la otra persona: eso sigue siendo cosa de quien
+  pregunta.
+- **Related**: `ADR-012`, `ADR-016`, `STANDARD.md` §La tarea

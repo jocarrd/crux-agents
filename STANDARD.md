@@ -922,6 +922,17 @@ máquina desde su rama remota, uniéndose al registro que ya llegó.
 | Fusionada | `crux workspace merge --yes` | `merged` |
 | Cerrado su último espacio | `crux workspace rm`, que la archiva en `done/` si ya está fusionada | `closed` |
 
+**Esperar a otra persona no es un estado del ciclo.** Una tarea puede estar
+fusionada y seguir pendiente de una respuesta, así que la espera va aparte:
+`crux task wait --on "<quién>" --ask "<qué>" [--ref "<dónde>"]` la apunta y
+retira los espacios limpios y las ramas que no tienen nada propio (o cuya
+propuesta ya se fusionó); lo que tenga trabajo sin publicar se queda y se dice.
+El recordatorio y `crux status` las enseñan en su propio bloque, con a quién y
+desde cuándo, y sugieren insistir pasados 7 días (`CRUX_WAIT_NUDGE_DAYS`).
+Mientras espera no se archiva. `crux workspace resume` la retoma —con una rama
+nueva desde la principal si la suya se retiró— y deja de esperar; `crux task
+unwait` quita la espera sin abrir espacio. Ver ADR-017.
+
 Las archivadas no salen en las listas (`crux task list --done` las enseña) y
 caducan: `crux workspace gc --yes` borra las de más de 180 días
 (`CRUX_TASKS_RETENTION_DAYS`). Lo que tenía que durar ya salió a la propuesta y

@@ -334,3 +334,108 @@ test_una_tarea_sin_decisiones_no_toca_el_docs_repo() {
   assert_no_file "$docs/repos/app/notes.md" "no crea notas vacías"
   assert_eq "init" "$(git -C "$docs" log -1 --format=%s)" "ni commits"
 }
+
+test_wait_records_who_and_retires_an_idle_workspace() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new dominio --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/dominio.md" out rc=0
+  out="$(cd "$root/app-ws-dominio" && bash "$CRUX_HOME/bin/task.sh" wait --on "Alex" --ask "¿Apuntamos el dominio: sí o no?" --ref "correo del 3 de octubre" 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "wait termina bien"
+  assert_contains "$(cat "$f")" "waiting_on: Alex" "apunta a quién se espera"
+  assert_contains "$(cat "$f")" "waiting_ask: ¿Apuntamos el dominio: sí o no?" "y qué se le preguntó, aunque lleve dos puntos"
+  assert_contains "$(cat "$f")" "waiting_ref: correo del 3 de octubre" "y dónde"
+  assert_contains "$(cat "$f")" "waiting_since: " "y desde cuándo"
+  assert_no_file "$root/app-ws-dominio/f.txt" "el espacio sin trabajo se retira"
+  assert_eq "" "$(git -C "$root/app" branch --list ws/dominio)" "y su rama vacía también"
+  assert_contains "$(cat "$f")" "retired: [app=ws/dominio]" "la rama queda apuntada como retirada"
+  assert_file "$f" "la tarea no se archiva por quedarse sin espacios"
+  local list; list="$(bash "$CRUX_HOME/bin/task.sh" list --all 2>&1)"
+  assert_contains "$list" "proj/dominio" "sigue en la lista"
+  assert_contains "$list" "waiting" "como tarea en espera"
+  assert_contains "$list" "a Alex desde" "diciendo a quién espera"
+}
+
+test_wait_keeps_a_workspace_with_work_in_it() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new cambios --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-cambios" out
+  echo y > "$ws/sin-commit.txt"
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "¿vale así?" 2>&1)"
+  assert_contains "$out" "cambios sin commitear: se queda" "dice por qué no lo retira"
+  assert_file "$ws/sin-commit.txt" "y no pierde el trabajo"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new commits --repo "$root/app" >/dev/null 2>&1
+  ws="$root/app-ws-commits"
+  ( cd "$ws" && echo z > z.txt && git add z.txt && git commit -qm z )
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "¿vale así?" 2>&1)"
+  assert_contains "$out" "sin fusionar en ws/commits: se queda" "una rama con commits propios no se toca"
+  assert_file "$ws/z.txt" "ni su espacio"
+}
+
+test_wait_needs_who_and_what() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new sin --repo "$root/app" >/dev/null 2>&1
+  local out rc=0
+  out="$(cd "$root/app-ws-sin" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" 2>&1)" || rc=$?
+  assert_eq 1 "$rc" "sin la pregunta no se pone a esperar"
+  assert_contains "$out" "uso: crux task wait" "y dice cómo se usa"
+  assert_not_contains "$(cat "$SB/tasks/proj/sin.md")" "waiting_on" "ni escribe nada a medias"
+}
+
+test_waiting_tasks_get_their_own_block_in_the_reminder() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new curro --repo "$root/app" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new espera --repo "$root/web" >/dev/null 2>&1
+  ( cd "$root/web-ws-espera" && bash "$CRUX_HOME/bin/task.sh" wait --on "Alex" --ask "¿Datos de la base vieja?" >/dev/null 2>&1 )
+  local r; r="$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")"
+  assert_contains "$r" "Esperando respuesta:" "las que esperan van en su propio bloque"
+  assert_contains "$r" "proj/espera · a Alex, hoy: ¿Datos de la base vieja?" "con a quién, desde cuándo y qué"
+  assert_not_contains "$r" "conviene insistir" "sin insistir antes de tiempo"
+  local antes despues
+  antes="$(printf '%s' "$r" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.usuario.indexOf("proj/curro")))})')"
+  despues="$(printf '%s' "$r" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.usuario.indexOf("Esperando respuesta")))})')"
+  assert_eq 1 "$([[ "$antes" -ge 0 && "$antes" -lt "$despues" ]] && echo 1 || echo 0)" "el trabajo propio va antes que lo que espera a otro"
+  sed -i 's/^waiting_since: .*/waiting_since: 2020-01-01/' "$SB/tasks/proj/espera.md"
+  r="$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")"
+  assert_contains "$r" "conviene insistir" "pasado el plazo sugiere insistir"
+  r="$(CRUX_WAIT_NUDGE_DAYS=100000 node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")"
+  assert_not_contains "$r" "conviene insistir" "y el plazo se puede ajustar"
+  local st; st="$(cd "$root/app" && bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  assert_contains "$st" "esperando respuesta" "crux status les da su sección"
+  assert_not_contains "$(printf '%s' "$st" | sed -n '/tareas abiertas sin espacio/,/^$/p')" "proj/espera" "y no la cuenta como abierta sin espacio"
+}
+
+test_a_merged_task_that_waits_is_not_archived() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new fusionada --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/fusionada.md"
+  node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
+  node "$CRUX_HOME/lib/task.mjs" wait --file "$f" --on "Alex" --ask "¿seguimos?" >/dev/null
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm fusionada 2>&1)"
+  assert_contains "$out" "espera a Alex: no se archiva" "rm no archiva una tarea que espera"
+  assert_file "$f" "el registro sigue"
+  assert_contains "$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")" "proj/fusionada" "y sigue en el recordatorio aunque esté fusionada"
+}
+
+test_resume_reopens_a_retired_branch_and_stops_waiting() {
+  sandbox >/dev/null
+  local root; root="$(_proyecto_de_tareas)"
+  bash "$CRUX_HOME/bin/workspace.sh" new vuelta --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/vuelta.md"
+  ( cd "$root/app-ws-vuelta" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "¿sí?" >/dev/null 2>&1 )
+  local out rc=0
+  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/workspace.sh" resume vuelta 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "resume abre la tarea aunque su rama se retirase"
+  assert_file "$root/app-ws-vuelta/f.txt" "con un espacio nuevo desde la principal"
+  assert_contains "$out" "ya no espera respuesta" "y deja de esperar"
+  assert_not_contains "$(cat "$f")" "waiting_on" "sin rastro de la espera"
+  assert_not_contains "$(cat "$f")" "retired:" "ni de la rama retirada"
+  rc=0; out="$(cd "$root/app-ws-vuelta" && bash "$CRUX_HOME/bin/task.sh" unwait 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "unwait sobre una tarea que no espera no es un error"
+  assert_contains "$out" "no estaba esperando" "y lo dice"
+}
