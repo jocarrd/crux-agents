@@ -1,7 +1,7 @@
 {
   "name": "crux",
   "version": "1.0.0",
-  "description": "Crux en Claude Code: las tareas abiertas como panel encima del prompt",
+  "description": "Crux in Claude Code: open tasks as a panel above the prompt",
   "author": { "name": "Jorge Carrera Diez" },
   "types": "./types/index.d.ts"
 }

@@ -1,110 +1,109 @@
 ---
 name: wizard
-description: Generar un asistente interactivo en bash que lleve a una persona, paso a paso, por un procedimiento manual que el agente no puede hacer: dar de alta infraestructura, sacar credenciales de un panel ajeno, meter secretos en el CI o ejecutar una migración de una sola vez. Abre cada URL, dice qué copiar, recoge los valores y los escribe donde van. Usa cuando haya que configurar un servicio de terceros, cuando un despliegue dependa de secretos que alguien tiene que ir a buscar, cuando toque un cambio de infraestructura irreversible, o cuando el usuario diga que no se acuerda de los pasos o que ya explicó esto la última vez.
+description: Generate an interactive bash wizard that walks a person, step by step, through a manual procedure the agent cannot do: provisioning infrastructure, pulling credentials from someone else's dashboard, putting secrets into CI, or running a one-off migration. It opens each URL, says what to copy, collects the values and writes them where they belong. Use when a third-party service has to be configured, when a deployment depends on secrets someone has to go and fetch, when an irreversible infrastructure change is coming, or when the user says "no me acuerdo de los pasos" or that they already explained this last time.
 ---
 
 # wizard
 
-Hay pasos que el agente no puede dar: entrar en un panel que exige la sesión de
-una persona, pulsar «crear» en algo que cuesta dinero, leer un token que solo se
-enseña una vez. Esos pasos acaban siempre igual: una lista de instrucciones en
-el chat que se pierde al cerrar la sesión, y a los dos meses hay que volver a
-explicarlos.
+Some steps the agent cannot take: logging into a dashboard that requires a
+person's session, clicking "create" on something that costs money, reading a
+token that is only shown once. Those steps always end the same way: a list of
+instructions in the chat that is lost when the session closes, and two months
+later they have to be explained again.
 
-Un **wizard** convierte esa lista en un script ejecutable. Abre cada URL, dice
-exactamente dónde pulsar y qué copiar, recoge el valor, lo escribe en su sitio
-(`.env`, secreto de GitHub), confirma antes de lo irreversible y enseña cuántas
-etapas quedan.
+A **wizard** turns that list into an executable script. It opens each URL, says
+exactly where to click and what to copy, collects the value, writes it where it
+goes (`.env`, GitHub secret), asks for confirmation before anything irreversible
+and shows how many stages remain.
 
-**No lo uses para lo que puede hacer el agente.** Si el paso se resuelve con un
-comando, se ejecuta y ya.
+**Don't use it for what the agent can do.** If the step is solved with a command,
+run it and move on.
 
-## Lo que ya está resuelto
+## What is already solved
 
-`template.sh` trae la biblioteca entera: progreso por etapas, puertas de
-confirmación, apertura de URL en Linux, macOS y WSL, entrada oculta para
-secretos, escritura idempotente en `.env`, `gh secret`/`gh variable` y resumen
-final con lo que quedó pendiente.
+`template.sh` ships the whole library: staged progress, confirmation gates, URL
+opening on Linux, macOS and WSL, hidden input for secrets, idempotent writing to
+`.env`, `gh secret`/`gh variable` and a final summary of what is still pending.
 
-**Tu trabajo es solo acotar el procedimiento y escribir sus etapas.** Todo lo
-que hay por encima de la marca `ETAPAS` es idéntico en todos los wizards, y esa
-uniformidad es la gracia: no se edita a mano.
+**Your job is only to scope the procedure and write its stages.** Everything
+above the `STAGES` marker is identical in every wizard, and that uniformity is
+the point: it is not edited by hand.
 
-Un wizard es de usar y tirar por defecto: se escribe en el scratchpad o en
-`scripts/`, se ejecuta y se borra. Se commitea solo si el procedimiento se va a
-repetir y merece vivir en el repo.
+A wizard is disposable by default: it is written in the scratchpad or in
+`scripts/`, run, and deleted. It is committed only if the procedure will be
+repeated and deserves to live in the repo.
 
-## Procedimiento
+## Procedure
 
-### 1. Acotar
+### 1. Scope
 
-Averigua todos los pasos manuales y todos los valores que salen por el camino.
-**Lee el repo antes de preguntar**, nunca empieces en frío:
+Find out all the manual steps and all the values that come out along the way.
+**Read the repo before asking**, never start cold:
 
-- Para configuración: `.env`, `.env.example`, `README`, `docker-compose*`, la
-  config del framework y `.github/workflows/*`. Cada `secrets.*` y cada
-  `vars.*` del workflow es un valor que el wizard tiene que producir.
-- Para una migración o un cambio de infraestructura: el estado actual, el
-  estado final y las acciones irreversibles que hay entre los dos.
+- For configuration: `.env`, `.env.example`, `README`, `docker-compose*`, the
+  framework config and `.github/workflows/*`. Every `secrets.*` and every
+  `vars.*` in the workflow is a value the wizard has to produce.
+- For a migration or an infrastructure change: the current state, the final
+  state and the irreversible actions between the two.
 
-Enseña al usuario la lista ordenada de etapas y qué valor produce cada una, y
-que confirme. Puede añadir, quitar o reordenar.
+Show the user the ordered list of stages and which value each one produces, and
+have them confirm. They can add, remove or reorder.
 
-**Hecho cuando** cada etapa tiene nombre y orden, y de cada valor sabes de
-dónde lo saca la persona, dónde se escribe (`.env`, secreto, los dos o ninguno)
-y si es secreto o público.
+**Done when** every stage has a name and an order, and for every value you know
+where the person gets it, where it is written (`.env`, secret, both or neither)
+and whether it is secret or public.
 
-### 2. Trazar el camino de cada etapa
+### 2. Trace the path of each stage
 
-Por cada etapa, escribe el recorrido exacto: qué URL se abre, qué se hace allí,
-dónde aparece el valor y qué variable rellena. Por ejemplo: «Panel → Developers
-→ API keys → Reveal test key → copiar».
+For each stage, write the exact route: which URL is opened, what is done there,
+where the value appears and which variable it fills. For example: "Dashboard →
+Developers → API keys → Reveal test key → copy".
 
-**Si no conoces la interfaz actual o el comando exacto, dilo y pregunta, o
-míralo en la documentación.** Inventarse un menú que no existe deja a la
-persona atascada delante de una pantalla que no se parece a lo que dice el
-script, y ahí el wizard vale menos que nada.
+**If you don't know the current interface or the exact command, say so and ask,
+or look it up in the documentation.** Inventing a menu that doesn't exist leaves
+the person stuck in front of a screen that doesn't look like what the script
+says, and then the wizard is worth less than nothing.
 
-**Hecho cuando** cada etapa son instrucciones que podría seguir alguien que no
-ha visto el proyecto.
+**Done when** every stage is a set of instructions that someone who has never
+seen the project could follow.
 
-### 3. Escribirlo
+### 3. Write it
 
-Copia `template.sh` a su destino. Sustituye la etapa de ejemplo por una
-`stage` por paso, en orden de dependencia, y ajusta `TOTAL_STAGES`.
+Copy `template.sh` to its destination. Replace the example stage with one
+`stage` per step, in dependency order, and adjust `TOTAL_STAGES`.
 
-Usa los ayudantes: `stage`, `say`/`step`, `open_url`, `ask`/`ask_secret`,
+Use the helpers: `stage`, `say`/`step`, `open_url`, `ask`/`ask_secret`,
 `write_env`, `set_secret`/`set_var`, `pause`/`confirm`.
 
-Mantén el listón que pone la plantilla:
+Keep the bar the template sets:
 
-- Abre la URL **antes** de pedir el valor que está en ella.
-- `ask_secret` para todo lo que sea secreto.
-- `write_env` para todo lo que haya que persistir.
-- `set_secret` solo para lo que de verdad necesita el CI.
-- `confirm` antes de cualquier acción irreversible.
-- Una etapa, una tarea. Cada `stage` limpia la pantalla, así que si metes tres
-  cosas en una, la primera se va antes de que la persona la lea.
+- Open the URL **before** asking for the value found on it.
+- `ask_secret` for anything secret.
+- `write_env` for anything that has to persist.
+- `set_secret` only for what CI really needs.
+- `confirm` before any irreversible action.
+- One stage, one task. Each `stage` clears the screen, so if you put three things
+  in one, the first is gone before the person reads it.
 
-### 4. Comprobar y entregar
+### 4. Check and hand over
 
 ```bash
-bash -n <script>          # sintaxis
-shellcheck <script>       # si está instalado
+bash -n <script>          # syntax
+shellcheck <script>       # if installed
 chmod +x <script>
 ```
 
-**No lo ejecutes tú de principio a fin**: abre navegadores y se queda esperando
-a una persona. Se revisa leyéndolo: que cada valor del paso 1 se recoja y
-acabe donde dijiste, y que cada nombre de `set_secret` coincida **exactamente**
-con un `secrets.*` del workflow.
+**Don't run it yourself from start to finish**: it opens browsers and waits for
+a person. Review it by reading: every value from step 1 is collected and ends up
+where you said, and every `set_secret` name matches a `secrets.*` in the
+workflow **exactly**.
 
-Dile al usuario cómo lanzarlo. Si el procedimiento se va a repetir, commitéalo
-y enlázalo desde el README, para que la próxima persona ejecute el script en
-vez de preguntarle a un agente.
+Tell the user how to launch it. If the procedure will be repeated, commit it and
+link it from the README, so the next person runs the script instead of asking an
+agent.
 
 ---
 
-*Adaptada de la skill `wizard` de
-[mattpocock/skills](https://github.com/mattpocock/skills), licencia MIT.
-`template.sh` conserva la estructura de la biblioteca original.*
+*Adapted from the `wizard` skill of
+[mattpocock/skills](https://github.com/mattpocock/skills), MIT license.
+`template.sh` keeps the structure of the original library.*

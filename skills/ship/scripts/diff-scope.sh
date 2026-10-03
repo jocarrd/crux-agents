@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Clasifica el diff y decide qué puertas de `ship` hacen falta.
+# Classifies the diff and decides which `ship` gates are needed.
 #
-#   diff-scope.sh [base]     por defecto compara con HEAD (staged + sin stagear)
+#   diff-scope.sh [base]     defaults to comparing against HEAD (staged + unstaged)
 #
-# Una puerta que cuesta lo mismo para una errata que para un cambio de esquema
-# se deja de pasar en dos semanas. Esto reparte el coste: lo que no puede estar
-# incorrecto no paga la revisión de correctitud, y lo que no se ve desde fuera
-# no paga levantar el entorno.
+# A gate that costs the same for a typo as for a schema change stops being run
+# within two weeks. This splits the cost: what cannot be wrong does not pay for
+# the correctness review, and what is not visible from outside does not pay for
+# bringing up the environment.
 
 set -uo pipefail
 
@@ -15,146 +15,147 @@ files="$(git diff --name-only "$BASE" 2>/dev/null; git diff --cached --name-only
 files="$(echo "$files" | sort -u | grep -v '^$' || true)"
 
 if [[ -z "$files" ]]; then
-  echo "scope: vacío"
+  echo "scope: empty"
   echo "runtime: no"
-  echo "puertas: ninguna — no hay nada que revisar"
+  echo "gates: none — nothing to review"
   exit 0
 fi
 
-ui=0; api=0; data=0; tests=0; docs=0; deps=0; logica=0; integracion=0; other=0
-tocados_test=""; tocados_codigo=""
+ui=0; api=0; data=0; tests=0; docs=0; deps=0; logic=0; integration=0; other=0
+touched_tests=""; touched_code=""
 
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
     *_test.*|*.test.*|*.spec.*|*/tests/*|*/test/*|*/__tests__/*)
-      tests=$((tests+1)); tocados_test+="$f"$'\n'; continue ;;
+      tests=$((tests+1)); touched_tests+="$f"$'\n'; continue ;;
     package.json|*/package.json|*lock.json|*lock.yaml|*.lock|go.mod|Cargo.toml|requirements*.txt|pyproject.toml)
       deps=$((deps+1)); continue ;;
     *.md|*.mdx|*.txt|LICENSE|.gitignore) docs=$((docs+1)); continue ;;
     */migrations/*|*schema.prisma|*.sql) data=$((data+1)); continue ;;
   esac
-  tocados_codigo+="$f"$'\n'
+  touched_code+="$f"$'\n'
   case "$f" in
     *.tsx|*.jsx|*.vue|*.svelte|*.css|*.scss|*.html|*/components/*|*/pages/*|*/app/*|*/styles/*|*/public/*)
       ui=$((ui+1)) ;;
     */api/*|*/routes/*|*/controllers/*|*/handlers/*|*.controller.*|*/server/*|*/endpoints/*|*/infrastructure/http/*)
       api=$((api+1)) ;;
-    # Arquitectura por capas: el dominio y los casos de uso son lógica pura y
-    # los cubren los tests; lo que habla con el mundo vive en infraestructura.
+    # Layered architecture: the domain and the use cases are pure logic and
+    # tests cover them; what talks to the world lives in infrastructure.
     */domain/*|*/application/*|*/use-cases/*|*/entities/*)
-      logica=$((logica+1)) ;;
+      logic=$((logic+1)) ;;
     */infrastructure/*|*.adapter.*|*.repository.*|*/adapters/*|*/repositories/*)
-      integracion=$((integracion+1)) ;;
+      integration=$((integration+1)) ;;
     *) other=$((other+1)) ;;
   esac
 done <<< "$files"
 
 total=$(echo "$files" | wc -l)
-echo "ficheros: $total"
+echo "files: $total"
 parts=""
 [[ $ui    -gt 0 ]] && parts="$parts ui:$ui"
 [[ $api   -gt 0 ]] && parts="$parts api:$api"
-[[ $data  -gt 0 ]] && parts="$parts datos:$data"
+[[ $data  -gt 0 ]] && parts="$parts data:$data"
 [[ $tests -gt 0 ]] && parts="$parts tests:$tests"
 [[ $docs  -gt 0 ]] && parts="$parts docs:$docs"
 [[ $deps  -gt 0 ]] && parts="$parts deps:$deps"
-[[ $logica -gt 0 ]] && parts="$parts lógica:$logica"
-[[ $integracion -gt 0 ]] && parts="$parts integración:$integracion"
-[[ $other -gt 0 ]] && parts="$parts otros:$other"
+[[ $logic -gt 0 ]] && parts="$parts logic:$logic"
+[[ $integration -gt 0 ]] && parts="$parts integration:$integration"
+[[ $other -gt 0 ]] && parts="$parts other:$other"
 echo "scope:$parts"
 
-# El runtime hace falta cuando el cambio puede verse desde fuera, o cuando
-# cambian las dependencias o el esquema: ahí lo que se rompe no es la lógica,
-# es el arranque.
+# The runtime is needed when the change can be seen from outside, or when
+# dependencies or the schema change: what breaks there is not the logic, it is
+# the startup.
 observable=0
-if [[ $ui -gt 0 || $api -gt 0 || $data -gt 0 || $deps -gt 0 || $integracion -gt 0 ]]; then
+if [[ $ui -gt 0 || $api -gt 0 || $data -gt 0 || $deps -gt 0 || $integration -gt 0 ]]; then
   observable=1
-  echo "runtime: sí"
-  [[ $ui   -gt 0 ]] && echo "  - toca interfaz: revisión visual"
-  [[ $api  -gt 0 ]] && echo "  - toca API: probar los endpoints afectados"
-  [[ $data -gt 0 ]] && echo "  - toca datos: verificar que la migración aplica y revierte"
-  [[ $deps -gt 0 ]] && echo "  - cambian dependencias: comprobar que arranca desde cero"
-  [[ $integracion -gt 0 ]] && echo "  - toca integración: probar contra el servicio real, no solo con dobles"
+  echo "runtime: yes"
+  [[ $ui   -gt 0 ]] && echo "  - touches the interface: visual review"
+  [[ $api  -gt 0 ]] && echo "  - touches the API: test the affected endpoints"
+  [[ $data -gt 0 ]] && echo "  - touches data: verify the migration applies and reverts"
+  [[ $deps -gt 0 ]] && echo "  - dependencies change: check it starts from scratch"
+  [[ $integration -gt 0 ]] && echo "  - touches an integration: test against the real service, not only with doubles"
 else
   echo "runtime: no"
 fi
 
-# --- Qué puertas aplican -----------------------------------------------------
+# --- Which gates apply -------------------------------------------------------
 #
-# Se calculan aquí en vez de dejarlo al criterio de quien pasa la puerta: a ojo
-# todo parece pequeño, y así es como se salta justo la que hacía falta.
+# They are computed here instead of left to the judgement of whoever passes
+# the gate: by eye everything looks small, and that is how the one that was
+# needed gets skipped.
 
-codigo=$((ui + api + data + logica + integracion + other + tests))
-if [[ $codigo -eq 0 ]]; then
-  echo "puertas: 2,8,9"
-  echo "  - solo texto: no hay código que pueda estar incorrecto ni tests que regresen"
+code=$((ui + api + data + logic + integration + other + tests))
+if [[ $code -eq 0 ]]; then
+  echo "gates: 2,8,9"
+  echo "  - text only: no code that can be wrong and no tests that can regress"
 elif [[ $observable -eq 1 ]]; then
-  echo "puertas: todas"
-  echo "  - el cambio se ve desde fuera: la 7 no es opcional aquí"
+  echo "gates: all"
+  echo "  - the change is visible from outside: gate 7 is not optional here"
 else
-  echo "puertas: 1,2,3,4,5,6,8,9"
-  echo "  - nada observable desde fuera: la 7 se salta"
+  echo "gates: 1,2,3,4,5,6,8,9"
+  echo "  - nothing observable from outside: gate 7 is skipped"
 fi
 
-# --- Qué tests correr en la puerta 1 -----------------------------------------
+# --- Which tests to run in gate 1 --------------------------------------------
 #
-# La 1 solo pregunta si el rojo ya venía de antes, y para eso basta lo afectado.
-# La suite entera es la 5. Correrla en las dos es pagar la más cara dos veces
-# para responder dos preguntas distintas.
+# Gate 1 only asks whether the red was already there, and the affected tests
+# are enough for that. The whole suite is gate 5. Running it in both is paying
+# for the most expensive one twice to answer two different questions.
 
-filtro=""
-if [[ -n "$tocados_test" ]]; then
-  filtro="$(echo "$tocados_test" | grep -v '^$' | head -5 | tr '\n' ' ')"
-elif [[ -n "$tocados_codigo" ]]; then
-  filtro="$(echo "$tocados_codigo" | grep -v '^$' | head -3 \
+filter=""
+if [[ -n "$touched_tests" ]]; then
+  filter="$(echo "$touched_tests" | grep -v '^$' | head -5 | tr '\n' ' ')"
+elif [[ -n "$touched_code" ]]; then
+  filter="$(echo "$touched_code" | grep -v '^$' | head -3 \
     | sed 's|.*/||; s|\.[^.]*$||' | sort -u | tr '\n' ' ')"
 fi
-filtro="${filtro% }"
+filter="${filter% }"
 
-# El comando concreto lo declara el proyecto: el kernel no sabe si aquí se
-# ejecuta pnpm, pytest o go test.
-contrato=""; d="$PWD"
+# The concrete command is declared by the project: the kernel does not know
+# whether pnpm, pytest or go test runs here.
+contract=""; d="$PWD"
 while [[ "$d" != "/" && -n "$d" ]]; do
   for c in "$d"/crux.json "$d"/*-docs/crux.json; do
-    [[ -f "$c" ]] && { contrato="$c"; break 2; }
+    [[ -f "$c" ]] && { contract="$c"; break 2; }
   done
   d="$(dirname "$d")"
 done
 
-comando=""
-if [[ -n "$contrato" ]] && command -v node >/dev/null 2>&1; then
-  comando="$(node -e '
+command=""
+if [[ -n "$contract" ]] && command -v node >/dev/null 2>&1; then
+  command="$(node -e '
     const fs = require("fs");
     const q = (JSON.parse(fs.readFileSync(process.argv[1], "utf8")).quality) || {};
     const f = process.argv[2];
-    const c = f && q.testsFiltered ? q.testsFiltered.replace("{filtro}", f) : (q.tests || "");
+    const c = f && q.testsFiltered ? q.testsFiltered.replace(/\{(filter|filtro)\}/, f) : (q.tests || "");
     process.stdout.write(c);
-  ' "$contrato" "$filtro" 2>/dev/null || true)"
+  ' "$contract" "$filter" 2>/dev/null || true)"
 fi
 
-if [[ $codigo -eq 0 ]]; then
-  echo "tests: ninguno — el diff no toca código"
-elif [[ -n "$comando" ]]; then
-  echo "tests: $comando"
-elif [[ -n "$filtro" ]]; then
-  echo "tests: filtra por → $filtro"
-  echo "  - declara 'quality.tests' y 'quality.testsFiltered' en crux.json para el comando exacto"
+if [[ $code -eq 0 ]]; then
+  echo "tests: none — the diff does not touch code"
+elif [[ -n "$command" ]]; then
+  echo "tests: $command"
+elif [[ -n "$filter" ]]; then
+  echo "tests: filter by → $filter"
+  echo "  - declare 'quality.tests' and 'quality.testsFiltered' in crux.json for the exact command"
 else
-  echo "tests: la suite del proyecto"
+  echo "tests: the project suite"
 fi
 
-if [[ $docs -eq 0 && $((ui + api + data + logica)) -gt 0 ]]; then
-  echo "doc: el cambio toca superficie y no hay documentación tocada — comprueba si alguna ha quedado desalineada"
+if [[ $docs -eq 0 && $((ui + api + data + logic)) -gt 0 ]]; then
+  echo "doc: the change touches surface and no documentation is touched — check whether any has drifted"
 fi
 
-# Lo que se cuela con un `git add -A`: capturas que una herramienta escribió en
-# el directorio de trabajo, volcados, ficheros de un solo uso. No los reporta
-# ningún test ni el linter, y viajan a la rama sin que nadie los mire.
-sospechosos="$(echo "$files" | grep -E '^[^/]*\.(png|jpe?g|gif|webp|pdf|zip|tar|gz|mp4|log|tmp|bak|html)$' || true)"
-if [[ -n "$sospechosos" ]]; then
-  echo "artefactos: ficheros sueltos en la raíz que probablemente no van al repo —"
+# What sneaks in with a `git add -A`: screenshots a tool wrote into the
+# working directory, dumps, one-off files. No test or linter reports them, and
+# they travel to the branch without anyone looking.
+suspects="$(echo "$files" | grep -E '^[^/]*\.(png|jpe?g|gif|webp|pdf|zip|tar|gz|mp4|log|tmp|bak|html)$' || true)"
+if [[ -n "$suspects" ]]; then
+  echo "artifacts: loose files at the root that probably do not belong in the repo —"
   while IFS= read -r f; do
     [[ -n "$f" ]] && echo "  - $f"
-  done <<< "$sospechosos"
+  done <<< "$suspects"
 fi

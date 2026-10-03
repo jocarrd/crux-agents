@@ -1,44 +1,44 @@
 ---
 name: crux-init
-description: Arrancar el repo de documentación de un proyecto nuevo bajo el estándar, o formalizar uno que vive sin documentación. Crea el repo en el remoto, materializa la estructura mínima desde las plantillas del kernel, escribe el contrato crux.json y genera los punteros de los repos de código. Usa cuando empiezas un proyecto o quieres poner bajo el estándar uno que ya existe.
+description: Bootstrap the documentation repo of a new project under the standard, or formalize one that lives without documentation. Creates the repo on the remote, materializes the minimal structure from the kernel templates, writes the crux.json contract and generates the pointers for the code repos. Use when you are starting a project or want to put an existing one under the standard.
 ---
 
 # crux-init
 
-Crea el docs repo de un proyecto nuevo siguiendo el estándar.
+Creates the docs repo of a new project following the standard.
 
-## Cuándo usar
+## When to use
 
-- Arrancas un proyecto y quieres su documentación montada desde el día uno.
-- Tienes un proyecto que vive sin documentación y quieres formalizarlo.
+- You are starting a project and want its documentation set up from day one.
+- You have a project that lives without documentation and want to formalize it.
 
-Si el proyecto **ya tiene** un docs repo con contenido, usa `crux adopt`, que
-lo registra sin tocar lo que ya hay.
+If the project **already has** a docs repo with content, use `crux adopt`, which
+registers it without touching what is already there.
 
-## Precondiciones
+## Preconditions
 
-- El kernel instalado en esta máquina (`crux version` responde).
-- `gh` autenticado, salvo que uses `--no-remote`.
+- The kernel installed on this machine (`crux version` responds).
+- `gh` authenticated, unless you use `--no-remote`.
 
-## Flujo
+## Flow
 
-### 1. Recoger los datos
+### 1. Collect the data
 
-Pregunta al usuario:
+Ask the user:
 
-1. **Nombre del proyecto**, en kebab-case minúscula. Será también el nombre de
-   la carpeta padre, así que conviene que sea corto.
-2. **Descripción**, una línea.
-3. **Repos que ya existen**, si los hay.
-4. **Perfil**: `multi-repo` si el código es propio, `client-repo` si el código
-   pertenece a un cliente y no se puede tocar.
-5. **Visibilidad** del docs repo: privado por defecto.
+1. **Project name**, in lowercase kebab-case. It will also be the name of the
+   parent folder, so it is best if it is short.
+2. **Description**, one line.
+3. **Repos that already exist**, if any.
+4. **Profile**: `multi-repo` if the code is your own, `client-repo` if the code
+   belongs to a client and can't be touched.
+5. **Visibility** of the docs repo: private by default.
 
-El perfil es la decisión que más consecuencias tiene: determina si se escribe
-o no en los repos de código, y qué reglas hace cumplir la verificación. Ante
-la duda, pregúntalo explícitamente en vez de asumir.
+The profile is the decision with the most consequences: it determines whether
+the code repos are written to or not, and which rules the verification enforces.
+When in doubt, ask explicitly instead of assuming.
 
-### 2. Ejecutar
+### 2. Run
 
 ```bash
 crux init <project> \
@@ -47,39 +47,40 @@ crux init <project> \
   --profile multi-repo
 ```
 
-El comando crea el repo en el remoto, lo clona, materializa la estructura
-desde las plantillas, escribe `crux.json`, hace el commit inicial y genera los
-punteros de los repos que encuentre en disco.
+The command creates the repo on the remote, clones it, materializes the structure
+from the templates, writes `crux.json`, makes the initial commit and generates
+the pointers for the repos it finds on disk.
 
-Es determinista: sale de las plantillas del kernel, no de que se reproduzcan
-ficheros a mano. Dos ejecuciones dan el mismo árbol.
+It is deterministic: it comes from the kernel templates, not from files being
+reproduced by hand. Two runs give the same tree.
 
-### 3. Verificar
+### 3. Verify
 
 ```bash
 crux doctor
 ```
 
-Debe salir conforme antes de dar el bootstrap por bueno.
+It must come out conformant before accepting the bootstrap.
 
-### 4. Explicar al usuario qué tiene ahora
+### 4. Explain to the user what they now have
 
-- Dónde ha quedado cada cosa y qué carpetas aparecerán después, a demanda:
-  `architecture/`, `conventions/`, `operations/` y `topics/<tema>/` solo
-  cuando el proyecto las necesite.
-- Que los repos de código se colocan como hermanos del docs repo.
-- Que para añadir uno nuevo está `/add-repo-to-docs`.
+- Where each thing ended up and which folders will appear later, on demand:
+  `architecture/`, `conventions/`, `operations/` and `topics/<topic>/` only when
+  the project needs them.
+- That the code repos are placed as siblings of the docs repo.
+- That `/add-repo-to-docs` exists for adding a new one.
 
-## Errores comunes
+## Common errors
 
-- **El repo ya existe en el remoto.** Decidir entre otro nombre o limpiar a
-  mano; el comando no borra nada ajeno.
-- **El nombre no es kebab-case.** El comando lo rechaza a propósito: media
-  convención depende de que la carpeta se llame exactamente como el proyecto.
-- **El proyecto ya tenía documentación.** No es este comando; es `crux adopt`.
+- **The repo already exists on the remote.** Decide between another name or
+  cleaning up by hand; the command doesn't delete anything that isn't its own.
+- **The name is not kebab-case.** The command rejects it on purpose: half the
+  convention depends on the folder being named exactly like the project.
+- **The project already had documentation.** This is not the command; it is
+  `crux adopt`.
 
-## Relacionado
+## Related
 
-- `/add-repo-to-docs` — registrar un repo en un proyecto ya montado
-- `/crux-doctor` — verificar conformidad
-- `/end-session` — el ritual de cierre que mantiene todo esto vivo
+- `/add-repo-to-docs`: register a repo in an already set up project
+- `/crux-doctor`: verify conformance
+- `/end-session`: the closing ritual that keeps all this alive

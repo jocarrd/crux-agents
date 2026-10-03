@@ -1,77 +1,77 @@
-# Por qué las skills se escriben así
+# Why skills are written this way
 
-El procedimiento está en `SKILL.md`. Aquí están los motivos y lo que se midió.
+The procedure is in `SKILL.md`. Here are the reasons and what was measured.
 
-## Por qué el tamaño importa
+## Why size matters
 
-Cada skill se carga entera en el contexto del agente cada vez que se usa, y el
-contexto lleno rinde peor y cuesta más. Medido el 28-09-2026 con un prompt fijo
-y el tokenizador del modelo:
+Each skill is loaded in full into the agent's context every time it is used, and
+a full context performs worse and costs more. Measured on 28-09-2026 with a
+fixed prompt and the model's tokenizer:
 
-| Skill | Antes | Acortada | Ahorro |
-| ----- | ----- | -------- | ------ |
-| `ship` | 2.821 tokens | 1.533 | 46 % |
-| `flow` | 3.334 | 1.390 | 58 % |
-| `review-pr` | 3.473 | 1.890 | 45 % |
-| `x-posts` | 4.146 | 1.897 | 54 % |
-| `share-local` | 2.850 | 1.480 | 48 % |
-| `visual-test` | 2.619 | 1.300 | 51 % |
+| Skill | Before | Shortened | Saving |
+| ----- | ------ | --------- | ------ |
+| `ship` | 2,821 tokens | 1,533 | 46 % |
+| `flow` | 3,334 | 1,390 | 58 % |
+| `review-pr` | 3,473 | 1,890 | 45 % |
+| `x-posts` | 4,146 | 1,897 | 54 % |
+| `share-local` | 2,850 | 1,480 | 48 % |
+| `visual-test` | 2,619 | 1,300 | 51 % |
 
-Casi la mitad de cada skill era explicación de por qué existía cada regla. Con
-tres escenarios de respuesta conocida, las versiones cortas respondieron como
-las originales, una vez corregidos dos matices que el primer borrador había
-perdido.
+Almost half of each skill was explanation of why each rule existed. With three
+scenarios of known answer, the short versions answered like the originals, once
+two nuances that the first draft had lost were corrected.
 
-Traducir al inglés ahorraba menos: `ship` pasaba de 2.821 a 2.203 tokens (22 %).
-En castellano, cada palabra ocupa de media casi el doble de tokens, así que
-1.000 palabras son unos 1.900 tokens.
+Translating into English saved less: `ship` went from 2,821 to 2,203 tokens
+(22 %). In Spanish, each word takes on average almost twice as many tokens, so
+1,000 words are about 1,900 tokens.
 
-## Por qué probar con escenarios
+## Why test with scenarios
 
-Los dos errores que salieron al acortar:
+The two mistakes that came up when shortening:
 
-- `review-pr` perdió qué cuenta como "solo texto", y el primer borrador dejaba
-  fusionar sin preguntar un cambio de CSS, que el script trata como código.
-- `visual-test` dejaba dar por buena una página con solo `audit` y `checks`,
-  sin mirar las capturas.
+- `review-pr` lost what counts as "text only", and the first draft allowed
+  merging a CSS change without asking, which the script treats as code.
+- `visual-test` allowed accepting a page with only `audit` and `checks`, without
+  looking at the screenshots.
 
-Ninguno se veía leyendo: el texto corto parecía completo. Se vieron al comparar
-las respuestas de las dos versiones a la misma pregunta. Por eso el matiz que
-cambia una decisión va en `SKILL.md`, no en la referencia: la referencia solo se
-abre si el agente duda, y cuando pierde un matiz no duda.
+Neither was visible when reading: the short text seemed complete. They were seen
+when comparing the answers of the two versions to the same question. That is why
+the nuance that changes a decision goes in `SKILL.md`, not in the reference: the
+reference is only opened if the agent doubts, and when it loses a nuance it does
+not doubt.
 
-## Por qué buscar antes de crear
+## Why search before creating
 
-Dos skills que responden a la misma frase se quitan la activación la una a la
-otra, y el agente acaba eligiendo la peor. Ampliar una existente mantiene el
-catálogo corto, que también es contexto: el agente ve una línea de cada skill
-en cada sesión.
+Two skills that answer the same sentence take each other's activation away, and
+the agent ends up choosing the worse one. Extending an existing one keeps the
+catalogue short, which is also context: the agent sees one line of each skill in
+every session.
 
-## Por qué la descripción manda
+## Why the description rules
 
-Es lo único que el agente lee antes de decidir. Una skill que no se activa
-cuando toca es como si no existiese. Los síntomas se escriben como los diría
-quien tiene el problema, porque esa persona todavía no sabe que necesita esta
-skill.
+It is the only thing the agent reads before deciding. A skill that does not
+activate when it should is as if it did not exist. Symptoms are written the way
+whoever has the problem would say them, because that person does not yet know
+they need this skill.
 
-"Cuándo no usar" evita aplicar un procedimiento caro a un caso trivial.
+"When not to use" avoids applying an expensive procedure to a trivial case.
 
-## Por qué los gotchas valen más
+## Why gotchas are worth more
 
-El procedimiento feliz lo deduce cualquiera. Lo que no se deduce es que cierta
-capa de fabricante bloquea los toques, que sin cancelar las animaciones la
-salida sale en blanco, o que la variante de media manda sobre la clase base.
+Anyone can deduce the happy procedure. What cannot be deduced is that a certain
+manufacturer layer blocks touches, that without cancelling the animations the
+output comes out blank, or that the media variant overrides the base class.
 
-## Por qué el adaptador tiene que repartir
+## Why the adapter has to discriminate
 
-El adaptador y el procedimiento que adapta comparten vocabulario, y eso es
-inevitable. El problema es cuando el adaptador gana también las frases sin
-nombres propios: el catálogo es común a todos los proyectos y entonces gana
-donde no aplica. Las dos frases se escriben antes de la descripción, como se
-pediría el trabajo de verdad; sacarlas de la descripción ya escrita hace que la
-prueba pase siempre.
+The adapter and the procedure it adapts share vocabulary, and that is
+unavoidable. The problem is when the adapter also wins the sentences without
+proper names: the catalogue is common to all projects and it then wins where it
+does not apply. The two sentences are written before the description, the way
+the job would really be asked for; taking them from the already-written
+description makes the test always pass.
 
-## Por qué ejecutarla
+## Why execute it
 
-Escrita desde la memoria siempre le falta un paso: los que diste por supuestos
-solo aparecen al seguirla al pie de la letra.
+Written from memory it always lacks a step: the ones you took for granted only
+show up when following it to the letter.

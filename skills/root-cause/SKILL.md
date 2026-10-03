@@ -1,112 +1,112 @@
 ---
 name: root-cause
-description: Depurar con disciplina: reproducir antes de tocar nada, medir en vez de suponer, estrechar el espacio de búsqueda por bisección y separar el síntoma de la causa. Usa cuando algo falla y no sabes por qué, cuando un arreglo anterior no aguantó, cuando el fallo solo pasa en producción, o cuando estés a punto de proponer una solución sin haber entendido el problema.
+description: Debug with discipline: reproduce before touching anything, measure instead of assuming, narrow the search space by bisection and separate the symptom from the cause. Use when something fails and you don't know why, when a previous fix didn't hold, when the failure only happens in production, or when you are about to propose a solution without having understood the problem.
 ---
 
 # root-cause
 
-El fallo más común al depurar es **proponer el arreglo antes de entender el
-problema**. Suele funcionar a la primera lo justo para esconder la
-causa real, que reaparece un mes después con otra cara.
+The most common mistake when debugging is **proposing the fix before understanding
+the problem**. It usually works just well enough the first time to hide the real
+cause, which reappears a month later wearing a different face.
 
-## La regla
+## The rule
 
-> **No se propone un arreglo hasta poder explicar por qué falla y demostrarlo.**
+> **No fix is proposed until you can explain why it fails and prove it.**
 
-Si no puedes reproducirlo o señalar la línea, todavía estás investigando,
-aunque tengas una teoría muy convincente.
+If you can't reproduce it or point to the line, you are still investigating, even
+if you have a very convincing theory.
 
-## 1. Reproducir
+## 1. Reproduce
 
-Sin reproducción no hay depuración: hay adivinanza. Y tampoco puedes saber si
-tu arreglo funcionó, porque no tienes con qué comprobarlo.
+Without reproduction there is no debugging: there is guessing. And you can't tell
+whether your fix worked either, because you have nothing to check it with.
 
-Escribe **el caso mínimo que falla**: qué entrada, qué estado previo, qué
-secuencia. Si solo falla a veces, esa intermitencia es un dato, no un
-obstáculo: apunta a tiempo, orden, concurrencia o caché.
+Write **the minimal case that fails**: what input, what prior state, what
+sequence. If it only fails sometimes, that intermittency is a datum, not an
+obstacle: it points to timing, ordering, concurrency or cache.
 
-Si no reproduce en local pero sí en otro entorno, la diferencia entre los dos
-entornos **es la pista principal**. Enumérala: versiones, variables, datos,
-permisos, latencia, zona horaria.
+If it doesn't reproduce locally but does in another environment, the difference
+between the two environments **is the main clue**. List it: versions, variables,
+data, permissions, latency, time zone.
 
-Si solo falla en producción, **se empieza por lo que producción ya sabe**:
-`/prod-signals` resume sus logs y dice qué error, cuántas veces y desde cuándo.
-Es un dato más fiable que el relato de quien lo vio.
+If it only fails in production, **start with what production already knows**:
+`/prod-signals` summarises its logs and says which error, how many times and
+since when. It is more reliable data than the account of whoever saw it.
 
-## 2. Medir, no suponer
+## 2. Measure, don't assume
 
-Cada afirmación durante la depuración necesita una prueba detrás. "Debe de
-estar llegando mal el parámetro" no vale: imprime el parámetro.
+Every claim during debugging needs evidence behind it. "The parameter must be
+arriving wrong" is not enough: print the parameter.
 
-Instrumenta el camino completo antes de mirar el detalle: qué entra, qué sale
-de cada capa, qué se llamó y con qué. La mayoría de los bugs difíciles se
-resuelven al ver que **el dato ya venía mal tres capas antes**.
+Instrument the whole path before looking at the detail: what goes in, what comes
+out of each layer, what was called and with what. Most hard bugs are solved on
+seeing that **the data was already wrong three layers earlier**.
 
-## 3. Estrechar por bisección
+## 3. Narrow by bisection
 
-La técnica más rentable y la que menos se usa.
+The most profitable technique and the least used.
 
-- **En el tiempo**: si antes funcionaba, encuentra el commit que lo rompió.
-  Bisecar sobre el historial da la respuesta en unos pocos pasos.
-- **En el espacio**: parte el sistema por la mitad y comprueba de qué lado está
-  el fallo. Repite. Diez capas se recorren en tres o cuatro pruebas.
-- **En los datos**: reduce la entrada hasta que quitar una cosa más haga
-  desaparecer el fallo. Lo que queda es la causa.
+- **In time**: if it used to work, find the commit that broke it. Bisecting the
+  history gives the answer in a few steps.
+- **In space**: split the system in half and check which side the failure is on.
+  Repeat. Ten layers are covered in three or four tests.
+- **In the data**: reduce the input until removing one more thing makes the
+  failure disappear. What remains is the cause.
 
-## 4. Separar síntoma de causa
+## 4. Separate symptom from cause
 
-Pregunta "¿y por qué pasa eso?" hasta que la respuesta sea algo que puedas
-cambiar y que explique **todos** los síntomas observados, no solo el que
-reportaron.
+Ask "and why does that happen?" until the answer is something you can change and
+that explains **all** the observed symptoms, not just the one that was reported.
 
-Señales de que te has quedado en el síntoma:
+Signs you have stopped at the symptom:
 
-- El arreglo es un caso especial para una entrada concreta.
-- Añade una comprobación defensiva sin saber quién manda mal el dato.
-- No sabrías decir por qué el bug no salía antes.
-- Funciona pero no sabes explicar por qué.
+- The fix is a special case for one particular input.
+- It adds a defensive check without knowing who sends the data wrong.
+- You couldn't say why the bug didn't show up before.
+- It works but you can't explain why.
 
-Ese último es el más peligroso: **si no sabes por qué funciona, no sabes cuándo
-va a dejar de funcionar**.
+That last one is the most dangerous: **if you don't know why it works, you don't
+know when it will stop working**.
 
-Y si al arreglarlo se pone rojo un test que ya existía, **no lo edites**: para
-y revisa el diagnóstico. Casi siempre es la causa la que está mal, no el test.
+And if fixing it turns an existing test red, **don't edit it**: stop and review
+the diagnosis. It is almost always the cause that is wrong, not the test.
 
-## 5. Escribir lo aprendido
+## 5. Write down what you learned
 
-Dos salidas, y las dos importan:
+Two outputs, and both matter:
 
-**Un test que reproduce el bug**, escrito antes del arreglo y que falle antes
-de aplicarlo. Es la única prueba de que entendiste el problema.
+**A test that reproduces the bug**, written before the fix and failing before it
+is applied. It is the only proof that you understood the problem.
 
-**Una nota donde haga falta**, si la causa fue algo que no se deduce del
-código: un comportamiento raro de una dependencia, una configuración de
-infraestructura, un supuesto que resultó falso. Eso no cabe en un comentario y
-se pierde si no se escribe en la documentación del proyecto.
+**A note where it is needed**, if the cause was something not deducible from the
+code: odd behaviour in a dependency, an infrastructure setting, an assumption
+that turned out false. That doesn't fit in a comment and is lost if it isn't
+written in the project documentation.
 
-## Cuando el sistema no es tuyo
+## When the system isn't yours
 
-Si el código pertenece a otro, o hay alguien más que decide qué es un bug:
-**registra mediciones, no diagnósticos**. Anota qué se midió, cómo
-reproducirlo y qué pregunta abre. No declares algo como error ni concluyas qué
-está mal sin la validación de quien tiene autoridad para decirlo.
+If the code belongs to someone else, or someone else decides what counts as a
+bug: **record measurements, not diagnoses**. Note what was measured, how to
+reproduce it and what question it opens. Don't declare something an error or
+conclude what is wrong without validation from whoever has the authority to say
+so.
 
-Y distingue siempre lo medido de lo leído en documentación previa: la
-documentación describe la intención del momento en que se escribió, no el
-estado actual.
+And always distinguish what was measured from what was read in earlier
+documentation: documentation describes the intent at the time it was written, not
+the current state.
 
 ## Anti-patterns
 
-- **Cambiar cosas a ver si se arregla.** Si funciona, no sabrás por qué; si no,
-  habrás ensuciado el terreno.
-- **Arreglar el primer síntoma.** Suele haber una causa común detrás de tres.
-- **Dar por buena la propia teoría sin comprobarla.** La primera teoría es
-  gratis; comprobarla cuesta dos minutos.
-- **Depurar con la caché caliente.** La mitad de los fallos que no reproducen
-  vienen de un estado previo que no has limpiado.
+- **Changing things to see if it gets fixed.** If it works, you won't know why;
+  if not, you will have muddied the ground.
+- **Fixing the first symptom.** There is often a common cause behind three.
+- **Accepting your own theory without checking it.** The first theory is free;
+  checking it costs two minutes.
+- **Debugging with a warm cache.** Half of the failures that don't reproduce come
+  from a prior state you haven't cleared.
 
-## Relacionado
+## Related
 
-- `/write-tests` — el test de regresión que cierra el bug
-- `/prod-signals` — lo que dicen los logs de producción, resumido
-- `/ship` — la puerta que evita que el arreglo rompa otra cosa
+- `/write-tests`: the regression test that closes the bug
+- `/prod-signals`: what the production logs say, summarised
+- `/ship`: the gate that stops the fix from breaking something else

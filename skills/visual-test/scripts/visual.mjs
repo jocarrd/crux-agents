@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Testing visual headless con Chrome del sistema (vía playwright-core).
-// Uso:
+// Headless visual testing with the system Chrome (via playwright-core).
+// Usage:
 //   node visual.mjs shot   <url> <out.png> [--desktop] [--scroll N]
-//   node visual.mjs audit  <url> [url...]          # scroll horizontal + culpables
-//   node visual.mjs bisect <url> [--threshold N]   # localiza el elemento que desborda
-//   node visual.mjs checks <url>                   # señales de diseño/usabilidad mobile
-//   node visual.mjs a11y   <url> [--desktop]       # auditoría WCAG con axe-core (CDN)
+//   node visual.mjs audit  <url> [url...]          # horizontal scroll + culprits
+//   node visual.mjs bisect <url> [--threshold N]   # locates the element that overflows
+//   node visual.mjs checks <url>                   # mobile design/usability signals
+//   node visual.mjs a11y   <url> [--desktop]       # WCAG audit with axe-core (CDN)
 //
-// Requiere: google-chrome instalado y `npm i playwright-core` en el cwd.
-// El modo a11y inyecta axe-core desde CDN (necesita red).
+// Requires: google-chrome installed and `npm i playwright-core` in the cwd.
+// The a11y mode injects axe-core from a CDN (needs network).
 import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
@@ -48,8 +48,8 @@ async function withPage(ctxOpts, fn) {
 }
 
 async function load(page, url) {
-  // Dev (turbopack) compila al vuelo y a veces falla un chunk dinámico el 1er
-  // intento: calentar dos veces.
+  // Dev (turbopack) compiles on the fly and sometimes a dynamic chunk fails on
+  // the 1st attempt: warm up twice.
   for (let i = 0; i < 2; i++) {
     await page
       .goto(url, { waitUntil: 'networkidle', timeout: 35000 })
@@ -58,26 +58,26 @@ async function load(page, url) {
   }
 }
 
-// --- recorrido como el de una persona -------------------------------------
-// Las animaciones de entrada y las islas que hidratan tarde solo se ven si se
-// baja con pausas. Un scroll de golpe mide el estado anterior.
-async function recorrer(page, pasos = 60, salto = 500, espera = 150) {
-  for (let i = 0; i < pasos; i++) {
-    await page.evaluate((y) => window.scrollBy(0, y), salto)
-    await page.waitForTimeout(espera)
+// --- walk like a person would ----------------------------------------------
+// Entrance animations and islands that hydrate late only show if you scroll
+// down with pauses. A single jump measures the previous state.
+async function traverse(page, steps = 60, jump = 500, wait = 150) {
+  for (let i = 0; i < steps; i++) {
+    await page.evaluate((y) => window.scrollBy(0, y), jump)
+    await page.waitForTimeout(wait)
   }
   await page.waitForTimeout(2500)
 }
 
-function relacionContraste(a, b) {
-  const canal = (c) => {
+function contrastRatio(a, b) {
+  const channel = (c) => {
     const m = c.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/)
     if (m) return [+m[1], +m[2], +m[3]]
     const n = c.match(/[\d.]+/g)
     return n ? n.slice(0, 3).map((x) => +x / 255) : [0, 0, 0]
   }
   const lum = (c) => {
-    const [r, g, bl] = canal(c).map((n) =>
+    const [r, g, bl] = channel(c).map((n) =>
       n <= 0.03928 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4,
     )
     return 0.2126 * r + 0.7152 * g + 0.0722 * bl
@@ -88,20 +88,20 @@ function relacionContraste(a, b) {
 }
 
 if (mode === 'invisible') {
-  // Una animación de entrada que no dispara deja el contenido en opacity 0
-  // para siempre. No lo ve el build, ni el typecheck, ni axe.
+  // An entrance animation that never fires leaves the content at opacity 0
+  // forever. Neither the build, the typecheck nor axe sees it.
   const urls = rest.filter((r) => !r.startsWith('--'))
   const desktop = rest.includes('--desktop')
-  let malos = 0
+  let bad = 0
   await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
     for (const url of urls) {
       await load(page, url)
-      await recorrer(page)
-      const ocultos = await page.evaluate(() => {
-        const dentroDeCarrusel = (e) => !!e.closest('.swiper, [data-carousel]')
+      await traverse(page)
+      const hidden = await page.evaluate(() => {
+        const insideCarousel = (e) => !!e.closest('.swiper, [data-carousel]')
         return [...document.querySelectorAll('main *')]
           .filter((e) => {
-            if (dentroDeCarrusel(e)) return false
+            if (insideCarousel(e)) return false
             const c = getComputedStyle(e)
             if (c.visibility === 'hidden' || +c.opacity < 0.95) {
               const r = e.getBoundingClientRect()
@@ -112,20 +112,21 @@ if (mode === 'invisible') {
           .slice(0, 8)
           .map((e) => `${e.tagName}.${(e.className || '').toString().split(' ')[0]}`)
       })
-      if (ocultos.length) {
-        malos++
-        console.log(`🔴 ${url} — ${ocultos.length} elementos invisibles`)
-        ocultos.forEach((o) => console.log(`   ${o}`))
-      } else console.log(`✅ ${url} — nada invisible`)
+      if (hidden.length) {
+        bad++
+        console.log(`🔴 ${url} — ${hidden.length} invisible elements`)
+        hidden.forEach((o) => console.log(`   ${o}`))
+      } else console.log(`✅ ${url} — nothing invisible`)
     }
   })
-  if (malos) process.exit(1)
+  if (bad) process.exit(1)
 } else if (mode === 'hydration') {
-  // Un fallo de hidratación hace que el framework tire el HTML del servidor y
-  // repinte en cliente. Solo se ve escuchando pageerror mientras se recorre.
+  // A hydration failure makes the framework throw away the server HTML and
+  // repaint on the client. It only shows by listening to pageerror while
+  // scrolling through.
   const urls = rest.filter((r) => !r.startsWith('--'))
   const desktop = rest.includes('--desktop')
-  let malos = 0
+  let bad = 0
   await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
     for (const url of urls) {
       const errs = []
@@ -134,27 +135,27 @@ if (mode === 'invisible') {
         if (m.type() === 'error') errs.push('console: ' + m.text().slice(0, 120))
       })
       await load(page, url)
-      await recorrer(page, 45, 500, 120)
+      await traverse(page, 45, 500, 120)
       if (errs.length) {
-        malos++
+        bad++
         console.log(`🔴 ${url}`)
         ;[...new Set(errs)].slice(0, 5).forEach((e) => console.log(`   ${e}`))
-      } else console.log(`✅ ${url} — sin errores en consola`)
+      } else console.log(`✅ ${url} — no console errors`)
       page.removeAllListeners('pageerror')
       page.removeAllListeners('console')
     }
   })
-  if (malos) process.exit(1)
+  if (bad) process.exit(1)
 } else if (mode === 'states') {
-  // axe mide el estado en reposo. Un botón puede pasar parado y fallar al
-  // pasar el ratón o al quedarse activo, y eso no lo ve nadie.
+  // axe measures the idle state. A button can pass at rest and fail on hover
+  // or when left active, and nobody sees that.
   const url = rest[0]
   const desktop = !rest.includes('--mobile')
   await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
     await load(page, url)
-    await recorrer(page, 40, 450, 130)
+    await traverse(page, 40, 450, 130)
     const n = await page.$$eval('main button, main a[href]', (e) => e.length)
-    const filas = []
+    const rows = []
     for (let i = 0; i < n; i++) {
       const el = (await page.$$('main button, main a[href]'))[i]
       if (!el) continue
@@ -162,91 +163,91 @@ if (mode === 'invisible') {
         const e = [...document.querySelectorAll('main button, main a[href]')][idx]
         const r = e.getBoundingClientRect()
         return {
-          txt: (e.textContent || '').trim().slice(0, 28) || e.getAttribute('aria-label') || '(sin texto)',
+          txt: (e.textContent || '').trim().slice(0, 28) || e.getAttribute('aria-label') || '(no text)',
           ok: r.width > 0 && r.height > 0 && !e.disabled,
         }
       }, i)
       if (!meta.ok) continue
-      const leer = () =>
+      const read = () =>
         page.evaluate((idx) => {
           const e = [...document.querySelectorAll('main button, main a[href]')][idx]
           const c = getComputedStyle(e)
-          let fondo = c.backgroundColor
-          let nodo = e
-          while (fondo === 'rgba(0, 0, 0, 0)' && nodo.parentElement) {
-            nodo = nodo.parentElement
-            fondo = getComputedStyle(nodo).backgroundColor
+          let background = c.backgroundColor
+          let node = e
+          while (background === 'rgba(0, 0, 0, 0)' && node.parentElement) {
+            node = node.parentElement
+            background = getComputedStyle(node).backgroundColor
           }
-          return { color: c.color, fondo, cursor: c.cursor }
+          return { color: c.color, background, cursor: c.cursor }
         }, i)
       await el.scrollIntoViewIfNeeded().catch(() => {})
       await page.mouse.move(2, 2)
       await page.waitForTimeout(450)
-      const reposo = await leer()
+      const idle = await read()
       await el.hover({ timeout: 2000 }).catch(() => {})
       await page.waitForTimeout(500)
-      const hover = await leer()
-      filas.push({
+      const hover = await read()
+      rows.push({
         txt: meta.txt,
-        reposo: relacionContraste(reposo.color, reposo.fondo),
-        hover: relacionContraste(hover.color, hover.fondo),
+        idle: contrastRatio(idle.color, idle.background),
+        hover: contrastRatio(hover.color, hover.background),
         cursor: hover.cursor,
       })
     }
-    const malos = filas.filter((f) => f.reposo < 4.5 || f.hover < 4.5)
-    console.log(`${filas.length} controles · ${malos.length} por debajo de 4.5`)
-    malos.forEach((f) =>
-      console.log(`🔴 "${f.txt}" reposo:${f.reposo} hover:${f.hover}`),
+    const bad = rows.filter((f) => f.idle < 4.5 || f.hover < 4.5)
+    console.log(`${rows.length} controls · ${bad.length} below 4.5`)
+    bad.forEach((f) =>
+      console.log(`🔴 "${f.txt}" idle:${f.idle} hover:${f.hover}`),
     )
-    if (!malos.length) console.log('✅ todos pasan AA en reposo y en hover')
+    if (!bad.length) console.log('✅ all pass AA at rest and on hover')
     console.log(
-      '\nOjo: los estados que solo existen al pulsar (pestaña activa, chip',
+      '\nNote: states that only exist on press (active tab, selected chip)',
     )
-    console.log('seleccionado) hay que activarlos y volver a medir a mano.')
+    console.log('have to be activated and measured again by hand.')
   })
 } else if (mode === 'rhythm') {
-  // El aire entre secciones y el que queda donde cambia la banda de fondo.
+  // The space between sections and what is left where the background band changes.
   const url = rest[0]
   const desktop = !rest.includes('--mobile')
   await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
     await load(page, url)
-    await recorrer(page, 30, 600, 100)
+    await traverse(page, 30, 600, 100)
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.waitForTimeout(700)
-    const filas = await page.evaluate(() => {
+    const rows = await page.evaluate(() => {
       const secs = [...document.querySelectorAll('main section, main > div')]
       return secs.map((s, i) => {
         const c = getComputedStyle(s)
         const r = s.getBoundingClientRect()
-        const sig = secs[i + 1]
-        const cab = s.querySelector('h1, h2, h3, header')
+        const next = secs[i + 1]
+        const header = s.querySelector('h1, h2, h3, header')
         return {
-          que: (s.id || (s.className || '').toString().split(' ')[0] || '?').slice(0, 26),
-          fondo: c.backgroundColor,
+          name: (s.id || (s.className || '').toString().split(' ')[0] || '?').slice(0, 26),
+          background: c.backgroundColor,
           padT: Math.round(parseFloat(c.paddingTop)),
           padB: Math.round(parseFloat(c.paddingBottom)),
-          aire: sig
+          gap: next
             ? Math.round(
-                sig.getBoundingClientRect().top - r.bottom +
+                next.getBoundingClientRect().top - r.bottom +
                   parseFloat(c.paddingBottom) +
-                  parseFloat(getComputedStyle(sig).paddingTop),
+                  parseFloat(getComputedStyle(next).paddingTop),
               )
             : null,
-          alTitulo: cab ? Math.round(cab.getBoundingClientRect().top - r.top) : null,
-          cambiaFondo: sig ? getComputedStyle(sig).backgroundColor !== c.backgroundColor : false,
+          toHeading: header ? Math.round(header.getBoundingClientRect().top - r.top) : null,
+          bgChanges: next ? getComputedStyle(next).backgroundColor !== c.backgroundColor : false,
         }
       })
     })
-    console.log('sección                     fondo                padT  padB   aire  al titular')
-    filas.forEach((f) =>
+    console.log('section                     background           padT  padB    gap  to heading')
+    rows.forEach((f) =>
       console.log(
-        `${f.que.padEnd(27)} ${f.fondo.padEnd(20)} ${String(f.padT).padStart(4)} ${String(f.padB).padStart(5)} ${String(f.aire ?? '-').padStart(6)} ${String(f.alTitulo ?? '-').padStart(11)}` +
-          (f.cambiaFondo && f.padB === 0 ? '  ← el fondo cambia y no hay aire' : ''),
+        `${f.name.padEnd(27)} ${f.background.padEnd(20)} ${String(f.padT).padStart(4)} ${String(f.padB).padStart(5)} ${String(f.gap ?? '-').padStart(6)} ${String(f.toHeading ?? '-').padStart(11)}` +
+          (f.bgChanges && f.padB === 0 ? '  ← the background changes and there is no gap' : ''),
       ),
     )
-    const pegados = filas.filter((f) => f.alTitulo !== null && f.alTitulo < 24 && f.padT < 24)
-    if (pegados.length)
-      console.log(`\n🔴 ${pegados.length} secciones con el titular pegado al canto`)
+    const cramped = rows.filter((f) => f.toHeading !== null && f.toHeading < 24 && f.padT < 24)
+    if (cramped.length)
+      console.log(`\n🔴 ${cramped.length} sections with the heading stuck to the edge`)
   })
 } else if (mode === 'shot') {
 
@@ -306,11 +307,11 @@ if (mode === 'invisible') {
       hits.sort((a, b) => b.drop - a.drop || a.kids - b.kids)
       return { base, hits: hits.slice(0, 8) }
     }, thr)
-    console.log(`scrollWidth base=${r.base} (hoja kids=0 = culpable real)`)
+    console.log(`scrollWidth base=${r.base} (leaf kids=0 = real culprit)`)
     r.hits.forEach((h) => console.log(`  -${h.drop}px kids=${h.kids} <${h.tag}> .${h.cls}${h.txt ? '  "' + h.txt + '"' : ''}`))
   })
 } else if (mode === 'checks') {
-  // Señales objetivas de diseño/usabilidad en móvil (no sustituye el ojo).
+  // Objective design/usability signals on mobile (does not replace the eye).
   await withPage(MOBILE, async (page) => {
     await load(page, rest[0])
     const r = await page.evaluate(() => {
@@ -328,9 +329,9 @@ if (mode === 'invisible') {
       const label = (el) =>
         `<${el.tagName.toLowerCase()}${el.className ? ' .' + el.className.toString().trim().split(/\s+/).slice(0, 2).join('.') : ''}> ${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 30)}`
 
-      // Tap targets: solo cuentan los "tipo botón" (pill/chip/control con caja:
-      // fondo, borde o padding propio). Los links de texto en flujo (sin caja)
-      // se tocan tocando el texto y NO se miden con la regla de 44px.
+      // Tap targets: only "button-like" ones count (pill/chip/control with a
+      // box: its own background, border or padding). Inline text links (no box)
+      // are tapped by tapping the text and are NOT measured by the 44px rule.
       const transparent = (c) => !c || c === 'transparent' || /, 0\)$/.test(c)
       const hasBox = (el, cs) =>
         el.tagName === 'INPUT' ||
@@ -339,7 +340,7 @@ if (mode === 'invisible') {
         parseFloat(cs.borderBottomWidth) > 0 ||
         !transparent(cs.backgroundColor) ||
         cs.backgroundImage !== 'none'
-      const tap = { serio: [], menor: [] }
+      const tap = { severe: [], minor: [] }
       document
         .querySelectorAll('a, button, [role="button"], input, select, [onclick]')
         .forEach((el) => {
@@ -351,19 +352,19 @@ if (mode === 'invisible') {
           if (min >= 40) return
           const entry = `${Math.round(b.width)}x${Math.round(b.height)}  ${label(el)}`
           if (min < 24) {
-            // diminuto: solo es problema si es "tipo botón" (con caja). Un link
-            // de texto sin fondo/borde se toca tocando el texto: no se cuenta.
-            if (hasBox(el, cs)) tap.serio.push(entry)
+            // tiny: only a problem if "button-like" (with a box). A text link
+            // without background/border is tapped by tapping the text: not counted.
+            if (hasBox(el, cs)) tap.severe.push(entry)
           } else {
-            tap.menor.push(entry)
+            tap.minor.push(entry)
           }
         })
 
-      // Texto: <10px casi siempre es problema; 10-12px suele ser leyenda/etiqueta
-      // secundaria intencionada (a revisar, no alarma).
-      const tiny = { serio: [], menor: [] }
+      // Text: <10px is almost always a problem; 10-12px is usually an
+      // intentional caption/secondary label (to review, not an alarm).
+      const tiny = { severe: [], minor: [] }
       document.querySelectorAll('body *').forEach((el) => {
-        if (el instanceof SVGElement) return // labels de gráficos SVG no son texto DOM
+        if (el instanceof SVGElement) return // SVG chart labels are not DOM text
         const hasText = [...el.childNodes].some(
           (n) => n.nodeType === 3 && n.textContent.trim(),
         )
@@ -373,7 +374,7 @@ if (mode === 'invisible') {
           return
         const fs = parseFloat(cs.fontSize)
         if (fs && fs < 12)
-          (fs < 10 ? tiny.serio : tiny.menor).push(`${fs}px  ${label(el)}`)
+          (fs < 10 ? tiny.severe : tiny.minor).push(`${fs}px  ${label(el)}`)
       })
 
       const noAlt = []
@@ -391,10 +392,10 @@ if (mode === 'invisible') {
 
       const uniq = (a) => [...new Set(a)]
       return {
-        tapSerio: uniq(tap.serio).slice(0, 10),
-        tapMenor: uniq(tap.menor).slice(0, 10),
-        tinySerio: uniq(tiny.serio).slice(0, 10),
-        tinyMenor: uniq(tiny.menor).slice(0, 8),
+        tapSevere: uniq(tap.severe).slice(0, 10),
+        tapMinor: uniq(tap.minor).slice(0, 10),
+        tinySevere: uniq(tiny.severe).slice(0, 10),
+        tinyMinor: uniq(tiny.minor).slice(0, 8),
         noAlt: uniq(noAlt).slice(0, 10),
         edge: uniq(edge).slice(0, 8),
       }
@@ -403,16 +404,16 @@ if (mode === 'invisible') {
       console.log(`\n${title}: ${arr.length}${arr.length ? '' : '  ✅'}`)
       arr.forEach((x) => console.log('  · ' + x))
     }
-    sec('🔴 Tap targets diminutos <24px (difíciles de tocar)', r.tapSerio)
-    sec('🟡 Tap targets 24-40px (usables, bajo la guía de 44px)', r.tapMenor)
-    sec('🔴 Texto <10px (ilegible)', r.tinySerio)
-    sec('🟡 Texto 10-12px (revisar; leyendas suelen ser intencionadas)', r.tinyMenor)
-    sec('🔴 Imágenes sin alt', r.noAlt)
-    sec('🟡 Texto a ancho completo pegado a los bordes (sin padding)', r.edge)
+    sec('🔴 Tiny tap targets <24px (hard to tap)', r.tapSevere)
+    sec('🟡 Tap targets 24-40px (usable, under the 44px guideline)', r.tapMinor)
+    sec('🔴 Text <10px (illegible)', r.tinySevere)
+    sec('🟡 Text 10-12px (review; captions are usually intentional)', r.tinyMinor)
+    sec('🔴 Images without alt', r.noAlt)
+    sec('🟡 Full-width text stuck to the edges (no padding)', r.edge)
   })
 } else if (mode === 'a11y') {
-  // Auditoría WCAG real con axe-core (motor estándar): contraste, ARIA,
-  // labels, roles, nombres accesibles, etc. Se inyecta desde CDN.
+  // Real WCAG audit with axe-core (standard engine): contrast, ARIA, labels,
+  // roles, accessible names, etc. Injected from a CDN.
   const url = rest[0]
   const desktop = rest.includes('--desktop')
   await withPage(desktop ? DESKTOP : MOBILE, async (page) => {
@@ -423,7 +424,7 @@ if (mode === 'invisible') {
       })
       .catch(() => {})
     if (!(await page.evaluate(() => !!window.axe))) {
-      console.log('No se pudo cargar axe-core (¿sin red?). Reintenta.')
+      console.log('Could not load axe-core (no network?). Try again.')
       return
     }
     const res = await page.evaluate(
@@ -442,7 +443,7 @@ if (mode === 'invisible') {
     )
     const nodes = v.reduce((n, x) => n + x.nodes.length, 0)
     console.log(
-      `axe-core (${desktop ? 'desktop' : 'mobile'}): ${v.length} reglas con violaciones, ${nodes} nodos\n`,
+      `axe-core (${desktop ? 'desktop' : 'mobile'}): ${v.length} rules with violations, ${nodes} nodes\n`,
     )
     for (const x of v) {
       console.log(
@@ -453,11 +454,11 @@ if (mode === 'invisible') {
         console.log(`   ${n.target.join(' ')}${hint ? '  — ' + hint : ''}`)
       })
     }
-    if (!v.length) console.log('✅ Sin violaciones WCAG detectadas por axe-core.')
+    if (!v.length) console.log('✅ No WCAG violations detected by axe-core.')
   })
 } else {
   console.log(
-    'modos: shot | audit | bisect | checks | a11y | invisible | hydration | states | rhythm (ver cabecera del script)',
+    'modes: shot | audit | bisect | checks | a11y | invisible | hydration | states | rhythm (see the script header)',
   )
   process.exit(1)
 }

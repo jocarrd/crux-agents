@@ -1,116 +1,116 @@
 ---
 name: runbook
-description: Escribir el procedimiento de un incidente que se acaba de resolver, con la forma que se puede ejecutar con el sistema caído — síntoma tal y como se reporta, cómo confirmarlo, los comandos, cómo verificar que se arregló y cuándo escalar. Usa justo después de arreglar algo en producción, cuando resolver un problema te haya costado reconstruir lo que ya sabías, o cuando alguien pregunte qué hacer si vuelve a pasar.
+description: Write the procedure for an incident that has just been resolved, in a form that can be executed with the system down — symptom as it is reported, how to confirm it, the commands, how to verify it was fixed and when to escalate. Use right after fixing something in production, when resolving a problem cost you rebuilding what you already knew, or when someone asks what to do if it happens again.
 ---
 
 # runbook
 
-Un runbook no se escribe para documentar un incidente. Se escribe **para que
-la próxima vez no haya que pensar**.
+A runbook is not written to document an incident. It is written **so that next
+time nobody has to think**.
 
-> **Un runbook se mide por lo que tarda alguien con prisa en llegar del síntoma
-> al comando.**
+> **A runbook is measured by how long it takes someone in a hurry to get from the
+> symptom to the command.**
 
-## Cuándo usar
+## When to use
 
-- Justo después de resolver algo en producción. **Es el único momento bueno**:
-  en frío te acuerdas de la causa, no de los tres comandos que descartaste.
-- Cuando arreglar algo te ha obligado a redescubrir lo que ya sabías.
-- Cuando alguien pregunta qué hacer si vuelve a pasar.
+- Right after resolving something in production. **It is the only good moment**:
+  cold, you remember the cause, not the three commands you ruled out.
+- When fixing something has forced you to rediscover what you already knew.
+- When someone asks what to do if it happens again.
 
-## Cuándo no usar
+## When not to use
 
-- **El problema tiene arreglo.** Un runbook para algo que se puede eliminar es
-  aceptar que va a repetirse. Primero se pregunta si se arregla; el runbook es
-  para lo que no depende de ti o no compensa arreglar.
-- **El procedimiento se repite en varios proyectos.** Entonces lo que tienes es
-  una skill. Tapa los nombres propios: si sigue teniendo sentido,
-  hay un patrón.
-- **Ha pasado una vez y no sabes por qué.** Lo que tienes es una anécdota.
-  Anótala en las notas del repo y espera a la segunda.
+- **The problem has a fix.** A runbook for something that can be eliminated is
+  accepting that it will repeat. First ask whether it can be fixed; the runbook
+  is for what does not depend on you or is not worth fixing.
+- **The procedure repeats across several projects.** Then what you have is a
+  skill. Cover the proper names: if it still makes sense, there is a pattern.
+- **It has happened once and you do not know why.** What you have is an anecdote.
+  Note it in the repo's notes and wait for the second time.
 
-## Las cinco partes
+## The five parts
 
-Ninguna es opcional. Las dos que se caen siempre son las dos que más duelen.
+None is optional. The two that always get dropped are the two that hurt most.
 
-### 1. Síntoma
+### 1. Symptom
 
-Cómo se ve **desde fuera**, con las palabras de quien lo sufre. "El login no
-hace nada" antes que el nombre técnico del fallo: es lo que alguien teclea al
-buscarlo, y quien lo busca todavía no sabe la causa.
+How it looks **from outside**, in the words of whoever suffers it. "El login no
+hace nada" before the technical name of the failure: it is what someone types
+when searching for it, and whoever is searching does not yet know the cause.
 
-Un runbook que se titula con su causa solo lo encuentra quien ya no lo
-necesita.
+A runbook titled with its cause is only found by someone who no longer needs it.
 
-### 2. Confirmar
+### 2. Confirm
 
-Cómo distinguirlo de lo que se le parece. **Es el paso que más tiempo ahorra**
-y el que más se omite, porque cuando lo escribes ya sabes cuál era el problema
-y parece evidente.
+How to tell it apart from what resembles it. **It is the step that saves the most
+time** and the one most often omitted, because by the time you write it you
+already know what the problem was and it seems obvious.
 
-No lo era. Si dos causas distintas dan el mismo síntoma, aquí es donde se
-separan, y sin esta parte se aplica el remedio equivocado con toda confianza.
+It was not. If two different causes give the same symptom, this is where they
+are separated, and without this part the wrong remedy is applied with full
+confidence.
 
-### 3. Actuar
+### 3. Act
 
-Los comandos, en orden, copiables. **Cada paso es un comando, no una
-historia.** Si un paso necesita un párrafo de explicación, o el paso está mal
-elegido o la explicación va en otro sitio y el runbook enlaza.
+The commands, in order, copyable. **Each step is a command, not a story.** If a
+step needs a paragraph of explanation, either the step is badly chosen or the
+explanation goes elsewhere and the runbook links.
 
-Lo que hay que decidir sí se dice: qué mirar para elegir entre dos ramas, qué
-valor es normal y cuál no.
+What has to be decided is stated: what to look at to choose between two branches,
+which value is normal and which is not.
 
-### 4. Verificar
+### 4. Verify
 
-Cómo se sabe que se arregló, con una comprobación que se ejecuta. Sin esto se
-declara resuelto lo que no lo está, se cierra el incidente y vuelve media hora
-después.
+How to know it was fixed, with a check that is executed. Without this, what is
+not resolved is declared resolved, the incident is closed and it comes back half
+an hour later.
 
-Si el efecto tarda en propagarse —una caché, un DNS, un CDN—, se dice cuánto.
+If the effect takes time to propagate —a cache, a DNS, a CDN—, say how long.
 
-### 5. Escalar
+### 5. Escalate
 
-Cuándo dejar de intentarlo. Un runbook sin salida convierte cada incidente en
-una carrera sin línea de meta, y a las tres de la mañana eso es lo que
-convierte una caída de diez minutos en una de dos horas.
+When to stop trying. A runbook without an exit turns every incident into a race
+with no finish line, and at three in the morning that is what turns a ten-minute
+outage into a two-hour one.
 
-Va con qué hacer entonces: a quién se avisa, qué se apaga, qué se dice.
+It goes with what to do then: who is notified, what is switched off, what is
+said.
 
-## Procedimiento
+## Procedure
 
-1. **Recupera lo que acabas de hacer.** El historial del shell, no la memoria.
-   Ahí están los comandos reales, incluidos los que no funcionaron.
-2. **Quédate con el camino corto.** Lo que descartaste no va en `Actuar`; si
-   descartarlo costó, va en `Confirmar` como forma de distinguir.
-3. **Escribe el síntoma al final**, cuando ya sabes qué era, pero redáctalo
-   como si no lo supieras.
-4. **Comprueba los comandos.** Copiados del historial, con las rutas reales,
-   sin abreviar. Un runbook con un comando que no corre es peor que ninguno.
-5. **Enlázalo desde el índice por síntoma**, si el proyecto lo tiene. Un
-   runbook que no aparece cuando buscas no existe.
+1. **Recover what you have just done.** The shell history, not memory. That is
+   where the real commands are, including those that did not work.
+2. **Keep the short path.** What you ruled out does not go in `Act`; if ruling it
+   out was costly, it goes in `Confirm` as a way to tell cases apart.
+3. **Write the symptom last**, when you already know what it was, but word it as
+   if you did not.
+4. **Check the commands.** Copied from the history, with the real paths,
+   unabbreviated. A runbook with a command that does not run is worse than none.
+5. **Link it from the symptom index**, if the project has one. A runbook that
+   does not show up when you search does not exist.
 
-## Dónde va
+## Where it goes
 
-En `operations/` del docs repo del proyecto. Uno por fichero cuando el
-procedimiento es largo; agrupados por sistema cuando son cortos y comparten
-contexto.
+In `operations/` of the project's docs repo. One per file when the procedure is
+long; grouped by system when they are short and share context.
 
-El índice por síntoma —el playbook— es la puerta de entrada: lista qué se ve y
-a qué runbook lleva. Es lo que se abre primero cuando algo falla.
+The symptom index —the playbook— is the entry point: it lists what is seen and
+which runbook it leads to. It is what gets opened first when something fails.
 
 ## Anti-patterns
 
-- **El runbook que explica.** Si empieza contando la arquitectura, se convirtió
-  en documentación. La explicación va a `architecture/`.
-- **El paso que dice "revisa los logs".** Revisar qué, dónde, buscando qué.
-  Un paso que hay que interpretar no es un paso.
-- **Escribirlo en frío, la semana siguiente.** Sale una reconstrucción
-  plausible con los detalles cambiados. El detalle es justamente el valor.
-- **El runbook que caduca en silencio.** Rutas, puertos y límites de terceros
-  cambian. Si el proyecto marca la última verificación, se marca.
+- **The runbook that explains.** If it starts by telling the architecture, it has
+  turned into documentation. The explanation goes in `architecture/`.
+- **The step that says "check the logs".** Check what, where, looking for what. A
+  step that has to be interpreted is not a step.
+- **Writing it cold, the following week.** A plausible reconstruction comes out
+  with the details changed. The detail is exactly the value.
+- **The runbook that expires silently.** Paths, ports and third-party limits
+  change. If the project marks the last verification, it is marked.
 
-## Relacionado
+## Related
 
-- `/root-cause` — antes: entender qué pasa. Esto es después
-- `/adr` — cuando lo aprendido cambia una decisión, no solo un procedimiento
-- `/skill-creator` — cuando el procedimiento resulta valer para varios proyectos
+- `/root-cause` — before: understand what is happening. This is after
+- `/adr` — when what was learned changes a decision, not just a procedure
+- `/skill-creator` — when the procedure turns out to be worth it for several
+  projects

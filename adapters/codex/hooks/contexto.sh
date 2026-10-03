@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
-# Adaptador de Codex para los hooks que dan contexto en texto plano.
+# Codex adapter for hooks that provide context as plain text.
 #
-#   contexto.sh <evento> <hook> [args...]
+#   contexto.sh <event> <hook> [args...]
 #
-# Claude Code toma como contexto lo que un hook de UserPromptSubmit escribe en
-# stdout. Codex solo lo garantiza en JSON (hookSpecificOutput.additionalContext),
-# así que aquí se envuelve. El hook no cambia: es el mismo script en los dos
-# agentes, y su código de salida y su stderr pasan tal cual.
+# Claude Code takes as context whatever a UserPromptSubmit hook writes to
+# stdout. Codex only guarantees it as JSON (hookSpecificOutput.additionalContext),
+# so it is wrapped here. The hook does not change: it is the same script in both
+# agents, and its exit code and stderr pass through as is.
 
 set -u
-evento="$1"; hook="$2"; shift 2
+event="$1"; hook="$2"; shift 2
 
-salida="$(bash "$hook" "$@")"
+output="$(bash "$hook" "$@")"
 rc=$?
 if [[ $rc -ne 0 ]]; then
-  [[ -n "$salida" ]] && printf '%s\n' "$salida"
+  [[ -n "$output" ]] && printf '%s\n' "$output"
   exit "$rc"
 fi
-[[ -n "$salida" ]] || exit 0
+[[ -n "$output" ]] || exit 0
 
-# Si el hook ya habla JSON, se respeta.
-if printf '%s' "$salida" | node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' 2>/dev/null; then
-  printf '%s\n' "$salida"
+# If the hook already speaks JSON, it is respected.
+if printf '%s' "$output" | node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' 2>/dev/null; then
+  printf '%s\n' "$output"
   exit 0
 fi
 node -e '
-  const [evento, texto] = process.argv.slice(1);
-  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: evento, additionalContext: texto } }) + "\n");
-' "$evento" "$salida"
+  const [eventName, text] = process.argv.slice(1);
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: eventName, additionalContext: text } }) + "\n");
+' "$event" "$output"

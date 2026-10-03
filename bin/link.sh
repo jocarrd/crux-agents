@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# crux link — genera y verifica los punteros de contexto de los repos de código
-# del proyecto, y materializa sus skills propias.
+# crux link — generates and checks the context pointers of the project's code
+# repos, and materializes their own skills.
 #
-# Todo sale de crux.json: no hay nombres de proyecto ni listas de repos
-# hardcodeadas. El perfil decide si se escribe o no en los repos de código.
+# Everything comes from crux.json: no project names or repo lists are
+# hardcoded. The profile decides whether anything is written to code repos.
 
 set -euo pipefail
 
@@ -21,22 +21,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-DOCS="$(find_docs_repo "$TARGET")" || die "no encuentro un docs repo desde $TARGET"
+DOCS="$(find_docs_repo "$TARGET")" || die "no docs repo found from $TARGET"
 CONFIG="$DOCS/crux.json"
-[[ -f "$CONFIG" ]] || die "falta $CONFIG — ejecuta 'crux adopt' primero"
+[[ -f "$CONFIG" ]] || die "$CONFIG is missing — run 'crux adopt' first"
 
 PROJECT="$(json_get "$CONFIG" project)"
 PROFILE="$(json_get "$CONFIG" profile)"
 DOCS_NAME="$(basename "$DOCS")"
 ROOT="$(dirname "$DOCS")"
 
-echo "proyecto $PROJECT · perfil $PROFILE"
+echo "project $PROJECT · profile $PROFILE"
 echo
 
-# La descripción de una línea de cada repo vive en la tabla de repos/README.md,
-# que es su fuente canónica. Sin ella el puntero pierde lo único que decía de
-# útil sobre el repo.
-tagline_de() {
+# Each repo's one-line description lives in the repos/README.md table, which is
+# its canonical source. Without it the pointer loses the only useful thing it
+# said about the repo.
+tagline_of() {
   local repo="$1" out
   out="$(node -e '
     const fs = require("fs");
@@ -51,153 +51,155 @@ tagline_de() {
     } catch {}
     process.stdout.write(out);
   ' "$DOCS/repos/README.md" "$repo" 2>/dev/null || true)"
-  echo "${out:-parte de $PROJECT}"
+  echo "${out:-part of $PROJECT}"
 }
 
-# --- Reglas del perfil -------------------------------------------------------
+# --- Profile rules -----------------------------------------------------------
 #
-# Estaban en el perfil y nadie las leía, o copiadas a mano en el AGENTS.md de un
-# proyecto diciendo que doctor las hacía cumplir, que era falso. Se escriben
-# desde el perfil, en un bloque gestionado, y doctor comprueba que estén.
+# They used to live in the profile with nobody reading them, or be copied by
+# hand into a project's AGENTS.md claiming doctor enforced them, which was
+# false. They are written from the profile into a managed block, and doctor
+# checks they are there. The old block was marked `perfil`: it is still
+# recognised and replaced by the `profile` one.
 
-escribir_reglas_del_perfil() {
-  local reglas; reglas="$(perfil_get "$PROFILE" "$DOCS" rules "")"
-  [[ -n "$reglas" ]] || return 0
+write_profile_rules() {
+  local rules; rules="$(profile_get "$PROFILE" "$DOCS" rules "")"
+  [[ -n "$rules" ]] || return 0
 
-  local bloque
-  bloque="$(printf '<!-- crux:begin perfil -->\n## Reglas del perfil `%s`\n\nLas declara el perfil, y `crux doctor` comprueba que estén escritas aquí.\nCumplirlas es cosa de quien trabaja: son reglas de trabajo, no\ncomprobaciones automáticas.\n\n' "$PROFILE")"
+  local block
+  block="$(printf '<!-- crux:begin profile -->\n## Rules of the `%s` profile\n\nThe profile declares them, and `crux doctor` checks they are written here.\nFollowing them is up to whoever does the work: they are working rules, not\nautomatic checks.\n\n' "$PROFILE")"
   local r
   while IFS= read -r r; do
     [[ -n "$r" ]] || continue
-    bloque="$bloque$(printf -- '- %s\n' "$r")"
-  done <<< "$reglas"
-  bloque="$bloque$(printf '\n<!-- crux:end -->')"
+    block="$block$(printf -- '- %s\n' "$r")"
+  done <<< "$rules"
+  block="$block$(printf '\n<!-- crux:end -->')"
 
-  local destino="$DOCS/AGENTS.md"
-  [[ -f "$destino" ]] || return 0
-  if grep -qF 'crux:begin perfil' "$destino"; then
+  local target="$DOCS/AGENTS.md"
+  [[ -f "$target" ]] || return 0
+  if grep -qE 'crux:begin (perfil|profile)' "$target"; then
     node -e '
       const fs = require("fs");
-      const [f, bloque] = process.argv.slice(1);
-      const re = /<!-- crux:begin perfil[\s\S]*?crux:end -->/;
-      const actual = fs.readFileSync(f, "utf8");
-      if (actual.match(re)[0] === bloque) process.exit(2);
-      fs.writeFileSync(f, actual.replace(re, bloque));
-    ' "$destino" "$bloque" && ok "reglas del perfil $PROFILE actualizadas en AGENTS.md" || true
+      const [f, block] = process.argv.slice(1);
+      const re = /<!-- crux:begin (?:perfil|profile)[\s\S]*?crux:end -->/;
+      const current = fs.readFileSync(f, "utf8");
+      if (current.match(re)[0] === block) process.exit(2);
+      fs.writeFileSync(f, current.replace(re, block));
+    ' "$target" "$block" && ok "profile $PROFILE rules updated in AGENTS.md" || true
   else
-    printf '\n%s\n' "$bloque" >> "$destino"
-    ok "reglas del perfil $PROFILE escritas en AGENTS.md"
+    printf '\n%s\n' "$block" >> "$target"
+    ok "profile $PROFILE rules written to AGENTS.md"
   fi
 }
 
-escribir_reglas_del_perfil
+write_profile_rules
 
-# --- Punteros de los repos de código ----------------------------------------
+# --- Code repo pointers ------------------------------------------------------
 
-WRITES_POINTERS="$(perfil_get "$PROFILE" "$DOCS" pointers.write true)"
+WRITES_POINTERS="$(profile_get "$PROFILE" "$DOCS" pointers.write true)"
 
 if [[ "$WRITES_POINTERS" != "true" ]]; then
-  if [[ "$(perfil_get "$PROFILE" "$DOCS" pointers.local false)" != "true" ]]; then
-    warn "perfil $PROFILE: no se escribe nada fuera del docs repo"
-    info "los agentes deben abrir $DOCS_NAME/AGENTS.md explícitamente"
+  if [[ "$(profile_get "$PROFILE" "$DOCS" pointers.local false)" != "true" ]]; then
+    warn "profile $PROFILE: nothing is written outside the docs repo"
+    info "agents must open $DOCS_NAME/AGENTS.md explicitly"
   else
-    info "perfil $PROFILE: nada versionado fuera del docs repo; solo el puntero local $PUNTERO_LOCAL"
+    info "profile $PROFILE: nothing versioned outside the docs repo; only the local pointer $LOCAL_POINTER"
     while IFS= read -r repo; do
       [[ -n "$repo" ]] || continue
-      nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
-      [[ -d "$ROOT/$repo" ]] || { warn "declarado en crux.json pero no está en disco: $repo"; continue; }
+      valid_name "$repo" || { warn "invalid repo name in the contract: $repo"; continue; }
+      [[ -d "$ROOT/$repo" ]] || { warn "declared in crux.json but not on disk: $repo"; continue; }
       rc=0
-      escribir_puntero_local "$ROOT/$repo" "$DOCS_NAME" || rc=$?
+      write_local_pointer "$ROOT/$repo" "$DOCS_NAME" || rc=$?
       case $rc in
-        0) ok "$repo/$PUNTERO_LOCAL apunta a $DOCS_NAME (excluido de git)" ;;
-        2) warn "$repo no es un repo git: sin puntero local, no habría cómo excluirlo" ;;
-        3) info "$repo versiona su propio $PUNTERO_LOCAL — se respeta, no se toca" ;;
+        0) ok "$repo/$LOCAL_POINTER points to $DOCS_NAME (excluded from git)" ;;
+        2) warn "$repo is not a git repo: no local pointer, there would be no way to exclude it" ;;
+        3) info "$repo versions its own $LOCAL_POINTER — respected, not touched" ;;
       esac
     done < <(json_get "$CONFIG" repos 2>/dev/null || true)
   fi
 else
-  created=0; updated=0; seen=0; sin_marcadores=()
+  created=0; updated=0; seen=0; without_markers=()
   while IFS= read -r repo; do
     [[ -n "$repo" ]] || continue
-    nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
+    valid_name "$repo" || { warn "invalid repo name in the contract: $repo"; continue; }
     repo_dir="$ROOT/$repo"
-    [[ -d "$repo_dir" ]] || { warn "declarado en crux.json pero no está en disco: $repo"; continue; }
+    [[ -d "$repo_dir" ]] || { warn "declared in crux.json but not on disk: $repo"; continue; }
     seen=$((seen + 1))
 
-    tagline="$(tagline_de "$repo")"
+    tagline="$(tagline_of "$repo")"
 
-    for fichero in AGENTS.md CLAUDE.md; do
-      # `|| rc=$?` y no `$?` a secas: render_managed devuelve códigos con
-      # significado, y con set -e un retorno distinto de cero fuera de un
-      # condicional aborta el script sin decir nada.
+    for file in AGENTS.md CLAUDE.md; do
+      # `|| rc=$?` and not a bare `$?`: render_managed returns meaningful
+      # codes, and under set -e a non-zero return outside a conditional
+      # aborts the script without a word.
       rc=0
-      render_managed "$CRUX_HOME/templates/code-repo/$fichero" "$repo_dir/$fichero" \
+      render_managed "$CRUX_HOME/templates/code-repo/$file" "$repo_dir/$file" \
         "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME" "TAGLINE=$tagline" || rc=$?
       case $rc in
-        0) ok "creado $repo/$fichero"; created=$((created + 1)) ;;
-        1) ok "actualizado el bloque de $repo/$fichero"; updated=$((updated + 1)) ;;
-        3) sin_marcadores+=("$repo/$fichero") ;;
-        4) die "la plantilla $fichero del kernel no trae el bloque gestionado" ;;
+        0) ok "created $repo/$file"; created=$((created + 1)) ;;
+        1) ok "updated the block of $repo/$file"; updated=$((updated + 1)) ;;
+        3) without_markers+=("$repo/$file") ;;
+        4) die "the kernel's $file template has no managed block" ;;
       esac
     done
   done < <(json_get "$CONFIG" repos 2>/dev/null || true)
 
-  if [[ ${#sin_marcadores[@]} -gt 0 ]]; then
+  if [[ ${#without_markers[@]} -gt 0 ]]; then
     echo
     if [[ $REFRESH -eq 1 ]]; then
-      for f in "${sin_marcadores[@]}"; do
-        repo="${f%%/*}"; fichero="${f##*/}"
-        propio="$(sed '1{/^# /d}' "$ROOT/$f")"
-        render_to_stdout "$CRUX_HOME/templates/code-repo/$fichero" \
-          "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME" "TAGLINE=$(tagline_de "$repo")" > "$ROOT/$f.tmp"
-        printf '\n---\n\n## Contexto propio de %s\n\n%s\n' "$repo" "$propio" >> "$ROOT/$f.tmp"
+      for f in "${without_markers[@]}"; do
+        repo="${f%%/*}"; file="${f##*/}"
+        own="$(sed '1{/^# /d}' "$ROOT/$f")"
+        render_to_stdout "$CRUX_HOME/templates/code-repo/$file" \
+          "REPO=$repo" "PROJECT=$PROJECT" "DOCS=$DOCS_NAME" "TAGLINE=$(tagline_of "$repo")" > "$ROOT/$f.tmp"
+        printf '\n---\n\n## Own context of %s\n\n%s\n' "$repo" "$own" >> "$ROOT/$f.tmp"
         mv "$ROOT/$f.tmp" "$ROOT/$f"
-        ok "$f reescrito con el bloque, contenido previo conservado debajo"
+        ok "$f rewritten with the block, previous content kept below"
       done
     else
-      warn "estos punteros son anteriores al bloque gestionado:"
-      for f in "${sin_marcadores[@]}"; do info "$f"; done
-      info "'crux link --refresh' los reescribe conservando su contenido debajo"
+      warn "these pointers predate the managed block:"
+      for f in "${without_markers[@]}"; do info "$f"; done
+      info "'crux link --refresh' rewrites them keeping their content below"
     fi
   fi
 
   if [[ $seen -eq 0 ]]; then
-    info "ningún repo de código en disco todavía"
-  elif [[ $((created + updated)) -eq 0 && ${#sin_marcadores[@]} -eq 0 ]]; then
-    ok "punteros al día ($(cuenta "$seen" repo repos))"
+    info "no code repo on disk yet"
+  elif [[ $((created + updated)) -eq 0 && ${#without_markers[@]} -eq 0 ]]; then
+    ok "pointers up to date ($(count "$seen" repo repos))"
   fi
 
 fi
 
-# --- Catálogo del kernel en el índice del proyecto --------------------------
+# --- Kernel catalog in the project index ------------------------------------
 #
-# La lista de skills transversales se queda obsoleta en cuanto el kernel crece,
-# y un índice que miente es peor que no tenerlo. Si el AGENTS.md marca el hueco,
-# se rellena solo.
+# The list of cross-cutting skills goes stale as soon as the kernel grows, and
+# an index that lies is worse than none. If AGENTS.md marks the spot, it fills
+# itself in.
 
 if grep -q '<!-- crux:skills -->' "$DOCS/AGENTS.md" 2>/dev/null; then
-  catalogo="$(for d in "$CRUX_HOME"/skills/*/; do
+  catalog="$(for d in "$CRUX_HOME"/skills/*/; do
     n="$(basename "$d")"
-    linea="$(awk '/^---$/{c++; next} c==1 && /^description:/{sub(/^description: /,""); print; exit}' "$d/SKILL.md" 2>/dev/null)"
-    # Un índice se escanea, no se lee: la frase entera lo vuelve ilegible.
-    corta="${linea%%.*}"
-    corta="${corta%%:*}"
-    [[ ${#corta} -gt 78 ]] && corta="${corta:0:75}…"
-    printf -- '- `%s` — %s\n' "$n" "$corta"
+    line="$(awk '/^---$/{c++; next} c==1 && /^description:/{sub(/^description: /,""); print; exit}' "$d/SKILL.md" 2>/dev/null)"
+    # An index is scanned, not read: the whole sentence makes it unreadable.
+    cut="${line%%.*}"
+    cut="${cut%%:*}"
+    [[ ${#cut} -gt 78 ]] && cut="${cut:0:75}…"
+    printf -- '- `%s` — %s\n' "$n" "$cut"
   done)"
   node -e '
     const fs = require("fs");
-    const [file, catalogo] = process.argv.slice(1);
+    const [file, catalog] = process.argv.slice(1);
     const src = fs.readFileSync(file, "utf8");
     const re = /<!-- crux:skills -->[\s\S]*?<!-- \/crux:skills -->/;
-    fs.writeFileSync(file, src.replace(re, `<!-- crux:skills -->\n${catalogo}\n<!-- /crux:skills -->`));
-  ' "$DOCS/AGENTS.md" "$catalogo"
-  ok "catálogo del kernel actualizado en AGENTS.md ($(echo "$catalogo" | wc -l) skills)"
+    fs.writeFileSync(file, src.replace(re, `<!-- crux:skills -->\n${catalog}\n<!-- /crux:skills -->`));
+  ' "$DOCS/AGENTS.md" "$catalog"
+  ok "kernel catalog updated in AGENTS.md ($(echo "$catalog" | wc -l) skills)"
 fi
 
-# --- Skills propias del proyecto --------------------------------------------
+# --- Project's own skills ----------------------------------------------------
 
 echo
 crux_materialize_skills "$DOCS/.claude/skills" "$PROJECT"
 crux_prune_skills
-ok "skills del proyecto materializadas"
+ok "project skills materialized"

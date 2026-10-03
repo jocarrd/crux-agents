@@ -1,72 +1,72 @@
 #!/usr/bin/env bash
-# Devuelve cada fichero de entorno a su sitio, leyendo el mapa de al lado.
+# Puts each env file back in its place, reading the map next to it.
 #
-#   ./restaurar.sh                     dice qué haría, sin tocar nada
-#   ./restaurar.sh --hazlo             lo copia
-#   ./restaurar.sh /ruta/proyecto --hazlo   si el proyecto no está donde se espera
+#   ./restaurar.sh                     says what it would do, touching nothing
+#   ./restaurar.sh --apply             copies them (--hazlo still works)
+#   ./restaurar.sh /path/project --apply   if the project is not where expected
 #
-# No sobreescribe nunca: perder un valor que solo estaba en el destino es peor
-# que copiar de menos.
+# Never overwrites: losing a value that only existed at the destination is
+# worse than copying too little.
 
 set -euo pipefail
-AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MAPA="$AQUI/mapa.txt"
-[[ -f "$MAPA" ]] || { echo "falta mapa.txt junto a este script"; exit 1; }
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAP="$HERE/mapa.txt"
+[[ -f "$MAP" ]] || { echo "mapa.txt is missing next to this script"; exit 1; }
 
-NOMBRE="$(head -1 "$MAPA" | sed -n 's/^# proyecto: //p')"
-HAZLO=0; DESTINO=""
+NAME="$(head -1 "$MAP" | sed -n 's/^# \(project\|proyecto\): //p')"
+DO_IT=0; TARGET=""
 for a in "$@"; do
-  if [[ "$a" == "--hazlo" ]]; then HAZLO=1; else DESTINO="$a"; fi
+  if [[ "$a" == "--hazlo" || "$a" == "--apply" ]]; then DO_IT=1; else TARGET="$a"; fi
 done
 
-# La raíz en ESTA máquina, que no tiene por qué ser la de la que salió la carpeta.
-RAIZ="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
-PROYECTO="${DESTINO:-$RAIZ/$NOMBRE}"
+# The root on THIS machine, which need not match the one the folder came from.
+ROOT="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
+PROJECT="${TARGET:-$ROOT/$NAME}"
 
-# Una carpeta reunida antes de que collect.sh anclara en la raíz del proyecto
-# lleva por nombre el de un repo, no el del proyecto, y entonces el destino está
-# un nivel más adentro. Buscarlo aquí evita que esas carpetas —que ya están
-# hechas y llevan secretos— haya que rehacerlas desde la máquina de origen.
-if [[ -z "$DESTINO" && ! -d "$PROYECTO" ]]; then
-  for c in "$RAIZ"/*/"$NOMBRE"; do
+# A folder gathered before collect.sh anchored on the project root is named
+# after a repo, not the project, so the destination is one level deeper.
+# Looking for it here avoids having to redo those folders (already built and
+# holding secrets) from the source machine.
+if [[ -z "$TARGET" && ! -d "$PROJECT" ]]; then
+  for c in "$ROOT"/*/"$NAME"; do
     [[ -d "$c" ]] || continue
-    echo "$NOMBRE no es un proyecto sino un repo de $(basename "$(dirname "$c")")"
-    PROYECTO="$c"; break
+    echo "$NAME is not a project but a repo of $(basename "$(dirname "$c")")"
+    PROJECT="$c"; break
   done
 fi
 
-[[ -d "$PROYECTO" ]] || {
-  echo "no encuentro el proyecto en $RAIZ/$NOMBRE ni como repo de ningún proyecto"
-  echo "pásalo como argumento: ./restaurar.sh /ruta/al/proyecto --hazlo"
+[[ -d "$PROJECT" ]] || {
+  echo "cannot find the project at $ROOT/$NAME nor as a repo of any project"
+  echo "pass it as an argument: ./restaurar.sh /path/to/project --apply"
   exit 1
 }
-echo "restaurando en $PROYECTO"
+echo "restoring into $PROJECT"
 echo
 
-puestos=0; saltados=0; sin_repo=0
-while IFS='|' read -r origen destino; do
-  [[ -n "$origen" && "$origen" != \#* ]] || continue
-  src="$AQUI/$origen"; dst="$PROYECTO/$destino"
-  [[ -f "$src" ]] || { echo "  falta aquí   $origen"; continue; }
+placed=0; skipped=0; no_repo=0
+while IFS='|' read -r origin target; do
+  [[ -n "$origin" && "$origin" != \#* ]] || continue
+  src="$HERE/$origin"; dst="$PROJECT/$target"
+  [[ -f "$src" ]] || { echo "  missing here $origin"; continue; }
   if [[ ! -d "$(dirname "$dst")" ]]; then
-    echo "  sin repo     $destino"; sin_repo=$((sin_repo+1)); continue
+    echo "  no repo      $target"; no_repo=$((no_repo+1)); continue
   fi
   if [[ -f "$dst" ]]; then
-    echo "  ya existe    $destino"; saltados=$((saltados+1)); continue
+    echo "  exists       $target"; skipped=$((skipped+1)); continue
   fi
-  if [[ $HAZLO -eq 1 ]]; then
-    cp -p "$src" "$dst"; chmod 600 "$dst"; echo "  puesto       $destino"
+  if [[ $DO_IT -eq 1 ]]; then
+    cp -p "$src" "$dst"; chmod 600 "$dst"; echo "  placed       $target"
   else
-    echo "  pondría      $destino"
+    echo "  would place  $target"
   fi
-  puestos=$((puestos+1))
-done < "$MAPA"
+  placed=$((placed+1))
+done < "$MAP"
 
 echo
-if [[ $HAZLO -eq 1 ]]; then
-  echo "$puestos puestos, $saltados ya estaban, $sin_repo sin repo clonado"
-  echo "cuando termines, borra esta carpeta"
+if [[ $DO_IT -eq 1 ]]; then
+  echo "$placed placed, $skipped already there, $no_repo without a cloned repo"
+  echo "when you are done, delete this folder"
 else
-  echo "$puestos por poner, $saltados ya están, $sin_repo sin repo clonado"
-  echo "para hacerlo de verdad: ./restaurar.sh --hazlo"
+  echo "$placed to place, $skipped already there, $no_repo without a cloned repo"
+  echo "to do it for real: ./restaurar.sh --apply"
 fi

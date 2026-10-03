@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Batería de extremo a extremo: el ciclo completo sobre un proyecto de verdad.
+# End-to-end battery: the complete cycle on a real project.
 #
 #   test/e2e.sh
 #
-# La suite de test/run.sh prueba piezas. Esto prueba el recorrido: crear el
-# proyecto, registrar un repo, instalar las guardas, abrir un espacio, pasar la
-# puerta, proponer y fusionar. Los fallos más caros del kernel han aparecido
-# aquí y no allí, porque solo se ven cuando las piezas se usan seguidas.
+# The test/run.sh suite tests pieces. This tests the journey: create the
+# project, register a repo, install the guards, open a workspace, pass the
+# gate, propose and merge. The kernel's costliest failures have shown up here
+# and not there, because they only show when the pieces are used in sequence.
 #
-# No depende de ningún proveedor: el remoto es un repo bare local.
+# It depends on no provider: the remote is a local bare repo.
 
 set -uo pipefail
 
@@ -16,221 +16,221 @@ CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export CRUX_HOME CRUX_IN_TESTS=1
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/crux-e2e-XXXXXX")"
-export CRUX_PROJECTS_DIR="$SB/proyectos"
+export CRUX_PROJECTS_DIR="$SB/projects"
 export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
 export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
 export CODEX_HOME_DIR="$SB/home/.codex"
 export CRUX_REGISTRY="$SB/workspaces.json"
-# Sin esto, `crux hooks install` reescribía los hooks reales de quien pasaba la
-# puerta y los dejaba apuntando al árbol que se estaba probando.
+# Without this, `crux hooks install` rewrote the real hooks of whoever ran the
+# gate and left them pointing at the tree being tested.
 export CLAUDE_SETTINGS="$SB/home/.claude/settings.json"
 mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
 real_settings="$HOME/.claude/settings.json"
 real_before="$(sha256sum "$real_settings" 2>/dev/null | cut -d' ' -f1)"
 
-PASO=0; FALLOS=0
+STEP=0; FAILURES=0
 if [[ -t 1 ]]; then R=$'\033[31m'; G=$'\033[32m'; D=$'\033[2m'; O=$'\033[0m'; else R=""; G=""; D=""; O=""; fi
 
-paso()  { PASO=$((PASO + 1)); echo "${D}$PASO. $*${O}"; }
-bien()  { echo "   ${G}ok${O} $*"; }
-mal()   { FALLOS=$((FALLOS + 1)); echo "   ${R}fallo${O} $*"; }
-cierto(){ if eval "$1"; then bien "$2"; else mal "$2"; fi; }
+step()  { STEP=$((STEP + 1)); echo "${D}$STEP. $*${O}"; }
+good()  { echo "   ${G}ok${O} $*"; }
+bad()   { FAILURES=$((FAILURES + 1)); echo "   ${R}fail${O} $*"; }
+truthy(){ if eval "$1"; then good "$2"; else bad "$2"; fi; }
 
 git_() { git -c user.email=e2e@localhost -c user.name=e2e "$@"; }
 
 crux() { bash "$CRUX_HOME/bin/crux" "$@"; }
 
-# CRUX_E2E_KEEP=1 conserva el sandbox: sin él, depurar un paso que falla exige
-# reproducir todo el recorrido a mano.
+# CRUX_E2E_KEEP=1 keeps the sandbox: without it, debugging a failing step
+# means reproducing the whole journey by hand.
 [[ "${CRUX_E2E_KEEP:-0}" == "1" ]] || trap 'rm -rf "$SB"' EXIT
 
-echo "e2e — el ciclo completo en $SB"
+echo "e2e — the complete cycle in $SB"
 echo
 
-# --- 1. Un proyecto nuevo, con su remoto -------------------------------------
+# --- 1. A new project, with its remote ---------------------------------------
 
-paso "crear el proyecto"
-REMOTO="$SB/remotos/demo-docs.git"
-mkdir -p "$(dirname "$REMOTO")"
-# El HEAD del bare decide qué rama saca un clon: si apunta a una que no existe,
-# el clon sale vacío sin decir por qué.
-git init -q --bare -b main "$REMOTO" 2>/dev/null || { git init -q --bare "$REMOTO"; git -C "$REMOTO" symbolic-ref HEAD refs/heads/main; }
+step "create the project"
+REMOTE="$SB/remotes/demo-docs.git"
+mkdir -p "$(dirname "$REMOTE")"
+# The bare repo's HEAD decides which branch a clone checks out: if it points at
+# one that does not exist, the clone comes out empty without saying why.
+git init -q --bare -b main "$REMOTE" 2>/dev/null || { git init -q --bare "$REMOTE"; git -C "$REMOTE" symbolic-ref HEAD refs/heads/main; }
 crux init demo --no-remote --parent "$CRUX_PROJECTS_DIR" --repos api >/dev/null 2>&1
 DOCS="$CRUX_PROJECTS_DIR/demo/demo-docs"
-cierto '[[ -f "$DOCS/crux.json" ]]' "el docs repo existe"
-cierto '[[ "$(git -C "$DOCS" rev-parse --abbrev-ref HEAD)" == "main" ]]' "nace en la rama declarada"
-git -C "$DOCS" remote add origin "$REMOTO"
+truthy '[[ -f "$DOCS/crux.json" ]]' "the docs repo exists"
+truthy '[[ "$(git -C "$DOCS" rev-parse --abbrev-ref HEAD)" == "main" ]]' "it is born on the declared branch"
+git -C "$DOCS" remote add origin "$REMOTE"
 
-paso "el repo de código, registrado y enlazado"
+step "the code repo, registered and linked"
 REPO="$CRUX_PROJECTS_DIR/demo/api"
 mkdir -p "$REPO/src" && git init -q -b main "$REPO"
 echo "export const uno = 1;" > "$REPO/src/index.js"
 git_ -C "$REPO" add -A && git_ -C "$REPO" commit -qm "chore: init"
 crux link "$DOCS" >/dev/null 2>&1
-cierto '[[ -f "$REPO/AGENTS.md" && -f "$REPO/CLAUDE.md" ]]' "los punteros están en el repo de código"
-cierto 'grep -q "crux:begin" "$REPO/AGENTS.md"' "y llevan el bloque gestionado"
+truthy '[[ -f "$REPO/AGENTS.md" && -f "$REPO/CLAUDE.md" ]]' "the pointers are in the code repo"
+truthy 'grep -q "crux:begin" "$REPO/AGENTS.md"' "and carry the managed block"
 
-paso "conformidad"
+step "conformance"
 bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" >/dev/null 2>&1
-cierto '[[ $? -eq 0 ]]' "doctor pasa sobre el proyecto recién creado"
+truthy '[[ $? -eq 0 ]]' "doctor passes on the freshly created project"
 
-# --- 2. Las guardas ----------------------------------------------------------
+# --- 2. The guards -----------------------------------------------------------
 
-paso "instalar las guardas"
+step "install the guards"
 ( cd "$DOCS" && crux hooks install >/dev/null 2>&1 )
-cierto '[[ -x "$REPO/.git/hooks/pre-push" ]]' "pre-push instalado en el repo de código"
-cierto 'grep -q "refs/heads/main" "$REPO/.git/hooks/pre-push"' "vigila la rama principal declarada"
-cierto '[[ ! -e "$DOCS/.git/hooks/pre-push" ]]' "el docs repo no lo lleva: se sube directo"
+truthy '[[ -x "$REPO/.git/hooks/pre-push" ]]' "pre-push installed in the code repo"
+truthy 'grep -q "refs/heads/main" "$REPO/.git/hooks/pre-push"' "watches the declared main branch"
+truthy '[[ ! -e "$DOCS/.git/hooks/pre-push" ]]' "the docs repo does not carry it: it is pushed directly"
 
-paso "el push directo a la principal se bloquea en el código, no en la doc"
+step "a direct push to main is blocked in code, not in docs"
 git_ -C "$DOCS" add -A >/dev/null 2>&1
 git_ -C "$DOCS" commit -qm "docs: initial" >/dev/null 2>&1
 git -C "$DOCS" push -q origin main >/dev/null 2>&1
-echo "más" >> "$DOCS/README.md"
+echo "more" >> "$DOCS/README.md"
 git_ -C "$DOCS" commit -qam "docs: tweak" >/dev/null 2>&1
 git -C "$DOCS" push -q origin main >/dev/null 2>&1
-cierto '[[ "$(git -C "$REMOTO" rev-parse main)" == "$(git -C "$DOCS" rev-parse HEAD)" ]]' \
-  "la documentación llega al remoto sin propuesta"
-# Un remoto aparte para no tocar el que usa la propuesta más abajo.
-git init -q --bare "$SB/remotos/api-bloqueo.git"
-git -C "$REPO" push -q "$SB/remotos/api-bloqueo.git" HEAD:refs/heads/main >/dev/null 2>&1
-cierto 'git -C "$SB/remotos/api-bloqueo.git" show-ref --verify --quiet refs/heads/main' "la primera subida crea la principal"
-antes="$(git -C "$SB/remotos/api-bloqueo.git" rev-parse main)"
-echo "// más" >> "$REPO/src/index.js"
+truthy '[[ "$(git -C "$REMOTE" rev-parse main)" == "$(git -C "$DOCS" rev-parse HEAD)" ]]' \
+  "the documentation reaches the remote without a proposal"
+# A separate remote so as not to touch the one the proposal uses further down.
+git init -q --bare "$SB/remotes/api-blocked.git"
+git -C "$REPO" push -q "$SB/remotes/api-blocked.git" HEAD:refs/heads/main >/dev/null 2>&1
+truthy 'git -C "$SB/remotes/api-blocked.git" show-ref --verify --quiet refs/heads/main' "the first push creates main"
+before="$(git -C "$SB/remotes/api-blocked.git" rev-parse main)"
+echo "// more" >> "$REPO/src/index.js"
 git_ -C "$REPO" commit -qam "feat: tweak" >/dev/null 2>&1
-salida="$(git -C "$REPO" push "$SB/remotos/api-bloqueo.git" HEAD:refs/heads/main 2>&1)"
-cierto '[[ "$salida" == *"bloqueado"* ]]' "el hook impide actualizar la principal del código"
-cierto '[[ "$(git -C "$SB/remotos/api-bloqueo.git" rev-parse main)" == "$antes" ]]' "y nada nuevo llegó al remoto"
+output="$(git -C "$REPO" push "$SB/remotes/api-blocked.git" HEAD:refs/heads/main 2>&1)"
+truthy '[[ "$output" == *"blocked"* ]]' "the hook prevents updating the code main"
+truthy '[[ "$(git -C "$SB/remotes/api-blocked.git" rev-parse main)" == "$before" ]]' "and nothing new reached the remote"
 
-paso "el mensaje de commit fuera del idioma se rechaza"
+step "a commit message outside the language is rejected"
 ( cd "$REPO" && crux hooks install >/dev/null 2>&1 )
 echo "// dos" >> "$REPO/src/index.js"
 git_ -C "$REPO" add -A
-salida="$(git_ -C "$REPO" commit -m "feat: esto es para que el usuario pueda ver una cosa" 2>&1)"
-cierto '[[ "$salida" == *"español"* ]]' "el hook lo rechaza"
+output="$(git_ -C "$REPO" commit -m "feat: esto es para que el usuario pueda ver una cosa" 2>&1)"
+truthy '[[ "$output" == *"in Spanish"* ]]' "the hook rejects it"
 git_ -C "$REPO" commit -qm "feat: add a second export" >/dev/null 2>&1
 
-# --- 3. El ciclo -------------------------------------------------------------
+# --- 3. The cycle ------------------------------------------------------------
 
-paso "abrir el espacio de trabajo"
-( cd "$REPO" && crux workspace new tarea >/dev/null 2>&1 )
-WS="$CRUX_PROJECTS_DIR/demo/api-ws-tarea"
-cierto '[[ -d "$WS" ]]' "el worktree existe"
-cierto '[[ "$(git -C "$WS" rev-parse --abbrev-ref HEAD)" == "ws/tarea" ]]' "en su propia rama"
+step "open the workspace"
+( cd "$REPO" && crux workspace new task >/dev/null 2>&1 )
+WS="$CRUX_PROJECTS_DIR/demo/api-ws-task"
+truthy '[[ -d "$WS" ]]' "the worktree exists"
+truthy '[[ "$(git -C "$WS" rev-parse --abbrev-ref HEAD)" == "ws/task" ]]' "on its own branch"
 
-paso "desarrollar y pasar la puerta"
+step "develop and pass the gate"
 echo "export const tres = 3;" >> "$WS/src/index.js"
-mkdir -p "$WS/test" && echo "// prueba" > "$WS/test/index.test.js"
+mkdir -p "$WS/test" && echo "// test" > "$WS/test/index.test.js"
 git_ -C "$WS" add -A && git_ -C "$WS" commit -qm "feat: add a third export" >/dev/null 2>&1
 printf '%s\n' "$(git -C "$WS" rev-parse HEAD)" > "$WS/.crux-ship"
-cierto '[[ -z "$(git -C "$WS" status --porcelain)" ]]' "la marca de la puerta no ensucia el repo"
+truthy '[[ -z "$(git -C "$WS" status --porcelain)" ]]' "the gate mark does not dirty the repo"
 
-paso "reunir el material de la revisión"
-salida="$(bash "$CRUX_HOME/bin/review.sh" --repo "$WS" --base main 2>&1)"
-cierto '[[ "$salida" == *"ws/tarea"* ]]' "review dice qué rama revisa"
-cierto '[[ "$salida" == *"src/index.js"* ]]' "y qué ficheros toca"
+step "gather the review material"
+output="$(bash "$CRUX_HOME/bin/review.sh" --repo "$WS" --base main 2>&1)"
+truthy '[[ "$output" == *"ws/task"* ]]' "review says which branch it reviews"
+truthy '[[ "$output" == *"src/index.js"* ]]' "and which files it touches"
 
-paso "proponer el cambio"
-git -C "$REPO" remote add origin "$SB/remotos/api.git" 2>/dev/null
-git init -q --bare -b main "$SB/remotos/api.git" 2>/dev/null \
-  || { git init -q --bare "$SB/remotos/api.git"; git -C "$SB/remotos/api.git" symbolic-ref HEAD refs/heads/main; }
-# La puerta ya no se declara: se pasa, y el recibo dice qué se ejecutó.
+step "propose the change"
+git -C "$REPO" remote add origin "$SB/remotes/api.git" 2>/dev/null
+git init -q --bare -b main "$SB/remotes/api.git" 2>/dev/null \
+  || { git init -q --bare "$SB/remotes/api.git"; git -C "$SB/remotes/api.git" symbolic-ref HEAD refs/heads/main; }
+# The gate is no longer declared: it is passed, and the receipt says what ran.
 ( cd "$WS" && crux ship run -- true >/dev/null 2>&1 && crux ship seal >/dev/null 2>&1 )
-salida="$( cd "$WS" && crux workspace finish tarea 2>&1 )"
-cierto '[[ "$salida" != *"sin commitear"* ]]' "la marca de la puerta no bloquea la propuesta"
-cierto 'git -C "$SB/remotos/api.git" show-ref --verify --quiet refs/heads/ws/tarea' "la rama llegó al remoto"
+output="$( cd "$WS" && crux workspace finish task 2>&1 )"
+truthy '[[ "$output" != *"uncommitted"* ]]' "the gate mark does not block the proposal"
+truthy 'git -C "$SB/remotes/api.git" show-ref --verify --quiet refs/heads/ws/task' "the branch reached the remote"
 
-paso "cerrar el espacio"
-( cd "$REPO" && crux workspace rm tarea >/dev/null 2>&1 )
-cierto '[[ ! -d "$WS" ]]' "el worktree se retira"
-cierto '! grep -q "\"tarea\"" "$CRUX_REGISTRY"' "y el slot queda libre"
+step "close the workspace"
+( cd "$REPO" && crux workspace rm task >/dev/null 2>&1 )
+truthy '[[ ! -d "$WS" ]]' "the worktree is removed"
+truthy '! grep -q "\"task\"" "$CRUX_REGISTRY"' "and the slot is freed"
 
-# --- 4. Otra máquina ---------------------------------------------------------
+# --- 4. Another machine ------------------------------------------------------
 
-paso "el proyecto se recupera en otra máquina"
-# La integración la hace la propuesta; aquí se simula su resultado, que es lo
-# único que importa para la pregunta: ¿sobrevive el proyecto al cambio de
-# máquina?
+step "the project is recovered on another machine"
+# The integration is done by the proposal; here its result is simulated, which
+# is the only thing that matters for the question: does the project survive a
+# change of machine?
 git -C "$DOCS" push -q --no-verify origin main 2>/dev/null
-OTRA="$SB/otra"
-mkdir -p "$OTRA"
-git clone -q "$REMOTO" "$OTRA/demo-docs" 2>/dev/null
-cierto '[[ -f "$OTRA/demo-docs/crux.json" ]]' "el docs repo viaja por git"
-cierto '[[ -f "$OTRA/demo-docs/repos/api/README.md" ]]' "con la documentación de sus repos"
+OTHER="$SB/other"
+mkdir -p "$OTHER"
+git clone -q "$REMOTE" "$OTHER/demo-docs" 2>/dev/null
+truthy '[[ -f "$OTHER/demo-docs/crux.json" ]]' "the docs repo travels by git"
+truthy '[[ -f "$OTHER/demo-docs/repos/api/README.md" ]]' "with the documentation of its repos"
 
-# --- 5. Un repo más, en caliente ---------------------------------------------
+# --- 5. One more repo, hot ---------------------------------------------------
 
-paso "registrar un segundo repo en el proyecto"
+step "register a second repo in the project"
 REPO2="$CRUX_PROJECTS_DIR/demo/worker"
 mkdir -p "$REPO2" && git init -q -b main "$REPO2"
 echo "worker" > "$REPO2/main.py"
 git_ -C "$REPO2" add -A && git_ -C "$REPO2" commit -qm "chore: init"
-( cd "$DOCS" && crux add-repo worker --description "Procesa la cola" >/dev/null 2>&1 )
-cierto '[[ -f "$DOCS/repos/worker/README.md" ]]' "la carpeta de doc se crea"
-cierto 'grep -q "worker" "$DOCS/crux.json"' "y queda declarado en el contrato"
-cierto '[[ -f "$REPO2/AGENTS.md" ]]' "con su puntero en el repo de código"
+( cd "$DOCS" && crux add-repo worker --description "Processes the queue" >/dev/null 2>&1 )
+truthy '[[ -f "$DOCS/repos/worker/README.md" ]]' "the doc folder is created"
+truthy 'grep -q "worker" "$DOCS/crux.json"' "and it is declared in the contract"
+truthy '[[ -f "$REPO2/AGENTS.md" ]]' "with its pointer in the code repo"
 
-paso "el nombre de un repo no puede escaparse de la carpeta"
-salida="$( cd "$DOCS" && crux add-repo "../../fuera" --description "x" 2>&1 )"
-cierto '[[ "$salida" == *"kebab-case"* || "$salida" == *"inválido"* ]]' "se rechaza"
-cierto '[[ ! -e "$CRUX_PROJECTS_DIR/fuera" ]]' "y no se crea nada fuera"
+step "a repo name cannot escape the folder"
+output="$( cd "$DOCS" && crux add-repo "../../outside" --description "x" 2>&1 )"
+truthy '[[ "$output" == *"kebab-case"* ]]' "it is rejected"
+truthy '[[ ! -e "$CRUX_PROJECTS_DIR/outside" ]]' "and nothing is created outside"
 
-# --- 6. Idempotencia ---------------------------------------------------------
+# --- 6. Idempotence ----------------------------------------------------------
 
-paso "repetir link y hooks no cambia nada"
-antes="$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)"
+step "repeating link and hooks changes nothing"
+before="$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)"
 crux link "$DOCS" >/dev/null 2>&1
 ( cd "$DOCS" && crux hooks install >/dev/null 2>&1 )
-cierto '[[ "$antes" == "$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)" ]]' "el puntero es el mismo"
-cierto '[[ "$(grep -c "crux workspace" "$DOCS/.git/hooks/pre-push")" -le 2 ]]' "el hook no se duplica"
+truthy '[[ "$before" == "$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)" ]]' "the pointer is the same"
+truthy '[[ "$(grep -c "crux workspace" "$DOCS/.git/hooks/pre-push")" -le 2 ]]' "the hook is not duplicated"
 
-# --- 7. Un proyecto que ya existía -------------------------------------------
+# --- 7. A project that already existed ---------------------------------------
 
-paso "adoptar un docs repo que no nació con crux"
-AJENO="$CRUX_PROJECTS_DIR/heredado/heredado-docs"
-mkdir -p "$AJENO" && git init -q -b main "$AJENO"
-echo "# heredado" > "$AJENO/README.md"
-git_ -C "$AJENO" add -A && git_ -C "$AJENO" commit -qm "docs: init"
-( cd "$AJENO" && crux adopt . >/dev/null 2>&1 )
-cierto '[[ -f "$AJENO/crux.json" ]]' "queda con contrato"
-salida="$(bash "$CRUX_HOME/bin/upgrade.sh" "$AJENO" 2>&1)"
-cierto '[[ "$salida" == *"materializado"* || "$salida" == *"no falta"* ]]' "y upgrade completa lo que falte"
-bash "$CRUX_HOME/bin/doctor.sh" "$AJENO" >/dev/null 2>&1
-cierto '[[ $? -eq 0 ]]' "hasta pasar doctor"
+step "adopt a docs repo that was not born with crux"
+FOREIGN="$CRUX_PROJECTS_DIR/inherited/inherited-docs"
+mkdir -p "$FOREIGN" && git init -q -b main "$FOREIGN"
+echo "# inherited" > "$FOREIGN/README.md"
+git_ -C "$FOREIGN" add -A && git_ -C "$FOREIGN" commit -qm "docs: init"
+( cd "$FOREIGN" && crux adopt . >/dev/null 2>&1 )
+truthy '[[ -f "$FOREIGN/crux.json" ]]' "it ends up with a contract"
+output="$(bash "$CRUX_HOME/bin/upgrade.sh" "$FOREIGN" 2>&1)"
+truthy '[[ "$output" == *"materialized"* || "$output" == *"no piece of the standard is missing"* ]]' "and upgrade completes whatever is missing"
+bash "$CRUX_HOME/bin/doctor.sh" "$FOREIGN" >/dev/null 2>&1
+truthy '[[ $? -eq 0 ]]' "until doctor passes"
 
-# --- 8. El perfil de cliente -------------------------------------------------
+# --- 8. The client profile ---------------------------------------------------
 
-paso "con perfil de cliente no se escribe en el repo ajeno"
-crux init cliente --no-remote --parent "$CRUX_PROJECTS_DIR" --repos vendor --profile client-repo >/dev/null 2>&1
-CDOCS="$CRUX_PROJECTS_DIR/cliente/cliente-docs"
-VENDOR="$CRUX_PROJECTS_DIR/cliente/vendor"
+step "with a client profile nothing is written in the foreign repo"
+crux init client --no-remote --parent "$CRUX_PROJECTS_DIR" --repos vendor --profile client-repo >/dev/null 2>&1
+CDOCS="$CRUX_PROJECTS_DIR/client/client-docs"
+VENDOR="$CRUX_PROJECTS_DIR/client/vendor"
 mkdir -p "$VENDOR" && git init -q -b main "$VENDOR"
-echo "codigo" > "$VENDOR/main.c"
+echo "code" > "$VENDOR/main.c"
 git_ -C "$VENDOR" add -A && git_ -C "$VENDOR" commit -qm "chore: init"
 crux link "$CDOCS" >/dev/null 2>&1
-cierto '[[ ! -f "$VENDOR/AGENTS.md" && ! -f "$VENDOR/CLAUDE.md" ]]' "link no deja punteros"
+truthy '[[ ! -f "$VENDOR/AGENTS.md" && ! -f "$VENDOR/CLAUDE.md" ]]' "link leaves no pointers"
 
-paso "y el espacio de trabajo avisa, pero deja trabajar"
-salida="$( cd "$VENDOR" && crux workspace new tarea 2>&1 )"
-cierto '[[ "$salida" == *"documentación de vendor"* ]]' "avisa de a dónde va la documentación"
-cierto '[[ "$salida" == *"se verá en su repositorio"* ]]' "y de que la rama la verá el cliente"
-cierto '[[ -d "$CRUX_PROJECTS_DIR/cliente/vendor-ws-tarea" ]]' "y aun así crea el espacio"
+step "and the workspace warns, but lets you work"
+output="$( cd "$VENDOR" && crux workspace new task 2>&1 )"
+truthy '[[ "$output" == *"documentation of vendor"* ]]' "warns where the documentation goes"
+truthy '[[ "$output" == *"will be seen in their repository"* ]]' "and that the client will see the branch"
+truthy '[[ -d "$CRUX_PROJECTS_DIR/client/vendor-ws-task" ]]' "and still creates the workspace"
 
-paso "doctor detecta lo que falta y lo que sobra"
+step "doctor detects what is missing and what is extra"
 rm -rf "$DOCS/repos/worker"
-salida="$(bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" 2>&1)"
-cierto '[[ "$salida" == *"sin carpeta de doc"* ]]' "reporta el repo declarado sin doc"
+output="$(bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" 2>&1)"
+truthy '[[ "$output" == *"without a doc folder"* ]]' "reports the declared repo without docs"
 bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" >/dev/null 2>&1
-cierto '[[ $? -ne 0 ]]' "y sale con error"
+truthy '[[ $? -ne 0 ]]' "and exits with an error"
 
-paso "los ajustes reales de Claude Code no se tocan"
-cierto '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
-  "el settings.json de quien ejecuta sale igual que entró"
+step "the real Claude Code settings are not touched"
+truthy '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
+  "the settings.json of whoever runs it comes out as it went in"
 
 echo
-if [[ $FALLOS -eq 0 ]]; then
-  echo "${G}e2e correcto${O} — $PASO pasos del ciclo"
+if [[ $FAILURES -eq 0 ]]; then
+  echo "${G}e2e passed${O} — $STEP steps of the cycle"
 else
-  echo "${R}$FALLOS fallos${O} en $PASO pasos"
+  echo "${R}$FAILURES failures${O} in $STEP steps"
 fi
-exit $(( FALLOS > 0 ? 1 : 0 ))
+exit $(( FAILURES > 0 ? 1 : 0 ))

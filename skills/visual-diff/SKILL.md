@@ -1,102 +1,102 @@
 ---
 name: visual-diff
-description: Medir objetivamente cuánto se desvía una salida renderizada (PDF, página, imagen) respecto a una referencia visual, con rejilla de celdas, error medio por celda, desenfoque previo contra el antialias, zonas con nombre semántico y superposiciones que revelan el desalineo. Usa cuando exista un diseño oficial contra el que comparar, cuando quieras un ranking de qué zonas están peor, o como red de seguridad tras una tanda de cambios de maquetación que la revisión a ojo no cubre.
+description: Objectively measure how far a rendered output (PDF, page, image) deviates from a visual reference, with a cell grid, mean error per cell, pre-blur against antialiasing, zones with semantic names and overlays that reveal misalignment. Use when an official design exists to compare against, when you want a ranking of which zones are worst, or as a safety net after a batch of layout changes that eyeball review doesn't cover.
 ---
 
 # visual-diff
 
-Responde a una pregunta concreta: **cuánto me desvío de la referencia, y
-dónde**. Es la mitad medible del trabajo visual; la otra mitad, cuando no hay
-referencia y el criterio es de una persona, es `/render-loop`.
+It answers one specific question: **how far am I from the reference, and where**.
+It is the measurable half of visual work; the other half, when there is no
+reference and the criterion is a person's, is `/render-loop`.
 
-## Cuándo usar cada una
+## When to use each
 
-| Situación | Herramienta |
-| --------- | ----------- |
-| Hay un diseño oficial contra el que comparar | **esta** |
-| Antes de dar por buena una tanda de cambios | **esta** |
-| Anotaciones subjetivas: "más grande", "más aire" | `/render-loop` |
-| Confirmar que un cambio se aprecia | `/render-loop` |
+| Situation | Tool |
+| --------- | ---- |
+| There is an official design to compare against | **this one** |
+| Before accepting a batch of changes | **this one** |
+| Subjective notes: "bigger", "more air" | `/render-loop` |
+| Confirming a change is noticeable | `/render-loop` |
 
-## Uso
+## Usage
 
 ```bash
-python3 <directorio-de-esta-skill>/scripts/imgdiff.py <actual> <referencia> \
+python3 <this-skill-directory>/scripts/imgdiff.py <current> <reference> \
   --out diff-out --grid 12x18 --blocks blocks.json
 ```
 
-Acepta PDF —lo rasteriza con `pdftoppm`— o imágenes. Produce `report.md`
-ordenado por desviación descendente, `scores.json` y una superposición por
-página. Sale con código 1 si alguna celda supera el umbral, así que sirve
-directamente como puerta en un hook o en CI.
+It accepts PDFs (rasterized with `pdftoppm`) or images. It produces `report.md`
+sorted by descending deviation, `scores.json` and one overlay per page. It exits
+with code 1 if any cell exceeds the threshold, so it works directly as a gate in
+a hook or in CI.
 
-Requiere `python3` con `numpy` y `Pillow`, y `poppler` para los PDF.
+It requires `python3` with `numpy` and `Pillow`, and `poppler` for PDFs.
 
-## Cómo funciona, y por qué así
+## How it works, and why
 
-1. **Rasteriza ambas salidas a la misma resolución** y ajusta la actual al
-   tamaño de la referencia.
-2. **Aplica un desenfoque previo.** Esto es lo que hace utilizable la
-   comparación entre renderizadores distintos: sin él, el antialias domina la
-   señal y todo parece diferente. Con él sobreviven los defectos reales de
-   posición, tamaño y color.
-3. **Divide en una rejilla y calcula el error medio absoluto por celda.** Un
-   número por página no dice nada accionable; por celda, sí.
-4. **Ignora las celdas casi blancas en ambas.** Son los márgenes: sin este
-   filtro inflan la media y esconden los defectos reales.
-5. **Etiqueta cada celda con su bloque semántico.** Un informe que dice "la
-   cabecera está desplazada" es accionable; uno que dice "celda 3,7" obliga a
-   ir a mirar el PNG para entender qué pasa.
-6. **Genera la superposición.** Lo que coincide sale gris; el desalineo
-   aparece como fantasma de color, azul donde solo hay contenido en el actual
-   y cálido donde solo lo hay en la referencia.
+1. **Rasterize both outputs at the same resolution** and fit the current one to
+   the reference's size.
+2. **Apply a pre-blur.** This is what makes comparison between different
+   renderers usable: without it, antialiasing dominates the signal and
+   everything looks different. With it, the real defects of position, size and
+   colour survive.
+3. **Split into a grid and compute the mean absolute error per cell.** One number
+   per page says nothing actionable; per cell, it does.
+4. **Ignore cells that are almost white in both.** They are the margins: without
+   this filter they inflate the average and hide the real defects.
+5. **Label each cell with its semantic block.** A report saying "the header is
+   shifted" is actionable; one saying "cell 3,7" forces you to go look at the PNG
+   to understand what is happening.
+6. **Generate the overlay.** What matches comes out grey; misalignment shows up as
+   a coloured ghost, blue where there is content only in the current one and warm
+   where there is only in the reference.
 
-## Los bloques semánticos
+## The semantic blocks
 
-Un JSON con las zonas en coordenadas normalizadas de 0 a 1, opcionalmente por
-página:
+A JSON with the zones in normalized 0 to 1 coordinates, optionally per page:
 
 ```json
-[{"name": "cabecera",  "page": 1, "box": [0, 0, 1, 0.2]},
- {"name": "tarjeta-izquierda", "page": 1, "box": [0, 0.28, 0.55, 0.52]}]
+[{"name": "header",  "page": 1, "box": [0, 0, 1, 0.2]},
+ {"name": "left-card", "page": 1, "box": [0, 0.28, 0.55, 0.52]}]
 ```
 
-Merece la pena escribirlo una vez: convierte el informe de una lista de
-coordenadas en una lista de nombres que ya sabes dónde tocar.
+It is worth writing once: it turns the report from a list of coordinates into a
+list of names where you already know where to make the change.
 
-## La regla que decide si la medición vale algo
+## The rule that decides whether the measurement is worth anything
 
-**Fija los datos antes de comparar.** Si el render actual lleva datos
-distintos a los de la referencia, estás midiendo contenido y no diseño, y
-cualquier diferencia real queda enterrada bajo el ruido.
+**Fix the data before comparing.** If the current render carries different data
+from the reference, you are measuring content and not design, and any real
+difference gets buried under the noise.
 
-Lo normal es exponer un modo de la propia aplicación que rellene la salida con
-los mismos datos que la referencia. Sin eso, el diff no es concluyente y no
-conviene interpretarlo.
+The normal thing is to expose a mode in the application itself that fills the
+output with the same data as the reference. Without that, the diff is
+inconclusive and shouldn't be interpreted.
 
-## Cobertura sistemática
+## Systematic coverage
 
-Una comparación contra una referencia mide el caso que has renderizado. Si la
-salida tiene lienzos de tamaño fijo —típico en informes y documentos—, **el
-contenido que no cabe se recorta en silencio**, y la revisión a ojo solo
-detecta lo que a uno se le ocurre mirar.
+A comparison against a reference measures the case you have rendered. If the
+output has fixed-size canvases (typical in reports and documents), **content that
+doesn't fit is clipped silently**, and eyeball review only detects what one
+thinks to look at.
 
-Por eso conviene acompañarla de una batería de escenarios que renderice los
-casos límite: el texto más largo posible, valores extremos, campos vacíos,
-todas las variantes de una etiqueta. Es la parte que hay que pasar sí o sí
-después de tocar tipografías o espaciados.
+That is why it is worth accompanying it with a battery of scenarios that renders
+the edge cases: the longest possible text, extreme values, empty fields, all the
+variants of a label. It is the part that must be run without fail after touching
+typography or spacing.
 
-## Falso positivo documentado
+## Documented false positive
 
-**Si aparecen artefactos —cabeceras negras, bloques mal compuestos— en unos
-visores y no en otros, sospecha del renderizador antes que del diseño.** La
-causa habitual es lanzar el navegador headless sin las mismas banderas que
-usa el pipeline de producción.
+**If artifacts appear (black headers, badly composed blocks) in some viewers and
+not in others, suspect the renderer before the design.** The usual cause is
+launching the headless browser without the same flags the production pipeline
+uses.
 
-Cualquier script de comparación debe replicar exactamente esas banderas. Esto
-le costó una jornada completa a un equipo antes de documentarlo.
+Any comparison script must replicate exactly those flags. This cost one team a
+whole working day before it was documented.
 
-## Relacionado
+## Related
 
-- `/render-loop` — iterar cuando no hay referencia y el criterio es subjetivo
-- `/visual-test` — inspección de páginas web en distintos viewports
+- `/render-loop`: iterate when there is no reference and the criterion is
+  subjective
+- `/visual-test`: inspect web pages across viewports

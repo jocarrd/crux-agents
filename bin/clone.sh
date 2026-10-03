@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# crux clone — traer un proyecto entero a una máquina nueva.
+# crux clone — bring a whole project to a new machine.
 #
-#   crux clone <project> [--from <plantilla|url>] [--parent <dir>]
+#   crux clone <project> [--from <template|url>] [--parent <dir>]
 #
-# Clona el docs repo, lee su contrato y clona los repos que declara. Dos cosas
-# salen del contrato y no de un supuesto: la lista de repos —que en una guía
-# escrita a mano se queda desfasada en cuanto añades uno— y **de dónde se
-# clonan**, que puede ser distinto para la documentación y para el código.
+# Clones the docs repo, reads its contract and clones the repos it declares.
+# Two things come from the contract and not from an assumption: the list of
+# repos —which in a hand-written guide goes stale as soon as you add one— and
+# **where they are cloned from**, which can differ for documentation and code.
 
 set -euo pipefail
 
@@ -15,7 +15,7 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
 PROJECT="${1:-}"
-[[ -n "$PROJECT" ]] || die "uso: crux clone <project> [--from <plantilla|url>] [--parent <dir>]"
+[[ -n "$PROJECT" ]] || die "usage: crux clone <project> [--from <template|url>] [--parent <dir>]"
 shift
 
 FROM=""
@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --from)   FROM="$2"; shift 2 ;;
     --parent) PARENT="$2"; shift 2 ;;
-    *) die "opción desconocida: $1" ;;
+    *) die "unknown option: $1" ;;
   esac
 done
 
@@ -34,90 +34,90 @@ PROJECT="${PROJECT%-docs}"
 ROOT="$PARENT/$PROJECT"
 DOCS="$ROOT/$PROJECT-docs"
 
-# Para traer el docs repo hace falta una URL, y todavía no hay contrato que la
-# diga: o la pasa el usuario, o se hereda del valor por defecto de la máquina.
-plantilla_inicial() {
+# Fetching the docs repo needs a URL, and there is no contract yet to give it:
+# either the user passes it, or it is inherited from the machine default.
+initial_template() {
   [[ -n "$FROM" ]] && { echo "$FROM"; return; }
   local cfg="${CRUX_CONFIG:-$HOME/.crux/config}"
   if [[ -f "$cfg" ]]; then
-    local defecto
-    defecto="$(grep -E '^CRUX_REMOTE=' "$cfg" | cut -d= -f2- | tr -d '"')"
-    [[ -n "$defecto" ]] && { echo "$defecto"; return; }
+    local default_value
+    default_value="$(grep -E '^CRUX_REMOTE=' "$cfg" | cut -d= -f2- | tr -d '"')"
+    [[ -n "$default_value" ]] && { echo "$default_value"; return; }
   fi
   echo ""
 }
 
-echo "clonando $PROJECT"
+echo "cloning $PROJECT"
 echo
 
 mkdir -p "$ROOT"
 
-# --- 1. El docs repo, que es quien sabe el resto ------------------------------
+# --- 1. The docs repo, which knows the rest ------------------------------
 
 if [[ -d "$DOCS/.git" ]]; then
-  ok "$PROJECT-docs ya está"
+  ok "$PROJECT-docs already there"
 else
-  TMPL="$(plantilla_inicial)"
+  TMPL="$(initial_template)"
   if [[ -z "$TMPL" ]]; then
-    err "no sé de dónde traer $PROJECT-docs"
-    info "pásalo con --from 'git@tu-remoto:org/{repo}.git' (o la URL completa),"
-    info "o fija un valor por defecto con CRUX_REMOTE en ~/.crux/config"
+    err "I do not know where to fetch $PROJECT-docs from"
+    info "pass it with --from 'git@your-remote:org/{repo}.git' (or the full URL),"
+    info "or set a default with CRUX_REMOTE in ~/.crux/config"
     exit 1
   fi
   URL="${TMPL//\{repo\}/$PROJECT-docs}"
-  git clone -q "$URL" "$DOCS" || die "no pude clonar desde $URL"
+  git clone -q "$URL" "$DOCS" || die "could not clone from $URL"
   ok "$PROJECT-docs"
 fi
 
 CONFIG="$DOCS/crux.json"
-[[ -f "$CONFIG" ]] || die "$PROJECT-docs no está adoptado (sin crux.json): clona el resto a mano"
+[[ -f "$CONFIG" ]] || die "$PROJECT-docs is not adopted (no crux.json): clone the rest by hand"
 
 PROFILE="$(json_get "$CONFIG" profile 2>/dev/null || echo "?")"
 
-# --- 2. Los repos que declara el contrato -------------------------------------
+# --- 2. The repos the contract declares -------------------------------------
 
-clonados=0; fallidos=(); sin_remoto=()
+cloned=0; failed_items=(); without_remote=()
 while IFS= read -r repo; do
   [[ -n "$repo" ]] || continue
-  # El nombre sale de crux.json y se concatena a una ruta. nombre_valido existe
-  # justo para esto y solo la llamaba add-repo, o sea la puerta de entrada; un
-  # contrato que llega clonado nunca pasaba por ahi.
-  nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
+  # The name comes from crux.json and is concatenated into a path. valid_name
+  # exists precisely for this and only add-repo called it, i.e. the entry
+  # point; a contract that arrives cloned never went through there.
+  valid_name "$repo" || { warn "invalid repo name in the contract: $repo"; continue; }
   if [[ -d "$ROOT/$repo/.git" ]]; then
-    info "$repo ya está"
+    info "$repo already there"
     continue
   fi
   url="$(remote_url "$CONFIG" "$repo" 2>/dev/null || true)"
   if [[ -z "$url" ]]; then
-    sin_remoto+=("$repo")
+    without_remote+=("$repo")
     continue
   fi
   if git clone -q "$url" "$ROOT/$repo" 2>/dev/null; then
     ok "$repo"
-    clonados=$((clonados + 1))
+    cloned=$((cloned + 1))
   else
-    fallidos+=("$repo  ($url)")
+    failed_items+=("$repo  ($url)")
   fi
 done < <(json_get "$CONFIG" repos 2>/dev/null || true)
 
-if [[ ${#sin_remoto[@]} -gt 0 ]]; then
+if [[ ${#without_remote[@]} -gt 0 ]]; then
   echo
-  warn "sin remoto declarado: ${sin_remoto[*]}"
-  info "añade \"remote\" a $PROJECT-docs/crux.json, o un override en remote.repos"
+  warn "no remote declared: ${without_remote[*]}"
+  info "add \"remote\" to $PROJECT-docs/crux.json, or an override in remote.repos"
 fi
 
-if [[ ${#fallidos[@]} -gt 0 ]]; then
+if [[ ${#failed_items[@]} -gt 0 ]]; then
   echo
-  warn "no pude clonar:"
-  for f in "${fallidos[@]}"; do info "$f"; done
-  # En un proyecto de cliente lo normal es que el código esté en otra
-  # organización, así que esto no es un fallo: es información.
+  warn "could not clone:"
+  for f in "${failed_items[@]}"; do info "$f"; done
+  # In a client project the code is normally in another organization, so this
+  # is not a failure: it is information.
   [[ "$PROFILE" == "client-repo" ]] \
-    && info "perfil $PROFILE: el código suele estar en el remoto del cliente, clónalo tú" \
-    || info "comprueba el nombre o los permisos"
+    && info "profile $PROFILE: the code usually lives on the client's remote, clone it yourself" \
+    || info "check the name or the permissions"
 fi
 
-# --- 3. Punteros y verificación ----------------------------------------------
+# --- 3. Pointers and verification ----------------------------------------------
 
 echo
 bash "$CRUX_HOME/bin/link.sh" "$DOCS"
@@ -125,25 +125,26 @@ bash "$CRUX_HOME/bin/link.sh" "$DOCS"
 echo
 bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" || true
 
-# Traer un proyecto y no engancharle nada deja una copia que parece lista y no lo
-# está: todo lo que sostiene el estándar es automático. Se hace con los repos ya
-# en disco, porque los hooks por repo los necesitan.
+# Bringing a project over without hooking anything leaves a copy that looks
+# ready and is not: everything that upholds the standard is automatic. It is
+# done with the repos already on disk, because the per-repo hooks need them.
 echo
 ( cd "$DOCS" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1 \
-  && ok "hooks enganchados" \
-  || warn "no pude enganchar los hooks — hazlo con 'crux hooks install' desde $PROJECT-docs"
+  && ok "hooks installed" \
+  || warn "could not install the hooks — do it with 'crux hooks install' from $PROJECT-docs"
 
-# Y por el mismo motivo los servidores MCP que el proyecto declare: sin esto la
-# máquina nueva se queda sin ellos y el doctor no tendría con qué compararlo.
+# And for the same reason the MCP servers the project declares: without this
+# the new machine goes without them and the doctor would have nothing to
+# compare against.
 if json_has "$DOCS/crux.json" 'mcp && Object.keys(root.mcp).length'; then
   ( cd "$DOCS" && bash "$CRUX_HOME/bin/mcp.sh" install ) >/dev/null 2>&1 \
-    && ok "servidores MCP escritos" \
-    || warn "no pude escribir los servidores MCP — hazlo con 'crux mcp install' desde $PROJECT-docs"
+    && ok "MCP servers written" \
+    || warn "could not write the MCP servers — do it with 'crux mcp install' from $PROJECT-docs"
 fi
 
 echo
-echo "listo: $ROOT"
+echo "done: $ROOT"
 if [[ -f "$DOCS/operations/machine-onboarding.md" ]]; then
-  info "credenciales y secretos del proyecto: $PROJECT-docs/operations/machine-onboarding.md"
+  info "project credentials and secrets: $PROJECT-docs/operations/machine-onboarding.md"
 fi
 exit 0

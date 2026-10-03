@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Adaptador de Claude para `crux skill test`: responde a la pregunta que llega
-# por la entrada estándar siguiendo solo la skill de $CRUX_SKILL_FILE.
+# Claude adapter for `crux skill test`: answers the question that arrives on
+# standard input following only the skill in $CRUX_SKILL_FILE.
 #
-# Contexto aislado a propósito: prompt de sistema propio, sin MCP y sin
-# herramientas, y desde un directorio temporal para que no salten los hooks de
-# ningún repo. Con el contexto normal, la base variaba cientos de tokens entre
-# llamadas y los hooks de cierre respondían en lugar de la skill.
+# Isolated context on purpose: own system prompt, no MCP and no tools, and from
+# a temporary directory so that no repo's hooks fire. With the normal context,
+# the baseline varied by hundreds of tokens between calls and the closing hooks
+# answered instead of the skill.
 set -u
-: "${CRUX_SKILL_FILE:?falta CRUX_SKILL_FILE}"
+: "${CRUX_SKILL_FILE:?CRUX_SKILL_FILE is missing}"
 cd "$(mktemp -d)" || exit 1
 exec claude -p --model "${CRUX_SKILL_MODEL:-haiku}" \
-  --system-prompt "Sigue esta skill al pie de la letra. No ejecutas nada: solo respondes qué harías.
+  --system-prompt "Follow this skill to the letter. You execute nothing: you only answer what you would do.
 
 $(cat "$CRUX_SKILL_FILE")" \
   --strict-mcp-config --tools ""

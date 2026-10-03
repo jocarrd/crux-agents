@@ -1,97 +1,100 @@
 ---
 name: repo-map
-description: Levantar en pocos minutos el mapa de un repo que no conoces o que llevas meses sin tocar: por dónde entra la ejecución, qué capas hay, dónde vive cada tipo de cosa, qué convenciones sigue y qué zonas conviene no tocar sin avisar. Usa al volver a un repo dormido, al entrar en uno ajeno, antes de una tarea grande, o cuando la documentación no basta para orientarte.
+description: Build, in a few minutes, the map of a repo you don't know or haven't touched in months: where execution enters, what layers exist, where each kind of thing lives, what conventions it follows and which zones are best not touched without warning. Use when returning to a dormant repo, entering someone else's, before a big task, or when the documentation isn't enough to orient you.
 ---
 
 # repo-map
 
-Orientarse antes de tocar. El objetivo es saber **dónde mirar** para la tarea
-que tienes delante, sin llegar a entender el repo entero.
+Orient yourself before touching anything. The goal is to know **where to look**
+for the task in front of you, without having to understand the whole repo.
 
-## Cuándo usar
+## When to use
 
-- Vuelves a un repo que no tocas hace meses.
-- Entras en uno que no has escrito tú.
-- Vas a acometer un cambio que cruza varias capas.
+- You return to a repo you haven't touched in months.
+- You enter one you didn't write.
+- You are about to take on a change that crosses several layers.
 
-## Cuándo no usar
+## When not to use
 
-- Ya tienes documentación del repo y la tarea es pequeña: léela y ya.
-- La tarea toca un fichero que ya conoces.
+- You already have documentation for the repo and the task is small: read it and
+  go.
+- The task touches a file you already know.
 
-Si el proyecto sigue el estándar, **empieza siempre por su documentación**
-(`repos/<repo>/`). Esto es para cuando esa documentación no existe, se ha
-quedado corta, o quieres verificarla contra la realidad.
+If the project follows the standard, **always start with its documentation**
+(`repos/<repo>/`). This is for when that documentation doesn't exist, has fallen
+short, or you want to verify it against reality.
 
-## El recorrido, en este orden
+## The walkthrough, in this order
 
-**1. Por dónde entra la ejecución.** Los puntos de entrada dicen más que
-cualquier README: el arranque del servidor, el enrutado, los comandos, las
-tareas programadas, los consumidores de cola. Todo lo demás cuelga de ahí.
+**1. Where execution enters.** Entry points say more than any README: server
+startup, routing, commands, scheduled jobs, queue consumers. Everything else
+hangs from there.
 
-**2. Cómo se levanta y cómo se prueba.** Los scripts declarados y la
-configuración de contenedores. Esto responde a la pregunta práctica: qué tengo
-que tener corriendo para ver algo.
+**2. How it is brought up and how it is tested.** The declared scripts and the
+container configuration. This answers the practical question: what do I need
+running to see anything.
 
-**3. La forma del árbol.** Qué carpetas de primer nivel hay y qué significa
-cada una. Aquí se ve si el proyecto sigue una arquitectura por capas, por
-dominios o ninguna.
+**3. The shape of the tree.** Which top-level folders exist and what each means.
+Here you see whether the project follows a layered architecture, a domain-based
+one, or none.
 
-**4. Dónde está el dominio.** El código que contiene las reglas de negocio, no
-el que habla con el mundo. Suele ser la parte más pequeña y la más importante:
-si tienes que entender solo una cosa, es esta.
+**4. Where the domain is.** The code that holds the business rules, not the code
+that talks to the world. It is usually the smallest part and the most important:
+if you have to understand only one thing, it is this.
 
-**5. Las fronteras.** Qué se llama por HTTP, qué comparte base de datos, qué
-depende de servicios externos. Las fronteras son donde viven los bugs
-interesantes y donde un cambio se propaga a otros repos.
+**5. The boundaries.** What is called over HTTP, what shares a database, what
+depends on external services. Boundaries are where the interesting bugs live and
+where a change propagates to other repos.
 
-**6. Las convenciones reales.** No las declaradas: las que se ven. Cómo se
-nombran los ficheros, cómo se gestionan los errores, cómo se inyectan las
-dependencias, dónde van los tests. Un cambio que las respete pasa
-desapercibido; uno que no, molesta a todo el mundo.
+**6. The real conventions.** Not the declared ones: the ones you can see. How
+files are named, how errors are handled, how dependencies are injected, where the
+tests go. A change that respects them goes unnoticed; one that doesn't annoys
+everyone.
 
-**7. Las zonas sensibles.** Lo que un cambio despistado rompe caro: migraciones,
-autenticación, contratos públicos, generación de artefactos, cualquier cosa con
-estado persistente. Merece la pena saber cuáles son antes de tocar, no después.
+**7. The sensitive zones.** What a careless change breaks at high cost:
+migrations, authentication, public contracts, artifact generation, anything with
+persistent state. It is worth knowing which they are before touching, not after.
 
-## Señales que conviene mirar en el historial
+## Signals worth looking at in the history
 
-- **Los ficheros que más cambian** suelen ser el corazón del repo, o su punto
-  de dolor.
-- **Los que no cambia nadie desde hace años** son o muy estables o código
-  muerto. Comprobar cuál de las dos cosas antes de fiarse.
-- **El tamaño de los commits recientes** dice cómo trabaja quien lo mantiene.
+- **The files that change the most** are usually the heart of the repo, or its
+  pain point.
+- **The ones nobody has changed in years** are either very stable or dead code.
+  Check which of the two before trusting them.
+- **The size of recent commits** says how whoever maintains it works.
 
-## Qué producir
+## What to produce
 
-Un resumen corto, no un tratado. Como máximo una página:
+A short summary, not a treatise. One page at most:
 
-- Qué hace el repo, en una línea.
-- Puntos de entrada, con su ruta.
-- Las tres o cuatro carpetas que importan y qué vive en cada una.
-- Cómo se levanta en local.
-- Fronteras hacia fuera.
-- Zonas sensibles.
-- **Lo que no has entendido**, dicho explícitamente.
+- What the repo does, in one line.
+- Entry points, with their path.
+- The three or four folders that matter and what lives in each.
+- How it is brought up locally.
+- Boundaries to the outside.
+- Sensitive zones.
+- **What you haven't understood**, stated explicitly.
 
-Ese último punto es el que más valor tiene y el que siempre se omite. Un mapa
-que finge cubrirlo todo es peor que uno que señala sus huecos.
+That last point is the most valuable and the one that is always omitted. A map
+that pretends to cover everything is worse than one that points out its gaps.
 
-## Después
+## Afterwards
 
-Si el repo pertenece a un proyecto bajo el estándar y esta información no
-estaba escrita, **escríbela**: `repos/<repo>/README.md` o el fichero temático
-que corresponda. Haber hecho el trabajo dos veces por no anotarlo la primera es
-exactamente lo que el estándar viene a evitar.
+If the repo belongs to a project under the standard and this information wasn't
+written down, **write it**: `repos/<repo>/README.md` or the relevant topic file.
+Having done the work twice for not noting it the first time is exactly what the
+standard exists to avoid.
 
 ## Anti-patterns
 
-- **Leer el código en orden alfabético.** Se sigue la ejecución, no el listado.
-- **Fiarse de la documentación sin verificar una sola cosa.** Un contraste
-  rápido con el código revela si está viva o momificada.
-- **Producir un mapa exhaustivo.** Nadie lo lee, incluido tú dentro de un mes.
+- **Reading the code in alphabetical order.** You follow the execution, not the
+  listing.
+- **Trusting the documentation without verifying a single thing.** A quick check
+  against the code reveals whether it is alive or mummified.
+- **Producing an exhaustive map.** Nobody reads it, including you a month from
+  now.
 
-## Relacionado
+## Related
 
-- `/promote-to-docs` — para que el mapa sobreviva a la sesión
-- `/root-cause` — para encontrar un fallo concreto
+- `/promote-to-docs`: so the map survives the session
+- `/root-cause`: to find a specific failure

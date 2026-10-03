@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Monta el antes y el después: antes a la izquierda, después a la derecha y una
-barra roja en medio, partido en tramos que se leen en un móvil.
+"""Builds the before and after: before on the left, after on the right and a
+red bar in the middle, split into chunks that read on a phone.
 
-    python3 compose.py <carpeta de capture.mjs> [--lang es|en] [--chunk 3000]
+    python3 compose.py <capture.mjs folder> [--lang es|en] [--chunk 3000]
 
-Empareja before/<nombre>.png con after/<nombre>.png y deja los montajes en
-<carpeta>/compare/<nombre>-<n>.webp. Requiere Pillow.
+Pairs before/<name>.png with after/<name>.png and leaves the montages in
+<folder>/compare/<name>-<n>.webp. Requires Pillow.
 """
 
 import argparse
@@ -25,8 +25,8 @@ DEVICE = {
     "es": [(600, "móvil"), (1000, "tablet"), (10**6, "escritorio")],
     "en": [(600, "mobile"), (1000, "tablet"), (10**6, "desktop")],
 }
-# Ancho de cada mitad según el dispositivo: el móvil a su tamaño real se lee en
-# un teléfono; el escritorio necesita más para que el texto no sea polvo.
+# Width of each half by device: mobile at its real size reads on a phone;
+# desktop needs more so the text is not dust.
 PANEL = [(600, 390), (1000, 450), (10**6, 900)]
 
 
@@ -53,7 +53,7 @@ def compose(before, after, out_base, label, lang, chunk, width_css):
     b = b.resize((panel, round(b.height * panel / b.width)))
     total = max(a.height, b.height)
     parts = max(1, -(-total // chunk))
-    # Un tramo final de pocos píxeles es solo pie de página: se suma al anterior.
+    # A final chunk of a few pixels is just footer: it is added to the previous one.
     if parts > 1 and total - (parts - 1) * chunk < chunk // 5:
         parts -= 1
     big, small = font(34), font(22)
@@ -92,13 +92,13 @@ def main():
     after_dir = os.path.join(args.dir, "after")
     out_dir = os.path.join(args.dir, "compare")
     if not os.path.isdir(before_dir) or not os.path.isdir(after_dir):
-        sys.exit(f"faltan {before_dir} o {after_dir}: primero capture.mjs")
+        sys.exit(f"missing {before_dir} or {after_dir}: run capture.mjs first")
     os.makedirs(out_dir, exist_ok=True)
 
     names = sorted(n for n in os.listdir(after_dir) if n.endswith(".png"))
     missing = [n for n in names if not os.path.exists(os.path.join(before_dir, n))]
     if missing:
-        sys.exit(f"sin antes para: {', '.join(missing)}")
+        sys.exit(f"no before for: {', '.join(missing)}")
     for index, name in enumerate(names, start=1):
         stem = name[:-4]
         match = re.match(r"(.+)-(\d+)$", stem)

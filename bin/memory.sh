@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# crux memory — qué sabe el agente que todavía no sabe el proyecto.
+# crux memory — what the agent knows that the project does not know yet.
 #
-#   crux memory           las memorias por tipo, y las que faltan en git
-#   crux memory --brief   una línea con lo que falta, para engancharlo a un hook
-#   crux memory --check   silencioso; sale 1 si alguna debería estar promovida
+#   crux memory           the memories by type, and the ones missing from git
+#   crux memory --brief   one line with what is missing, to hook into a hook
+#   crux memory --check   silent; exits 1 if any should have been promoted
 #
-# El estándar reparte por a quién pertenece cada cosa: `project` y `reference`
-# son del proyecto y van a git; `user` y `feedback` son de la persona y se
-# quedan en local. La regla estaba escrita desde el primer día y no la
-# comprobaba nadie, así que había análisis de proyecto viviendo en una sola
-# máquina. Esto es lo que la convierte en verificable.
+# The standard splits things by who each one belongs to: `project` and
+# `reference` belong to the project and go to git; `user` and `feedback`
+# belong to the person and stay local. The rule was written from day one and
+# nobody checked it, so there was project analysis living on a single machine.
+# This is what makes it verifiable.
 #
-# No decide dónde va cada memoria ni la mueve: eso es una decisión, y las
-# decisiones no las toma un hook. Dice qué falta y en qué docs repo va.
+# It does not decide where each memory goes nor move it: that is a decision,
+# and decisions are not made by a hook. It says what is missing and which docs
+# repo it goes in.
 
 set -euo pipefail
 
@@ -26,152 +27,153 @@ for arg in "$@"; do
   case "$arg" in
     --check) CHECK=true ;;
     --brief) BRIEF=true ;;
-    *) die "uso: crux memory [--brief|--check]" ;;
+    *) die "usage: crux memory [--brief|--check]" ;;
   esac
 done
 
-# --- Qué proyecto es cada ámbito ---------------------------------------------
+# --- Which project each scope is ---------------------------------------------
 #
-# Los agentes nombran el ámbito de una memoria con la ruta de trabajo y los
-# separadores cambiados por guiones. Deshacer eso es ambiguo —un proyecto puede
-# llevar guiones—, pero hacerlo no lo es: se calcula el nombre de cada proyecto
-# que existe y se busca cuál encaja. Gana el más largo, para que un proyecto no
-# se lleve las memorias de otro cuyo nombre empiece igual.
+# Agents name a memory's scope with the working path and the separators
+# replaced by hyphens. Undoing that is ambiguous —a project can contain
+# hyphens—, but doing it forwards is not: the name of every existing project
+# is computed and the one that fits is looked for. The longest wins, so that a
+# project does not take the memories of another whose name starts the same.
 
-raiz="$(projects_root)"
+root="$(projects_root)"
 
-# Sin raíz de proyectos toda memoria saldría "sin proyecto", que se lee igual
-# que "no pertenece a ninguno" y no lo es: se dice, y el listado sigue porque
-# detectar la fuga no depende de saber su destino.
-if [[ ! -d "$raiz" ]] && ! $CHECK && ! $BRIEF; then
-  warn "la raíz de proyectos no existe: $raiz"
-  info "sin ella no se puede decir a qué docs repo pertenece cada memoria"
+# Without a projects root every memory would come out as "no project", which
+# reads the same as "belongs to none" and is not: it is said, and the listing
+# goes on because detecting the leak does not depend on knowing its destination.
+if [[ ! -d "$root" ]] && ! $CHECK && ! $BRIEF; then
+  warn "the projects root does not exist: $root"
+  info "without it there is no telling which docs repo each memory belongs to"
   echo
 fi
 
-slug_de() { printf '%s' "$1" | tr '/.' '-'; }
+slug_of() { printf '%s' "$1" | tr '/.' '-'; }
 
-proyecto_de_ambito() {
-  local ambito="$1" mejor="" mejor_len=0 dir nombre slug
-  for dir in "$raiz"/*/; do
+project_of_scope() {
+  local scope_name="$1" best="" best_len=0 dir name slug
+  for dir in "$root"/*/; do
     [[ -d "$dir" ]] || continue
-    nombre="$(basename "$dir")"
-    [[ -d "$raiz/$nombre/$nombre-docs" ]] || continue
-    slug="$(slug_de "$raiz/$nombre")"
-    if [[ "$ambito" == "$slug" || "$ambito" == "$slug"-* ]] && (( ${#slug} > mejor_len )); then
-      mejor="$nombre"; mejor_len=${#slug}
+    name="$(basename "$dir")"
+    [[ -d "$root/$name/$name-docs" ]] || continue
+    slug="$(slug_of "$root/$name")"
+    if [[ "$scope_name" == "$slug" || "$scope_name" == "$slug"-* ]] && (( ${#slug} > best_len )); then
+      best="$name"; best_len=${#slug}
     fi
   done
-  echo "$mejor"
+  echo "$best"
 }
 
-# --- Recolección --------------------------------------------------------------
+# --- Collection --------------------------------------------------------------
 
-lineas=""
-adaptadores=0
+lines=""
+adapters=0
 for scan in "$CRUX_HOME"/adapters/*/memory-scan.sh; do
   [[ -f "$scan" ]] || continue
-  adaptadores=$((adaptadores + 1))
-  salida="$(bash "$scan")" || die "el adaptador $scan falló; no se puede afirmar que no haya memorias sin promover"
-  [[ -n "$salida" ]] && lineas+="$salida"$'\n'
+  adapters=$((adapters + 1))
+  output="$(bash "$scan")" || die "the adapter $scan failed; it cannot be asserted that there are no unpromoted memories"
+  [[ -n "$output" ]] && lines+="$output"$'\n'
 done
 
-(( adaptadores > 0 )) || die "no hay ningún adaptador de memoria en $CRUX_HOME/adapters"
+(( adapters > 0 )) || die "no memory adapter in $CRUX_HOME/adapters"
 
-total=0; ambitos=""; sin_promover=""; sin_tipo=""; ilegibles=""
-n_user=0; n_feedback=0; n_ambitos=0
+total=0; scopes=""; unpromoted=""; untyped=""; unreadable=""
+n_user=0; n_feedback=0; n_scopes=0
 
-while IFS=$'\t' read -r tipo ambito ruta; do
-  [[ -n "${tipo:-}" ]] || continue
+while IFS=$'\t' read -r kind scope_name path_value; do
+  [[ -n "${kind:-}" ]] || continue
   total=$((total + 1))
-  [[ "$ambitos" == *"|$ambito|"* ]] || { ambitos+="|$ambito|"; n_ambitos=$((n_ambitos + 1)); }
-  nombre="$(basename "$ruta" .md)"
+  [[ "$scopes" == *"|$scope_name|"* ]] || { scopes+="|$scope_name|"; n_scopes=$((n_scopes + 1)); }
+  name="$(basename "$path_value" .md)"
 
-  case "$tipo" in
+  case "$kind" in
     project|reference)
-      proyecto="$(proyecto_de_ambito "$ambito")"
-      # Sin proyecto no se adivina: se dice de qué ámbito salió, que es el dato
-      # que permite decidir. Deducirlo del nombre del fichero acertaría a veces
-      # y colocaría documentación en el proyecto equivocado el resto.
-      destino="${proyecto:+$proyecto-docs}"
-      sin_promover+="$tipo	$nombre	${destino:-ámbito $ambito}	$ruta"$'\n'
+      project="$(project_of_scope "$scope_name")"
+      # Without a project it is not guessed: it says which scope it came from,
+      # which is the datum that allows deciding. Deducing it from the file name
+      # would be right sometimes and would put documentation in the wrong
+      # project the rest.
+      target="${project:+$project-docs}"
+      unpromoted+="$kind	$name	${target:-scope $scope_name}	$path_value"$'\n'
       ;;
     user)     n_user=$((n_user + 1)) ;;
     feedback) n_feedback=$((n_feedback + 1)) ;;
     '?')
-      sin_tipo+="$nombre	$ruta"$'\n'
+      untyped+="$name	$path_value"$'\n'
       ;;
     '!')
-      ilegibles+="$ruta"$'\n'
+      unreadable+="$path_value"$'\n'
       ;;
     *)
-      sin_tipo+="$nombre ($tipo)	$ruta"$'\n'
+      untyped+="$name ($kind)	$path_value"$'\n'
       ;;
   esac
-done <<< "$lineas"
+done <<< "$lines"
 
-# Un fichero que está y no se puede leer no se cuenta como "nada que promover":
-# ese es justo el fallo que parece funcionar.
-if [[ -n "$ilegibles" ]]; then
-  err "hay memorias que no se pueden leer:"
-  printf '%s' "$ilegibles" | sed 's/^/      /'
+# A file that is there and cannot be read does not count as "nothing to
+# promote": that is exactly the failure that looks like it works.
+if [[ -n "$unreadable" ]]; then
+  err "there are memories that cannot be read:"
+  printf '%s' "$unreadable" | sed 's/^/      /'
   exit 1
 fi
 
-n_sin_promover=0
-[[ -n "$sin_promover" ]] && n_sin_promover=$(grep -c . <<< "${sin_promover%$'\n'}")
+n_unpromoted=0
+[[ -n "$unpromoted" ]] && n_unpromoted=$(grep -c . <<< "${unpromoted%$'\n'}")
 
 if $CHECK; then
-  (( n_sin_promover > 0 )) && exit 1
+  (( n_unpromoted > 0 )) && exit 1
   exit 0
 fi
 
 if $BRIEF; then
-  (( n_sin_promover > 0 )) || exit 0
-  muestra="$(cut -f2 <<< "${sin_promover%$'\n'}" | head -3 |
+  (( n_unpromoted > 0 )) || exit 0
+  sample="$(cut -f2 <<< "${unpromoted%$'\n'}" | head -3 |
     awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $0 }')"
-  (( n_sin_promover > 3 )) && muestra+=", +$((n_sin_promover - 3))"
-  warn "$n_sin_promover memorias de proyecto viven solo en esta máquina: $muestra"
-  info "crux memory las lista · /promote-to-docs las coloca en git"
+  (( n_unpromoted > 3 )) && sample+=", +$((n_unpromoted - 3))"
+  warn "$n_unpromoted project memories live only on this machine: $sample"
+  info "crux memory lists them · /promote-to-docs puts them in git"
   exit 1
 fi
 
-# --- Reporte -------------------------------------------------------------------
+# --- Report -------------------------------------------------------------------
 
-echo "memorias del agente — $total en $n_ambitos ámbito(s)"
+echo "agent memories — $total in $n_scopes scope(s)"
 echo
 
-if (( n_sin_promover > 0 )); then
-  warn "sin promover ($n_sin_promover)"
+if (( n_unpromoted > 0 )); then
+  warn "unpromoted ($n_unpromoted)"
   echo
-  printf '%s' "$sin_promover" | while IFS=$'\t' read -r tipo nombre destino _; do
-    printf '      %-10s %-34s → %s\n' "$tipo" "$nombre" "$destino"
+  printf '%s' "$unpromoted" | while IFS=$'\t' read -r kind name target _; do
+    printf '      %-10s %-34s → %s\n' "$kind" "$name" "$target"
   done
   echo
-  info "van a git: en local no sobreviven al cambio de máquina."
-  info "/promote-to-docs las coloca en el docs repo y borra la copia local."
-  if [[ "$sin_promover" == *"	ámbito "* ]]; then
-    info "las que salen con un ámbito en vez de un docs repo vienen de un"
-    info "directorio que no es ningún proyecto: el destino lo decides tú."
+  info "they go to git: locally they do not survive a change of machine."
+  info "/promote-to-docs puts them in the docs repo and deletes the local copy."
+  if [[ "$unpromoted" == *"	scope "* ]]; then
+    info "those shown with a scope instead of a docs repo come from a"
+    info "directory that is not any project: the destination is up to you."
   fi
   echo
 else
-  ok "nada sin promover"
+  ok "nothing unpromoted"
   echo
 fi
 
-if [[ -n "$sin_tipo" ]]; then
-  warn "sin tipo declarado ($(grep -c . <<< "${sin_tipo%$'\n'}"))"
-  printf '%s' "$sin_tipo" | while IFS=$'\t' read -r nombre _; do
-    printf '      %s\n' "$nombre"
+if [[ -n "$untyped" ]]; then
+  warn "no declared type ($(grep -c . <<< "${untyped%$'\n'}"))"
+  printf '%s' "$untyped" | while IFS=$'\t' read -r name _; do
+    printf '      %s\n' "$name"
   done
-  info "no se les asume ninguno: declara el tipo o bórralas."
+  info "none is assumed for them: declare the type or delete them."
   echo
 fi
 
-resumen=""
-(( n_user > 0 )) && resumen+="$n_user user"
-(( n_feedback > 0 )) && resumen+="${resumen:+ · }$n_feedback feedback"
-[[ -n "$resumen" ]] && info "locales por diseño: $resumen"
+summary=""
+(( n_user > 0 )) && summary+="$n_user user"
+(( n_feedback > 0 )) && summary+="${summary:+ · }$n_feedback feedback"
+[[ -n "$summary" ]] && info "local by design: $summary"
 
 exit 0

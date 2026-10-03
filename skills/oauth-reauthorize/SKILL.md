@@ -1,74 +1,74 @@
 ---
 name: oauth-reauthorize
-description: Regenerar el refresh_token de una integración OAuth cuando el flujo queda invalidado, levantando un servidor local efímero que captura el code del callback y guardando los tokens con permisos restrictivos. Usa cuando una integración empiece a fallar con invalid_grant al refrescar, tras revocar permisos manualmente, o al poner en marcha una máquina nueva donde falta el token.
+description: Regenerate the refresh_token of an OAuth integration when the flow has been invalidated, bringing up an ephemeral local server that captures the callback code and saving the tokens with restrictive permissions. Use when an integration starts failing with invalid_grant on refresh, after manually revoking permissions, or when setting up a new machine where the token is missing.
 ---
 
 # oauth-reauthorize
 
-Rehace desde cero el flujo OAuth de una integración de escritorio.
+Redoes from scratch the OAuth flow of a desktop integration.
 
-## Cuándo usar
+## When to use
 
-- Una integración devuelve `invalid_grant` al refrescar. El síntoma habitual
-  es que el proveedor caducó el grant por falta de uso, o alguien revocó los
-  permisos a mano.
-- Máquina nueva donde el fichero de cliente ya está pero falta el token.
-- Después de revocar el acceso manualmente.
+- An integration returns `invalid_grant` on refresh. The usual symptom is that the
+  provider expired the grant from lack of use, or someone revoked the permissions
+  by hand.
+- A new machine where the client file is already there but the token is missing.
+- After revoking access manually.
 
-## Precondiciones
+## Preconditions
 
-- Un `client.json` de tipo **escritorio** en el directorio de configuración de
-  la integración. El tipo importa, ver los gotchas.
-- La cuenta con la que vas a autorizar tiene realmente el acceso al recurso.
-- El puerto de loopback que vas a usar, libre.
+- A `client.json` of **desktop** type in the integration's configuration
+  directory. The type matters, see the gotchas.
+- The account you are going to authorize with actually has access to the
+  resource.
+- The loopback port you are going to use, free.
 
-## Uso
+## Usage
 
 ```bash
-python3 <directorio-de-esta-skill>/scripts/oauth-authorize.py \
-  --dir ~/.config/<servicio> \
+python3 <this-skill-directory>/scripts/oauth-authorize.py \
+  --dir ~/.config/<service> \
   --scope "<scope>"
 ```
 
-Opcionalmente `--port`, y `--auth-url`/`--token-url` si el proveedor no es
+Optionally `--port`, and `--auth-url`/`--token-url` if the provider is not
 Google.
 
-El script imprime la URL de consentimiento y abre el navegador. Tras aceptar,
-el proveedor redirige a `127.0.0.1`, el servidor efímero captura el `code`, lo
-intercambia por tokens y los escribe con permisos 600.
+The script prints the consent URL and opens the browser. After accepting, the
+provider redirects to `127.0.0.1`, the ephemeral server captures the `code`,
+exchanges it for tokens and writes them with 600 permissions.
 
-## Verificar
+## Verify
 
-No des por bueno el flujo porque el script diga OK: **haz una consulta real**
-contra la API con el `access_token` recién obtenido. Un token que se escribe
-pero no autoriza nada es el fallo más fácil de pasar por alto, y aparece
-cuando el scope pedido no es el que la API necesita.
+Don't accept the flow just because the script says OK: **make a real query**
+against the API with the freshly obtained `access_token`. A token that is written
+but authorizes nothing is the easiest failure to overlook, and it appears when
+the requested scope is not the one the API needs.
 
 ## Gotchas
 
-- **La respuesta no incluye `refresh_token`.** Ocurre cuando el proveedor
-  reutiliza un grant previo. El script ya pide consentimiento explícito y
-  acceso offline para forzar uno nuevo, pero el cinturón de seguridad es
-  **revocar el acceso a mano** en la página de permisos de la cuenta y repetir.
-- **`redirect_uri_mismatch`.** El cliente OAuth tiene que ser de tipo
-  escritorio: esos aceptan cualquier puerto bajo loopback por defecto. Los de
-  tipo web exigen registrar el URI exacto.
-- **El flujo fuera de banda está muerto.** El `urn:ietf:wg:oauth:2.0:oob` que
-  aparece en tutoriales antiguos lleva años deprecado. Siempre loopback.
-- **No uses puertos privilegiados** para el callback: obligan a root sin
-  ninguna ventaja.
-- **Una cuenta de servicio no sustituye esto** salvo que tenga permiso
-  explícito sobre el recurso. Que exista un fichero de credenciales de cuenta
-  de servicio en el directorio no significa que sirva; muchas integraciones
-  solo admiten OAuth de usuario.
+- **The response doesn't include `refresh_token`.** It happens when the provider
+  reuses a previous grant. The script already requests explicit consent and
+  offline access to force a new one, but the safety net is to **revoke access by
+  hand** on the account's permissions page and repeat.
+- **`redirect_uri_mismatch`.** The OAuth client has to be of desktop type: those
+  accept any port under loopback by default. Web-type ones require registering
+  the exact URI.
+- **The out-of-band flow is dead.** The `urn:ietf:wg:oauth:2.0:oob` that appears
+  in old tutorials has been deprecated for years. Always loopback.
+- **Don't use privileged ports** for the callback: they require root with no
+  advantage.
+- **A service account doesn't replace this** unless it has explicit permission on
+  the resource. A service-account credentials file existing in the directory
+  doesn't mean it works; many integrations only support user OAuth.
 
-## Después
+## Afterwards
 
-Los tokens son secretos: quedan con permisos 600 y **no se commitean**. Si el
-proyecto necesita renovarlos de forma periódica, eso vive en un script aparte,
-no aquí.
+The tokens are secrets: they stay with 600 permissions and are **not committed**.
+If the project needs to renew them periodically, that lives in a separate script,
+not here.
 
-## Relacionado
+## Related
 
-- La documentación operativa del proyecto, para los scopes y el recurso
-  concretos de cada integración
+- The project's operational documentation, for the concrete scopes and resource of
+  each integration

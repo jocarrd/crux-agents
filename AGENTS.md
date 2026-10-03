@@ -1,23 +1,23 @@
 # AGENTS.md — crux
 
-Este repo es el **kernel del sistema de trabajo con agentes**: el estándar, las
-skills transversales, las plantillas y el tooling que consumen todos los
-proyectos.
+This repo is the **kernel of the agent workflow system**: the standard, the
+cross-cutting skills, the templates and the tooling that every project
+consumes.
 
-No es la documentación de un proyecto. Es lo que los fabrica.
+It is not a project's documentation. It is what produces them.
 
 ---
 
-## Antes de tocar nada
+## Before touching anything
 
-| Vas a… | Lee |
-| ------ | --- |
-| Entender el sistema entero | `GUIA.md` — ocho niveles, de lo sencillo a lo profundo |
-| Cambiar una regla del estándar | `STANDARD.md` |
-| Escribir una skill nueva | La skill `/skill-creator`, y `STANDARD.md` §Skills |
-| Tocar un comando | `bin/<comando>.sh`, y la suite en `test/` |
+| You are about to… | Read |
+| ----------------- | ---- |
+| Understand the whole system | `GUIA.md` — eight levels, from simple to deep |
+| Change a rule of the standard | `STANDARD.md` |
+| Write a new skill | The `/skill-creator` skill, and `STANDARD.md` §Skills |
+| Touch a command | `bin/<command>.sh`, and the suite in `test/` |
 
-Y ejecuta la suite **antes y después**:
+And run the suite **before and after**:
 
 ```bash
 ./test/run.sh
@@ -25,141 +25,144 @@ Y ejecuta la suite **antes y después**:
 
 ---
 
-## Las cinco reglas que sostienen este repo
+## The five rules that hold this repo up
 
-Están puestas a propósito y hay tests que fallan si se rompen. No son estilo.
+They are there on purpose and tests fail if they are broken. They are not style.
 
-### 1. El kernel no nombra ningún proyecto
+### 1. The kernel names no project
 
-Ni en las skills, ni en las plantillas, ni en los perfiles, ni en el código. Si
-necesitas un dato concreto —una ruta, un puerto, un dispositivo, una
-credencial—, ese dato va en un **adaptador** dentro del proyecto, y aquí queda
-el procedimiento.
+Not in the skills, not in the templates, not in the profiles, not in the code.
+If you need a concrete piece of data —a path, a port, a device, a
+credential—, that data goes in an **adapter** inside the project, and what
+stays here is the procedure.
 
-Lo vigila `test_el_kernel_no_nombra_proyectos_concretos`. Es la regla que
-impide que crux vuelva a acoplarse a lo que documenta, que es exactamente cómo
-nació el problema que este repo resuelve.
+It is enforced by `test_kernel_names_no_concrete_projects`. This is the
+rule that stops crux from coupling itself again to what it documents, which is
+exactly how the problem this repo solves was born.
 
-### 2. Ninguna skill se ata a un agente concreto
+### 2. No skill is tied to a specific agent
 
-Se describe **la acción a realizar**, no quién la ejecuta ni con qué
-herramienta. Es lo que permite que el mismo `SKILL.md` sirva a varios agentes
-desde una sola fuente.
+A skill describes **the action to perform**, not who runs it or with what
+tool. That is what lets the same `SKILL.md` serve several agents from a single
+source.
 
-Lo vigila `test_ninguna_skill_del_kernel_nombra_herramientas_de_un_agente`.
+It is enforced by `test_no_kernel_skill_names_an_agents_tools`.
 
-### 3. Una librería no fija las opciones del shell
+### 3. A library does not set shell options
 
-`lib/common.sh` **no lleva `set -e`**. Quien la carga ya declaró las suyas, y
-pisárselas mata el script en silencio en el primer comando que devuelve algo
-distinto de cero.
+`lib/common.sh` **has no `set -e`**. Whoever loads it has already declared
+their own options, and overriding them kills the script silently at the first
+command that returns a non-zero status.
 
-Esto ya rompió la suite de tests y después `doctor`, las dos veces sin ningún
-mensaje. Si un comando devuelve códigos con significado, se recoge con
-`cmd || rc=$?`, nunca con `$?` a secas.
+This has already broken the test suite and then `doctor`, both times without a
+single message. If a command returns meaningful codes, collect them with
+`cmd || rc=$?`, never with a bare `$?`.
 
-Lo vigila `test_la_libreria_no_pisa_las_opciones_del_shell`.
+It is enforced by `test_the_library_does_not_override_shell_options`.
 
-### 4. Lo que se genera, se genera; no se mantiene a mano
+### 4. What is generated is generated; it is not maintained by hand
 
-Los punteros de los repos, el catálogo de skills del índice y las filas de las
-tablas se producen desde plantillas y contratos. Si te encuentras editando algo
-que un comando podría escribir, el arreglo es el comando, no el fichero.
+The repo pointers, the skill catalog in the index and the table rows are
+produced from templates and contracts. If you find yourself editing something
+a command could write, the fix is the command, not the file.
 
-### 5. Lo que no se puede leer se dice y se para
+### 5. What cannot be read is reported, and execution stops
 
-Un fichero ausente, ilegible o corrupto **no se convierte en un valor por
-defecto**. Se nombra y se detiene ahí.
+A missing, unreadable or corrupt file **is not turned into a default value**.
+It is named, and execution stops there.
 
-Seguir con el hueco es lo que produce el peor fallo posible: uno que parece
-funcionar. `doctor` leía `?` de un `crux.json` roto y acusaba a campos que sí
-estaban; `release` no encontraba consumidores y publicaba diciendo que no había
-nada que verificar; `finish` dejaba escapar el error del shell porque el
-`2>/dev/null` de un comando no tapa la redirección que hace el propio shell.
+Carrying on past the gap produces the worst possible failure: one that looks
+like it works. `doctor` read `?` from a broken `crux.json` and blamed fields
+that were in fact there; `release` found no consumers and published saying
+there was nothing to verify; `finish` let the shell error leak out because the
+`2>/dev/null` on a command does not cover the redirection the shell itself
+performs.
 
-`2>/dev/null` vale para preguntar si algo existe. No vale para leer algo que
-tiene que estar.
+`2>/dev/null` is fine for asking whether something exists. It is not fine for
+reading something that has to be there.
 
-Lo vigila `test_ningun_comando_disimula_un_fichero_que_no_puede_leer`.
+It is enforced by `test_no_command_hides_a_file_it_cannot_read`.
 
 ---
 
-## Cómo está organizado
+## How it is organized
 
 ```
-STANDARD.md    el estándar: qué cumple un proyecto
-GUIA.md        cómo funciona todo, de principio a fin
-install.sh     instalación por máquina
-bin/           un fichero por comando
-lib/           utilidades compartidas y verificadores
-templates/     lo que se materializa en cada proyecto
-profiles/      política verificable: multi-repo, client-repo
-adapters/      cómo se expone el kernel a cada agente
-skills/        los procedimientos transversales
-test/          la suite del propio kernel
+STANDARD.md    the standard: what a project must meet
+GUIA.md        how everything works, from start to finish
+install.sh     per-machine installation
+bin/           one file per command
+lib/           shared utilities and verifiers
+templates/     what gets materialized in each project
+profiles/      verifiable policy: multi-repo, client-repo
+adapters/      how the kernel is exposed to each agent
+skills/        the cross-cutting procedures
+test/          the kernel's own suite
 ```
 
 ---
 
-## Añadir algo
+## Adding something
 
-**Una skill**: `skills/<nombre>/SKILL.md` con frontmatter `name` y
-`description`. La descripción decide si se activa, así que lleva las
-situaciones y las palabras con las que aparece el problema. Después,
-`./install.sh` para materializarla.
+**A skill**: `skills/<name>/SKILL.md` with `name` and `description`
+frontmatter. The description decides whether it activates, so it carries the
+situations and the words in which the problem shows up. Then `./install.sh`
+to materialize it.
 
-**Un comando**: `bin/<nombre>.sh` más su entrada en el despachador `bin/crux`,
-en `README.md` y en la tabla de `STANDARD.md`. Y un caso en `test/cases/`.
+**A command**: `bin/<name>.sh` plus its entry in the `bin/crux` dispatcher, in
+`README.md` and in the table in `STANDARD.md`. And a case in `test/cases/`.
 
-**Una comprobación de `doctor`**: dentro de su bloque numerado, con `section` y
-`section_ok`. Y un test **en negativo**: que falle cuando debe. Una
-comprobación que no se ha visto fallar no sirve.
+**A `doctor` check**: inside its numbered block, with `section` and
+`section_ok`. And a **negative** test: one that fails when it should. A check
+that has never been seen to fail is worthless.
 
 ---
 
-## Cómo se prueba
+## How it is tested
 
 ```bash
-./test/run.sh            # todo
-./test/run.sh doctor     # los que casan con el patrón
+./test/run.sh            # everything
+./test/run.sh doctor     # those matching the pattern
 ```
 
-Cada caso corre en un sandbox aislado con los directorios de agentes
-redirigidos —incluidos los **ajustes** donde viven los hooks, que un caso
-devolvió a su sitio real con un `unset` y dejó la máquina con tres hooks
-apuntando a un worktree ya borrado—: la suite **no toca** `~/.claude`,
-`~/.codex` ni `~/Proyectos`. El runner lo comprueba después de cada caso. Si
-escribes un caso que necesite un `$HOME`, **pásalo por invocación**
-(`env HOME=... bash ...`), nunca con `export`: exportarlo se lo lleva el caso
-siguiente, que al borrarse el sandbox se queda apuntando a un directorio
-inexistente. El runner lo detecta y lo reporta como fallo, porque la primera
-vez que pasó colgó la suite entera sin un solo mensaje.
+Each case runs in an isolated sandbox with the agent directories redirected
+—including the **settings** where the hooks live, which one case put back in
+its real place with an `unset`, leaving the machine with three hooks pointing
+at an already deleted worktree—: the suite **does not touch** `~/.claude`,
+`~/.codex` or `~/Proyectos`. The runner checks this after every case. If you
+write a case that needs a `$HOME`, **pass it per invocation**
+(`env HOME=... bash ...`), never with `export`: exporting it carries it over
+to the next case, which, once the sandbox is deleted, is left pointing at a
+nonexistent directory. The runner detects this and reports it as a failure,
+because the first time it happened it hung the whole suite without a single
+message.
 
-Y calibra contra la realidad: cuando `code-health` se escribió, la primera
-versión daba 248 hallazgos de ruido en un repo real. Un informe que nadie lee
-dos veces no vale, aunque el código sea correcto.
+And calibrate against reality: when `code-health` was written, its first
+version produced 248 findings of noise on a real repo. A report nobody reads
+twice is worthless, even if the code is correct.
 
 ---
 
-## Reglas de trabajo
+## Working rules
 
-- **Versionado semver en `VERSION`.** Patch para redacción y arreglos; minor
-  para plantillas, skills o comprobaciones nuevas; major si cambia la
-  estructura obligatoria o el formato de `crux.json`.
-- **El estándar se cambia aquí primero**, y los proyectos se alinean con
-  `crux upgrade`. Ningún proyecto inventa su variante.
-- **Idioma**: documentación y descripciones en español; nombres, comandos,
-  ramas y **commits en inglés**; términos técnicos sin traducir. Lo del commit
-  lo comprueba el hook `commit-msg` que instala `crux hooks install`: la regla
-  llevaba escrita desde el primer día y el historial estaba entero en español.
-- **Conventional commits**, cuerpo de 100 caracteres por línea, sin
-  `Co-Authored-By` y sin emojis. **Ni el commit ni la descripción de una
-  propuesta de cambio llevan la firma de la herramienta**: nada de
-  `Co-Authored-By` ni de una línea de "generado con" al pie.
-  El hook `commit-msg` la borra sola, porque el agente la añade por instrucción
-  de su propio entorno y la regla escrita perdía esa pelea.
-- **La descripción de una propuesta dice qué cambia, qué se añade y por qué**,
-  más lo comprobado y lo pendiente. En un repo de cliente no nombra nuestro
-  tooling ni nuestros procesos internos. Ver `STANDARD.md` §8.
-- **Sin comentarios que narren lo que el código ya dice.** Solo el porqué que
-  no se deduce leyendo.
+- **Semver versioning in `VERSION`.** Patch for wording and fixes; minor for
+  new templates, skills or checks; major if the mandatory structure or the
+  `crux.json` format changes.
+- **The standard is changed here first**, and projects align with
+  `crux upgrade`. No project invents its own variant.
+- **Language**: everything in English — documentation, descriptions, names,
+  commands, branches and **commits**; technical terms are left as they are. The
+  commit rule is checked by the `commit-msg` hook that `crux hooks install`
+  installs: the rule had been written down since day one and the history was
+  entirely in Spanish.
+- **Conventional commits**, body lines of 100 characters, no `Co-Authored-By`
+  and no emojis. **Neither the commit nor the description of a change proposal
+  carries the tool's signature**: no `Co-Authored-By` and no "generated with"
+  line at the bottom. The `commit-msg` hook strips it automatically, because
+  the agent adds it on instruction from its own environment and the written
+  rule kept losing that fight.
+- **A proposal's description says what changes, what is added and why**, plus
+  what was verified and what is pending. In a client repo it does not name our
+  tooling or our internal processes. See `STANDARD.md` §8.
+- **No comments that narrate what the code already says.** Only the why that
+  cannot be deduced by reading.

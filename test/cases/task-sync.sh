@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-# Las tareas viajan entre máquinas en la rama crux/tasks del docs repo. Aquí
-# las dos máquinas son dos raíces de proyectos con su propio estado, clonadas
-# del mismo remoto local. Ver ADR-016.
+# Tasks travel between machines on the crux/tasks branch of the docs repo.
+# Here the two machines are two project roots with their own state, cloned
+# from the same local remote. See ADR-016.
 
-_tareas_dos_maquinas() {
+_tasks_two_machines() {
   git init -q --bare -b main "$SB/docs.git"
-  git clone -q "$SB/docs.git" "$SB/semilla" 2>/dev/null
-  git -C "$SB/semilla" commit -q --allow-empty -m "docs"
-  git -C "$SB/semilla" push -q origin main
+  git clone -q "$SB/docs.git" "$SB/seed" 2>/dev/null
+  git -C "$SB/seed" commit -q --allow-empty -m "docs"
+  git -C "$SB/seed" push -q origin main
   local m
   for m in A B; do
-    mkdir -p "$SB/$m/P/alfa"
-    git clone -q "$SB/docs.git" "$SB/$m/P/alfa/alfa-docs" 2>/dev/null
+    mkdir -p "$SB/$m/P/alpha"
+    git clone -q "$SB/docs.git" "$SB/$m/P/alpha/alpha-docs" 2>/dev/null
   done
   mkdir -p "$SB/bin"
   printf '#!/bin/sh\nexit 1\n' > "$SB/bin/gh"
@@ -20,408 +20,408 @@ _tareas_dos_maquinas() {
   export PATH="$SB/bin:$PATH"
 }
 
-# en <máquina> <comando...> — el comando con el entorno de esa máquina.
+# en <machine> <command...> — the command with that machine's environment.
 en() {
   local m="$1"; shift
   CRUX_PROJECTS_DIR="$SB/$m/P" CRUX_TASKS_DIR="$SB/$m/tasks" CRUX_STATE_DIR="$SB/$m/state" \
     CRUX_REGISTRY="$SB/$m/registry.json" "$@"
 }
 
-motor() { local m="$1"; shift; en "$m" node "$CRUX_HOME/lib/task.mjs" "$@"; }
-replica() { en "$1" node "$CRUX_HOME/lib/task-sync.mjs" sync --all; }
-registro() { echo "$SB/$1/tasks/alfa/$2.md"; }
+engine() { local m="$1"; shift; en "$m" node "$CRUX_HOME/lib/task.mjs" "$@"; }
+replicate() { en "$1" node "$CRUX_HOME/lib/task-sync.mjs" sync --all; }
+task_record() { echo "$SB/$1/tasks/alpha/$2.md"; }
 
-_nueva_tarea() {
-  # _nueva_tarea <máquina> <tarea> <siguiente paso>
-  motor "$1" ensure --file "$(registro "$1" "$2")" --task "$2" --project alfa --repo app --workspace "$2" >/dev/null
-  motor "$1" set --file "$(registro "$1" "$2")" --section "Siguiente paso" --text "$3"
+_new_task() {
+  # _new_task <machine> <task> <next step>
+  engine "$1" ensure --file "$(task_record "$1" "$2")" --task "$2" --project alpha --repo app --workspace "$2" >/dev/null
+  engine "$1" set --file "$(task_record "$1" "$2")" --section "Next step" --text "$3"
 }
 
-test_tareas_la_creada_en_una_maquina_llega_a_la_otra() {
+test_tasks_one_created_on_a_machine_reaches_the_other() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
+  _tasks_two_machines
+  _new_task A t1 "do X"
 
-  replica A >/dev/null
-  replica B >/dev/null
+  replicate A >/dev/null
+  replicate B >/dev/null
 
-  assert_file "$(registro B t1)" "la tarea llega"
-  assert_contains "$(cat "$(registro B t1)")" "hacer X" "con su siguiente paso"
-  assert_eq "" "$(git -C "$SB/A/P/alfa/alfa-docs" status --porcelain)" "el docs repo queda limpio"
-  assert_eq 1 "$(git -C "$SB/A/P/alfa/alfa-docs" rev-list --count main)" "y main no recibe ningún commit"
-  assert_contains "$(git -C "$SB/semilla" ls-remote origin)" "refs/heads/crux/tasks" "viaja en su propia rama"
+  assert_file "$(task_record B t1)" "the task arrives"
+  assert_contains "$(cat "$(task_record B t1)")" "do X" "with its next step"
+  assert_eq "" "$(git -C "$SB/A/P/alpha/alpha-docs" status --porcelain)" "the docs repo stays clean"
+  assert_eq 1 "$(git -C "$SB/A/P/alpha/alpha-docs" rev-list --count main)" "and main receives no commit"
+  assert_contains "$(git -C "$SB/seed" ls-remote origin)" "refs/heads/crux/tasks" "it travels on its own branch"
   teardown
 }
 
-test_tareas_un_cambio_en_la_otra_maquina_vuelve() {
+test_tasks_a_change_on_the_other_machine_comes_back() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
-  replica A >/dev/null; replica B >/dev/null
+  _tasks_two_machines
+  _new_task A t1 "do X"
+  replicate A >/dev/null; replicate B >/dev/null
 
-  motor B set --file "$(registro B t1)" --section "Siguiente paso" --text "hacer Y"
-  replica B >/dev/null
-  replica A >/dev/null
+  engine B set --file "$(task_record B t1)" --section "Next step" --text "do Y"
+  replicate B >/dev/null
+  replicate A >/dev/null
 
-  assert_contains "$(cat "$(registro A t1)")" "hacer Y" "lo cambiado en B llega a A"
-  assert_no_file "$SB/A/tasks/alfa/t1.conflicto-remota.md" "sin conflicto: solo cambió en un sitio"
+  assert_contains "$(cat "$(task_record A t1)")" "do Y" "what changed on B reaches A"
+  assert_no_file "$SB/A/tasks/alpha/t1.conflicto-remota.md" "no conflict: it changed in one place only"
   teardown
 }
 
-test_tareas_si_cambia_en_las_dos_gana_la_reciente_y_la_otra_se_guarda() {
+test_tasks_if_both_change_the_recent_wins_and_the_other_is_kept() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "base"
-  replica A >/dev/null; replica B >/dev/null
+  _tasks_two_machines
+  _new_task A t1 "base"
+  replicate A >/dev/null; replicate B >/dev/null
 
-  motor B set --file "$(registro B t1)" --section "Siguiente paso" --text "version de B"
-  replica B >/dev/null
-  motor A set --file "$(registro A t1)" --section "Siguiente paso" --text "version de A"
-  # A es la más reciente: el reloj de minutos empataría.
-  sed -i 's/^updated: .*/updated: 2099-01-01T00:00/' "$(registro A t1)"
+  engine B set --file "$(task_record B t1)" --section "Next step" --text "version of B"
+  replicate B >/dev/null
+  engine A set --file "$(task_record A t1)" --section "Next step" --text "version of A"
+  # A is the most recent: the minutes clock would tie.
+  sed -i 's/^updated: .*/updated: 2099-01-01T00:00/' "$(task_record A t1)"
 
   local out
-  out="$(replica A)"
-  assert_contains "$(cat "$(registro A t1)")" "version de A" "se queda la más reciente"
-  assert_contains "$(cat "$SB"/A/tasks/alfa/t1.conflicto-*.md 2>/dev/null)" "version de B" "la otra se guarda al lado"
-  assert_contains "$out" "cambió en las dos" "y se avisa"
+  out="$(replicate A)"
+  assert_contains "$(cat "$(task_record A t1)")" "version of A" "the most recent stays"
+  assert_contains "$(cat "$SB"/A/tasks/alpha/t1.conflicto-*.md 2>/dev/null)" "version of B" "the other is kept alongside"
+  assert_contains "$out" "changed on both" "and it is warned"
 
-  replica B >/dev/null
-  assert_contains "$(cat "$(registro B t1)")" "version de A" "la otra máquina acaba con la misma"
+  replicate B >/dev/null
+  assert_contains "$(cat "$(task_record B t1)")" "version of A" "the other machine ends up with the same"
   teardown
 }
 
-test_tareas_archivar_en_una_retira_la_abierta_en_la_otra() {
+test_tasks_archiving_on_one_retires_the_open_one_on_the_other() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
-  replica A >/dev/null; replica B >/dev/null
+  _tasks_two_machines
+  _new_task A t1 "do X"
+  replicate A >/dev/null; replicate B >/dev/null
 
-  motor A archive --file "$(registro A t1)" >/dev/null
-  replica A >/dev/null
-  replica B >/dev/null
+  engine A archive --file "$(task_record A t1)" >/dev/null
+  replicate A >/dev/null
+  replicate B >/dev/null
 
-  assert_no_file "$(registro B t1)" "la abierta desaparece en B"
-  assert_eq 1 "$(find "$SB/B/tasks/alfa/done" -name '*-t1.md' | wc -l | tr -d ' ')" "y llega la archivada"
-  replica A >/dev/null
-  assert_no_file "$(registro A t1)" "y B no se la devuelve a A como abierta"
+  assert_no_file "$(task_record B t1)" "the open one disappears on B"
+  assert_eq 1 "$(find "$SB/B/tasks/alpha/done" -name '*-t1.md' | wc -l | tr -d ' ')" "and the archived one arrives"
+  replicate A >/dev/null
+  assert_no_file "$(task_record A t1)" "and B does not send it back to A as open"
   teardown
 }
 
-test_tareas_se_publican_solas_al_escribirlas() {
+test_tasks_publish_themselves_when_written() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
+  _tasks_two_machines
 
-  CRUX_TASK_SYNC=1 _nueva_tarea A t1 "hacer X"
+  CRUX_TASK_SYNC=1 _new_task A t1 "do X"
   local _
   for _ in $(seq 1 50); do
-    git -C "$SB/semilla" ls-remote origin refs/heads/crux/tasks | grep -q . && break
+    git -C "$SB/seed" ls-remote origin refs/heads/crux/tasks | grep -q . && break
     sleep 0.2
   done
-  git -C "$SB/semilla" fetch -q origin crux/tasks 2>/dev/null
-  assert_contains "$(git -C "$SB/semilla" show FETCH_HEAD:t1.md 2>/dev/null)" "t1" \
-    "sin que nadie lance nada, la tarea está en el remoto"
+  git -C "$SB/seed" fetch -q origin crux/tasks 2>/dev/null
+  assert_contains "$(git -C "$SB/seed" show FETCH_HEAD:t1.md 2>/dev/null)" "t1" \
+    "with nobody launching anything, the task is on the remote"
   teardown
 }
 
-test_tareas_sin_red_quedan_pendientes_y_leave_lo_dice() {
+test_tasks_without_network_stay_pending_and_leave_says_so() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
-  mv "$SB/docs.git" "$SB/docs-lejos.git"
+  _tasks_two_machines
+  _new_task A t1 "do X"
+  mv "$SB/docs.git" "$SB/docs-away.git"
 
-  replica A >/dev/null
-  assert_contains "$(en A node "$CRUX_HOME/lib/task-sync.mjs" pending)" "alfa" "queda marcada como pendiente"
+  replicate A >/dev/null
+  assert_contains "$(en A node "$CRUX_HOME/lib/task-sync.mjs" pending)" "alpha" "it is marked as pending"
   local out rc
   out="$(en A crux sync --leave 2>&1)"; rc=$?
-  assert_contains "$out" "tareas sin publicar" "--leave la cuenta como atrapada"
-  assert_eq 1 "$rc" "y no deja irse"
+  assert_contains "$out" "unpublished tasks" "--leave counts it as stuck"
+  assert_eq 1 "$rc" "and does not let you leave"
 
-  mv "$SB/docs-lejos.git" "$SB/docs.git"
-  replica A >/dev/null
-  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" pending)" "con red, se publica y deja de estar pendiente"
+  mv "$SB/docs-away.git" "$SB/docs.git"
+  replicate A >/dev/null
+  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" pending)" "with network, it publishes and stops being pending"
   teardown
 }
 
-test_tareas_un_proyecto_puede_quedarse_fuera() {
+test_tasks_a_project_can_opt_out() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  echo '{"tasks":{"sync":false}}' > "$SB/A/P/alfa/alfa-docs/crux.json"
-  _nueva_tarea A t1 "hacer X"
+  _tasks_two_machines
+  echo '{"tasks":{"sync":false}}' > "$SB/A/P/alpha/alpha-docs/crux.json"
+  _new_task A t1 "do X"
 
-  replica A >/dev/null
-  assert_not_contains "$(git -C "$SB/semilla" ls-remote origin)" "crux/tasks" "con tasks.sync false no se publica nada"
+  replicate A >/dev/null
+  assert_not_contains "$(git -C "$SB/seed" ls-remote origin)" "crux/tasks" "with tasks.sync false nothing is published"
   teardown
 }
 
-test_tareas_dos_maquinas_publicando_a_la_vez_no_pierden_nada() {
+test_tasks_two_machines_publishing_at_once_lose_nothing() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A de-a "a"
-  _nueva_tarea B de-b "b"
+  _tasks_two_machines
+  _new_task A by-a "a"
+  _new_task B by-b "b"
 
-  replica A >/dev/null & replica B >/dev/null & wait
-  replica A >/dev/null; replica B >/dev/null
+  replicate A >/dev/null & replicate B >/dev/null & wait
+  replicate A >/dev/null; replicate B >/dev/null
 
-  assert_file "$(registro A de-b)" "A tiene la de B"
-  assert_file "$(registro B de-a)" "B tiene la de A"
+  assert_file "$(task_record A by-b)" "A has the one from B"
+  assert_file "$(task_record B by-a)" "B has the one from A"
   teardown
 }
 
-test_tareas_crux_sync_las_trae_al_llegar() {
+test_tasks_crux_sync_brings_them_on_arrival() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
-  replica A >/dev/null
+  _tasks_two_machines
+  _new_task A t1 "do X"
+  replicate A >/dev/null
 
   local out
   out="$(en B crux sync 2>&1)"
-  assert_contains "$out" "alfa: 1 tarea traída" "lo cuenta"
-  assert_file "$(registro B t1)" "y la trae"
+  assert_contains "$out" "alpha: 1 task pulled" "it says so"
+  assert_file "$(task_record B t1)" "and brings it"
   teardown
 }
 
-test_tareas_el_recordatorio_informa_sin_empujar() {
+test_tasks_the_reminder_informs_without_pushing() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea B t1 "hacer X"
-  _nueva_tarea B hecha "nada"
-  motor B status --file "$(registro B hecha)" --to merged
+  _tasks_two_machines
+  _new_task B t1 "do X"
+  _new_task B finished "nothing"
+  engine B status --file "$(task_record B finished)" --to merged
 
   local out
-  out="$(en B node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/B/P/alfa/alfa-docs")"
-  assert_contains "$out" "alfa/t1" "enseña la abierta"
-  assert_not_contains "$out" "alfa/hecha" "no la que ya está fusionada"
-  assert_contains "$out" "por si quieres retomar alguna" "a la persona se le ofrece"
-  assert_contains "$out" "No retomes ninguna" "y al agente se le dice que no empuje"
-  assert_contains "$out" "crux workspace resume t1" "con cómo retomarla aquí"
-  # Los mismos datos, estructurados, para quien los pinte de otra forma
-  assert_contains "$out" '"tareas":[{"tarea":"alfa/t1"' "el recordatorio trae las tareas como datos"
-  assert_contains "$out" '"aqui":false' "y dice si tienen espacio en esta máquina"
+  out="$(en B node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/B/P/alpha/alpha-docs")"
+  assert_contains "$out" "alpha/t1" "it shows the open one"
+  assert_not_contains "$out" "alpha/finished" "not the one already merged"
+  assert_contains "$out" "in case you want to resume one" "the person is offered it"
+  assert_contains "$out" "Do not resume any" "and the agent is told not to push"
+  assert_contains "$out" "crux workspace resume t1" "with how to resume it here"
+  # The same data, structured, for whoever renders it another way
+  assert_contains "$out" '"tasks":[{"task":"alpha/t1"' "the reminder brings the tasks as data"
+  assert_contains "$out" '"here":false' "and says whether they have a workspace on this machine"
 
-  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P")" "sin tareas, no dice nada"
+  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P")" "with no tasks, it says nothing"
   teardown
 }
 
-test_tareas_el_hook_de_inicio_las_ensena_y_calla_al_compactar() {
+test_tasks_the_start_hook_shows_them_and_stays_quiet_on_compact() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
+  _tasks_two_machines
+  _new_task A t1 "do X"
   local hook="$CRUX_HOME/adapters/claude/hooks/session-sync.sh" out
 
-  out="$(printf '{"source":"startup","session_id":"s1","cwd":"%s"}' "$SB/A/P/alfa" \
+  out="$(printf '{"source":"startup","session_id":"s1","cwd":"%s"}' "$SB/A/P/alpha" \
     | en A env HOME="$SB" bash "$hook")"
-  assert_contains "$out" '"systemMessage"' "la persona lo ve directamente"
-  assert_contains "$out" "alfa/t1" "con la tarea"
-  assert_contains "$out" '"additionalContext"' "y el agente sabe que ya se le enseñó"
+  assert_contains "$out" '"systemMessage"' "the person sees it directly"
+  assert_contains "$out" "alpha/t1" "with the task"
+  assert_contains "$out" '"additionalContext"' "and the agent knows it was already shown"
 
-  out="$(printf '{"source":"compact","session_id":"s1","cwd":"%s"}' "$SB/A/P/alfa" \
+  out="$(printf '{"source":"compact","session_id":"s1","cwd":"%s"}' "$SB/A/P/alpha" \
     | en A env HOME="$SB" bash "$hook")"
-  assert_eq "" "$out" "al compactar no interrumpe"
+  assert_eq "" "$out" "on compact it does not interrupt"
   teardown
 }
 
-test_tareas_volver_a_una_sesion_parada_las_recuerda_una_vez() {
+test_tasks_returning_to_an_idle_session_reminds_once() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
+  _tasks_two_machines
+  _new_task A t1 "do X"
   local hook="$CRUX_HOME/adapters/claude/hooks/session-idle.sh" out
   local msg
-  msg="$(printf '{"session_id":"s2","cwd":"%s"}' "$SB/A/P/alfa")"
+  msg="$(printf '{"session_id":"s2","cwd":"%s"}' "$SB/A/P/alpha")"
 
   out="$(printf '%s' "$msg" | en A env HOME="$SB" bash "$hook")"
-  assert_eq "" "$out" "el primer mensaje no dice nada: ya habló el inicio de sesión"
+  assert_eq "" "$out" "the first message says nothing: session start already spoke"
 
-  touch -d "5 hours ago" "$SB/A/state/sesiones/s2"
+  touch -d "5 hours ago" "$SB/A/state/sessions/s2"
   out="$(printf '%s' "$msg" | en A env HOME="$SB" bash "$hook")"
-  assert_contains "$out" "Vuelves a esta sesión" "tras horas parada, lo dice"
-  assert_contains "$out" "alfa/t1" "y recuerda la tarea"
+  assert_contains "$out" "You are back in this session" "after hours idle, it says so"
+  assert_contains "$out" "alpha/t1" "and reminds the task"
 
   out="$(printf '%s' "$msg" | en A env HOME="$SB" bash "$hook")"
-  assert_eq "" "$out" "el mensaje siguiente ya no repite"
+  assert_eq "" "$out" "the next message no longer repeats"
   teardown
 }
 
-test_tareas_resume_abre_el_espacio_con_la_rama_y_la_tarea_de_la_otra_maquina() {
+test_tasks_resume_opens_the_workspace_with_the_branch_and_task_of_the_other_machine() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
+  _tasks_two_machines
   git init -q --bare -b main "$SB/app.git"
-  git clone -q "$SB/app.git" "$SB/semilla-app" 2>/dev/null
-  git -C "$SB/semilla-app" commit -q --allow-empty -m "app"
-  git -C "$SB/semilla-app" push -q origin main
+  git clone -q "$SB/app.git" "$SB/seed-app" 2>/dev/null
+  git -C "$SB/seed-app" commit -q --allow-empty -m "app"
+  git -C "$SB/seed-app" push -q origin main
   local m
-  for m in A B; do git clone -q "$SB/app.git" "$SB/$m/P/alfa/app" 2>/dev/null; done
+  for m in A B; do git clone -q "$SB/app.git" "$SB/$m/P/alpha/app" 2>/dev/null; done
 
-  # En A: el espacio, un commit en su rama, subido, y el siguiente paso anotado.
-  ( cd "$SB/A/P/alfa/app" && en A crux workspace new t2 ) >/dev/null 2>&1
-  local ws="$SB/A/P/alfa/app-ws-t2"
-  echo "a medias" > "$ws/fichero"
-  git -C "$ws" add fichero && git -C "$ws" commit -q -m "wip"
+  # On A: the workspace, a commit on its branch, pushed, and the next step noted.
+  ( cd "$SB/A/P/alpha/app" && en A crux workspace new t2 ) >/dev/null 2>&1
+  local ws="$SB/A/P/alpha/app-ws-t2"
+  echo "half done" > "$ws/file"
+  git -C "$ws" add file && git -C "$ws" commit -q -m "wip"
   git -C "$ws" push -q -u origin HEAD 2>/dev/null
-  motor A set --file "$(registro A t2)" --section "Siguiente paso" --text "seguir con el fichero"
-  replica A >/dev/null
+  engine A set --file "$(task_record A t2)" --section "Next step" --text "carry on with the file"
+  replicate A >/dev/null
 
-  # En B: traer las tareas y retomarla.
-  replica B >/dev/null
+  # On B: bring the tasks and resume it.
+  replicate B >/dev/null
   local out
   out="$(en B crux workspace resume t2 2>&1)"
-  assert_file "$SB/B/P/alfa/app-ws-t2/fichero" "el espacio llega con el trabajo de la rama"
-  assert_contains "$out" "seguir con el fichero" "y enseña el siguiente paso"
-  assert_contains "$(cat "$(registro B t2)")" "seguir con el fichero" "la tarea no empieza vacía"
-  assert_eq 1 "$(grep -c 'app=' "$(registro B t2)")" "la rama queda anotada una sola vez"
+  assert_file "$SB/B/P/alpha/app-ws-t2/file" "the workspace arrives with the branch work"
+  assert_contains "$out" "carry on with the file" "and shows the next step"
+  assert_contains "$(cat "$(task_record B t2)")" "carry on with the file" "the task does not start empty"
+  assert_eq 1 "$(grep -c 'app=' "$(task_record B t2)")" "the branch is noted only once"
   teardown
 }
 
-test_tareas_resume_dice_que_hacer_si_la_tarea_no_esta() {
+test_tasks_resume_says_what_to_do_if_the_task_is_missing() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
+  _tasks_two_machines
   local out rc
-  out="$(en B crux workspace resume no-existe 2>&1)"; rc=$?
-  assert_eq 1 "$rc" "falla"
-  assert_contains "$out" "crux sync" "y dice que traiga las tareas"
+  out="$(en B crux workspace resume does-not-exist 2>&1)"; rc=$?
+  assert_eq 1 "$rc" "it fails"
+  assert_contains "$out" "crux sync" "and tells to bring the tasks"
   teardown
 }
 
-test_tareas_reutilizar_el_nombre_de_una_archivada_no_la_borra() {
+test_tasks_reusing_an_archived_name_does_not_delete_it() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A release "la vieja"
-  sed -i 's/^created: .*/created: 2026-01-01T10:00/' "$(registro A release)"
-  replica A >/dev/null; replica B >/dev/null
-  motor A archive --file "$(registro A release)" >/dev/null
-  replica A >/dev/null; replica B >/dev/null
+  _tasks_two_machines
+  _new_task A release "the old one"
+  sed -i 's/^created: .*/created: 2026-01-01T10:00/' "$(task_record A release)"
+  replicate A >/dev/null; replicate B >/dev/null
+  engine A archive --file "$(task_record A release)" >/dev/null
+  replicate A >/dev/null; replicate B >/dev/null
 
-  # Meses después, otra tarea con el mismo nombre.
-  _nueva_tarea B release "la nueva"
-  replica B >/dev/null; replica A >/dev/null
-  assert_file "$(registro A release)" "la nueva llega a la otra máquina"
-  assert_file "$(registro B release)" "y sigue viva donde nació"
-  assert_contains "$(cat "$(registro A release)")" "la nueva" "y es la nueva, no la vieja"
+  # Months later, another task with the same name.
+  _new_task B release "the new one"
+  replicate B >/dev/null; replicate A >/dev/null
+  assert_file "$(task_record A release)" "the new one reaches the other machine"
+  assert_file "$(task_record B release)" "and stays alive where it was born"
+  assert_contains "$(cat "$(task_record A release)")" "the new one" "and it is the new one, not the old one"
   teardown
 }
 
-test_tareas_publican_con_firma_obligatoria_y_un_pre_push_que_falla() {
+test_tasks_publish_with_mandatory_signing_and_a_failing_pre_push() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  local docs="$SB/A/P/alfa/alfa-docs"
+  _tasks_two_machines
+  local docs="$SB/A/P/alpha/alpha-docs"
   git -C "$docs" config commit.gpgSign true
   git -C "$docs" config gpg.program false
   printf '#!/bin/sh\nexit 1\n' > "$docs/.git/hooks/pre-push"
   chmod +x "$docs/.git/hooks/pre-push"
-  _nueva_tarea A t1 "hacer X"
+  _new_task A t1 "do X"
 
-  replica A >/dev/null
-  assert_contains "$(git -C "$SB/semilla" ls-remote origin)" "crux/tasks" \
-    "la rama interna se publica aunque el repo exija firma y su pre-push lo rechace todo"
+  replicate A >/dev/null
+  assert_contains "$(git -C "$SB/seed" ls-remote origin)" "crux/tasks" \
+    "the internal branch is published even if the repo demands signing and its pre-push rejects everything"
   teardown
 }
 
-test_tareas_sin_remoto_leave_avisa_de_que_se_quedan() {
+test_tasks_without_remote_leave_warns_they_stay() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  git -C "$SB/A/P/alfa/alfa-docs" remote remove origin
-  _nueva_tarea A t1 "hacer X"
+  _tasks_two_machines
+  git -C "$SB/A/P/alpha/alpha-docs" remote remove origin
+  _new_task A t1 "do X"
 
   local out
   out="$(en A crux sync --leave 2>&1)"
-  assert_contains "$out" "las tareas se quedan en esta máquina" "lo dice"
+  assert_contains "$out" "the tasks stay on this machine" "it says so"
   teardown
 }
 
-test_tareas_el_recordatorio_menciona_los_conflictos_pendientes() {
+test_tasks_the_reminder_mentions_pending_conflicts() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "hacer X"
-  echo "copia" > "$SB/A/tasks/alfa/t1.conflicto-remota.md"
+  _tasks_two_machines
+  _new_task A t1 "do X"
+  echo "copy" > "$SB/A/tasks/alpha/t1.conflicto-remota.md"
 
-  assert_contains "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P/alfa")" \
-    "copia de un conflicto" "no se quedan olvidadas"
+  assert_contains "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P/alpha")" \
+    "of a conflict between machines" "they are not forgotten"
   teardown
 }
 
-test_tareas_las_ya_fusionadas_se_cierran_solas_y_no_se_recuerdan() {
+test_tasks_already_merged_close_themselves_and_are_not_reminded() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  # Un gh que dice que cualquier propuesta está fusionada.
+  _tasks_two_machines
+  # A gh that says any proposal is merged.
   printf '#!/bin/sh\n[ "$1 $2" = "pr view" ] && echo MERGED && exit 0\nexit 1\n' > "$SB/bin/gh"
-  _nueva_tarea A vieja "nada"
-  motor A meta --file "$(registro A vieja)" --key pr --value "https://github.com/o/r/pull/1"
-  motor A status --file "$(registro A vieja)" --to proposed
+  _new_task A old "nothing"
+  engine A meta --file "$(task_record A old)" --key pr --value "https://github.com/o/r/pull/1"
+  engine A status --file "$(task_record A old)" --to proposed
 
   local out
   out="$(en A crux sync 2>&1)"
-  assert_contains "$out" "ya estaba fusionada" "lo cuenta"
-  assert_no_file "$(registro A vieja)" "sin espacio aquí, se archiva"
-  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P/alfa")" "y el recordatorio ya no la saca"
+  assert_contains "$out" "already merged" "it says so"
+  assert_no_file "$(task_record A old)" "with no workspace here, it is archived"
+  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P/alpha")" "and the reminder no longer shows it"
 
-  replica B >/dev/null
-  assert_no_file "$(registro B vieja)" "a la otra máquina no llega como abierta"
+  replicate B >/dev/null
+  assert_no_file "$(task_record B old)" "it does not reach the other machine as open"
   teardown
 }
 
-test_tareas_no_se_publican_en_un_repo_publico() {
+test_tasks_are_not_published_in_a_public_repo() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  # El remoto parece de GitHub y gh dice que es público.
-  local docs="$SB/A/P/alfa/alfa-docs"
-  git -C "$docs" remote set-url origin "git@github.com:o/alfa-docs.git"
-  git -C "$docs" config "url.$SB/docs.git.insteadOf" "git@github.com:o/alfa-docs.git"
+  _tasks_two_machines
+  # The remote looks like GitHub and gh says it is public.
+  local docs="$SB/A/P/alpha/alpha-docs"
+  git -C "$docs" remote set-url origin "git@github.com:o/alpha-docs.git"
+  git -C "$docs" config "url.$SB/docs.git.insteadOf" "git@github.com:o/alpha-docs.git"
   printf '#!/bin/sh\n[ "$1 $2" = "repo view" ] && echo PUBLIC && exit 0\nexit 1\n' > "$SB/bin/gh"
-  _nueva_tarea A t1 "nota privada"
+  _new_task A t1 "private note"
 
   local out
   out="$(en A crux sync --leave 2>&1)"
-  assert_not_contains "$(git -C "$SB/semilla" ls-remote origin)" "crux/tasks" "no se publica nada"
-  assert_contains "$out" "su repo es público" "y se dice por qué se quedan aquí"
+  assert_not_contains "$(git -C "$SB/seed" ls-remote origin)" "crux/tasks" "nothing is published"
+  assert_contains "$out" "its repo is public" "and it says why they stay here"
 
   echo '{"tasks":{"sync":true}}' > "$docs/crux.json"
-  replica A >/dev/null
-  assert_contains "$(git -C "$SB/semilla" ls-remote origin)" "crux/tasks" "declarado en el contrato, sí"
+  replicate A >/dev/null
+  assert_contains "$(git -C "$SB/seed" ls-remote origin)" "crux/tasks" "declared in the contract, yes"
   teardown
 }
 
-test_tareas_la_reciclada_en_el_mismo_minuto_sobrevive() {
+test_tasks_one_recycled_in_the_same_minute_survives() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A t1 "la vieja"
-  replica A >/dev/null; replica B >/dev/null
-  motor A archive --file "$(registro A t1)" >/dev/null
-  replica A >/dev/null
+  _tasks_two_machines
+  _new_task A t1 "the old one"
+  replicate A >/dev/null; replicate B >/dev/null
+  engine A archive --file "$(task_record A t1)" >/dev/null
+  replicate A >/dev/null
   sleep 1
-  _nueva_tarea A t1 "la nueva"
-  replica A >/dev/null; replica B >/dev/null
-  assert_contains "$(cat "$(registro B t1)" 2>/dev/null)" "la nueva" "una tarea nueva con el nombre de una recién archivada no se borra"
+  _new_task A t1 "the new one"
+  replicate A >/dev/null; replicate B >/dev/null
+  assert_contains "$(cat "$(task_record B t1)" 2>/dev/null)" "the new one" "a new task with the name of a just archived one is not deleted"
   teardown
 }
 
-test_tareas_la_fusionada_en_la_otra_maquina_se_reconcilia_al_llegar() {
+test_tasks_one_merged_on_the_other_machine_reconciles_on_arrival() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
+  _tasks_two_machines
   printf '#!/bin/sh\n[ "$1 $2" = "pr view" ] && echo MERGED && exit 0\nexit 1\n' > "$SB/bin/gh"
-  _nueva_tarea A t1 "x"
-  replica A >/dev/null; replica B >/dev/null
-  # A la propone; B aún no lo sabe.
-  motor A meta --file "$(registro A t1)" --key pr --value "https://github.com/o/r/pull/2"
-  motor A status --file "$(registro A t1)" --to proposed
-  replica A >/dev/null
+  _new_task A t1 "x"
+  replicate A >/dev/null; replicate B >/dev/null
+  # A proposes it; B does not know yet.
+  engine A meta --file "$(task_record A t1)" --key pr --value "https://github.com/o/r/pull/2"
+  engine A status --file "$(task_record A t1)" --to proposed
+  replicate A >/dev/null
 
   en B crux sync >/dev/null 2>&1
-  assert_no_file "$(registro B t1)" "B la trae, ve que está fusionada y la archiva en la misma ronda"
+  assert_no_file "$(task_record B t1)" "B brings it, sees it is merged and archives it in the same round"
   teardown
 }
 
-test_tareas_con_la_rama_ya_traida_desfasada_no_se_pisa_nada() {
+test_tasks_with_a_stale_already_fetched_branch_nothing_is_overwritten() {
   sandbox >/dev/null
-  _tareas_dos_maquinas
-  _nueva_tarea A de-a "a"
-  replica A >/dev/null
-  # B no ha traído nada y confía en lo que tiene: su publicación choca con la de
-  # A, y la segunda vuelta tiene que ir a buscarla.
-  _nueva_tarea B de-b "b"
+  _tasks_two_machines
+  _new_task A by-a "a"
+  replicate A >/dev/null
+  # B has fetched nothing and trusts what it has: its publication clashes with
+  # the one from A, and the second pass has to go and fetch it.
+  _new_task B by-b "b"
   en B node "$CRUX_HOME/lib/task-sync.mjs" sync --all --fetched >/dev/null
-  replica A >/dev/null
+  replicate A >/dev/null
 
-  assert_file "$(registro B de-a)" "B acaba con la de A"
-  assert_file "$(registro A de-b)" "y A con la de B"
+  assert_file "$(task_record B by-a)" "B ends up with the one from A"
+  assert_file "$(task_record A by-b)" "and A with the one from B"
   teardown
 }

@@ -1,78 +1,79 @@
 #!/usr/bin/env bash
-# crux workspace — espacios de trabajo aislados para trabajar en paralelo.
+# crux workspace — isolated workspaces to work in parallel.
 #
-#   crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>] [--task <tarea>] [--goal "<texto>"] [--force]
+#   crux workspace new <name> [--repo <dir>] [--base <branch>] [--branch <branch>] [--task <task>] [--goal "<text>"] [--force]
 #   crux workspace list
-#   crux workspace resume <tarea> [--project <p>]   la retoma aquí desde el remoto
-#   crux workspace adopt <ruta> [--task <tarea>]   registra un worktree hecho a mano
-#   crux workspace heal [--quiet]                  retira entradas sin carpeta ni rama
-#   crux workspace finish <nombre> [--title "..."]
-#   crux workspace merge <nombre> [--yes]
-#   crux workspace rm <nombre> [--include-ignored]
+#   crux workspace resume <task> [--project <p>]   resumes it here from the remote
+#   crux workspace adopt <path> [--task <task>]    registers a hand-made worktree
+#   crux workspace heal [--quiet]                  removes entries with no folder or branch
+#   crux workspace finish <name> [--title "..."]
+#   crux workspace merge <name> [--yes]
+#   crux workspace rm <name> [--include-ignored]
 #   crux workspace gc [--yes] [--include-disk]
 #   crux workspace prune [--yes]
 #
-# Un worktree de git aísla los ficheros, pero no el runtime: dos agentes sobre
-# el mismo repo siguen peleándose por el puerto, la base de datos y el .env.
-# Esto reparte también esos recursos, con un registro para que dos espacios no
-# cojan el mismo hueco.
+# A git worktree isolates files, but not the runtime: two agents on the same
+# repo still fight over the port, the database and the .env. This shares out
+# those resources too, with a registry so two workspaces do not take the same
+# slot.
 #
-# El worktree se crea como hermano del repo original, no en un directorio
-# aparte: es lo que hace que los punteros de contexto relativos
-# (../<project>-docs/) sigan resolviendo dentro del espacio aislado.
+# The worktree is created as a sibling of the original repo, not in a separate
+# directory: that is what makes the relative context pointers
+# (../<project>-docs/) keep resolving inside the isolated workspace.
 
 set -euo pipefail
 
 CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}"
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
-# Trae REGISTRY, LOCK y el cerrojo. Va despues de common.sh, de la que usa
-# die y warn.
+# Brings in REGISTRY, LOCK and the lock. It goes after common.sh, whose die and
+# warn it uses.
 source "$CRUX_HOME/lib/registry.sh"
 
-RESERVA=""
-WORKTREE_HECHO=0
+RESERVED=""
+WORKTREE_DONE=0
 
-al_salir() {
+on_exit() {
   trap - EXIT
-  if [[ -n "$RESERVA" ]]; then
-    # Con el worktree ya en disco la entrada se queda: es lo que deja
-    # retirarlo con 'workspace rm' en vez de a mano.
-    if [[ $WORKTREE_HECHO -eq 1 ]]; then
-      warn "espacio '$RESERVA' a medias — retíralo con: crux workspace rm $RESERVA"
+  if [[ -n "$RESERVED" ]]; then
+    # With the worktree already on disk the entry stays: that is what allows
+    # removing it with 'workspace rm' instead of by hand.
+    if [[ $WORKTREE_DONE -eq 1 ]]; then
+      warn "workspace '$RESERVED' half-done — remove it with: crux workspace rm $RESERVED"
     else
-      borra_del_registro "$RESERVA"
+      remove_from_registry "$RESERVED"
     fi
-    RESERVA=""
+    RESERVED=""
   fi
   unlock
 }
-trap al_salir EXIT
-trap 'al_salir; exit 130' INT
-trap 'al_salir; exit 143' TERM
+trap on_exit EXIT
+trap 'on_exit; exit 130' INT
+trap 'on_exit; exit 143' TERM
 
-# El cerrojo lo suelta el sistema al morir el proceso, así que un Ctrl-C duro o
-# un OOM no dejan el registro bloqueado. Donde no hay flock —macOS— se usa un
-# mkdir con el pid dentro, que sí necesita reconocer al dueño muerto.
+# The lock is released by the system when the process dies, so a hard Ctrl-C
+# or an OOM do not leave the registry blocked. Where there is no flock —macOS—
+# a mkdir with the pid inside is used, which does need to recognise a dead
+# owner.
 
-# --- Configuración de workspace del proyecto --------------------------------
+# --- The project's workspace configuration ----------------------------------
 #
-# Sale de la sección "workspace" de crux.json. Sin ella se usan los valores por
-# defecto, que solo reparten puertos.
+# It comes from the "workspace" section of crux.json. Without it the defaults
+# are used, which only share out ports.
 
 load_config() {
-  # load_config <docs-repo> <nombre-del-repo>
+  # load_config <docs-repo> <repo-name>
   #
-  # Un proyecto multi-repo no tiene un único juego de variables: el front, el
-  # backend y el panel necesitan cosas distintas. La sección por repo se
-  # solapa sobre la común.
+  # A multi-repo project does not have a single set of variables: the front,
+  # the backend and the panel need different things. The per-repo section is
+  # overlaid on the common one.
   local docs="$1" repo="$2"
   PORT_BASE=3000; PORTS_PER_SLOT=10; ENV_FILE=""; ENV_TEMPLATE="{}"
-  SETUP_CMD=""; TEARDOWN_CMD=""; INSTALAR="true"
+  SETUP_CMD=""; TEARDOWN_CMD=""; INSTALL_DEPS="true"
   local cfg="$docs/crux.json"
   [[ -f "$cfg" ]] || return 0
-  local motivo
-  motivo="$(json_valido "$cfg")" || die "el contrato de $(basename "$docs") es ilegible — $motivo"
+  local reason
+  reason="$(valid_json "$cfg")" || die "the contract of $(basename "$docs") is unreadable — $reason"
 
   eval "$(node -e '
     const fs = require("fs");
@@ -88,12 +89,12 @@ load_config() {
     console.log(`SETUP_CMD=${q(r.setup || w.setup || "")}`);
     console.log(`TEARDOWN_CMD=${q(r.teardown || w.teardown || "")}`);
     const inst = r.install !== undefined ? r.install : w.install;
-    console.log(`INSTALAR=${q(inst === false ? "false" : "true")}`);
+    console.log(`INSTALL_DEPS=${q(inst === false ? "false" : "true")}`);
   ' "$cfg" "$repo" 2>/dev/null)"
 }
 
 substitute() {
-  # substitute <texto> — aplica {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}
+  # substitute <text> — applies {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}
   node -e '
     const [text, slot, port0, name, branch] = process.argv.slice(1);
     let v = text.replace(/\{\{SLOT\}\}/g, slot)
@@ -105,51 +106,52 @@ substitute() {
 
 cmd_new() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace new <nombre> [--repo <dir>] [--base <rama>] [--branch <rama>]"
-  nombre_valido "$name" \
-    || die "nombre de espacio inválido: '$name' — letras, números, punto, guion y guion bajo, sin barras ni '..'"
+  [[ -n "$name" ]] || die "usage: crux workspace new <name> [--repo <dir>] [--base <branch>] [--branch <branch>]"
+  valid_name "$name" \
+    || die "invalid workspace name: '$name' — letters, numbers, dot, hyphen and underscore, no slashes or '..'"
 
-  local repo="$PWD" base="" rama_pedida="" FORZAR=0 tarea="" objetivo=""
+  local repo="$PWD" base="" requested_branch="" FORCE=0 task="" goal=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) repo="$2"; shift 2 ;;
-      --task) tarea="$2"; shift 2 ;;
-      --goal) objetivo="$2"; shift 2 ;;
+      --task) task="$2"; shift 2 ;;
+      --goal) goal="$2"; shift 2 ;;
       --base) base="$2"; shift 2 ;;
-      --branch) rama_pedida="$2"; shift 2 ;;
-      --force) FORZAR=1; shift ;;
-      *) die "opción desconocida: $1" ;;
+      --branch) requested_branch="$2"; shift 2 ;;
+      --force) FORCE=1; shift ;;
+      *) die "unknown option: $1" ;;
     esac
   done
 
   repo="$(cd "$repo" && git rev-parse --show-toplevel 2>/dev/null)" \
-    || die "no es un repo git: $repo"
+    || die "not a git repo: $repo"
   local repo_name; repo_name="$(basename "$repo")"
   local parent; parent="$(dirname "$repo")"
   local path="$parent/${repo_name}-ws-${name}"
-  # Una tarea que toca varios repos abre un espacio en cada uno con el mismo
-  # --task: todos escriben en el mismo registro.
-  tarea="${tarea:-$name}"
-  nombre_valido "$tarea" || die "nombre de tarea inválido: '$tarea'"
-  local proyecto; proyecto="$(project_name_for "$repo")"
+  # A task touching several repos opens a workspace in each with the same
+  # --task: all of them write to the same record.
+  task="${task:-$name}"
+  valid_name "$task" || die "invalid task name: '$task'"
+  local project; project="$(project_name_for "$repo")"
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
-  local perfil=""
+  local profile=""
   [[ -n "$docs" && -f "$docs/crux.json" ]] &&
-    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
+    profile="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
 
-  # El nombre del espacio es local; el de la rama se publica. En el repo de un
-  # cliente `ws/<lo-que-sea>` enseña nuestra nomenclatura y, si el nombre va en
-  # otro idioma, también eso. Por eso el patrón lo decide el perfil y la rama se
-  # puede fijar aparte.
-  local patron branch
-  patron="$(perfil_get "$perfil" "$docs" branch.pattern "ws/{{name}}")"
-  branch="${rama_pedida:-${patron//\{\{name\}\}/$name}}"
+  # The workspace name is local; the branch name is published. In a client's
+  # repo `ws/<whatever>` shows our naming and, if the name is in another
+  # language, that too. That is why the profile decides the pattern and the
+  # branch can be set separately.
+  local pattern branch
+  pattern="$(profile_get "$profile" "$docs" branch.pattern "ws/{{name}}")"
+  branch="${requested_branch:-${pattern//\{\{name\}\}/$name}}"
 
-  [[ -e "$path" ]] && die "ya existe $path"
+  [[ -e "$path" ]] && die "$path already exists"
 
-  # Si otro espacio ya trabaja sobre este repo, decirlo: es la señal de que hay
-  # otra sesión viva y de que conviene repartir por superficie.
-  otros="$(node -e '
+  # If another workspace is already working on this repo, say so: it is the
+  # sign that there is another live session and that it is worth splitting by
+  # surface.
+  others="$(node -e '
     const fs = require("fs");
     try {
       const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -157,24 +159,25 @@ cmd_new() {
       process.stdout.write(m.map(([n, w]) => `${n} (${w.branch})`).join(", "));
     } catch {}
   ' "$REGISTRY" "$repo" 2>/dev/null || true)"
-  [[ -n "$otros" ]] && warn "ya hay trabajo abierto sobre $repo_name: $otros"
+  [[ -n "$others" ]] && warn "there is already open work on $repo_name: $others"
 
-  # `pointers.write: false` dice que la documentación del estándar no se escribe
-  # en el repo de código; no dice que no se pueda trabajar en él. Una rama local
-  # no es documentación, y en un repo de cliente desarrollar es justo el encargo:
-  # bloquearlo impedía la tarea sin proteger nada. Se avisa de a dónde va la
-  # documentación y se sigue. Lo que sí sale hacia el cliente es `finish`, que
-  # empuja la rama y abre la propuesta: ahí es donde toca mirar.
-  if [[ -n "$perfil" ]]; then
-    local escribe
-    escribe="$(perfil_get "$perfil" "$docs" pointers.write true)"
-    if [[ "$escribe" != "true" && $FORZAR -eq 0 ]]; then
-      warn "perfil $perfil: la rama y el worktree son locales y tuyos, pero la"
-      warn "documentación de $repo_name va a $(basename "$docs"), no al repo del cliente"
-      # La rama sí acaba publicada en su repositorio al proponer el cambio.
-      if [[ -z "$rama_pedida" ]]; then
-        warn "y la rama '$branch' se verá en su repositorio, con nuestra nomenclatura"
-        info "para elegirla: crux workspace new $name --branch fix/<algo-en-ingles>"
+  # `pointers.write: false` says the standard's documentation is not written in
+  # the code repo; it does not say you cannot work in it. A local branch is not
+  # documentation, and in a client repo developing is precisely the job:
+  # blocking it prevented the task without protecting anything. A warning says
+  # where the documentation goes and carries on. What does go out to the client
+  # is `finish`, which pushes the branch and opens the proposal: that is where
+  # to look.
+  if [[ -n "$profile" ]]; then
+    local writes
+    writes="$(profile_get "$profile" "$docs" pointers.write true)"
+    if [[ "$writes" != "true" && $FORCE -eq 0 ]]; then
+      warn "profile $profile: the branch and the worktree are local and yours, but the"
+      warn "documentation of $repo_name goes to $(basename "$docs"), not to the client's repo"
+      # The branch does end up published in their repository when the change is proposed.
+      if [[ -z "$requested_branch" ]]; then
+        warn "and the branch '$branch' will be seen in their repository, with our naming"
+        info "to choose it: crux workspace new $name --branch fix/<something-in-english>"
       fi
     fi
   fi
@@ -186,112 +189,114 @@ cmd_new() {
   registry_init
   with_lock
 
-  # El registro esta indexado por nombre de espacio, asi que dos repos con el
-  # mismo nombre se pisaban: la entrada del primero desaparecia, su worktree
-  # quedaba vivo pero invisible, sus puertos volvian a repartirse, y un gc
-  # posterior lo borraba del disco por "no conocerlo". cmd_adopt ya comprobaba
-  # esto; cmd_new no.
-  local ocupado
-  ocupado="$(node -e '
+  # The registry is indexed by workspace name, so two repos with the same name
+  # trampled each other: the first one's entry disappeared, its worktree stayed
+  # alive but invisible, its ports were shared out again, and a later gc
+  # deleted it from disk for "not knowing it". cmd_adopt already checked this;
+  # cmd_new did not.
+  local taken
+  taken="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const w = (r.workspaces || {})[process.argv[2]];
     process.stdout.write(w ? w.path : "");
-  ' "$REGISTRY" "$name")" || ocupado=""
-  if [[ -n "$ocupado" ]]; then
+  ' "$REGISTRY" "$name")" || taken=""
+  if [[ -n "$taken" ]]; then
     unlock
-    err "ya hay un espacio llamado $name en el registro"
-    info "está en $ocupado"
-    info "usa otro nombre, o retíralo con: crux workspace rm $name"
+    err "there is already a workspace called $name in the registry"
+    info "it is at $taken"
+    info "use another name, or remove it with: crux workspace rm $name"
     exit 1
   fi
 
-  # El menor slot con su rango libre: cada proyecto parte de su propia base, y
-  # dos slots distintos de dos proyectos daban el mismo rango de puertos.
+  # The lowest slot with its range free: each project starts from its own base,
+  # and two different slots of two projects gave the same port range.
   local slot
   slot="$(node -e '
     const fs = require("fs");
     const [file, base, perSlot] = process.argv.slice(1);
     const r = JSON.parse(fs.readFileSync(file, "utf8"));
     const ws = Object.values(r.workspaces);
-    const ocupados = new Set(ws.map((w) => w.slot));
-    const rangos = ws.map((w) => w.ports).filter(Array.isArray);
-    const libre = (s) => {
-      if (ocupados.has(s)) return false;
-      const desde = Number(base) + s * Number(perSlot);
-      const hasta = desde + Number(perSlot) - 1;
-      return !rangos.some(([a, b]) => desde <= b && a <= hasta);
+    const takenSlots = new Set(ws.map((w) => w.slot));
+    const ranges = ws.map((w) => w.ports).filter(Array.isArray);
+    const isFree = (s) => {
+      if (takenSlots.has(s)) return false;
+      const since = Number(base) + s * Number(perSlot);
+      const until = since + Number(perSlot) - 1;
+      return !ranges.some(([a, b]) => since <= b && a <= until);
     };
     let s = 0;
-    while (!libre(s)) {
-      if (++s > 9999) { process.stderr.write("no queda ningún rango de puertos libre\n"); process.exit(1); }
+    while (!isFree(s)) {
+      if (++s > 9999) { process.stderr.write("no free port range left\n"); process.exit(1); }
     }
     process.stdout.write(String(s));
-  ' "$REGISTRY" "$PORT_BASE" "$PORTS_PER_SLOT")" || die "no pude repartir un slot"
+  ' "$REGISTRY" "$PORT_BASE" "$PORTS_PER_SLOT")" || die "could not allocate a slot"
 
   SLOT="$slot"; PORT0=$((PORT_BASE + slot * PORTS_PER_SLOT))
   WS_NAME="$name"; WS_BRANCH="$branch"
 
-  # Reservado el slot, el cerrojo se suelta: instalar y levantar el setup tarda
-  # minutos, y con el registro cogido el segundo espacio no arrancaba.
-  escribir_espacio "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT" "$tarea" "$proyecto"
-  RESERVA="$name"
+  # Once the slot is reserved, the lock is released: installing and running the
+  # setup takes minutes, and with the registry held the second workspace did
+  # not start.
+  write_workspace "$name" "$slot" "$repo" "$path" "$branch" "$PORT0" "$PORTS_PER_SLOT" "$task" "$project"
+  RESERVED="$name"
   unlock
 
-  # Si se pidio una base concreta y no sale, se para: el camino de respaldo
-  # creaba la rama desde HEAD sin decirlo, y se trabajaban horas sobre la base
-  # equivocada. El 2>/dev/null del primer intento tiraba ademas el motivo.
+  # If a specific base was requested and it fails, it stops: the fallback path
+  # created the branch from HEAD without saying so, and hours were worked on
+  # the wrong base. The 2>/dev/null of the first attempt also threw away the
+  # reason.
   if [[ -n "$base" ]]; then
     git -C "$repo" show-ref --verify --quiet "refs/heads/$base" ||
       git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$base" ||
-      die "la base $base no existe en $repo"
+      die "the base $base does not exist in $repo"
     git -C "$repo" worktree add -b "$branch" "$path" "$base" >/dev/null \
-      || die "no pude crear el worktree desde $base"
+      || die "could not create the worktree from $base"
   else
     git -C "$repo" worktree add "$path" "$branch" >/dev/null 2>&1 \
       || git -C "$repo" worktree add -b "$branch" "$path" >/dev/null \
-      || die "no pude crear el worktree"
+      || die "could not create the worktree"
   fi
 
-  WORKTREE_HECHO=1
-  ok "worktree $path (rama $branch)"
+  WORKTREE_DONE=1
+  ok "worktree $path (branch $branch)"
 
-  local registro_tarea resultado
-  registro_tarea="$(task_dir)/$proyecto/$tarea.md"
-  if resultado="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$registro_tarea" \
-      --task "$tarea" --project "$proyecto" --repo "$repo_name" --workspace "$name" 2>&1)"; then
-    [[ "$resultado" == joined ]] && ok "se une a la tarea '$tarea' ya abierta" || ok "tarea '$tarea' registrada"
-    node "$CRUX_HOME/lib/task.mjs" branch --file "$registro_tarea" --repo "$repo_name" --branch "$branch" \
-      >/dev/null 2>&1 || warn "no pude anotar la rama en la tarea: sin ella, otra máquina no sabrá retomarla"
-    local idioma_tarea
-    idioma_tarea="$(idioma_commits "$perfil" "$docs")"
-    info "escríbela en '$idioma_tarea': de ella sale la descripción de la propuesta"
-    [[ -z "$objetivo" ]] || node "$CRUX_HOME/lib/task.mjs" set --file "$registro_tarea" \
-      --section Objetivo --text "$objetivo" >/dev/null 2>&1 || warn "no pude anotar el objetivo"
+  local task_record_file result
+  task_record_file="$(task_dir)/$project/$task.md"
+  if result="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$task_record_file" \
+      --task "$task" --project "$project" --repo "$repo_name" --workspace "$name" 2>&1)"; then
+    [[ "$result" == joined ]] && ok "joins the already open task '$task'" || ok "task '$task' registered"
+    node "$CRUX_HOME/lib/task.mjs" branch --file "$task_record_file" --repo "$repo_name" --branch "$branch" \
+      >/dev/null 2>&1 || warn "could not note the branch in the task: without it, another machine will not know how to resume it"
+    local task_language
+    task_language="$(commit_language "$profile" "$docs")"
+    info "write it in '$task_language': the proposal description comes from it"
+    [[ -z "$goal" ]] || node "$CRUX_HOME/lib/task.mjs" set --file "$task_record_file" \
+      --section Objective --text "$goal" >/dev/null 2>&1 || warn "could not note the objective"
   else
-    warn "no pude escribir el registro de la tarea: $resultado"
+    warn "could not write the task record: $result"
   fi
 
-  # La marca de la puerta es estado local. Va al exclude del directorio común,
-  # que es el que git respeta desde un worktree, y así no toca el .gitignore
-  # versionado —que en un repo ajeno no se puede tocar.
-  local comun; comun="$(git -C "$path" rev-parse --git-common-dir 2>/dev/null || echo "")"
-  if [[ -n "$comun" ]]; then
-    mkdir -p "$comun/info"
-    local ignorar
-    for ignorar in .crux-ship .crux-visual ${ENV_FILE:+"$ENV_FILE"}; do
-      grep -qxF "$ignorar" "$comun/info/exclude" 2>/dev/null \
-        || echo "$ignorar" >> "$comun/info/exclude"
+  # The gate marker is local state. It goes to the common directory's exclude,
+  # which is the one git honours from a worktree, and so it does not touch the
+  # versioned .gitignore —which in someone else's repo cannot be touched.
+  local common; common="$(git -C "$path" rev-parse --git-common-dir 2>/dev/null || echo "")"
+  if [[ -n "$common" ]]; then
+    mkdir -p "$common/info"
+    local to_ignore
+    for to_ignore in .crux-ship .crux-visual ${ENV_FILE:+"$ENV_FILE"}; do
+      grep -qxF "$to_ignore" "$common/info/exclude" 2>/dev/null \
+        || echo "$to_ignore" >> "$common/info/exclude"
     done
   fi
 
-  # Un fichero sin versionar no viaja con `git worktree add`: sin esto, el
-  # puntero local del perfil de cliente se quedaba en el repo original.
-  if [[ -n "$docs" && "$(perfil_get "$perfil" "$docs" pointers.local false)" == "true" ]]; then
-    local rc_puntero=0
-    escribir_puntero_local "$path" "$(basename "$docs")" || rc_puntero=$?
-    if [[ $rc_puntero -eq 0 ]]; then
-      ok "$PUNTERO_LOCAL apunta a $(basename "$docs") (excluido de git)"
+  # An unversioned file does not travel with `git worktree add`: without this,
+  # the client profile's local pointer stayed in the original repo.
+  if [[ -n "$docs" && "$(profile_get "$profile" "$docs" pointers.local false)" == "true" ]]; then
+    local rc_pointer=0
+    write_local_pointer "$path" "$(basename "$docs")" || rc_pointer=$?
+    if [[ $rc_pointer -eq 0 ]]; then
+      ok "$LOCAL_POINTER points to $(basename "$docs") (excluded from git)"
     fi
   fi
 
@@ -306,31 +311,31 @@ cmd_new() {
       const lines = Object.entries(JSON.parse(tmplRaw)).map(([k, v]) => `${k}=${subst(v)}`);
       fs.writeFileSync(file, lines.join("\n") + "\n");
     ' "$path/$ENV_FILE" "$ENV_TEMPLATE" "$slot" "$PORT0" "$name" "$branch"
-    ok "$ENV_FILE con el slot $slot (puertos desde $PORT0)"
+    ok "$ENV_FILE with slot $slot (ports from $PORT0)"
   else
-    info "sin configuración de workspace para $repo_name: solo se reserva el rango de puertos"
+    info "no workspace configuration for $repo_name: only the port range is reserved"
   fi
 
-  # Un worktree comparte el historial pero no los ficheros ignorados, así que
-  # nace sin dependencias instaladas. Sin esto, el primer comando que se ejecuta
-  # en el espacio falla con un error que no dice qué pasa.
-  if [[ "$INSTALAR" != "false" ]]; then
-    local instalar=""
-    if   [[ -f "$path/pnpm-lock.yaml" ]];   then instalar="pnpm install --prefer-offline"
-    elif [[ -f "$path/package-lock.json" ]]; then instalar="npm ci --prefer-offline"
-    elif [[ -f "$path/yarn.lock" ]];        then instalar="yarn install"
-    elif [[ -f "$path/bun.lockb" ]];        then instalar="bun install"
-    elif [[ -f "$path/uv.lock" ]];          then instalar="uv sync"
-    elif [[ -f "$path/poetry.lock" ]];      then instalar="poetry install"
-    elif [[ -f "$path/requirements.txt" ]]; then instalar="pip install -r requirements.txt"
-    elif [[ -f "$path/go.mod" ]];           then instalar="go mod download"
-    elif [[ -f "$path/Cargo.toml" ]];       then instalar="cargo fetch"
+  # A worktree shares the history but not ignored files, so it is born without
+  # dependencies installed. Without this, the first command run in the
+  # workspace fails with an error that does not say what is wrong.
+  if [[ "$INSTALL_DEPS" != "false" ]]; then
+    local install=""
+    if   [[ -f "$path/pnpm-lock.yaml" ]];   then install="pnpm install --prefer-offline"
+    elif [[ -f "$path/package-lock.json" ]]; then install="npm ci --prefer-offline"
+    elif [[ -f "$path/yarn.lock" ]];        then install="yarn install"
+    elif [[ -f "$path/bun.lockb" ]];        then install="bun install"
+    elif [[ -f "$path/uv.lock" ]];          then install="uv sync"
+    elif [[ -f "$path/poetry.lock" ]];      then install="poetry install"
+    elif [[ -f "$path/requirements.txt" ]]; then install="pip install -r requirements.txt"
+    elif [[ -f "$path/go.mod" ]];           then install="go mod download"
+    elif [[ -f "$path/Cargo.toml" ]];       then install="cargo fetch"
     fi
-    if [[ -n "$instalar" ]]; then
-      if ( cd "$path" && eval "$instalar" >/dev/null 2>&1 ); then
-        ok "dependencias instaladas (${instalar%% *})"
+    if [[ -n "$install" ]]; then
+      if ( cd "$path" && eval "$install" >/dev/null 2>&1 ); then
+        ok "dependencies installed (${install%% *})"
       else
-        warn "no pude instalar las dependencias: hazlo con '$instalar'"
+        warn "could not install the dependencies: do it with '$install'"
       fi
     fi
   fi
@@ -338,175 +343,179 @@ cmd_new() {
   if [[ -n "$SETUP_CMD" ]]; then
     local cmd; cmd="$(substitute "$SETUP_CMD")"
     if ( cd "$path" && eval "$cmd" ); then
-      ok "setup ejecutado"
+      ok "setup executed"
     else
-      warn "el setup falló — el espacio existe, pero revisa sus recursos"
+      warn "the setup failed — the workspace exists, but check its resources"
     fi
   fi
 
-  RESERVA=""
+  RESERVED=""
 
   echo
-  ok "espacio '$name' listo"
-  info "slot $slot · puertos $PORT0-$((PORT0 + PORTS_PER_SLOT - 1))"
+  ok "workspace '$name' ready"
+  info "slot $slot · ports $PORT0-$((PORT0 + PORTS_PER_SLOT - 1))"
   info "cd $path"
 }
 
 cmd_finish() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace finish <nombre> [--title \"...\"] [--skip-gate]"
+  [[ -n "$name" ]] || die "usage: crux workspace finish <name> [--title \"...\"] [--skip-gate]"
 
-  local titulo="" SKIP_GATE=0
+  local title="" SKIP_GATE=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --title) titulo="$2"; shift 2 ;;
+      --title) title="$2"; shift 2 ;;
       --skip-gate) SKIP_GATE=1; shift ;;
-      --sin-puerta) die "--sin-puerta ahora se llama --skip-gate" ;;
-      *) die "opción desconocida: $1" ;;
+      --sin-puerta) die "--sin-puerta is now called --skip-gate" ;;
+      *) die "unknown option: $1" ;;
     esac
   done
 
   registry_init
-  local datos
-  datos="$(node -e '
+  local data
+  data="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const w = r.workspaces[process.argv[2]];
     if (!w) process.exit(2);
     process.stdout.write([w.path, w.branch, w.repo].join("\n"));
-  ' "$REGISTRY" "$name")" || die "no existe el espacio '$name'"
+  ' "$REGISTRY" "$name")" || die "the workspace '$name' does not exist"
 
   local path branch repo
-  path="$(echo "$datos" | sed -n 1p)"
-  branch="$(echo "$datos" | sed -n 2p)"
-  repo="$(echo "$datos" | sed -n 3p)"
-  [[ -d "$path" ]] || die "el espacio '$name' ya no está en disco"
+  path="$(echo "$data" | sed -n 1p)"
+  branch="$(echo "$data" | sed -n 2p)"
+  repo="$(echo "$data" | sed -n 3p)"
+  [[ -d "$path" ]] || die "the workspace '$name' is no longer on disk"
 
-  # Nada sale de un espacio sin estar commiteado: lo que se queda fuera de git
-  # no llega a la revisión, y ese es el punto de trabajar así.
-  local pendiente
-  pendiente="$(git -C "$path" status --porcelain | grep -vE ' \.crux-(ship|visual)$' || true)"
-  if [[ -n "$pendiente" ]]; then
-    err "quedan cambios sin commitear en $path"
-    echo "$pendiente" | sed 's/^/      /'
+  # Nothing leaves a workspace uncommitted: what stays out of git does not
+  # reach review, and that is the point of working this way.
+  local pending
+  pending="$(git -C "$path" status --porcelain | grep -vE ' \.crux-(ship|visual)$' || true)"
+  if [[ -n "$pending" ]]; then
+    err "uncommitted changes remain in $path"
+    echo "$pending" | sed 's/^/      /'
     exit 1
   fi
 
-  # Lo que aún no está en ningún remoto: es lo que va a la propuesta.
+  # What is not yet in any remote: it is what goes into the proposal.
   local commits
   commits="$(git -C "$path" log --oneline "$branch" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
   [[ "${commits:-0}" -gt 0 ]] || commits=0
-  [[ "$commits" -eq 0 ]] && die "no hay nada que proponer en $branch"
+  [[ "$commits" -eq 0 ]] && die "there is nothing to propose in $branch"
 
-  # La puerta de calidad deja constancia del commit que verificó. Sin ella, se
-  # abriría una propuesta de código que nadie ha revisado, y la revisión pasaría
-  # a depender de que alguien se acuerde.
-  # El recibo dice qué se ejecutó y con qué resultado. Un sha suelto solo decía
-  # que alguien lo escribió, que no es lo mismo: la puerta se gana, no se
-  # declara. El atajo existe, pero hay que pedirlo y se ve.
+  # The quality gate records the commit it verified. Without it, a code
+  # proposal that nobody has reviewed would be opened, and review would depend
+  # on someone remembering.
+  # The receipt says what was run and with what result. A bare sha only said
+  # that someone wrote it, which is not the same: the gate is earned, not
+  # declared. The shortcut exists, but it has to be asked for and it shows.
   local head
   head="$(git -C "$path" rev-parse HEAD)"
   if [[ $SKIP_GATE -eq 1 ]]; then
-    warn "propuesta abierta SIN pasar la puerta de calidad, a petición explícita"
+    warn "proposal opened WITHOUT passing the quality gate, at explicit request"
   else
-    local recibo="$path/.crux-ship" sellado="" comandos=0 fallos=0
-    if [[ -f "$recibo" ]]; then
-      sellado="$(awk '/^sealed /{print $2}' "$recibo" | tail -1)"
-      comandos="$(recibo_comandos "$recibo")"
-      fallos="$(recibo_fallos "$recibo")"
+    local receipt="$path/.crux-ship" sealed="" commands=0 failures=0
+    if [[ -f "$receipt" ]]; then
+      sealed="$(awk '/^sealed /{print $2}' "$receipt" | tail -1)"
+      commands="$(receipt_commands "$receipt")"
+      failures="$(receipt_failures "$receipt")"
     fi
-    if [[ ! -f "$recibo" ]]; then
-      err "este commit no ha pasado la puerta de calidad"
-      info "pásala: crux ship run -- <comando>, y después crux ship seal"
-      info "si de verdad hace falta saltarla: --skip-gate"
+    if [[ ! -f "$receipt" ]]; then
+      err "this commit has not passed the quality gate"
+      info "pass it: crux ship run -- <command>, then crux ship seal"
+      info "if skipping it is really needed: --skip-gate"
       exit 1
     fi
-    if [[ "${comandos:-0}" -eq 0 ]]; then
-      err "el recibo de la puerta no registra ni un comando ejecutado"
-      info "un sha suelto no prueba que se verificara nada: crux ship run -- <comando>"
+    if [[ "${commands:-0}" -eq 0 ]]; then
+      err "the gate receipt records not a single command run"
+      info "a bare sha does not prove anything was verified: crux ship run -- <command>"
       exit 1
     fi
-    if [[ "${fallos:-0}" -gt 0 ]]; then
-      err "el recibo registra $(cuenta "$fallos" comprobación comprobaciones) en rojo"
-      recibo_en_rojo "$recibo" | sed 's/^/      /'
+    if [[ "${failures:-0}" -gt 0 ]]; then
+      err "the receipt records $(count "$failures" check checks) in red"
+      receipt_failed "$receipt" | sed 's/^/      /'
       exit 1
     fi
-    if [[ "$sellado" != "$head" ]]; then
-      err "este commit no ha pasado la puerta de calidad"
-      [[ -n "$sellado" ]] && info "el recibo es de ${sellado:0:8}, y HEAD es ${head:0:8}"
-      info "vuelve a pasarla y cierra con: crux ship seal"
+    if [[ "$sealed" != "$head" ]]; then
+      err "this commit has not passed the quality gate"
+      [[ -n "$sealed" ]] && info "the receipt is for ${sealed:0:8}, and HEAD is ${head:0:8}"
+      info "pass it again and close with: crux ship seal"
       exit 1
     fi
-    local kernel_recibo
-    kernel_recibo="$(recibo_kernel "$recibo")"
-    if [[ -z "$kernel_recibo" ]]; then
-      err "el recibo no dice con qué versión de crux se selló"
-      info "vuelve a cerrarlo: crux ship seal"
+    local kernel_receipt
+    kernel_receipt="$(receipt_kernel "$receipt")"
+    if [[ -z "$kernel_receipt" ]]; then
+      err "the receipt does not say which crux version sealed it"
+      info "seal it again: crux ship seal"
       exit 1
     fi
-    if [[ "$kernel_recibo" != "$(crux_version)" ]]; then
-      err "el recibo se selló con crux $kernel_recibo y ahora se ejecuta $(crux_version)"
-      info "las reglas de la puerta pueden haber cambiado: vuelve a pasarla"
+    if [[ "$kernel_receipt" != "$(crux_version)" ]]; then
+      err "the receipt was sealed with crux $kernel_receipt and now $(crux_version) is running"
+      info "the gate rules may have changed: pass it again"
       exit 1
     fi
-    ok "puerta pasada sobre ${head:0:8} con $(cuenta "$comandos" comprobación comprobaciones) (crux $kernel_recibo)"
+    ok "gate passed on ${head:0:8} with $(count "$commands" check checks) (crux $kernel_receipt)"
   fi
 
-  # Aquí es donde se pierde el contexto: la propuesta sale y la sesión que sabía
-  # por qué se hizo cada cosa se acaba. Si el registro no tiene ni un paso, la
-  # tarea queda con el objetivo de una línea y nada más, y lo que se midió o se
-  # descartó por el camino no lo recupera nadie. Va antes de subir, que es
-  # cuando todavía se puede anotar. Avisa y sigue: quien decide si la tarea
-  # merecía registro es quien la hizo, no el kernel.
-  local registro_tarea
-  registro_tarea="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
-  if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
-    local pasos_tarea
-    pasos_tarea="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$registro_tarea" 2>/dev/null |
+  # This is where context is lost: the proposal goes out and the session that
+  # knew why each thing was done ends. If the record has not a single step, the
+  # task is left with a one-line objective and nothing else, and what was
+  # measured or discarded along the way is recovered by nobody. It goes before
+  # pushing, which is when it can still be noted. It warns and carries on: the
+  # one who decides whether the task deserved a record is whoever did it, not
+  # the kernel.
+  local task_record_file
+  task_record_file="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
+  if [[ -n "$task_record_file" && -f "$task_record_file" ]]; then
+    local task_steps
+    task_steps="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$task_record_file" 2>/dev/null |
       cut -d$'\x1f' -f3)"
-    if [[ -z "$pasos_tarea" ]]; then
-      warn "la tarea se cierra sin un solo paso anotado"
-      info "en $registro_tarea solo queda el objetivo"
-      info "lo que mediste y lo que descartaste por el camino no lo recupera nadie"
-      info "anótalo ahora: crux task add \"<paso>\" · crux task note \"<decisión>\" --why \"<porqué>\""
+    if [[ -z "$task_steps" ]]; then
+      warn "the task is closed without a single step noted"
+      info "only the objective is left in $task_record_file"
+      info "what you measured and what you discarded along the way is recovered by nobody"
+      info "note it now: crux task add \"<step>\" · crux task note \"<decision>\" --why \"<why>\""
     fi
   fi
 
-  # Una rama que choca con la principal sale como propuesta que no se puede
-  # integrar, y la puerta se pasó contra una base que ya no existe. Se mira
-  # antes de subir, con lo último del remoto; sin red, se sigue como antes.
-  local principal_remota
-  principal_remota="$(rama_principal "$path")"
-  if git -C "$path" fetch -q origin "$principal_remota" 2>/dev/null &&
-     git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$principal_remota"; then
-    local choques detras
-    if ! choques="$(git -C "$path" merge-tree --write-tree --name-only --no-messages \
-        HEAD "origin/$principal_remota" 2>/dev/null)"; then
-      err "la rama choca con origin/$principal_remota"
-      printf '%s\n' "$choques" | tail -n +2 | sed 's/^/      /'
-      info "rebasa y vuelve a pasar la puerta: git rebase origin/$principal_remota"
+  # A branch that clashes with the main one goes out as a proposal that cannot
+  # be merged, and the gate was passed against a base that no longer exists.
+  # It is checked before pushing, with the latest from the remote; offline, it
+  # carries on as before.
+  local remote_main
+  remote_main="$(main_branch "$path")"
+  if git -C "$path" fetch -q origin "$remote_main" 2>/dev/null &&
+     git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$remote_main"; then
+    local clashes behind
+    if ! clashes="$(git -C "$path" merge-tree --write-tree --name-only --no-messages \
+        HEAD "origin/$remote_main" 2>/dev/null)"; then
+      err "the branch clashes with origin/$remote_main"
+      printf '%s\n' "$clashes" | tail -n +2 | sed 's/^/      /'
+      info "rebase and pass the gate again: git rebase origin/$remote_main"
       exit 1
     fi
-    detras="$(git -C "$path" rev-list --count "HEAD..origin/$principal_remota" 2>/dev/null || echo 0)"
-    [[ "${detras:-0}" -gt 0 ]] &&
-      warn "origin/$principal_remota lleva $(cuenta "$detras" "commit" "commits") que esta rama no tiene; no chocan"
+    behind="$(git -C "$path" rev-list --count "HEAD..origin/$remote_main" 2>/dev/null || echo 0)"
+    [[ "${behind:-0}" -gt 0 ]] &&
+      warn "origin/$remote_main has $(count "$behind" "commit" "commits") that this branch lacks; they do not clash"
   fi
 
-  # La rama base sale del contrato, del remoto o de la local, en ese orden.
-  # Antes caía a origin/main cuando no habia origin/HEAD, y en un repo con otra
-  # rama principal el rango de abajo falla con 128: con set -e el script muere
-  # aqui, con la rama ya subida y sin abrir la propuesta.
-  local rama base
-  rama="$(rama_principal "$path")"
-  if git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$rama"; then
-    base="origin/$rama"
+  # The base branch comes from the contract, the remote or the local one, in
+  # that order. It used to fall back to origin/main when there was no
+  # origin/HEAD, and in a repo with another main branch the range below fails
+  # with 128: with set -e the script dies here, with the branch already pushed
+  # and the proposal not opened.
+  local branch_ref base
+  branch_ref="$(main_branch "$path")"
+  if git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$branch_ref"; then
+    base="origin/$branch_ref"
   else
-    base="$rama"
+    base="$branch_ref"
   fi
 
-  # Una propuesta de más de 400 líneas escritas no se revisa bien de una
-  # sentada. Avisa y sigue: partirla es cosa de quien la hizo, y hay cambios que
-  # no se dejan partir. Lo generado no cuenta, porque nadie lo lee línea a línea.
+  # A proposal of more than 400 written lines is not reviewed well in one
+  # sitting. It warns and carries on: splitting it is up to whoever made it, and
+  # some changes cannot be split. Generated files do not count, because nobody
+  # reads them line by line.
   local written_lines
   written_lines="$(git -C "$path" diff --numstat "$base...$branch" 2>/dev/null | awk '
     $1 == "-" { next }
@@ -514,316 +523,319 @@ cmd_finish() {
     $3 ~ /(^|\/)(dist|build|vendor|generated|__snapshots__)\// || $3 ~ /\.(min\.(js|css)|snap)$/ { next }
     { n += $1 + $2 } END { print n + 0 }')"
   if [[ "${written_lines:-0}" -gt 400 ]]; then
-    warn "la propuesta tiene $written_lines líneas escritas: pasa de 400, lo que se revisa bien de una vez"
-    info "si se puede partir en unidades que funcionen solas, pártela en propuestas encadenadas"
-    info "si no, di en la descripción por qué va entera"
+    warn "the proposal has $written_lines written lines: over 400, what can be reviewed well at once"
+    info "if it can be split into units that work on their own, split it into chained proposals"
+    info "if not, say in the description why it goes whole"
   fi
 
-  # Nada obliga a presentar el plan antes de escribir código, y bloquearlo
-  # sería peor: una errata no lo necesita. Pero un cambio de este tamaño sin
-  # plan en el registro es justo el que nadie pudo parar a tiempo.
-  if [[ "${written_lines:-0}" -gt 100 && -n "$registro_tarea" && -f "$registro_tarea" ]]; then
+  # Nothing forces presenting the plan before writing code, and blocking it
+  # would be worse: a typo does not need one. But a change this size with no
+  # plan in the record is precisely the one nobody could stop in time.
+  if [[ "${written_lines:-0}" -gt 100 && -n "$task_record_file" && -f "$task_record_file" ]]; then
     local plan_lines
-    plan_lines="$(awk '/^## /{on = ($0 == "## Plan"); next} on && NF && !/^<!--.*-->$/' "$registro_tarea" | wc -l | tr -d ' ')"
+    plan_lines="$(awk '/^## /{on = ($0 == "## Plan"); next} on && NF && !/^<!--.*-->$/' "$task_record_file" | wc -l | tr -d ' ')"
     if [[ "$plan_lines" -eq 0 ]]; then
-      warn "$written_lines líneas escritas y la tarea no tiene plan"
-      info "si se aprobó en la conversación, guárdalo: crux task plan <fichero>"
+      warn "$written_lines written lines and the task has no plan"
+      info "if it was approved in the conversation, save it: crux task plan <file>"
     fi
   fi
 
-  # Si la tarea dice qué cambia y por qué, la descripción sale de ahí; si no,
-  # de los commits, como siempre. Un registro vacío no mejora la propuesta.
-  local cuerpo="" idioma docs_fin perfil_fin=""
+  # If the task says what changes and why, the description comes from there;
+  # if not, from the commits, as always. An empty record does not improve the
+  # proposal.
+  local body="" language docs_fin profile_fin=""
 
   docs_fin="$(find_docs_repo "$path" 2>/dev/null || echo "")"
   [[ -n "$docs_fin" && -f "$docs_fin/crux.json" ]] &&
-    perfil_fin="$(json_get "$docs_fin/crux.json" profile 2>/dev/null || echo "")"
-  # La descripción va en el idioma de lo que se publica en el repo, el mismo de
-  # los commits. La tarea se escribe en ese idioma porque de ahí sale el texto.
-  idioma="$(idioma_commits "$perfil_fin" "$docs_fin")"
-  if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
-    cuerpo="$(node "$CRUX_HOME/lib/task.mjs" body --file "$registro_tarea" --lang "$idioma" 2>/dev/null || true)"
+    profile_fin="$(json_get "$docs_fin/crux.json" profile 2>/dev/null || echo "")"
+  # The description goes in the language of what is published in the repo, the
+  # same as the commits. The task is written in that language because the text
+  # comes from it.
+  language="$(commit_language "$profile_fin" "$docs_fin")"
+  if [[ -n "$task_record_file" && -f "$task_record_file" ]]; then
+    body="$(node "$CRUX_HOME/lib/task.mjs" body --file "$task_record_file" --lang "$language" 2>/dev/null || true)"
   fi
-  # Si se saltó la puerta, la propuesta lo dice. Antes el cuerpo por defecto
-  # afirmaba "puerta pasada" también con --skip-gate: una evidencia falsa
-  # engaña más que una que falta.
-  local cambios gate_line
-  if [[ "$idioma" == "es" ]]; then
-    cambios="Cambios"
+  # If the gate was skipped, the proposal says so. The default body used to
+  # claim "gate passed" even with --skip-gate: false evidence misleads more
+  # than missing evidence.
+  local changes gate_line
+  if [[ "$language" == "es" ]]; then
+    changes="Cambios"
     if [[ $SKIP_GATE -eq 1 ]]; then gate_line="Abierta SIN pasar la puerta de calidad, a petición explícita."
     else gate_line="Puerta de calidad pasada sobre ${head:0:8}."; fi
   else
-    cambios="Changes"
+    changes="Changes"
     if [[ $SKIP_GATE -eq 1 ]]; then gate_line="Opened WITHOUT passing the quality gate, at explicit request."
     else gate_line="Quality gate passed on ${head:0:8}."; fi
   fi
-  if [[ -z "$cuerpo" ]]; then
-    cuerpo="$(printf '%s:\n\n%s\n\n---\n%s\n' "$cambios" \
+  if [[ -z "$body" ]]; then
+    body="$(printf '%s:\n\n%s\n\n---\n%s\n' "$changes" \
       "$(git -C "$path" log --format='- %s' "$base..$branch")" "$gate_line")"
   elif [[ $SKIP_GATE -eq 1 ]]; then
-    cuerpo="$(printf '%s\n\n---\n%s\n' "$cuerpo" "$gate_line")"
+    body="$(printf '%s\n\n---\n%s\n' "$body" "$gate_line")"
   fi
 
-  # La revisión visual que aprobó una persona entra en la propuesta si es del
-  # commit que se propone. Si no lo es, se dice y se sigue: las capturas viejas
-  # no se publican como si fueran las de ahora, pero tampoco bloquean.
+  # The visual review a person approved goes into the proposal if it is for the
+  # commit being proposed. If it is not, it says so and carries on: old
+  # screenshots are not published as if they were current, but they do not block.
   if [[ -f "$path/.crux-visual" ]]; then
     local visual="" rc_visual=0
-    visual="$(cd "$path" && bash "$CRUX_HOME/bin/visual.sh" section --publish --lang "$idioma" 2>&1)" || rc_visual=$?
+    visual="$(cd "$path" && bash "$CRUX_HOME/bin/visual.sh" section --publish --lang "$language" 2>&1)" || rc_visual=$?
     if [[ $rc_visual -eq 0 ]]; then
-      cuerpo="$(printf '%s\n\n%s' "$cuerpo" "$visual")"
-      ok "revisión visual añadida a la propuesta"
+      body="$(printf '%s\n\n%s' "$body" "$visual")"
+      ok "visual review added to the proposal"
     else
-      warn "la revisión visual no entra en la propuesta"
+      warn "the visual review does not go into the proposal"
       printf '%s\n' "$visual" | sed 's/^/      /'
     fi
   fi
 
-  # El cuerpo pasa por el mismo filtro que ship body antes de que nada salga.
-  # Existia y no lo llamaba nadie: dependia de que el agente se acordara, y lo
-  # que se publica fuera no puede depender de eso. Va antes del push para que
-  # un cuerpo con una credencial dentro ni siquiera suba la rama.
-  local cuerpo_tmp
-  cuerpo_tmp="$(mktemp "${TMPDIR:-/tmp}/crux-cuerpo.XXXXXX")"
-  printf '%s\n' "$cuerpo" > "$cuerpo_tmp"
-  if ! ( cd "$path" && bash "$CRUX_HOME/bin/ship.sh" body "$cuerpo_tmp" >/dev/null 2>&1 ); then
-    err "el cuerpo de la propuesta no pasa el filtro"
-    ( cd "$path" && bash "$CRUX_HOME/bin/ship.sh" body "$cuerpo_tmp" 2>&1 | sed 's/^/      /' ) || true
-    info "sale del registro de la tarea: $registro_tarea"
-    rm -f "$cuerpo_tmp"
+  # The body goes through the same filter as ship body before anything leaves.
+  # It existed and nobody called it: it depended on the agent remembering, and
+  # what is published outside cannot depend on that. It goes before the push so
+  # that a body with a credential inside does not even push the branch.
+  local body_tmp
+  body_tmp="$(mktemp "${TMPDIR:-/tmp}/crux-body.XXXXXX")"
+  printf '%s\n' "$body" > "$body_tmp"
+  if ! ( cd "$path" && bash "$CRUX_HOME/bin/ship.sh" body "$body_tmp" >/dev/null 2>&1 ); then
+    err "the proposal body does not pass the filter"
+    ( cd "$path" && bash "$CRUX_HOME/bin/ship.sh" body "$body_tmp" 2>&1 | sed 's/^/      /' ) || true
+    info "it comes from the task record: $task_record_file"
+    rm -f "$body_tmp"
     exit 1
   fi
-  rm -f "$cuerpo_tmp"
+  rm -f "$body_tmp"
 
-  git -C "$path" push -q -u origin "$branch" || die "no pude subir $branch"
-  ok "$branch subida ($(cuenta "$commits" commit commits))"
+  git -C "$path" push -q -u origin "$branch" || die "could not push $branch"
+  ok "$branch pushed ($(count "$commits" commit commits))"
 
   local url_pr=""
   if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-    # Contra la rama base, no contra --remotes: para cuando se calcula el título
-    # la rama ya está subida, así que --remotes la excluiría entera y el título
-    # se quedaría vacío.
-    local primero
-    primero="$(git -C "$path" log --format='%s' "$base..$branch" | tail -1)"
-    [[ -n "$primero" ]] || primero="$(git -C "$path" log -1 --format=%s "$branch")"
-    # El error de gh se guarda en vez de tirarse: sin el, una propuesta ya
-    # abierta, una plantilla obligatoria o un permiso que falta daban el mismo
-    # mensaje que no tener gh instalado.
+    # Against the base branch, not against --remotes: by the time the title is
+    # computed the branch is already pushed, so --remotes would exclude it
+    # entirely and the title would come out empty.
+    local first_one
+    first_one="$(git -C "$path" log --format='%s' "$base..$branch" | tail -1)"
+    [[ -n "$first_one" ]] || first_one="$(git -C "$path" log -1 --format=%s "$branch")"
+    # gh's error is kept instead of thrown away: without it, an already open
+    # proposal, a mandatory template or a missing permission gave the same
+    # message as not having gh installed.
     local gh_err
     gh_err="$(mktemp "${TMPDIR:-/tmp}/crux-gh.XXXXXX")"
     url_pr="$(cd "$path" && gh pr create \
-      --title "${titulo:-$primero}" \
-      --body "$cuerpo" 2>"$gh_err" || true)"
+      --title "${title:-$first_one}" \
+      --body "$body" 2>"$gh_err" || true)"
     if [[ -z "$url_pr" && -s "$gh_err" ]]; then
-      warn "gh no pudo abrir la propuesta"
+      warn "gh could not open the proposal"
       head -3 "$gh_err" | sed 's/^/      /'
     fi
     rm -f "$gh_err"
   fi
 
   if [[ -n "$url_pr" ]]; then
-    ok "propuesta abierta: $url_pr"
-    if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
-      node "$CRUX_HOME/lib/task.mjs" meta --file "$registro_tarea" --key pr --value "$url_pr" >/dev/null 2>&1 || true
-      node "$CRUX_HOME/lib/task.mjs" status --file "$registro_tarea" --to proposed >/dev/null 2>&1 || true
+    ok "proposal opened: $url_pr"
+    if [[ -n "$task_record_file" && -f "$task_record_file" ]]; then
+      node "$CRUX_HOME/lib/task.mjs" meta --file "$task_record_file" --key pr --value "$url_pr" >/dev/null 2>&1 || true
+      node "$CRUX_HOME/lib/task.mjs" status --file "$task_record_file" --to proposed >/dev/null 2>&1 || true
     fi
   else
-    info "abre la propuesta en tu proveedor desde la rama $branch"
+    info "open the proposal on your provider from the branch $branch"
   fi
 
   echo
-  info "revísala antes de pedir revisión humana: /review-pr"
-  info "cuando esté integrada: crux workspace rm $name"
+  info "review it before asking for human review: /review-pr"
+  info "once it is merged: crux workspace rm $name"
 }
 
 cmd_merge() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace merge <nombre> [--yes]"
+  [[ -n "$name" ]] || die "usage: crux workspace merge <name> [--yes]"
 
-  local confirmado=0
+  local confirmed=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --yes) confirmado=1; shift ;;
-      *) die "opción desconocida: $1" ;;
+      --yes) confirmed=1; shift ;;
+      *) die "unknown option: $1" ;;
     esac
   done
 
   command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
-    || die "hace falta gh autenticado para consultar y fusionar la propuesta"
+    || die "an authenticated gh is needed to query and merge the proposal"
 
   registry_init
-  local datos path branch
-  datos="$(node -e '
+  local data path branch
+  data="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const w = r.workspaces[process.argv[2]];
     if (!w) process.exit(2);
     process.stdout.write([w.path, w.branch].join("\n"));
-  ' "$REGISTRY" "$name")" || die "no existe el espacio '$name'"
-  path="$(echo "$datos" | sed -n 1p)"
-  branch="$(echo "$datos" | sed -n 2p)"
-  [[ -d "$path" ]] || die "el espacio '$name' ya no está en disco"
+  ' "$REGISTRY" "$name")" || die "the workspace '$name' does not exist"
+  path="$(echo "$data" | sed -n 1p)"
+  branch="$(echo "$data" | sed -n 2p)"
+  [[ -d "$path" ]] || die "the workspace '$name' is no longer on disk"
 
-  local estado
-  estado="$(cd "$path" && gh pr view --json number,title,url,mergeable,reviewDecision,statusCheckRollup 2>/dev/null)" \
-    || die "no hay propuesta abierta para $branch — lanza 'crux workspace finish $name'"
+  local status
+  status="$(cd "$path" && gh pr view --json number,title,url,mergeable,reviewDecision,statusCheckRollup 2>/dev/null)" \
+    || die "there is no open proposal for $branch — run 'crux workspace finish $name'"
 
-  # Se listan todas las señales antes de decidir: una propuesta puede tener los
-  # checks en verde y estar en conflicto, o al revés.
+  # All the signals are listed before deciding: a proposal can have green
+  # checks and be in conflict, or the other way round.
   eval "$(node -e '
     const d = JSON.parse(process.argv[1]);
     const checks = d.statusCheckRollup || [];
-    const fallan = checks.filter((c) => ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT"].includes(c.conclusion));
-    const enCurso = checks.filter((c) => c.status && c.status !== "COMPLETED");
-    // Comillas simples, como en load_config: dentro de las dobles bash sigue
-    // expandiendo $(...), y estos valores salen de gh, o sea del titulo que
-    // cualquiera puede ponerle a la propuesta.
+    const failing = checks.filter((c) => ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT"].includes(c.conclusion));
+    const running = checks.filter((c) => c.status && c.status !== "COMPLETED");
+    // Single quotes, as in load_config: inside double quotes bash still expands
+    // $(...), and these values come from gh, that is from the title anyone can
+    // give the proposal.
     const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, "")}'"'"'`;
     console.log(`PR_NUM=${d.number}`);
     console.log(`PR_URL=${q(d.url)}`);
-    console.log(`PR_TITULO=${q(d.title)}`);
+    console.log(`PR_TITLE=${q(d.title)}`);
     console.log(`PR_MERGEABLE=${q(d.mergeable)}`);
-    console.log(`PR_REVISION=${q(d.reviewDecision || "sin revisión requerida")}`);
+    console.log(`PR_REVIEW=${q(d.reviewDecision || "no review required")}`);
     console.log(`PR_CHECKS_TOTAL=${checks.length}`);
-    console.log(`PR_CHECKS_FALLAN=${fallan.length}`);
-    console.log(`PR_CHECKS_CURSO=${enCurso.length}`);
-    console.log(`PR_FALLAN_NOMBRES=${q(fallan.map((c) => c.name || c.context).join(", "))}`);
-  ' "$estado")"
+    console.log(`PR_CHECKS_FAILING=${failing.length}`);
+    console.log(`PR_CHECKS_RUNNING=${running.length}`);
+    console.log(`PR_FAILING_NAMES=${q(failing.map((c) => c.name || c.context).join(", "))}`);
+  ' "$status")"
 
-  echo "propuesta #$PR_NUM · $PR_TITULO"
+  echo "proposal #$PR_NUM · $PR_TITLE"
   echo "$PR_URL"
   echo
 
-  local bloqueado=0
-  local sin_ci=0
+  local blocked=0
+  local no_ci=0
   if [[ "$PR_CHECKS_TOTAL" -eq 0 ]]; then
-    warn "sin comprobaciones automáticas: la única validación es la que pasaste en local"
-    sin_ci=1
-  elif [[ "$PR_CHECKS_CURSO" -gt 0 ]]; then
-    warn "$PR_CHECKS_CURSO comprobaciones aún en curso"
-    bloqueado=1
-  elif [[ "$PR_CHECKS_FALLAN" -gt 0 ]]; then
-    err "$PR_CHECKS_FALLAN comprobaciones fallan: $PR_FALLAN_NOMBRES"
-    bloqueado=1
+    warn "no automatic checks: the only validation is the one you passed locally"
+    no_ci=1
+  elif [[ "$PR_CHECKS_RUNNING" -gt 0 ]]; then
+    warn "$PR_CHECKS_RUNNING checks still running"
+    blocked=1
+  elif [[ "$PR_CHECKS_FAILING" -gt 0 ]]; then
+    err "$PR_CHECKS_FAILING checks failing: $PR_FAILING_NAMES"
+    blocked=1
   else
-    ok "$PR_CHECKS_TOTAL comprobaciones en verde"
+    ok "$PR_CHECKS_TOTAL checks green"
   fi
 
   case "$PR_MERGEABLE" in
-    MERGEABLE) ok "sin conflictos" ;;
-    CONFLICTING) err "hay conflictos que resolver"; bloqueado=1 ;;
-    *) warn "estado de fusión desconocido: $PR_MERGEABLE" ;;
+    MERGEABLE) ok "no conflicts" ;;
+    CONFLICTING) err "there are conflicts to resolve"; blocked=1 ;;
+    *) warn "unknown merge state: $PR_MERGEABLE" ;;
   esac
 
-  [[ "$PR_REVISION" == "CHANGES_REQUESTED" ]] && { err "hay cambios solicitados en la revisión"; bloqueado=1; }
+  [[ "$PR_REVIEW" == "CHANGES_REQUESTED" ]] && { err "changes were requested in the review"; blocked=1; }
 
   echo
-  if [[ $bloqueado -eq 1 ]]; then
-    err "no se fusiona: hay algo que resolver antes"
+  if [[ $blocked -eq 1 ]]; then
+    err "not merging: there is something to resolve first"
     exit 1
   fi
 
-  if [[ $confirmado -eq 0 ]]; then
-    [[ $sin_ci -eq 1 ]] && ok "nada bloquea la fusión, pero no hay red automática detrás" \
-                        || ok "todo en verde"
-    info "para fusionarla: crux workspace merge $name --yes"
+  if [[ $confirmed -eq 0 ]]; then
+    [[ $no_ci -eq 1 ]] && ok "nothing blocks the merge, but there is no automatic safety net behind it" \
+                        || ok "all green"
+    info "to merge it: crux workspace merge $name --yes"
     exit 0
   fi
 
-  # Sin --delete-branch: gh intenta cambiar a la rama base para borrar la local,
-  # y desde un worktree eso falla porque la base ya está usada por otro. La rama
-  # remota se borra aparte.
+  # Without --delete-branch: gh tries to switch to the base branch to delete the
+  # local one, and from a worktree that fails because the base is already used
+  # by another. The remote branch is deleted separately.
   ( cd "$path" && gh pr merge --squash ) || true
 
-  # No se confía en el código de salida: el fallo puede venir de la limpieza
-  # posterior con la fusión ya hecha, y reportar un error entonces sería mentir.
-  local fusionada
-  fusionada="$(cd "$path" && gh pr view --json mergedAt -q '.mergedAt // ""' 2>/dev/null)"
-  [[ -n "$fusionada" ]] || die "la propuesta #$PR_NUM no se fusionó"
-  ok "propuesta #$PR_NUM fusionada"
-  local registro_tarea
-  registro_tarea="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
-  [[ -n "$registro_tarea" && -f "$registro_tarea" ]] &&
-    node "$CRUX_HOME/lib/task.mjs" status --file "$registro_tarea" --to merged >/dev/null 2>&1 || true
+  # The exit code is not trusted: the failure may come from the cleanup after
+  # the merge is already done, and reporting an error then would be lying.
+  local merged
+  merged="$(cd "$path" && gh pr view --json mergedAt -q '.mergedAt // ""' 2>/dev/null)"
+  [[ -n "$merged" ]] || die "proposal #$PR_NUM was not merged"
+  ok "proposal #$PR_NUM merged"
+  local task_record_file
+  task_record_file="$(task_file_for_path "$REGISTRY" "$path" 2>/dev/null || echo "")"
+  [[ -n "$task_record_file" && -f "$task_record_file" ]] &&
+    node "$CRUX_HOME/lib/task.mjs" status --file "$task_record_file" --to merged >/dev/null 2>&1 || true
 
   git -C "$path" push -q origin --delete "$branch" 2>/dev/null \
-    && ok "rama remota borrada" \
-    || info "la rama remota sigue ahí: bórrala desde tu proveedor si quieres"
+    && ok "remote branch deleted" \
+    || info "the remote branch is still there: delete it from your provider if you want"
 
   echo
-  # Fusionada, el espacio ya no tiene nada que hacer. Dejarlo vivo por defecto
-  # era lo que acumulaba espacios de trabajo terminado durante semanas. rm se
-  # niega solo si queda algo sin commitear, y entonces se queda y se dice.
-  if [[ "$(preferencia CRUX_MERGE_CLOSE_WORKSPACE true)" == "true" ]]; then
-    ( cmd_rm "$name" ) || warn "el espacio sigue vivo: ciérralo con 'crux workspace rm $name' cuando esté limpio"
+  # Once merged, the workspace has nothing left to do. Leaving it alive by
+  # default was what piled up finished workspaces for weeks. rm refuses only if
+  # something is uncommitted, and then it stays and says so.
+  if [[ "$(preference CRUX_MERGE_CLOSE_WORKSPACE true)" == "true" ]]; then
+    ( cmd_rm "$name" ) || warn "the workspace is still alive: close it with 'crux workspace rm $name' when it is clean"
   else
-    info "el espacio sigue vivo (CRUX_MERGE_CLOSE_WORKSPACE=false): 'crux workspace rm $name'"
+    info "the workspace is still alive (CRUX_MERGE_CLOSE_WORKSPACE=false): 'crux workspace rm $name'"
   fi
 }
 
 cmd_list() {
-  local todos=0
-  [[ "${1:-}" == "--all" ]] && todos=1
+  local all_flag=0
+  [[ "${1:-}" == "--all" ]] && all_flag=1
   registry_init
-  local aqui=""
-  [[ $todos -eq 0 ]] && aqui="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  local here=""
+  [[ $all_flag -eq 0 ]] && here="$(git rev-parse --show-toplevel 2>/dev/null || true)"
   node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const aqui = process.argv[2];
+    const here = process.argv[2];
     let rows = Object.entries(r.workspaces);
     const total = rows.length;
-    // Desde dentro de un espacio, "este repo" es el repo del que cuelga, no la
-    // ruta del worktree: si no, la lista decía que no había nada justo al
-    // retomar, que es cuando se mira.
-    const propio = rows.find(([, w]) => w.path === aqui);
-    const repo = propio ? propio[1].repo : aqui;
-    if (aqui) rows = rows.filter(([, w]) => w.repo === repo);
+    // From inside a workspace, "this repo" is the repo it hangs from, not the
+    // worktree path: otherwise the list said there was nothing right when
+    // resuming, which is when it is looked at.
+    const own = rows.find(([, w]) => w.path === here);
+    const repo = own ? own[1].repo : here;
+    if (here) rows = rows.filter(([, w]) => w.repo === repo);
     if (!rows.length) {
-      console.log(total ? `sin espacios en este repo (${total} en otros: crux workspace list --all)`
-                        : "sin espacios activos");
+      console.log(total ? `no workspaces in this repo (${total} in others: crux workspace list --all)`
+                        : "no active workspaces");
       process.exit(0);
     }
-    const desde = (p) => {
+    const since = (p) => {
       try {
-        const dias = Math.floor((Date.now() - fs.statSync(p).mtimeMs) / 86400000);
-        return dias < 1 ? "hoy" : dias === 1 ? "ayer" : `hace ${dias} días`;
+        const days = Math.floor((Date.now() - fs.statSync(p).mtimeMs) / 86400000);
+        return days < 1 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
       } catch { return ""; }
     };
-    // Lo que importa al volver a un espacio es en qué punto quedó: el estado y
-    // el siguiente paso de su tarea, no solo el slot.
-    const tarea = (w) => {
+    // What matters on returning to a workspace is where it was left: the status
+    // and next step of its task, not just the slot.
+    const task = (w) => {
       if (!w.task || !w.project) return "";
       try {
         const t = fs.readFileSync(`${process.argv[3]}/${w.project}/${w.task}.md`, "utf8");
-        const estado = (t.match(/^status: (.*)$/m) || [])[1] || "";
-        const sig = ((t.split(/^## Siguiente paso$/m)[1] || "").split(/^## /m)[0] || "")
+        const status = (t.match(/^status: (.*)$/m) || [])[1] || "";
+        const next = ((t.split(/^## (?:Next step|Siguiente paso)$/m)[1] || "").split(/^## /m)[0] || "")
           .replace(/<!--[\s\S]*?-->/g, "").trim().split("\n")[0];
-        const pend = (t.match(/^- \[ \] (T\d+ .*)$/m) || [])[1] || "";
-        return `${estado}${(sig || pend) ? " · " + (sig || pend).slice(0, 60) : ""}`;
+        const pending = (t.match(/^- \[ \] (T\d+ .*)$/m) || [])[1] || "";
+        return `${status}${(next || pending) ? " · " + (next || pending).slice(0, 60) : ""}`;
       } catch { return ""; }
     };
     for (const [name, w] of rows) {
-      const vivo = fs.existsSync(w.path);
-      const cola = vivo ? desde(w.path) : "sin worktree — retíralo con: crux workspace gc";
-      console.log(`${name.padEnd(16)} slot ${String(w.slot).padStart(2)}  puertos ${w.ports[0]}-${w.ports[1]}  ${cola.padEnd(14)}  ${w.path}`);
-      const t = tarea(w);
-      if (t) console.log(`${"".padEnd(16)} tarea ${w.task}: ${t}`);
+      const alive = fs.existsSync(w.path);
+      const tail = alive ? since(w.path) : "no worktree — remove it with: crux workspace gc";
+      console.log(`${name.padEnd(16)} slot ${String(w.slot).padStart(2)}  ports ${w.ports[0]}-${w.ports[1]}  ${tail.padEnd(14)}  ${w.path}`);
+      const t = task(w);
+      if (t) console.log(`${"".padEnd(16)} task ${w.task}: ${t}`);
     }
-  ' "$REGISTRY" "$aqui" "$(task_dir)"
+  ' "$REGISTRY" "$here" "$(task_dir)"
 }
 
-# Los hooks se prueban antes de un release instalándolos desde un espacio del
-# kernel. Al cerrarlo apuntarían a una carpeta borrada y fallarían en cada
-# mensaje, comando y cierre del agente: si el repo es el kernel, se reinstalan
-# desde el checkout principal y se retiran los que solo existían en el espacio.
+# Hooks are tested before a release by installing them from a kernel
+# workspace. On closing it they would point to a deleted folder and fail on
+# every message, command and agent shutdown: if the repo is the kernel, they
+# are reinstalled from the main checkout and those that only existed in the
+# workspace are removed.
 repoint_hooks() {
   local workspace="$1" main_repo="$2" settings="$3"
   if [[ ! -f "$main_repo/bin/hooks.sh" || ! -d "$main_repo/adapters" ]] ||
     ! ( cd "$main_repo" && CRUX_HOME="$main_repo" CLAUDE_SETTINGS="$settings" \
           bash "$main_repo/bin/hooks.sh" install >/dev/null 2>&1 ); then
-    warn "los hooks del agente apuntan a este espacio: quedarán rotos al borrarlo"
-    info "reinstálalos desde el repo principal: crux hooks install"
+    warn "the agent hooks point to this workspace: they will break when it is deleted"
+    info "reinstall them from the main repo: crux hooks install"
     return 0
   fi
 
@@ -845,19 +857,19 @@ repoint_hooks() {
     process.stdout.write(String(removed));
   ' "$settings" "$workspace/")"
 
-  ok "hooks del agente devueltos al checkout principal: $main_repo"
-  [[ "$removed" == "0" ]] || info "retirados $removed que solo existían en el espacio"
+  ok "agent hooks returned to the main checkout: $main_repo"
+  [[ "$removed" == "0" ]] || info "removed $removed that only existed in the workspace"
 }
 
 cmd_rm() {
   local name="${1:-}"; shift || true
-  [[ -n "$name" ]] || die "uso: crux workspace rm <nombre> [--include-ignored]"
+  [[ -n "$name" ]] || die "usage: crux workspace rm <name> [--include-ignored]"
   local include_ignored=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --include-ignored) include_ignored=1; shift ;;
-      --con-ignorados) die "--con-ignorados ahora se llama --include-ignored" ;;
-      *) die "opción desconocida: $1" ;;
+      --con-ignorados) die "--con-ignorados is now called --include-ignored" ;;
+      *) die "unknown option: $1" ;;
     esac
   done
 
@@ -871,23 +883,23 @@ cmd_rm() {
     const w = r.workspaces[process.argv[2]];
     if (!w) process.exit(2);
     process.stdout.write([w.path, w.repo, w.branch, w.project || "", w.task || ""].join("\n"));
-  ' "$REGISTRY" "$name")" || die "no existe el espacio '$name'"
+  ' "$REGISTRY" "$name")" || die "the workspace '$name' does not exist"
 
   repo="$(echo "$path" | sed -n 2p)"
   branch="$(echo "$path" | sed -n 3p)"
-  local proyecto_rm tarea_rm
-  proyecto_rm="$(echo "$path" | sed -n 4p)"
-  tarea_rm="$(echo "$path" | sed -n 5p)"
+  local project_rm task_rm
+  project_rm="$(echo "$path" | sed -n 4p)"
+  task_rm="$(echo "$path" | sed -n 5p)"
   path="$(echo "$path" | sed -n 1p)"
   unlock
 
   if [[ -d "$path" ]]; then
     if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
-      die "$path tiene cambios sin commitear — resuélvelos antes de borrarlo"
+      die "$path has uncommitted changes — resolve them before deleting it"
     fi
-    # Instalar los hooks desde dentro de un espacio los deja apuntando a él, y
-    # al cerrarlo dejan de existir sin que nada lo diga hasta la sesión
-    # siguiente.
+    # Installing the hooks from inside a workspace leaves them pointing at it,
+    # and on closing it they cease to exist with nothing saying so until the
+    # next session.
     local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
     if [[ -f "$settings" ]] && grep -qF "$path/" "$settings"; then
       repoint_hooks "$path" "$repo" "$settings"
@@ -902,116 +914,116 @@ cmd_rm() {
     local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
     load_config "$docs" "$(basename "$repo")"
 
-    # Despues de load_config: ENV_FILE sale del contrato, y ese fichero lo
-    # escribe el propio crux, asi que no cuenta como trabajo que se pierde.
-    if [[ $include_ignored -eq 0 && -n "$(ficheros_ignorados "$path" "${ENV_FILE:-}")" ]]; then
-      err "$path tiene ficheros ignorados que se perderian al retirarlo"
-      ficheros_ignorados "$path" "${ENV_FILE:-}" | sed 's/^/      /' | head -10
-      info "sacalos de ahi, o retiralo igualmente: crux workspace rm $name --include-ignored"
+    # After load_config: ENV_FILE comes from the contract, and crux itself writes
+    # that file, so it does not count as work that is lost.
+    if [[ $include_ignored -eq 0 && -n "$(ignored_files "$path" "${ENV_FILE:-}")" ]]; then
+      err "$path has ignored files that would be lost on removal"
+      ignored_files "$path" "${ENV_FILE:-}" | sed 's/^/      /' | head -10
+      info "take them out of there, or remove it anyway: crux workspace rm $name --include-ignored"
       exit 1
     fi
 
     if [[ -n "$TEARDOWN_CMD" ]]; then
       ( cd "$path" && eval "$(substitute "$TEARDOWN_CMD")" ) \
-        && ok "teardown ejecutado" \
-        || warn "el teardown falló — revisa si quedaron recursos del slot $SLOT"
+        && ok "teardown executed" \
+        || warn "the teardown failed — check whether resources of slot $SLOT were left behind"
     fi
     if git -C "$repo" worktree remove "$path" 2>/dev/null \
        || git -C "$repo" worktree remove --force "$path" 2>/dev/null; then
-      ok "worktree eliminado"
+      ok "worktree removed"
     else
-      # git deja de reconocerlo si alguien borró su registro por otra vía. El
-      # directorio sigue ocupando el slot, así que se retira igual.
+      # git stops recognising it if someone deleted its record some other way.
+      # The directory still occupies the slot, so it is removed anyway.
       rm -rf "$path"
       git -C "$repo" worktree prune 2>/dev/null || true
-      ok "directorio retirado (git ya no lo tenía como worktree)"
+      ok "directory removed (git no longer had it as a worktree)"
     fi
   fi
 
   with_lock
-  if borra_del_registro "$name"; then
+  if remove_from_registry "$name"; then
     unlock
-    ok "slot liberado"
+    ok "slot released"
   else
     unlock
-    err "el worktree ya no está, pero su entrada sigue en el registro"
-    info "el slot y los puertos quedan reservados hasta que se retire"
-    info "revisa los permisos de $REGISTRY y repite: crux workspace heal"
+    err "the worktree is gone, but its entry is still in the registry"
+    info "the slot and ports stay reserved until it is removed"
+    info "check the permissions of $REGISTRY and retry: crux workspace heal"
     exit 1
   fi
 
-  [[ -n "$tarea_rm" && -n "$proyecto_rm" ]] && archivar_si_terminada "$proyecto_rm" "$tarea_rm"
+  [[ -n "$task_rm" && -n "$project_rm" ]] && archive_if_finished "$project_rm" "$task_rm"
 
-  # Solo si está integrada: una rama con trabajo que no está en ningún sitio no
-  # se borra por una preferencia.
-  # Aqui la rama la creo crux para este espacio, asi que `--merged` si dice lo
-  # que parece: sus commits estan en la principal. Lo que no vale como prueba
-  # es para una rama cualquiera del repo, que es de lo que va prune.
-  if [[ "$(preferencia CRUX_RM_DELETE_BRANCH false)" == "true" ]] &&
-     git -C "$repo" branch --merged "$(rama_principal "$repo")" 2>/dev/null |
+  # Only if it is merged: a branch with work that is nowhere else is not
+  # deleted because of a preference.
+  # Here crux created the branch for this workspace, so `--merged` does say
+  # what it seems to: its commits are in the main branch. What does not work as
+  # proof is for an arbitrary branch of the repo, which is what prune is about.
+  if [[ "$(preference CRUX_RM_DELETE_BRANCH false)" == "true" ]] &&
+     git -C "$repo" branch --merged "$(main_branch "$repo")" 2>/dev/null |
        sed 's/^[ *]*//' | grep -qxF -- "$branch" &&
-     [[ -n "$(git -C "$repo" log --oneline "$(rama_principal "$repo")".."$branch" 2>/dev/null ||
+     [[ -n "$(git -C "$repo" log --oneline "$(main_branch "$repo")".."$branch" 2>/dev/null ||
               git -C "$repo" log --oneline -1 "$branch" 2>/dev/null)" ]]; then
     git -C "$repo" branch -D "$branch" >/dev/null 2>&1 \
-      && ok "rama $branch borrada (CRUX_RM_DELETE_BRANCH)" \
-      || info "la rama $branch sigue existiendo"
+      && ok "branch $branch deleted (CRUX_RM_DELETE_BRANCH)" \
+      || info "the branch $branch still exists"
   else
-    info "la rama $branch sigue existiendo; bórrala si ya no la necesitas"
+    info "the branch $branch still exists; delete it if you no longer need it"
   fi
 }
 
-# Una tarea se archiva sola cuando se cierra su último espacio y ya está
-# fusionada. Si sigue abierta, se queda: un espacio se puede cerrar para
-# retomarla desde otro, y archivar trabajo sin terminar lo escondería.
-archivar_si_terminada() {
-  local proyecto="$1" tarea="$2" registro estado otros destino
-  registro="$(task_dir)/$proyecto/$tarea.md"
-  [[ -f "$registro" ]] || return 0
-  otros="$(node -e '
+# A task archives itself when its last workspace closes and it is already
+# merged. If it is still open, it stays: a workspace can be closed to resume
+# the task from another, and archiving unfinished work would hide it.
+archive_if_finished() {
+  local project="$1" task="$2" task_record status others target
+  task_record="$(task_dir)/$project/$task.md"
+  [[ -f "$task_record" ]] || return 0
+  others="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const n = Object.values(r.workspaces || {}).filter((w) => w.project === process.argv[2] && w.task === process.argv[3]).length;
     process.stdout.write(String(n));
-  ' "$REGISTRY" "$proyecto" "$tarea")"
-  if [[ "${otros:-0}" -gt 0 ]]; then
-    info "la tarea '$tarea' sigue en $otros espacio(s) más"
+  ' "$REGISTRY" "$project" "$task")"
+  if [[ "${others:-0}" -gt 0 ]]; then
+    info "the task '$task' is still in $others more workspace(s)"
     return 0
   fi
-  estado="$(awk -F': ' '/^status:/{print $2; exit}' "$registro")"
-  # Fusionada pero esperando una respuesta: sigue viva hasta que llegue.
+  status="$(awk -F': ' '/^status:/{print $2; exit}' "$task_record")"
+  # Merged but waiting for an answer: it stays alive until it arrives.
   local waiting_on
-  waiting_on="$(awk -F': ' '/^waiting_on:/{print $2; exit}' "$registro")"
+  waiting_on="$(awk -F': ' '/^waiting_on:/{print $2; exit}' "$task_record")"
   if [[ -n "$waiting_on" ]]; then
-    info "la tarea '$tarea' espera a $waiting_on: no se archiva"
+    info "the task '$task' is waiting on $waiting_on: not archiving"
     return 0
   fi
-  case "$estado" in
+  case "$status" in
     merged|deployed)
-      promote_decisions "$registro"
-      if destino="$(node "$CRUX_HOME/lib/task.mjs" archive --file "$registro" 2>&1)"; then
-        ok "tarea '$tarea' archivada"
+      promote_decisions "$task_record"
+      if target="$(node "$CRUX_HOME/lib/task.mjs" archive --file "$task_record" 2>&1)"; then
+        ok "task '$task' archived"
       else
-        warn "no pude archivar la tarea: $destino"
+        warn "could not archive the task: $target"
       fi
       ;;
     closed) ;;
     *)
-      info "la tarea '$tarea' sigue abierta ($estado)"
-      info "si ya no sigue: crux task archive --task $proyecto/$tarea"
+      info "the task '$task' is still open ($status)"
+      info "if it is no longer going: crux task archive --task $project/$task"
       ;;
   esac
 }
 
-# Una rama fusionada por squash no aparece en `git branch --merged`: su commit
-# nunca entra en la principal. Preguntarle a la propuesta es lo único fiable en
-# un flujo que fusiona así.
-ramas_con_propuesta_fusionada() {
-  # Las ramas que de verdad tuvieron una propuesta fusionada, en una sola
-  # llamada. Antes se usaba `git branch --merged` como atajo, y eso es cierto
-  # para cualquier rama que apunte a un ancestro de la principal: una recien
-  # creada sin un solo commit propio, o una de vida larga como develop o
-  # staging justo despues de que su release entre. Se borraban, aqui y en el
-  # remoto, diciendo "su propuesta ya fusionada" sin haber preguntado nunca.
+# A branch merged by squash does not appear in `git branch --merged`: its
+# commit never enters the main branch. Asking the proposal is the only reliable
+# thing in a flow that merges that way.
+branches_with_merged_pr() {
+  # The branches that really had a merged proposal, in a single call. Before,
+  # `git branch --merged` was used as a shortcut, and that is true for any
+  # branch pointing at an ancestor of the main branch: a freshly created one
+  # with not a single commit of its own, or a long-lived one such as develop or
+  # staging right after its release lands. They were deleted, here and on the
+  # remote, saying "its proposal already merged" without ever having asked.
   local repo="$1" slug
   slug="$(cd "$repo" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" || return 1
   [[ -n "$slug" ]] || return 1
@@ -1019,28 +1031,28 @@ ramas_con_propuesta_fusionada() {
      -q '.[].headRefName' 2>/dev/null
 }
 
-# El registro se repara solo. Una entrada cuya carpeta ya no existe y cuya rama
-# tampoco no guarda nada: alguien retiró el worktree por su cuenta —un
-# `git worktree remove` para liberar disco— y el registro no se enteró. Se
-# acumularon 41 así. Si la rama sigue viva, puede haber trabajo: se avisa y se
-# deja.
+# The registry repairs itself. An entry whose folder no longer exists and whose
+# branch does not either holds nothing: someone removed the worktree on their
+# own —a `git worktree remove` to free disk— and the registry did not find out.
+# 41 piled up that way. If the branch is still alive, there may be work: it
+# warns and leaves it.
 cmd_heal() {
-  local callado=0
-  [[ "${1:-}" == "--quiet" ]] && callado=1
+  local quiet=0
+  [[ "${1:-}" == "--quiet" ]] && quiet=1
   [[ -f "$REGISTRY" ]] || return 0
-  local n repo branch path proyecto tarea retiradas=0
-  while IFS=$'\t' read -r n repo branch path proyecto tarea; do
+  local n repo branch path project task retired=0
+  while IFS=$'\t' read -r n repo branch path project task; do
     [[ -n "$n" ]] || continue
     if [[ -d "$repo" ]] && git -C "$repo" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
-      [[ $callado -eq 1 ]] || warn "'$n' no tiene carpeta, pero su rama $branch sigue viva: no se retira"
+      [[ $quiet -eq 1 ]] || warn "'$n' has no folder, but its branch $branch is still alive: not removing"
       continue
     fi
     with_lock 50
-    borra_del_registro "$n"
+    remove_from_registry "$n"
     unlock
-    retiradas=$((retiradas + 1))
-    [[ $callado -eq 1 ]] || ok "'$n' retirado del registro: ni carpeta ni rama"
-    [[ -n "$tarea" && -n "$proyecto" ]] && archivar_si_terminada "$proyecto" "$tarea" >/dev/null
+    retired=$((retired + 1))
+    [[ $quiet -eq 1 ]] || ok "'$n' removed from the registry: no folder, no branch"
+    [[ -n "$task" && -n "$project" ]] && archive_if_finished "$project" "$task" >/dev/null
   done < <(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -1049,38 +1061,38 @@ cmd_heal() {
       console.log([n, w.repo, w.branch, w.path, w.project || "", w.task || ""].join("\t"));
     }
   ' "$REGISTRY")
-  if [[ $callado -eq 1 ]]; then
-    [[ $retiradas -gt 0 ]] && info "registro reparado: $retiradas espacio(s) sin carpeta ni rama retirados"
-  elif [[ $retiradas -eq 0 ]]; then
-    ok "el registro está al día"
+  if [[ $quiet -eq 1 ]]; then
+    [[ $retired -gt 0 ]] && info "registry repaired: $retired workspace(s) with no folder or branch removed"
+  elif [[ $retired -eq 0 ]]; then
+    ok "the registry is up to date"
   fi
   return 0
 }
 
-# Un worktree hecho a mano no existe para crux: ni sale en las listas ni lo
-# protege nada, y `gc --include-disk` lo trataría como basura. Pasó con uno que
-# tenía trabajo pendiente de revisión.
+# A hand-made worktree does not exist for crux: it appears in no list and
+# nothing protects it, and `gc --include-disk` would treat it as garbage. It
+# happened with one that had work pending review.
 cmd_adopt() {
-  local ruta="${1:-}"; shift || true
-  [[ -n "$ruta" ]] || die "uso: crux workspace adopt <ruta> [--task <tarea>]"
-  local tarea=""
+  local path_value="${1:-}"; shift || true
+  [[ -n "$path_value" ]] || die "usage: crux workspace adopt <path> [--task <task>]"
+  local task=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --task) tarea="$2"; shift 2 ;;
-      *) die "opción desconocida: $1" ;;
+      --task) task="$2"; shift 2 ;;
+      *) die "unknown option: $1" ;;
     esac
   done
-  [[ -d "$ruta" ]] || die "no existe $ruta"
-  ruta="$(cd "$ruta" && pwd)"
-  es_worktree "$ruta" || die "$ruta no es un worktree de git"
-  local base; base="$(basename "$ruta")"
-  [[ "$base" == *-ws-* ]] || die "el nombre no sigue el patrón <repo>-ws-<nombre>: $base"
+  [[ -d "$path_value" ]] || die "$path_value does not exist"
+  path_value="$(cd "$path_value" && pwd)"
+  is_worktree "$path_value" || die "$path_value is not a git worktree"
+  local base; base="$(basename "$path_value")"
+  [[ "$base" == *-ws-* ]] || die "the name does not follow the pattern <repo>-ws-<name>: $base"
   local name="${base#*-ws-}" repo branch
-  repo="$(repo_principal "$ruta")"
-  branch="$(git -C "$ruta" rev-parse --abbrev-ref HEAD)"
-  nombre_valido "$name" || die "nombre de espacio inválido: '$name'"
-  tarea="${tarea:-$name}"
-  local proyecto; proyecto="$(project_name_for "$repo")"
+  repo="$(main_repo "$path_value")"
+  branch="$(git -C "$path_value" rev-parse --abbrev-ref HEAD)"
+  valid_name "$name" || die "invalid workspace name: '$name'"
+  task="${task:-$name}"
+  local project; project="$(project_name_for "$repo")"
 
   registry_init
   with_lock
@@ -1088,9 +1100,9 @@ cmd_adopt() {
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const [, , name, path] = process.argv.slice(1);
-    if (r.workspaces[name]) { console.error(`ya hay un espacio llamado ${name}`); process.exit(2); }
-    if (Object.values(r.workspaces).some((w) => w.path === path)) { console.error("ese worktree ya está registrado"); process.exit(2); }
-  ' "$REGISTRY" x "$name" "$ruta" || { unlock; exit 1; }
+    if (r.workspaces[name]) { console.error(`there is already a workspace called ${name}`); process.exit(2); }
+    if (Object.values(r.workspaces).some((w) => w.path === path)) { console.error("that worktree is already registered"); process.exit(2); }
+  ' "$REGISTRY" x "$name" "$path_value" || { unlock; exit 1; }
 
   local docs; docs="$(find_docs_repo "$repo" 2>/dev/null || echo "")"
   load_config "$docs" "$(basename "$repo")"
@@ -1100,49 +1112,49 @@ cmd_adopt() {
     const [file, base, perSlot] = process.argv.slice(1);
     const r = JSON.parse(fs.readFileSync(file, "utf8"));
     const ws = Object.values(r.workspaces);
-    const ocupados = new Set(ws.map((w) => w.slot));
-    const rangos = ws.map((w) => w.ports).filter(Array.isArray);
-    const libre = (s) => {
-      if (ocupados.has(s)) return false;
-      const desde = Number(base) + s * Number(perSlot);
-      return !rangos.some(([a, b]) => desde <= b && a <= desde + Number(perSlot) - 1);
+    const takenSlots = new Set(ws.map((w) => w.slot));
+    const ranges = ws.map((w) => w.ports).filter(Array.isArray);
+    const isFree = (s) => {
+      if (takenSlots.has(s)) return false;
+      const since = Number(base) + s * Number(perSlot);
+      return !ranges.some(([a, b]) => since <= b && a <= since + Number(perSlot) - 1);
     };
-    let s = 0; while (!libre(s)) s++;
+    let s = 0; while (!isFree(s)) s++;
     process.stdout.write(String(s));
   ' "$REGISTRY" "$PORT_BASE" "$PORTS_PER_SLOT")"
   local port0=$((PORT_BASE + slot * PORTS_PER_SLOT))
-  escribir_espacio "$name" "$slot" "$repo" "$ruta" "$branch" "$port0" "$PORTS_PER_SLOT" "$tarea" "$proyecto"
+  write_workspace "$name" "$slot" "$repo" "$path_value" "$branch" "$port0" "$PORTS_PER_SLOT" "$task" "$project"
   unlock
 
-  local registro_tarea resultado
-  registro_tarea="$(task_dir)/$proyecto/$tarea.md"
-  resultado="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$registro_tarea" \
-    --task "$tarea" --project "$proyecto" --repo "$(basename "$repo")" --workspace "$name" 2>&1)" \
-    || warn "no pude escribir el registro de la tarea: $resultado"
-  ok "'$name' adoptado ($branch, slot $slot)"
-  info "tarea '$tarea': $registro_tarea"
+  local task_record_file result
+  task_record_file="$(task_dir)/$project/$task.md"
+  result="$(node "$CRUX_HOME/lib/task.mjs" ensure --file "$task_record_file" \
+    --task "$task" --project "$project" --repo "$(basename "$repo")" --workspace "$name" 2>&1)" \
+    || warn "could not write the task record: $result"
+  ok "'$name' adopted ($branch, slot $slot)"
+  info "task '$task': $task_record_file"
 }
 
-# El registro y el disco se separan en las dos direcciones: una entrada cuyo
-# worktree borró alguien a mano, y un worktree que nunca llegó al registro.
-# `prune` mira ramas; esto mira espacios.
+# The registry and the disk drift apart in both directions: an entry whose
+# worktree someone deleted by hand, and a worktree that never made it into the
+# registry. `prune` looks at branches; this looks at workspaces.
 cmd_gc() {
-  local confirmado=0 include_disk=0
+  local confirmed=0 include_disk=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --yes) confirmado=1; shift ;;
+      --yes) confirmed=1; shift ;;
       --include-disk) include_disk=1; shift ;;
-      --con-disco) die "--con-disco ahora se llama --include-disk" ;;
-      *) die "opción desconocida: $1" ;;
+      --con-disco) die "--con-disco is now called --include-disk" ;;
+      *) die "unknown option: $1" ;;
     esac
   done
 
   registry_init
-  local raiz; raiz="$(projects_root)"
+  local root; root="$(projects_root)"
 
-  local sin_worktree=()
+  local without_worktree=()
   while IFS= read -r n; do
-    [[ -n "$n" ]] && sin_worktree+=("$n")
+    [[ -n "$n" ]] && without_worktree+=("$n")
   done < <(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -1151,302 +1163,302 @@ cmd_gc() {
     }
   ' "$REGISTRY")
 
-  local registrados; registrados="$(node -e '
+  local registered; registered="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     process.stdout.write(Object.values(r.workspaces || {}).map((w) => w.path).join("\n"));
   ' "$REGISTRY")"
 
-  local sin_registrar=() d
+  local unregistered=() d
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
-    printf '%s\n' "$registrados" | grep -qxF "$d" && continue
+    printf '%s\n' "$registered" | grep -qxF "$d" && continue
     git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue
-    es_worktree "$d" || continue
-    sin_registrar+=("$d")
-  done < <(find "$raiz" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
+    is_worktree "$d" || continue
+    unregistered+=("$d")
+  done < <(find "$root" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
 
-  caducar_tareas "$confirmado"
+  expire_tasks "$confirmed"
 
-  if [[ ${#sin_worktree[@]} -eq 0 && ${#sin_registrar[@]} -eq 0 ]]; then
-    ok "registro y disco están de acuerdo"
+  if [[ ${#without_worktree[@]} -eq 0 && ${#unregistered[@]} -eq 0 ]]; then
+    ok "registry and disk agree"
     return 0
   fi
 
-  if [[ ${#sin_worktree[@]} -gt 0 ]]; then
-    echo "entradas del registro sin worktree en disco (${#sin_worktree[@]}):"
-    printf '      %s\n' "${sin_worktree[@]}"
+  if [[ ${#without_worktree[@]} -gt 0 ]]; then
+    echo "registry entries with no worktree on disk (${#without_worktree[@]}):"
+    printf '      %s\n' "${without_worktree[@]}"
     echo
   fi
-  if [[ ${#sin_registrar[@]} -gt 0 ]]; then
-    echo "worktrees en disco que el registro no conoce (${#sin_registrar[@]}):"
+  if [[ ${#unregistered[@]} -gt 0 ]]; then
+    echo "worktrees on disk that the registry does not know (${#unregistered[@]}):"
     local w
-    for w in "${sin_registrar[@]}"; do
-      printf '      %s%s\n' "$(basename "$w")" "$(espacio_limpio "$w" || echo "  (con trabajo dentro)")"
+    for w in "${unregistered[@]}"; do
+      printf '      %s%s\n' "$(basename "$w")" "$(clean_workspace "$w" || echo "  (with work inside)")"
     done
     echo
   fi
 
-  if [[ $confirmado -eq 0 ]]; then
-    info "para retirar las entradas huérfanas: crux workspace gc --yes"
-    [[ ${#sin_registrar[@]} -gt 0 ]] \
-      && info "y los worktrees, si están limpios: crux workspace gc --yes --include-disk"
+  if [[ $confirmed -eq 0 ]]; then
+    info "to remove the orphan entries: crux workspace gc --yes"
+    [[ ${#unregistered[@]} -gt 0 ]] \
+      && info "and the worktrees, if they are clean: crux workspace gc --yes --include-disk"
     return 0
   fi
 
   local n
-  for n in ${sin_worktree[@]+"${sin_worktree[@]}"}; do
+  for n in ${without_worktree[@]+"${without_worktree[@]}"}; do
     with_lock 50
-    borra_del_registro "$n"
+    remove_from_registry "$n"
     unlock
-    ok "$n retirado del registro"
+    ok "$n removed from the registry"
   done
 
   [[ $include_disk -eq 1 ]] || {
-    [[ ${#sin_registrar[@]} -gt 0 ]] && info "el disco no se toca sin --include-disk"
+    [[ ${#unregistered[@]} -gt 0 ]] && info "the disk is not touched without --include-disk"
     return 0
   }
 
   local w repo
-  for w in ${sin_registrar[@]+"${sin_registrar[@]}"}; do
-    if ! espacio_limpio "$w"; then
-      warn "$(basename "$w") tiene trabajo sin subir: se queda"
+  for w in ${unregistered[@]+"${unregistered[@]}"}; do
+    if ! clean_workspace "$w"; then
+      warn "$(basename "$w") has unpushed work: it stays"
       continue
     fi
-    repo="$(repo_principal "$w")"
+    repo="$(main_repo "$w")"
     if git -C "$repo" worktree remove "$w" 2>/dev/null; then
-      ok "$(basename "$w") retirado del disco"
+      ok "$(basename "$w") removed from disk"
     else
-      warn "no pude retirar $(basename "$w"): hazlo con 'git worktree remove'"
+      warn "could not remove $(basename "$w"): do it with 'git worktree remove'"
     fi
   done
 }
 
-# Las tareas archivadas caducan. Lo que tenía que durar ya salió: la descripción
-# está en la propuesta y las decisiones en el docs repo. La fecha va en el
-# nombre del fichero, no en la de modificación, que cambia con cualquier copia.
-caducar_tareas() {
-  local confirmado="$1" dias corte f fecha viejas=()
-  dias="${CRUX_TASKS_RETENTION_DAYS:-$(preferencia CRUX_TASKS_RETENTION_DAYS 180)}"
-  [[ "$dias" =~ ^[0-9]+$ ]] || die "CRUX_TASKS_RETENTION_DAYS tiene que ser un número de días: '$dias'"
-  corte="$(node -e 'const d = new Date(Date.now() - Number(process.argv[1]) * 86400000); process.stdout.write(d.toISOString().slice(0, 10))' "$dias")"
+# Archived tasks expire. What had to last already went out: the description is
+# in the proposal and the decisions in the docs repo. The date is in the file
+# name, not in the modification time, which changes with any copy.
+expire_tasks() {
+  local confirmed="$1" days cutoff f date old_items=()
+  days="${CRUX_TASKS_RETENTION_DAYS:-$(preference CRUX_TASKS_RETENTION_DAYS 180)}"
+  [[ "$days" =~ ^[0-9]+$ ]] || die "CRUX_TASKS_RETENTION_DAYS has to be a number of days: '$days'"
+  cutoff="$(node -e 'const d = new Date(Date.now() - Number(process.argv[1]) * 86400000); process.stdout.write(d.toISOString().slice(0, 10))' "$days")"
   for f in "$(task_dir)"/*/done/*.md; do
     [[ -f "$f" ]] || continue
-    fecha="$(basename "$f" | cut -c1-10)"
-    [[ "$fecha" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
-    [[ "$fecha" < "$corte" ]] && viejas+=("$f")
+    date="$(basename "$f" | cut -c1-10)"
+    [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+    [[ "$date" < "$cutoff" ]] && old_items+=("$f")
   done
-  [[ ${#viejas[@]} -gt 0 ]] || return 0
-  echo "tareas archivadas hace más de $dias días (${#viejas[@]}):"
-  for f in "${viejas[@]}"; do printf '      %s/%s\n' "$(basename "$(dirname "$(dirname "$f")")")" "$(basename "$f" .md)"; done
-  if [[ "$confirmado" -eq 1 ]]; then
-    # Apuntadas como borradas, o la réplica de otra máquina las devolvería. Con
-    # su fecha de creación, que se lee antes de borrarlas.
-    for f in "${viejas[@]}"; do
+  [[ ${#old_items[@]} -gt 0 ]] || return 0
+  echo "tasks archived more than $days days ago (${#old_items[@]}):"
+  for f in "${old_items[@]}"; do printf '      %s/%s\n' "$(basename "$(dirname "$(dirname "$f")")")" "$(basename "$f" .md)"; done
+  if [[ "$confirmed" -eq 1 ]]; then
+    # Noted as removed, or the other machine's replica would bring them back.
+    # With their creation date, which is read before deleting them.
+    for f in "${old_items[@]}"; do
       printf 'done/%s %s\n' "$(basename "$f")" "$(sed -n 's/^created: //p' "$f" | head -1)" \
         >> "$(dirname "$(dirname "$f")")/.removed"
     done
-    rm -f "${viejas[@]}"
-    ok "${#viejas[@]} tareas caducadas borradas"
+    rm -f "${old_items[@]}"
+    ok "${#old_items[@]} expired tasks deleted"
   else
-    info "para borrarlas: crux workspace gc --yes"
+    info "to delete them: crux workspace gc --yes"
   fi
   echo
 }
 
-# Un worktree se retira solo si no se pierde nada: ni cambios sin commitear ni
-# commits propios del espacio que no estén en ningún remoto. Contra la rama
-# principal y no contra HEAD: en un repo sin remoto, HEAD --not --remotes son
-# todos los commits del proyecto y nunca saldría limpio.
-ficheros_ignorados() {
-  # ficheros_ignorados <dir> [fichero que crux regenera]
+# A worktree is removed only if nothing is lost: neither uncommitted changes
+# nor the workspace's own commits that are in no remote. Against the main
+# branch and not against HEAD: in a repo with no remote, HEAD --not --remotes
+# is every commit of the project and it would never come out clean.
+ignored_files() {
+  # ignored_files <dir> [file crux regenerates]
   #
-  # Lo que git status normal no ensena y al retirar el worktree se borra igual:
-  # ahi viven la base de datos del espacio y lo que se haya dejado a mano. Se
-  # deja fuera lo reponible por una instalacion, el recibo de la puerta, el
-  # puntero local y el fichero de entorno que escribe el propio crux.
-  local propio="${2:-}"
+  # What a plain git status does not show and is deleted anyway when the
+  # worktree is removed: the workspace's database and whatever was left by hand
+  # live there. What an install can restore, the gate receipt, the local
+  # pointer and the environment file crux itself writes are left out.
+  local own="${2:-}"
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
     grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
-    { [[ -n "$propio" ]] && grep -vxF "!! $propio" || cat; } || true
+    { [[ -n "$own" ]] && grep -vxF "!! $own" || cat; } || true
 }
 
-espacio_limpio() {
+clean_workspace() {
   local w="$1"
   [[ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ]] || return 1
-  [[ -z "$(ficheros_ignorados "$w" "${ENV_FILE:-}")" ]] || return 1
-  local base sueltos
-  base="$(rama_principal "$w")"
-  sueltos="$(git -C "$w" log --oneline "$base..HEAD" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
-  [[ "${sueltos:-0}" -eq 0 ]]
+  [[ -z "$(ignored_files "$w" "${ENV_FILE:-}")" ]] || return 1
+  local base standalone_items
+  base="$(main_branch "$w")"
+  standalone_items="$(git -C "$w" log --oneline "$base..HEAD" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${standalone_items:-0}" -eq 0 ]]
 }
 
 cmd_prune() {
-  local confirmado=0
-  [[ "${1:-}" == "--yes" ]] && confirmado=1
+  local confirmed=0
+  [[ "${1:-}" == "--yes" ]] && confirmed=1
 
-  local repo; repo="$(git rev-parse --show-toplevel 2>/dev/null)" || die "esto se ejecuta dentro de un repo"
+  local repo; repo="$(git rev-parse --show-toplevel 2>/dev/null)" || die "this runs inside a repo"
   command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
-    || die "hace falta gh autenticado para saber qué propuestas se fusionaron"
+    || die "an authenticated gh is needed to know which proposals were merged"
 
-  local principal; principal="$(rama_principal "$repo")"
-  local fusionadas
-  fusionadas="$(ramas_con_propuesta_fusionada "$repo")" \
-    || die "no pude preguntarle a gh que propuestas se fusionaron"
+  local main_name; main_name="$(main_branch "$repo")"
+  local merged_list
+  merged_list="$(branches_with_merged_pr "$repo")" \
+    || die "could not ask gh which proposals were merged"
 
-  local integradas=()
+  local integrated=()
   while IFS= read -r b; do
-    [[ -n "$b" && "$b" != "$principal" ]] || continue
-    # Nada de ramas de vida larga: aunque su propuesta se fusionara, borrarlas
-    # rompe el flujo de quien las usa.
+    [[ -n "$b" && "$b" != "$main_name" ]] || continue
+    # No long-lived branches: even if their proposal was merged, deleting them
+    # breaks the flow of whoever uses them.
     case "$b" in
       develop|development|staging|stage|next|production|prod|release|release/*|hotfix/*) continue ;;
     esac
-    printf '%s\n' "$fusionadas" | grep -qxF -- "$b" && integradas+=("$b")
+    printf '%s\n' "$merged_list" | grep -qxF -- "$b" && integrated+=("$b")
   done < <(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin |
            sed 's|^origin/||' | sort -u)
 
-  if [[ ${#integradas[@]} -eq 0 ]]; then
-    ok "no hay ramas fusionadas que limpiar"
+  if [[ ${#integrated[@]} -eq 0 ]]; then
+    ok "there are no merged branches to clean"
     return 0
   fi
 
-  echo "ramas con su propuesta ya fusionada (${#integradas[@]}):"
-  printf '      %s\n' "${integradas[@]}"
+  echo "branches with their proposal already merged (${#integrated[@]}):"
+  printf '      %s\n' "${integrated[@]}"
   echo
-  if [[ $confirmado -eq 0 ]]; then
-    info "para borrarlas, aquí y en el remoto: crux workspace prune --yes"
+  if [[ $confirmed -eq 0 ]]; then
+    info "to delete them, here and on the remote: crux workspace prune --yes"
     return 0
   fi
 
-  local limpiadas=0
-  local en_uso; en_uso="$(git -C "$repo" worktree list --porcelain | sed -n 's/^branch refs\/heads\///p')"
-  for b in "${integradas[@]}"; do
-    if echo "$en_uso" | grep -qx "$b"; then
-      info "$b la usa un worktree: se queda"
+  local cleaned=0
+  local in_use; in_use="$(git -C "$repo" worktree list --porcelain | sed -n 's/^branch refs\/heads\///p')"
+  for b in "${integrated[@]}"; do
+    if echo "$in_use" | grep -qx "$b"; then
+      info "$b is used by a worktree: it stays"
       continue
     fi
-    # Con set -e, un borrado que falla —la rama solo existía en local, o ya no
-    # está en el remoto— se llevaría por delante el resto de la pasada.
-    local borrada=0
-    git -C "$repo" branch -D "$b" >/dev/null 2>&1 && borrada=1
-    git -C "$repo" push -q origin --delete "$b" >/dev/null 2>&1 && borrada=1
-    [[ $borrada -eq 1 ]] && limpiadas=$((limpiadas + 1))
+    # With set -e, a failing deletion —the branch only existed locally, or is
+    # no longer on the remote— would take the rest of the pass down with it.
+    local was_removed=0
+    git -C "$repo" branch -D "$b" >/dev/null 2>&1 && was_removed=1
+    git -C "$repo" push -q origin --delete "$b" >/dev/null 2>&1 && was_removed=1
+    [[ $was_removed -eq 1 ]] && cleaned=$((cleaned + 1))
   done
-  ok "$limpiadas de ${#integradas[@]} ramas limpiadas"
+  ok "$cleaned of ${#integrated[@]} branches cleaned"
 }
 
-# Retomar en esta máquina una tarea empezada en otra. El registro ya llegó con
-# `crux sync`; aquí se abre, en cada repo que declara, un espacio sobre la misma
-# rama traída del remoto, y el espacio se une a la tarea en vez de empezar una
-# vacía. No se decide nada que no diga el registro.
+# Resume on this machine a task started on another. The record already arrived
+# with `crux sync`; here a workspace is opened, in each repo it declares, on the
+# same branch brought from the remote, and the workspace joins the task instead
+# of starting an empty one. Nothing is decided that the record does not say.
 cmd_resume() {
-  local tarea="${1:-}" proyecto=""
+  local task="${1:-}" project=""
   shift || true
-  [[ -n "$tarea" ]] || die "uso: crux workspace resume <tarea> [--project <proyecto>]"
+  [[ -n "$task" ]] || die "usage: crux workspace resume <task> [--project <project>]"
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --project) proyecto="$2"; shift 2 ;;
-      *) die "opción desconocida: $1" ;;
+      --project) project="$2"; shift 2 ;;
+      *) die "unknown option: $1" ;;
     esac
   done
-  nombre_valido "$tarea" || die "nombre de tarea inválido: '$tarea'"
+  valid_name "$task" || die "invalid task name: '$task'"
 
-  local candidatos=() f
-  for f in "$(task_dir)"/*/"$tarea".md; do
+  local candidates=() f
+  for f in "$(task_dir)"/*/"$task".md; do
     [[ -f "$f" ]] || continue
-    [[ -z "$proyecto" || "$(basename "$(dirname "$f")")" == "$proyecto" ]] && candidatos+=("$f")
+    [[ -z "$project" || "$(basename "$(dirname "$f")")" == "$project" ]] && candidates+=("$f")
   done
-  if [[ ${#candidatos[@]} -eq 0 ]]; then
-    err "no hay ninguna tarea abierta '$tarea' en esta máquina"
-    info "si se abrió en otra, trae las tareas antes: crux sync"
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    err "there is no open task '$task' on this machine"
+    info "if it was opened on another, pull the tasks first: crux sync"
     exit 1
   fi
-  if [[ ${#candidatos[@]} -gt 1 ]]; then
-    err "hay una tarea '$tarea' en varios proyectos:"
-    for f in "${candidatos[@]}"; do info "$(basename "$(dirname "$f")")"; done
-    die "elige con --project <proyecto>"
+  if [[ ${#candidates[@]} -gt 1 ]]; then
+    err "there is a task '$task' in several projects:"
+    for f in "${candidates[@]}"; do info "$(basename "$(dirname "$f")")"; done
+    die "choose with --project <project>"
   fi
-  local registro="${candidatos[0]}"
-  proyecto="$(basename "$(dirname "$registro")")"
+  local task_record="${candidates[0]}"
+  project="$(basename "$(dirname "$task_record")")"
 
-  local datos
-  datos="$(node "$CRUX_HOME/lib/task.mjs" places --file "$registro" 2>&1)" \
-    || die "no pude leer el registro $registro: $datos"
-  [[ -n "$datos" ]] || die "la tarea '$tarea' no declara ningún repo: ábrela con crux workspace new"
+  local data
+  data="$(node "$CRUX_HOME/lib/task.mjs" places --file "$task_record" 2>&1)" \
+    || die "could not read the record $task_record: $data"
+  [[ -n "$data" ]] || die "the task '$task' declares no repo: open it with crux workspace new"
 
-  local raiz repo_nombre rama espacio dir_repo n_repos hechos=0
-  raiz="$(projects_root)"
-  n_repos="$(printf '%s\n' "$datos" | wc -l | tr -d ' ')"
-  while IFS=$'\t' read -r repo_nombre rama espacio; do
-    dir_repo="$raiz/$proyecto/$repo_nombre"
-    [[ -d "$dir_repo/.git" ]] || dir_repo="$raiz/$repo_nombre"
+  local root repo_name branch_ref ws_name dir_repo n_repos done_count=0
+  root="$(projects_root)"
+  n_repos="$(printf '%s\n' "$data" | wc -l | tr -d ' ')"
+  while IFS=$'\t' read -r repo_name branch_ref ws_name; do
+    dir_repo="$root/$project/$repo_name"
+    [[ -d "$dir_repo/.git" ]] || dir_repo="$root/$repo_name"
     if [[ ! -d "$dir_repo/.git" ]]; then
-      err "$repo_nombre no está en esta máquina"
-      info "tráelo con: crux clone $proyecto"
+      err "$repo_name is not on this machine"
+      info "bring it with: crux clone $project"
       continue
     fi
-    [[ -n "$espacio" ]] || { [[ "$n_repos" -gt 1 ]] && espacio="$tarea-$repo_nombre" || espacio="$tarea"; }
-    # Una tarea registrada antes de que se anotara la rama: la del patrón.
-    [[ -n "$rama" ]] || rama="ws/$espacio"
+    [[ -n "$ws_name" ]] || { [[ "$n_repos" -gt 1 ]] && ws_name="$task-$repo_name" || ws_name="$task"; }
+    # A task registered before the branch was noted: the pattern one.
+    [[ -n "$branch_ref" ]] || branch_ref="ws/$ws_name"
 
-    local ya
-    ya="$(node -e '
+    local already
+    already="$(node -e '
       const fs = require("fs");
       try {
         const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
         const w = (r.workspaces || {})[process.argv[2]];
         if (w && fs.existsSync(w.path)) process.stdout.write(w.path);
       } catch {}
-    ' "$REGISTRY" "$espacio")"
-    if [[ -n "$ya" ]]; then
-      ok "$repo_nombre: el espacio ya está aquí — $ya"
-      hechos=$((hechos + 1)); continue
+    ' "$REGISTRY" "$ws_name")"
+    if [[ -n "$already" ]]; then
+      ok "$repo_name: the workspace is already here — $already"
+      done_count=$((done_count + 1)); continue
     fi
 
-    git -C "$dir_repo" fetch -q origin "+refs/heads/$rama:refs/remotes/origin/$rama" 2>/dev/null || true
-    # Una rama retirada al ponerse a esperar no falta: se abre una nueva desde
-    # la principal, porque lo que tenía ya estaba integrado.
+    git -C "$dir_repo" fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>/dev/null || true
+    # A branch retired when going into waiting is not missing: a new one is
+    # opened from the main branch, because what it had was already merged.
     local retired_branch
-    retired_branch="$(node "$CRUX_HOME/lib/task.mjs" retired --file "$registro" | awk -F'\t' -v r="$repo_nombre" '$1 == r {print $2; exit}')"
+    retired_branch="$(node "$CRUX_HOME/lib/task.mjs" retired --file "$task_record" | awk -F'\t' -v r="$repo_name" '$1 == r {print $2; exit}')"
     if [[ -n "$retired_branch" ]]; then
-      rama="$retired_branch"
-      if ( cmd_new "$espacio" --repo "$dir_repo" --branch "$rama" --base "$(rama_principal "$dir_repo")" --task "$tarea" ); then
-        node "$CRUX_HOME/lib/task.mjs" reopen --file "$registro" --repo "$repo_nombre"
-        hechos=$((hechos + 1))
+      branch_ref="$retired_branch"
+      if ( cmd_new "$ws_name" --repo "$dir_repo" --branch "$branch_ref" --base "$(main_branch "$dir_repo")" --task "$task" ); then
+        node "$CRUX_HOME/lib/task.mjs" reopen --file "$task_record" --repo "$repo_name"
+        done_count=$((done_count + 1))
       fi
       continue
     fi
-    if ! git -C "$dir_repo" show-ref --verify --quiet "refs/heads/$rama" \
-       && ! git -C "$dir_repo" show-ref --verify --quiet "refs/remotes/origin/$rama"; then
-      err "$repo_nombre: la rama $rama no está ni aquí ni en el remoto"
-      info "en la otra máquina: crux sync --leave te dice qué falta por subir"
+    if ! git -C "$dir_repo" show-ref --verify --quiet "refs/heads/$branch_ref" \
+       && ! git -C "$dir_repo" show-ref --verify --quiet "refs/remotes/origin/$branch_ref"; then
+      err "$repo_name: the branch $branch_ref is neither here nor on the remote"
+      info "on the other machine: crux sync --leave tells you what is left to push"
       continue
     fi
-    ( cmd_new "$espacio" --repo "$dir_repo" --branch "$rama" --task "$tarea" ) && hechos=$((hechos + 1))
-  done <<< "$datos"
+    ( cmd_new "$ws_name" --repo "$dir_repo" --branch "$branch_ref" --task "$task" ) && done_count=$((done_count + 1))
+  done <<< "$data"
 
-  [[ $hechos -gt 0 ]] || exit 1
-  # Retomarla es que la respuesta llegó: deja de esperar.
-  if [[ "$(node "$CRUX_HOME/lib/task.mjs" unwait --file "$registro")" == "cleared" ]]; then
-    ok "la tarea ya no espera respuesta"
+  [[ $done_count -gt 0 ]] || exit 1
+  # Resuming it means the answer arrived: it stops waiting.
+  if [[ "$(node "$CRUX_HOME/lib/task.mjs" unwait --file "$task_record")" == "cleared" ]]; then
+    ok "the task no longer waits for an answer"
   fi
   echo
-  local resumen
-  resumen="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$registro" 2>/dev/null || true)"
-  IFS=$'\x1f' read -r _ estado pasos siguiente <<< "$resumen"
-  ok "tarea '$tarea' retomada · $estado${pasos:+ · pasos $pasos}"
-  [[ -n "$siguiente" ]] && info "siguiente: $siguiente"
-  info "registro: $registro"
+  local summary
+  summary="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$task_record" 2>/dev/null || true)"
+  IFS=$'\x1f' read -r _ status steps next_step <<< "$summary"
+  ok "task '$task' resumed · $status${steps:+ · steps $steps}"
+  [[ -n "$next_step" ]] && info "next: $next_step"
+  info "record: $task_record"
 }
 
-uso() {
+usage() {
   awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
 }
 
 for arg in "$@"; do
-  [[ "$arg" == "--help" || "$arg" == "-h" ]] && { uso; exit 0; }
+  [[ "$arg" == "--help" || "$arg" == "-h" ]] && { usage; exit 0; }
 done
 
 case "${1:-}" in
@@ -1460,6 +1472,6 @@ case "${1:-}" in
   rm)   shift; cmd_rm "$@" ;;
   gc)   shift; cmd_gc "$@" ;;
   prune) shift; cmd_prune "$@" ;;
-  help) uso ;;
-  *) uso >&2; die "uso: crux workspace {new|list|resume|adopt|finish|merge|rm|gc|heal|prune}" ;;
+  help) usage ;;
+  *) usage >&2; die "usage: crux workspace {new|list|resume|adopt|finish|merge|rm|gc|heal|prune}" ;;
 esac

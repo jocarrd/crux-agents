@@ -1,25 +1,25 @@
 # repos/
 
-Documentación específica de cada repo de {{PROJECT}}. Una carpeta por repo,
-nombrada igual que el repo en GitHub.
+Documentation specific to each {{PROJECT}} repo. One folder per repo, named the
+same as the repo on GitHub.
 
-| Carpeta | Repo | Qué hace |
-| ------- | ---- | -------- |
+| Folder | Repo | What it does |
+| ------ | ---- | ------------ |
 | | | |
 
-## Convenciones dentro de cada carpeta
+## Conventions inside each folder
 
-- `README.md` — índice del repo: qué hace, qué docs viven aquí, dónde está el código
-- `decisions.md` — decisiones que afectan solo a este repo
-- Resto de docs temáticas según haga falta: `architecture.md`, `api.md`,
+- `README.md` — the repo's index: what it does, which docs live here, where the code is
+- `decisions.md` — decisions that affect only this repo
+- Other topical docs as needed: `architecture.md`, `api.md`,
   `design-system.md`, `notes.md`…
 
-## Reglas de paths
+## Path rules
 
-Los paths que aparecen en estas docs son **relativos a la raíz del repo
-descrito** y se escriben en backticks, sin enlazar. Cada doc debe incluir esta
-línea en su cabecera:
+The paths that appear in these docs are **relative to the root of the described
+repo** and are written in backticks, without linking. Each doc must include
+this line in its header:
 
 ```
-> Paths relativos a la raíz de `<repo-name>/`.
+> Paths relative to the root of `<repo-name>/`.
 ```

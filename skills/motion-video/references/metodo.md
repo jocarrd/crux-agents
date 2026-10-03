@@ -1,10 +1,10 @@
-# motion-video — método y porqués
+# motion-video — method and rationale
 
-## Muelles de forma cerrada
+## Closed-form springs
 
-Una curva fija va de A a B siempre igual. Un muelle acelera, se pasa un pelo y
-se asienta: tiene masa. En forma cerrada sigue siendo función pura del tiempo,
-así que el fotograma 812 se pinta sin simular los 811 anteriores.
+A fixed curve goes from A to B always the same way. A spring accelerates,
+overshoots a touch and settles: it has mass. In closed form it is still a pure
+function of time, so frame 812 is painted without simulating the 811 before it.
 
 ```js
 function spring(t, k = 170, d = 20) {
@@ -16,7 +16,7 @@ function spring(t, k = 170, d = 20) {
   }
   return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
 }
-// Un valor con varios destinos: un muelle por cambio, sumados. keys = [[t, valor], ...]
+// A value with several targets: one spring per change, summed. keys = [[t, value], ...]
 function track(t, keys, k = 170, d = 20) {
   let v = keys[0][1];
   for (let i = 1; i < keys.length; i++) v += (keys[i][1] - keys[i - 1][1]) * spring(t - keys[i][0], k, d);
@@ -24,63 +24,62 @@ function track(t, keys, k = 170, d = 20) {
 }
 ```
 
-Rígido (k 260-320) para botones y bordes que avanzan; medio (170) para
-tarjetas y cámara; lento y sin rebote para tipografía grande y logos.
+Stiff (k 260-320) for buttons and advancing borders; medium (170) for cards and
+camera; slow and without bounce for large typography and logos.
 
-## Fallos medidos
+## Measured failures
 
-- **Una imagen que cambia de `src` dentro de `seek`** no llega a cargarse antes
-  de la captura y sale vacía. Se precargan todas y se alterna `display`.
-- **Logos blancos sobre fondo claro** desaparecen. Van en una pastilla oscura.
-- **Palabras gigantes a ancho fijo** se salen del lienzo. Se miden una vez con
-  la fuente cargada y se ajusta el tamaño al ancho.
-- **Partir un texto en letras en cada `seek`** reconstruye el DOM en cada
-  fotograma. Se parte una vez y se reutiliza mientras el texto no cambie.
-- **Una cortina que sigue visible** tapa la escena siguiente unos fotogramas.
-  Su visibilidad se corta en cuanto termina, no con margen.
-- **Público no técnico:** una terminal agobia. Pasos en lenguaje llano; los
-  comandos, si acaso, en un desplegable.
+- **An image that changes `src` inside `seek`** does not finish loading before
+  the capture and comes out empty. Preload them all and toggle `display`.
+- **White logos on a light background** disappear. They go on a dark pill.
+- **Giant words at fixed width** overflow the canvas. Measure them once with the
+  font loaded and fit the size to the width.
+- **Splitting a text into letters on every `seek`** rebuilds the DOM on every
+  frame. Split it once and reuse it while the text does not change.
+- **A curtain that stays visible** covers the next scene for a few frames. Its
+  visibility is cut as soon as it ends, not with a margin.
+- **Non-technical audience:** a terminal overwhelms. Steps in plain language;
+  the commands, if at all, in a collapsible.
 
-## Sonido sin poder escucharlo
+## Sound without being able to listen to it
 
-Sintetizar es escribir muestras: bombo (seno con caída de tono), caja
-(ruido filtrado), platos (ruido paso alto con caída larga), cuerdas y metales
-(dientes de sierra desafinados con filtro), coro (dientes de sierra por
-formantes a 750, 1150 y 2700 Hz), reverberación tipo Freeverb y eco. Cada
-efecto se coloca en el segundo exacto del corte que acompaña.
+Synthesising is writing samples: kick (sine with pitch drop), snare (filtered
+noise), cymbals (high-passed noise with a long decay), strings and brass
+(detuned sawtooth waves with a filter), choir (sawtooth waves by formants at
+750, 1150 and 2700 Hz), Freeverb-style reverb and echo. Each effect is placed at
+the exact second of the cut it accompanies.
 
-Lo que no se oye se mide. Energía por bandas en un tramo de cuerpo:
+What cannot be heard is measured. Energy per band over a body section:
 
 ```bash
 for b in "20 60" "60 150" "150 400" "400 1500" "1500 5000" "5000 16000"; do set -- $b
-  ffmpeg -ss 8 -to 19 -i musica.wav -af "highpass=f=$1,highpass=f=$1,lowpass=f=$2,lowpass=f=$2,volumedetect" -f null - 2>&1 | grep mean_volume
+  ffmpeg -ss 8 -to 19 -i music.wav -af "highpass=f=$1,highpass=f=$1,lowpass=f=$2,lowpass=f=$2,volumedetect" -f null - 2>&1 | grep mean_volume
 done
 ```
 
-Una mezcla sana cae unos 3 dB por banda hacia los agudos. Un pico en 400-1500
-es un coro o un pad que tapa el resto; un hueco en 1500-5000 deja la melodía sin
-presencia. `volumedetect` por tramos confirma la forma: silencio antes del
-drop, golpe en el drop.
+A healthy mix falls about 3 dB per band towards the highs. A peak at 400-1500 is
+a choir or a pad covering the rest; a gap at 1500-5000 leaves the melody without
+presence. `volumedetect` by sections confirms the shape: silence before the
+drop, a hit on the drop.
 
-Mezcla con la imagen y normalización en un paso:
+Mix with the image and normalisation in one step:
 
 ```bash
-ffmpeg -i video.mp4 -i musica.wav -map 0:v -map 1:a -c:v copy \
+ffmpeg -i video.mp4 -i music.wav -map 0:v -map 1:a -c:v copy \
   -af "alimiter=limit=0.95,loudnorm=I=-14:TP=-1.5:LRA=11" -ar 48000 -c:a aac -b:a 192k \
   -shortest -movflags +faststart final.mp4
 ```
 
-## Desenfoque de movimiento
+## Motion blur
 
-Se renderiza a `fps × sub` y se promedian grupos de `sub` fotogramas:
+Render at `fps × sub` and average groups of `sub` frames:
 
 ```bash
 ffmpeg -framerate 120 -i f%05d.png -vf "tmix=frames=4,select='eq(mod(n\,4)\,3)',setpts=N/30/TB" -r 30 ...
 ```
 
-## De dónde sale
+## Where it comes from
 
-Del método que se hizo público en septiembre de 2026 alrededor de los vídeos
-generados con modelos de lenguaje (seek(t), muelles, rejilla de pulsos, bucle
-de crítica puntuado) y de un vídeo real hecho con esta skill, donde se midieron
-los fallos de arriba.
+From the method made public in September 2026 around videos generated with
+language models (seek(t), springs, beat grid, scored critique loop) and from a
+real video made with this skill, where the failures above were measured.

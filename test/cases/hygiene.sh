@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-_proyecto_higiene() {
+_hygiene_project() {
   local root="$CRUX_PROJECTS_DIR/proj"
   mkdir -p "$root/app" "$root/proj-docs"
   git -C "$root/app" init -q
@@ -12,194 +12,195 @@ _proyecto_higiene() {
   echo "$root"
 }
 
-test_el_registro_se_repara_solo_si_no_queda_ni_carpeta_ni_rama() {
+test_the_registry_self_heals_only_if_neither_folder_nor_branch_remain() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_higiene)"
-  bash "$CRUX_HOME/bin/workspace.sh" new borrado --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new con-rama --repo "$root/app" >/dev/null 2>&1
+  local root; root="$(_hygiene_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new deleted --repo "$root/app" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new with-branch --repo "$root/app" >/dev/null 2>&1
 
-  # Lo que hacían las sesiones para liberar disco: por fuera de crux.
-  git -C "$root/app" worktree remove --force "$root/app-ws-borrado" >/dev/null 2>&1
-  git -C "$root/app" branch -D ws/borrado >/dev/null 2>&1
-  git -C "$root/app" worktree remove --force "$root/app-ws-con-rama" >/dev/null 2>&1
+  # What sessions did to free disk: outside crux.
+  git -C "$root/app" worktree remove --force "$root/app-ws-deleted" >/dev/null 2>&1
+  git -C "$root/app" branch -D ws/deleted >/dev/null 2>&1
+  git -C "$root/app" worktree remove --force "$root/app-ws-with-branch" >/dev/null 2>&1
 
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" heal 2>&1)"
-  assert_contains "$out" "'borrado' retirado del registro" "sin carpeta ni rama, la entrada sobra"
-  assert_contains "$out" "su rama ws/con-rama sigue viva" "con la rama viva puede haber trabajo: se avisa"
-  assert_not_contains "$(cat "$CRUX_REGISTRY")" '"borrado"' "la entrada desaparece"
-  assert_contains "$(cat "$CRUX_REGISTRY")" '"con-rama"' "la otra se queda"
+  assert_contains "$out" "'deleted' removed from the registry" "with no folder or branch, the entry is surplus"
+  assert_contains "$out" "its branch ws/with-branch is still alive" "with the branch alive there may be work: it warns"
+  assert_not_contains "$(cat "$CRUX_REGISTRY")" '"deleted"' "the entry disappears"
+  assert_contains "$(cat "$CRUX_REGISTRY")" '"with-branch"' "the other one stays"
 
-  # Y no hace falta acordarse: abrir un espacio nuevo ya repara.
-  git -C "$root/app" branch -D ws/con-rama >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new otro --repo "$root/app" >/dev/null 2>&1
-  assert_not_contains "$(cat "$CRUX_REGISTRY")" '"con-rama"' "workspace new repara el registro sin pedirlo"
+  # And there is no need to remember: opening a new workspace already heals.
+  git -C "$root/app" branch -D ws/with-branch >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new other --repo "$root/app" >/dev/null 2>&1
+  assert_not_contains "$(cat "$CRUX_REGISTRY")" '"with-branch"' "workspace new heals the registry unasked"
 }
 
-test_adopt_registra_un_worktree_hecho_a_mano() {
+test_adopt_registers_a_hand_made_worktree() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_higiene)"
-  git -C "$root/app" worktree add -q -b fix/a-mano "$root/app-ws-a-mano" >/dev/null 2>&1
+  local root; root="$(_hygiene_project)"
+  git -C "$root/app" worktree add -q -b fix/by-hand "$root/app-ws-by-hand" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/app-ws-a-mano" 2>&1)"
-  assert_contains "$out" "'a-mano' adoptado (fix/a-mano" "lo registra con su rama"
-  assert_contains "$(cat "$CRUX_REGISTRY")" '"path": "'"$root"'/app-ws-a-mano"' "entra en el registro"
-  assert_file "$SB/tasks/proj/a-mano.md" "y abre su tarea"
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/app-ws-by-hand" 2>&1)"
+  assert_contains "$out" "'by-hand' adopted (fix/by-hand" "it registers it with its branch"
+  assert_contains "$(cat "$CRUX_REGISTRY")" '"path": "'"$root"'/app-ws-by-hand"' "it enters the registry"
+  assert_file "$SB/tasks/proj/by-hand.md" "and opens its task"
 
-  assert_exit 1 "no se adopta dos veces" bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/app-ws-a-mano"
-  mkdir -p "$root/suelto"
-  assert_exit 1 "ni algo que no es un worktree" bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/suelto"
+  assert_exit 1 "it is not adopted twice" bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/app-ws-by-hand"
+  mkdir -p "$root/loose"
+  assert_exit 1 "nor something that is not a worktree" bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/loose"
 }
 
-test_status_avisa_de_worktrees_desconocidos_y_espacios_ya_fusionados() {
+test_status_warns_of_unknown_worktrees_and_already_merged_workspaces() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_higiene)"
-  git -C "$root/app" worktree add -q -b fix/suelto "$root/app-ws-suelto" >/dev/null 2>&1
+  local root; root="$(_hygiene_project)"
+  git -C "$root/app" worktree add -q -b fix/loose "$root/app-ws-loose" >/dev/null 2>&1
 
-  # Un espacio cuya rama tuvo remoto y ya no lo tiene: fusionada y borrada.
-  git init -q --bare "$SB/remoto.git"
-  git -C "$root/app" remote add origin "$SB/remoto.git"
-  bash "$CRUX_HOME/bin/workspace.sh" new hecho --repo "$root/app" >/dev/null 2>&1
-  git -C "$root/app-ws-hecho" push -q -u origin ws/hecho >/dev/null 2>&1
-  git -C "$root/app" push -q origin --delete ws/hecho >/dev/null 2>&1
+  # A workspace whose branch had a remote and no longer does: merged and deleted.
+  git init -q --bare "$SB/remote.git"
+  git -C "$root/app" remote add origin "$SB/remote.git"
+  bash "$CRUX_HOME/bin/workspace.sh" new finished --repo "$root/app" >/dev/null 2>&1
+  git -C "$root/app-ws-finished" push -q -u origin ws/finished >/dev/null 2>&1
+  git -C "$root/app" push -q origin --delete ws/finished >/dev/null 2>&1
   git -C "$root/app" fetch -q --prune origin >/dev/null 2>&1
 
   local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
-  assert_contains "$out" "app-ws-suelto es un worktree que crux no conoce" "status enseña el worktree hecho a mano"
-  assert_contains "$out" "crux workspace adopt" "con cómo registrarlo"
-  assert_contains "$out" "'hecho': su rama ya no está en el remoto" "y el espacio que ya se fusionó"
+  assert_contains "$out" "app-ws-loose is a worktree crux does not know about" "status shows the hand-made worktree"
+  assert_contains "$out" "crux workspace adopt" "with how to register it"
+  assert_contains "$out" "'finished': its branch is no longer on the remote" "and the workspace that was already merged"
 }
 
-test_el_guardia_para_el_borrado_a_mano_de_un_espacio_registrado() {
+test_the_guard_stops_manual_deletion_of_a_registered_workspace() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_higiene)"
-  bash "$CRUX_HOME/bin/workspace.sh" new guardado --repo "$root/app" >/dev/null 2>&1
+  local root; root="$(_hygiene_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new guarded --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
-  _pide() { printf '{"tool_input":{"command":%s}}' "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" 2>&1; }
+  _asks() { printf '{"tool_input":{"command":%s}}' "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" 2>&1; }
 
-  local out; out="$(_pide "git worktree remove --force $root/app-ws-guardado")"
-  assert_contains "$out" "crux workspace rm guardado" "para el atajo y dice qué usar"
-  assert_exit 2 "sale con 2, que es lo que bloquea la herramienta" \
-    bash -c "printf '{\"tool_input\":{\"command\":\"rm -rf $root/app-ws-guardado\"}}' | bash $hook"
-  assert_eq "" "$(_pide "rm -rf $root/app-ws-guardado/node_modules")" "borrar algo dentro del espacio se deja"
-  assert_eq "" "$(_pide "rm -rf $root/app-ws-guardado-otro")" "un nombre parecido no es el espacio"
-  assert_eq "" "$(_pide "git worktree list")" "ni un comando que no borra"
+  local out; out="$(_asks "git worktree remove --force $root/app-ws-guarded")"
+  assert_contains "$out" "crux workspace rm guarded" "it stops the shortcut and says what to use"
+  assert_exit 2 "it exits with 2, which is what blocks the tool" \
+    bash -c "printf '{\"tool_input\":{\"command\":\"rm -rf $root/app-ws-guarded\"}}' | bash $hook"
+  assert_eq "" "$(_asks "rm -rf $root/app-ws-guarded/node_modules")" "deleting something inside the workspace is allowed"
+  assert_eq "" "$(_asks "rm -rf $root/app-ws-guarded-other")" "a similar name is not the workspace"
+  assert_eq "" "$(_asks "git worktree list")" "nor a command that does not delete"
 }
 
-test_el_guardia_cubre_las_otras_formas_de_llevarse_un_espacio() {
-  # La forma canonica estaba cubierta; el resto pasaba de largo. Y al reves:
-  # bloqueaba comandos que solo mencionaban las palabras en un comentario.
+test_the_guard_covers_the_other_ways_of_taking_a_workspace_away() {
+  # The canonical form was covered; the rest slipped through. And the other way
+  # round: it blocked commands that only mentioned the words in a comment.
   sandbox >/dev/null
-  local root; root="$(_proyecto_higiene)"
-  bash "$CRUX_HOME/bin/workspace.sh" new variantes --repo "$root/app" >/dev/null 2>&1
+  local root; root="$(_hygiene_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new variants --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
-  local ws="$root/app-ws-variantes"
-  _corta() {
+  local ws="$root/app-ws-variants"
+  _cut() {
     printf '{"tool_input":{"command":%s}}' \
       "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
 
-  assert_eq "2" "$(_corta "rm --recursive --force $ws")" "con las banderas largas"
-  assert_eq "2" "$(_corta "rm -f -r $ws")" "con las banderas separadas"
-  assert_eq "2" "$(_corta "find $ws -delete")" "con find -delete"
-  assert_eq "2" "$(_corta "find $ws -type f -exec rm {} ;")" "con find -exec rm"
+  assert_eq "2" "$(_cut "rm --recursive --force $ws")" "with long flags"
+  assert_eq "2" "$(_cut "rm -f -r $ws")" "with separate flags"
+  assert_eq "2" "$(_cut "find $ws -delete")" "with find -delete"
+  assert_eq "2" "$(_cut "find $ws -type f -exec rm {} ;")" "with find -exec rm"
 
-  assert_eq "0" "$(_corta "echo listo  # ojo con rm -rf $ws")" "la ruta en un comentario no cuenta"
-  assert_eq "0" "$(_corta "grep -n 'worktree remove' $ws/notas.md")" "ni mencionar las palabras"
-  assert_eq "0" "$(_corta "cd $ws && rm -rf node_modules")" "ni nombrarla antes de borrar otra cosa"
+  assert_eq "0" "$(_cut "echo done  # careful with rm -rf $ws")" "the path in a comment does not count"
+  assert_eq "0" "$(_cut "grep -n 'worktree remove' $ws/notes.md")" "nor mentioning the words"
+  assert_eq "0" "$(_cut "cd $ws && rm -rf node_modules")" "nor naming it before deleting something else"
 
-  assert_eq "2" "$(_corta "rm -Rf $ws")" "con la R mayúscula"
-  assert_eq "2" "$(_corta "rm -rf $root/app-ws-*")" "con un comodín que casa con el espacio"
-  assert_eq "2" "$(_corta "rm -rf $root/*")" "y con uno que se lleva la carpeta del proyecto entera"
-  assert_eq "0" "$(_corta "rm -rf $root/*.log")" "pero no con uno que no alcanza ningún espacio"
-  assert_eq "0" "$(_corta "rm -rf ./dist/*")" "ni con uno relativo a otra carpeta"
+  assert_eq "2" "$(_cut "rm -Rf $ws")" "with a capital R"
+  assert_eq "2" "$(_cut "rm -rf $root/app-ws-*")" "with a wildcard that matches the workspace"
+  assert_eq "2" "$(_cut "rm -rf $root/*")" "and with one that takes the whole project folder"
+  assert_eq "0" "$(_cut "rm -rf $root/*.log")" "but not with one that reaches no workspace"
+  assert_eq "0" "$(_cut "rm -rf ./dist/*")" "nor with one relative to another folder"
 }
 
-test_hooks_install_engancha_el_guardia_solo_para_bash() {
+test_hooks_install_hooks_the_guard_for_bash_only() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
   bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
   local pre; pre="$(node -e 'const s=require(process.argv[1]); console.log(JSON.stringify(s.hooks.PreToolUse||[]))' "$CLAUDE_SETTINGS")"
-  assert_contains "$pre" "worktree-guard.sh" "install engancha el guardia"
-  assert_contains "$pre" '"matcher":"Bash"' "solo sobre los comandos de shell"
+  assert_contains "$pre" "worktree-guard.sh" "install hooks the guard"
+  assert_contains "$pre" '"matcher":"Bash"' "only on shell commands"
   bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
-  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "worktree-guard" "y remove lo retira"
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "worktree-guard" "and remove takes it off"
 }
 
-test_el_registro_no_dice_ok_si_no_pudo_escribirse() {
+test_the_registry_does_not_say_ok_if_it_could_not_be_written() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
-  local root="$CRUX_PROJECTS_DIR/solectura"
-  mkdir -p "$root/app" "$root/solectura-docs"
+  local root="$CRUX_PROJECTS_DIR/readonly"
+  mkdir -p "$root/app" "$root/readonly-docs"
   git -C "$root/app" init -q
   git -C "$root/app" config user.email t@t
   git -C "$root/app" config user.name t
   echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
-  printf '{"crux":"0.1.0","project":"solectura","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
-    > "$root/solectura-docs/crux.json"
+  printf '{"crux":"0.1.0","project":"readonly","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/readonly-docs/crux.json"
   bash "$CRUX_HOME/bin/workspace.sh" new ro --repo "$root/app" >/dev/null 2>&1
 
-  # El directorio, no el fichero: escribir es crear un temporal y renombrarlo,
-  # y para eso basta con poder escribir en el directorio.
+  # The directory, not the file: writing is creating a temp file and renaming it,
+  # and for that being able to write in the directory is enough.
   chmod 500 "$(dirname "$CRUX_REGISTRY")"
   local out rc=0
   out="$(bash "$CRUX_HOME/bin/workspace.sh" rm ro 2>&1)" || rc=$?
   chmod 700 "$(dirname "$CRUX_REGISTRY")"
 
-  assert_eq "1" "$rc" "sale en rojo si no pudo retirar la entrada"
-  assert_not_contains "$out" "slot liberado" "y no dice que libero el slot"
-  # El punto exacto donde falla depende de si pudo coger el cerrojo antes; lo
-  # que garantiza el cambio es que no se anuncia como hecho algo que no lo esta.
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "su entrada sigue en el registro" \
-    "y hay un mensaje que lo dice cuando el fallo es al retirar la entrada"
+  assert_eq "1" "$rc" "it exits red if it could not remove the entry"
+  assert_not_contains "$out" "slot released" "and does not say it released the slot"
+  # The exact point where it fails depends on whether it could take the lock
+  # first; what the change guarantees is that something not done is not
+  # announced as done.
+  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "its entry is still in the registry" \
+    "and there is a message that says so when the failure is on removing the entry"
 }
 
-test_el_registro_se_escribe_de_una_pieza() {
+test_the_registry_is_written_in_one_piece() {
   sandbox >/dev/null
   local reg="$SB/registry.json"
   source "$CRUX_HOME/lib/registry.sh"
-  # Las lee registry_init al cargarse la libreria.
+  # registry_init reads them when the library is loaded.
   # shellcheck disable=SC2034
   REGISTRY="$reg"
   # shellcheck disable=SC2034
   LOCK="$SB/.lock"
   registry_init
-  assert_file "$reg" "registry_init lo crea"
+  assert_file "$reg" "registry_init creates it"
   assert_contains "$(cat "$CRUX_HOME/lib/registry.sh")" "renameSync" \
-    "se escribe a temporal y se renombra, no encima"
-  assert_contains "$(cat "$CRUX_HOME/lib/registry.sh")" "registro ilegible" \
-    "y un registro roto se dice en vez de pasar por vacio"
+    "it is written to a temp file and renamed, not over it"
+  assert_contains "$(cat "$CRUX_HOME/lib/registry.sh")" "unreadable registry" \
+    "and a broken registry is reported instead of passing as empty"
 }
 
-test_una_clave_de_staging_no_viaja_en_la_linea_de_comandos() {
+test_a_staging_password_does_not_travel_on_the_command_line() {
   sandbox >/dev/null
   local stg; stg="$(cat "$CRUX_HOME/bin/stg.sh")"
   assert_not_contains "$stg" "hash-password --plaintext" \
-    "la clave no va como argumento, que sudo deja escrito en auth.log"
-  assert_contains "$stg" "docker exec -i" "entra por la entrada estandar"
+    "the password does not go as an argument, which sudo leaves written in auth.log"
+  assert_contains "$stg" "docker exec -i" "it comes in through standard input"
 }
 
-test_una_skill_del_proyecto_no_reemplaza_la_del_kernel() {
+test_a_project_skill_does_not_replace_the_kernels() {
   sandbox >/dev/null
   local mat; mat="$(cat "$CRUX_HOME/adapters/claude/materialize.sh")"
-  assert_contains "$mat" "ya la trae el kernel" "se avisa en vez de reemplazar"
+  assert_contains "$mat" "already shipped by the kernel" "it warns instead of replacing"
   assert_not_contains "$mat" 'ln -sfn "$src" "$CLAUDE_SKILLS_DIR/$name"' \
-    "el enlace ya no se fuerza a ciegas"
+    "the link is no longer forced blindly"
 }
 
-test_check_secrets_ve_una_contrasena_en_una_asignacion() {
+test_check_secrets_sees_a_password_in_an_assignment() {
   sandbox >/dev/null
   local d="$SB/docs"; mkdir -p "$d"
-  printf '# Notas\n\nDB_PASSWORD=Ab3xKq91zzTT\n' > "$d/notas.md"
+  printf '# Notes\n\nDB_PASSWORD=Ab3xKq91zzTT\n' > "$d/notes.md"
   local out; out="$(node "$CRUX_HOME/lib/check-secrets.mjs" "$d" 2>&1 || true)"
-  assert_contains "$out" "notas.md" "la forma CLAVE=valor ya no se descarta por el ="
+  assert_contains "$out" "notes.md" "the KEY=value form is no longer dropped because of the ="
 
-  printf '# Notas\n\nDB_PASSWORD=changeme\nPORT=3000\n' > "$d/notas.md"
-  local limpio; limpio="$(node "$CRUX_HOME/lib/check-secrets.mjs" "$d" 2>&1 || true)"
-  assert_not_contains "$limpio" "notas.md" "y un valor de ejemplo no grita"
+  printf '# Notes\n\nDB_PASSWORD=changeme\nPORT=3000\n' > "$d/notes.md"
+  local clean; clean="$(node "$CRUX_HOME/lib/check-secrets.mjs" "$d" 2>&1 || true)"
+  assert_not_contains "$clean" "notes.md" "and an example value does not shout"
 }
 
-test_el_registro_de_tarea_no_pierde_lo_que_no_escribio_crux() {
+test_the_task_record_does_not_lose_what_crux_did_not_write() {
   sandbox >/dev/null
   local f="$SB/t.md"
   cat > "$f" <<'MD'
@@ -210,60 +211,60 @@ status: open
 owner-name: Jorge
 ---
 
-Un parrafo de contexto.
+A paragraph of context.
 
-## Desviaciones y decisiones
+## Deviations and decisions
 
-- El ejemplo es:
+- The example is:
 
 ```markdown
-## Cabecera de ejemplo
-texto
+## Example header
+text
 ```
 
-- Y por eso X.
+- And that is why X.
 MD
-  node "$CRUX_HOME/lib/task.mjs" note --file "$f" --text "decision nueva" >/dev/null 2>&1
-  local tras; tras="$(cat "$f")"
-  assert_contains "$tras" "owner-name: Jorge" "una clave de cabecera con guion sobrevive"
-  assert_contains "$tras" "Un parrafo de contexto." "y lo escrito antes de la primera seccion"
-  assert_contains "$tras" "- Y por eso X." "lo que iba tras el bloque de codigo sigue en su sitio"
-  local lineas; lineas="$(grep -n 'decision nueva' "$f" | cut -d: -f1)"
-  local cierre; cierre="$(grep -n '^```$' "$f" | tail -1 | cut -d: -f1)"
-  [[ "$lineas" -gt "$cierre" ]] && PASS=$((PASS + 1)) \
-    || _fail "la nota nueva va fuera del bloque de codigo"
+  node "$CRUX_HOME/lib/task.mjs" note --file "$f" --text "new decision" >/dev/null 2>&1
+  local after_step; after_step="$(cat "$f")"
+  assert_contains "$after_step" "owner-name: Jorge" "a header key with a hyphen survives"
+  assert_contains "$after_step" "A paragraph of context." "and what was written before the first section"
+  assert_contains "$after_step" "- And that is why X." "what came after the code block stays in place"
+  local lines; lines="$(grep -n 'new decision' "$f" | cut -d: -f1)"
+  local closing; closing="$(grep -n '^```$' "$f" | tail -1 | cut -d: -f1)"
+  [[ "$lines" -gt "$closing" ]] && PASS=$((PASS + 1)) \
+    || _fail "the new note goes outside the code block"
 }
 
-test_la_puerta_ensena_los_comandos_del_contrato_la_primera_vez() {
+test_the_gate_shows_the_contract_commands_the_first_time() {
   sandbox >/dev/null
-  local root="$CRUX_PROJECTS_DIR/puerta"
-  mkdir -p "$root/app" "$root/puerta-docs"
+  local root="$CRUX_PROJECTS_DIR/gate"
+  mkdir -p "$root/app" "$root/gate-docs"
   git -C "$root/app" init -q
   git -C "$root/app" config user.email t@t
   git -C "$root/app" config user.name t
   echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
-  printf '{"crux":"0.1.0","project":"puerta","profile":"multi-repo","repos":["app"],"quality":{"gate":["echo comprobando"]},"sections":[]}\n' \
-    > "$root/puerta-docs/crux.json"
+  printf '{"crux":"0.1.0","project":"gate","profile":"multi-repo","repos":["app"],"quality":{"gate":["echo checking"]},"sections":[]}\n' \
+    > "$root/gate-docs/crux.json"
 
   local out
   out="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
-  assert_contains "$out" "declarada en el contrato" "la primera vez los enseña"
-  assert_contains "$out" "echo comprobando" "con el comando delante"
+  assert_contains "$out" "declared in the contract" "the first time it shows them"
+  assert_contains "$out" "echo checking" "with the command in front"
 
-  # La segunda vez, con la misma huella, no vuelve a interrumpir.
-  local otra
-  otra="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
-  assert_not_contains "$otra" "declarada en el contrato" "la segunda vez no molesta"
+  # The second time, with the same fingerprint, it does not interrupt again.
+  local other
+  other="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
+  assert_not_contains "$other" "declared in the contract" "the second time it does not bother"
 
-  # Y si cambian, lo dice.
-  printf '{"crux":"0.1.0","project":"puerta","profile":"multi-repo","repos":["app"],"quality":{"gate":["echo otra cosa"]},"sections":[]}\n' \
-    > "$root/puerta-docs/crux.json"
-  local cambiada
-  cambiada="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
-  assert_contains "$cambiada" "ha cambiado desde la ultima vez" "cuando cambia, avisa"
+  # And if they change, it says so.
+  printf '{"crux":"0.1.0","project":"gate","profile":"multi-repo","repos":["app"],"quality":{"gate":["echo something else"]},"sections":[]}\n' \
+    > "$root/gate-docs/crux.json"
+  local changed
+  changed="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
+  assert_contains "$changed" "has changed since last time" "when it changes, it warns"
 }
 
-test_el_guardia_para_lo_que_destruye_trabajo() {
+test_the_guard_stops_what_destroys_work() {
   local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
   _bash() {
     printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
@@ -271,14 +272,14 @@ test_el_guardia_para_lo_que_destruye_trabajo() {
     echo $?
   }
   assert_eq "2" "$(_bash "git reset --hard HEAD~1")" "reset --hard"
-  assert_eq "2" "$(_bash "git -C repo reset --hard")" "reset --hard con -C"
+  assert_eq "2" "$(_bash "git -C repo reset --hard")" "reset --hard with -C"
   assert_eq "2" "$(_bash "git push --force origin main")" "push --force"
   assert_eq "2" "$(_bash "git push -f")" "push -f"
   assert_eq "2" "$(_bash "git clean -fdx")" "clean -fdx"
   assert_eq "2" "$(_bash "git clean -f -d")" "clean -f -d"
-  assert_eq "2" "$(_bash "git checkout -- .")" "descartar el árbol con checkout"
-  assert_eq "2" "$(_bash "git restore .")" "descartar el árbol con restore"
-  assert_eq "2" "$(_bash "git stash clear")" "vaciar la pila de stash compartida"
+  assert_eq "2" "$(_bash "git checkout -- .")" "discarding the tree with checkout"
+  assert_eq "2" "$(_bash "git restore .")" "discarding the tree with restore"
+  assert_eq "2" "$(_bash "git stash clear")" "emptying the shared stash"
   assert_eq "2" "$(_bash "rm -rf ~")" "rm -rf ~"
   assert_eq "2" "$(_bash "rm -rf \$HOME")" "rm -rf \$HOME"
   assert_eq "2" "$(_bash "rm -rf .")" "rm -rf ."
@@ -286,71 +287,71 @@ test_el_guardia_para_lo_que_destruye_trabajo() {
   assert_eq "2" "$(_bash "chmod -R 777 .")" "chmod -R 777"
   assert_eq "2" "$(_bash "sudo chown -R me /srv")" "chown -R"
   assert_eq "2" "$(_bash "pkill -f next-server")" "pkill"
-  assert_eq "2" "$(_bash "cd /tmp && killall node")" "killall tras otro comando"
-  assert_eq "2" "$(_bash "bash -c \"git reset --hard\"")" "dentro de bash -c"
+  assert_eq "2" "$(_bash "cd /tmp && killall node")" "killall after another command"
+  assert_eq "2" "$(_bash "bash -c \"git reset --hard\"")" "inside bash -c"
 }
 
-test_el_guardia_deja_lo_que_se_le_parece() {
+test_the_guard_lets_through_what_looks_like_it() {
   local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
   _bash() {
     printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
       "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
-  assert_eq "0" "$(_bash "git push --force-with-lease")" "force-with-lease es la forma segura"
-  assert_eq "0" "$(_bash "git push -u origin feat/x")" "un push normal"
-  assert_eq "0" "$(_bash "git push --follow-tags")" "una opción larga que empieza por f"
+  assert_eq "0" "$(_bash "git push --force-with-lease")" "force-with-lease is the safe form"
+  assert_eq "0" "$(_bash "git push -u origin feat/x")" "a normal push"
+  assert_eq "0" "$(_bash "git push --follow-tags")" "a long option that starts with f"
   assert_eq "0" "$(_bash "git reset --soft HEAD~1")" "reset --soft"
-  assert_eq "0" "$(_bash "git clean -n -d")" "clean en seco"
-  assert_eq "0" "$(_bash "git checkout -- src/a.ts")" "descartar un fichero concreto"
-  assert_eq "0" "$(_bash "rm -rf ./dist node_modules")" "rm -rf de rutas concretas"
-  assert_eq "0" "$(_bash "rm -rf ~/.cache/foo")" "rm -rf de una ruta dentro de ~"
-  assert_eq "0" "$(_bash "kill 12345")" "kill por PID"
-  assert_eq "0" "$(_bash "pgrep -a node")" "pgrep solo busca"
-  assert_eq "0" "$(_bash "echo 'nunca uses git reset --hard'")" "mencionarlo entre comillas"
-  assert_eq "0" "$(_bash "ls  # git push --force")" "mencionarlo en un comentario"
+  assert_eq "0" "$(_bash "git clean -n -d")" "clean as a dry run"
+  assert_eq "0" "$(_bash "git checkout -- src/a.ts")" "discarding a specific file"
+  assert_eq "0" "$(_bash "rm -rf ./dist node_modules")" "rm -rf of specific paths"
+  assert_eq "0" "$(_bash "rm -rf ~/.cache/foo")" "rm -rf of a path inside ~"
+  assert_eq "0" "$(_bash "kill 12345")" "kill by PID"
+  assert_eq "0" "$(_bash "pgrep -a node")" "pgrep only searches"
+  assert_eq "0" "$(_bash "echo 'never use git reset --hard'")" "mentioning it in quotes"
+  assert_eq "0" "$(_bash "ls  # git push --force")" "mentioning it in a comment"
   assert_eq "0" "$(_bash "$(printf 'git commit -F - <<EOF\nfix: no more git reset --hard\nEOF')")" \
-    "mencionarlo en el mensaje de un commit"
-  assert_eq "0" "$(_bash "ssh -i ~/.ssh/id_ed25519 host")" "usar una clave sin volcarla"
-  assert_eq "0" "$(_bash "cat ~/.ssh/id_ed25519.pub")" "leer la clave pública"
+    "mentioning it in a commit message"
+  assert_eq "0" "$(_bash "ssh -i ~/.ssh/id_ed25519 host")" "using a key without dumping it"
+  assert_eq "0" "$(_bash "cat ~/.ssh/id_ed25519.pub")" "reading the public key"
 }
 
-test_el_guardia_no_deja_leer_claves_privadas() {
+test_the_guard_does_not_let_private_keys_be_read() {
   local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
   _tool() {
     printf '{"tool_name":"%s","tool_input":{"%s":%s}}' "$1" "$2" \
       "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$3")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
-  assert_eq "2" "$(_tool Bash command "cat ~/.ssh/id_ed25519")" "cat de la clave privada"
-  assert_eq "2" "$(_tool Bash command "base64 certs/server.pem")" "volcar un .pem"
-  assert_eq "2" "$(_tool Bash command "cat ~/.config/gh/hosts.yml")" "el token de gh"
-  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/id_ed25519_github")" "Read de la clave privada"
-  # shellcheck disable=SC2088  # la tilde literal es lo que se prueba
-  assert_eq "2" "$(_tool Read file_path "~/.aws/credentials")" "Read de las credenciales de AWS"
-  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.pub")" "Read de la pública"
-  assert_eq "0" "$(_tool Read file_path "/repo/.env")" "el .env lo mueve carry-env y se deja"
-  assert_eq "0" "$(_tool Read file_path "/repo/src/keys.ts")" "un fichero con key en el nombre"
+  assert_eq "2" "$(_tool Bash command "cat ~/.ssh/id_ed25519")" "cat of the private key"
+  assert_eq "2" "$(_tool Bash command "base64 certs/server.pem")" "dumping a .pem"
+  assert_eq "2" "$(_tool Bash command "cat ~/.config/gh/hosts.yml")" "the gh token"
+  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/id_ed25519_github")" "Read of the private key"
+  # shellcheck disable=SC2088  # the literal tilde is what is tested
+  assert_eq "2" "$(_tool Read file_path "~/.aws/credentials")" "Read of the AWS credentials"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.pub")" "Read of the public one"
+  assert_eq "0" "$(_tool Read file_path "/repo/.env")" "carry-env moves the .env and it is allowed"
+  assert_eq "0" "$(_tool Read file_path "/repo/src/keys.ts")" "a file with key in the name"
 }
 
-test_hooks_install_engancha_el_guardia_destructivo() {
+test_hooks_install_hooks_the_destructive_guard() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
   bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
   local pre; pre="$(node -e 'const s=require(process.argv[1]); console.log(JSON.stringify(s.hooks.PreToolUse||[]))' "$CLAUDE_SETTINGS")"
-  assert_contains "$pre" "destructive-guard.sh" "install engancha el guardia"
-  assert_contains "$pre" '"matcher":"Bash|Read|Edit|Write|MultiEdit|NotebookEdit"' "sobre la shell y los ficheros"
+  assert_contains "$pre" "destructive-guard.sh" "install hooks the guard"
+  assert_contains "$pre" '"matcher":"Bash|Read|Edit|Write|MultiEdit|NotebookEdit"' "on the shell and files"
   bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
-  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "destructive-guard" "y remove lo retira"
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "destructive-guard" "and remove takes it off"
 }
 
-test_el_guardia_de_propuestas_manda_a_finish() {
+test_the_proposal_guard_sends_to_finish() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
-  local root; root="$(_proyecto_higiene)"
-  bash "$CRUX_HOME/bin/workspace.sh" new portada --repo "$root/app" >/dev/null 2>&1
+  local root; root="$(_hygiene_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new cover --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
-  mkdir -p "$SB/suelto"; git -C "$SB/suelto" init -q
+  mkdir -p "$SB/loose"; git -C "$SB/loose" init -q
   _pr() {
     printf '{"tool_name":"Bash","cwd":%s,"tool_input":{"command":%s}}' \
       "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" \
@@ -358,41 +359,41 @@ test_el_guardia_de_propuestas_manda_a_finish() {
     echo "rc=$?"
   }
   local out
-  out="$(_pr "$root/app-ws-portada" 'gh pr create --title "x" --body "y"')"
-  assert_contains "$out" "rc=2" "en un espacio, gh pr create se para"
-  assert_contains "$out" "crux workspace finish portada" "y dice el finish exacto"
-  out="$(_pr "$root/app" "git checkout -b atajo && gh pr create --fill")"
-  assert_contains "$out" "rc=2" "en el checkout principal también"
-  assert_contains "$out" "crux workspace new <tarea>" "y ahí manda a abrir un espacio"
-  out="$(_pr "$SB" "cd $root/app-ws-portada && gh pr create --fill")"
-  assert_contains "$out" "rc=2" "entrando con cd a un repo gestionado"
-  assert_contains "$(_pr "$SB/suelto" "gh pr create --fill")" "rc=0" "un repo sin docs repo no se toca"
-  assert_contains "$(_pr "$root/app-ws-portada" "gh pr view 9")" "rc=0" "ni otros comandos de gh"
-  assert_contains "$(_pr "$root/app-ws-portada" "echo 'usa gh pr create'")" "rc=0" "ni mencionarlo"
+  out="$(_pr "$root/app-ws-cover" 'gh pr create --title "x" --body "y"')"
+  assert_contains "$out" "rc=2" "in a workspace, gh pr create is stopped"
+  assert_contains "$out" "crux workspace finish cover" "and says the exact finish"
+  out="$(_pr "$root/app" "git checkout -b shortcut && gh pr create --fill")"
+  assert_contains "$out" "rc=2" "in the main checkout too"
+  assert_contains "$out" "crux workspace new <task>" "and there it sends you to open a workspace"
+  out="$(_pr "$SB" "cd $root/app-ws-cover && gh pr create --fill")"
+  assert_contains "$out" "rc=2" "entering a managed repo with cd"
+  assert_contains "$(_pr "$SB/loose" "gh pr create --fill")" "rc=0" "a repo without a docs repo is not touched"
+  assert_contains "$(_pr "$root/app-ws-cover" "gh pr view 9")" "rc=0" "nor other gh commands"
+  assert_contains "$(_pr "$root/app-ws-cover" "echo 'use gh pr create'")" "rc=0" "nor mentioning it"
 }
 
-test_hooks_install_engancha_el_guardia_de_propuestas() {
+test_hooks_install_hooks_the_proposal_guard() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
   bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
-  assert_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard.sh" "install lo engancha"
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard.sh" "install hooks it"
   bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
-  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard" "y remove lo retira"
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard" "and remove takes it off"
 }
 
-test_ninguna_skill_manda_un_comando_que_el_guardia_bloquea() {
-  # Una skill que manda ejecutar lo que el guardia para deja al agente contra
-  # un muro: share-local cerraba el túnel con pkill.
-  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh" malos="" f linea
+test_no_skill_sends_a_command_the_guard_blocks() {
+  # A skill that tells to run what the guard stops leaves the agent against a
+  # wall: share-local closed the tunnel with pkill.
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh" bad_items="" f line
   for f in "$CRUX_HOME"/skills/*/SKILL.md; do
-    while IFS= read -r linea; do
-      [[ -n "${linea// }" ]] || continue
+    while IFS= read -r line; do
+      [[ -n "${line// }" ]] || continue
       if ! printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
-          "$(node -e 'console.log(JSON.stringify(process.argv[1]))' -- "$linea")" \
+          "$(node -e 'console.log(JSON.stringify(process.argv[1]))' -- "$line")" \
           | bash "$hook" >/dev/null 2>&1; then
-        malos+="${f#"$CRUX_HOME"/}: $linea"$'\n'
+        bad_items+="${f#"$CRUX_HOME"/}: $line"$'\n'
       fi
-    done < <(awk '/^```/{ if (dentro) { dentro = 0; cmd = 0 } else { dentro = 1; cmd = ($0 ~ /^```(bash|sh)?[[:space:]]*$/) } ; next } dentro && cmd' "$f")
+    done < <(awk '/^```/{ if (inside) { inside = 0; cmd = 0 } else { inside = 1; cmd = ($0 ~ /^```(bash|sh)?[[:space:]]*$/) } ; next } inside && cmd' "$f")
   done
-  assert_eq "" "$malos" "ningún bloque de comandos de una skill choca con el guardia"
+  assert_eq "" "$bad_items" "no command block of a skill clashes with the guard"
 }

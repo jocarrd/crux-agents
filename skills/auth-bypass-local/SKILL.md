@@ -1,94 +1,93 @@
 ---
 name: auth-bypass-local
-description: Saltar la autenticación en local para probar endpoints o interfaz protegidos sin sesión real, saltando a la vez la capa de servidor y la de cliente, con un doble candado que lo hace imposible de activar en producción. Usa cuando necesites reproducir o depurar un flujo autenticado —panel de administración, endpoints protegidos, roles— sin poder iniciar sesión, cuando quieras saltarte el login para ver una pantalla protegida en local, incluido con navegador headless.
+description: Bypass authentication locally to test protected endpoints or UI without a real session, skipping both the server layer and the client layer at once, with a double lock that makes it impossible to activate in production. Use when you need to reproduce or debug an authenticated flow (admin panel, protected endpoints, roles) without being able to log in, when you want to skip the login to see a protected screen locally, including with a headless browser.
 ---
 
 # auth-bypass-local
 
-Probar de verdad lo que está detrás del login, en local, sin sesión.
+Really test what is behind the login, locally, without a session.
 
-## La regla que hace que funcione
+## The rule that makes it work
 
-**Hay dos capas y hay que saltar las dos a la vez.** Es el error que cuesta la
-tarde: se salta solo el guard del cliente, se entra a la interfaz, y todas las
-llamadas al servidor devuelven 401 o 403. O al revés: el servidor acepta, pero
-el guard del cliente no deja ni pintar la pantalla.
+**There are two layers and both must be bypassed at once.** It is the mistake that
+costs an afternoon: only the client guard is bypassed, you get into the UI, and
+every call to the server returns 401 or 403. Or the other way round: the server
+accepts, but the client guard doesn't even let the screen render.
 
-| Capa | Qué bloquea | Qué hay que hacer |
-| ---- | ----------- | ----------------- |
-| Servidor | El guard que valida el token y el que comprueba el rol | Devolver autorizado e inyectar un usuario ficticio |
-| Cliente | El componente que envuelve las rutas protegidas | Dejar pasar sin sesión |
+| Layer | What it blocks | What to do |
+| ----- | -------------- | ---------- |
+| Server | The guard that validates the token and the one that checks the role | Return authorized and inject a fake user |
+| Client | The component that wraps the protected routes | Let through without a session |
 
-Además, el cliente sin sesión enviará las peticiones **sin cabecera de
-autorización**: el servidor con el bypass activo tiene que aceptarlas.
+In addition, the client without a session will send requests **with no
+authorization header**: the server with the bypass active has to accept them.
 
-## La regla que lo hace seguro
+## The rule that makes it safe
 
-**Doble candado: una variable de entorno explícita Y que el entorno no sea
-producción.** Los dos, en la misma condición:
+**Double lock: an explicit environment variable AND the environment not being
+production.** Both, in the same condition:
 
 ```
-bypassActivo = ENV_VAR === "1" && NODE_ENV !== "production"
+bypassActive = ENV_VAR === "1" && NODE_ENV !== "production"
 ```
 
-Así, aunque la variable se filtre a un entorno de producción, el bypass sigue
-sin poder activarse. Un solo candado no basta: una variable mal puesta en un
-`env_file` te abre el panel de administración a internet.
+That way, even if the variable leaks into a production environment, the bypass
+still cannot activate. A single lock is not enough: a variable wrongly set in an
+`env_file` opens your admin panel to the internet.
 
-En el cliente, la variable debe llegar **solo por el arranque de desarrollo**,
-nunca por un fichero que se hornee en el build de producción. Colócala en el
-fichero de entorno local que esté en el `.gitignore`, no en el que se
-distribuye.
+On the client, the variable must arrive **only through the development startup**,
+never through a file that gets baked into the production build. Put it in the
+local environment file that is in `.gitignore`, not in the one that gets
+distributed.
 
-## El detalle del componente cliente
+## The client component detail
 
-El guard suele llamar a hooks del proveedor de autenticación. Si haces el
-early-return antes de esos hooks, violas las reglas de hooks y la aplicación
-peta.
+The guard usually calls hooks of the authentication provider. If you do the early
+return before those hooks, you violate the rules of hooks and the application
+crashes.
 
-**Patrón envoltorio**: el componente externo decide si hay bypass y devuelve
-los hijos directamente; el componente que llama a los hooks queda aislado en un
-hijo que solo se monta cuando el bypass está apagado.
+**Wrapper pattern**: the outer component decides whether there is a bypass and
+returns the children directly; the component that calls the hooks stays isolated
+in a child that is only mounted when the bypass is off.
 
-Ojo con el proveedor de autenticación: normalmente necesita seguir montado con
-una clave pública válida, aunque no haya sesión. Sin eso, los hooks que
-devuelven `null` pasan a lanzar excepciones.
+Watch out for the authentication provider: it usually needs to stay mounted with
+a valid public key, even with no session. Without that, the hooks that return
+`null` start throwing exceptions.
 
-## Verificar
+## Verify
 
-Que la llamada protegida responda **sin token**:
+That the protected call responds **without a token**:
 
 ```bash
-curl -i http://localhost:<puerto>/<ruta-protegida>
+curl -i http://localhost:<port>/<protected-route>
 ```
 
-Debe dar 200. Si da 401, el bypass del servidor no está activo; si la interfaz
-no carga, es el del cliente.
+It must return 200. If it returns 401, the server bypass is not active; if the UI
+doesn't load, it is the client one.
 
-## Conducir el navegador para ver bugs reales
+## Drive the browser to see real bugs
 
-Muchos fallos de un panel protegido no se ven con `curl`: crashes de
-JavaScript, avisos de error en la interfaz, peticiones que fallan por el
-preflight. Con el bypass puesto se puede conducir un navegador headless contra
-la aplicación local, escuchando los errores de página y las respuestas con
-código de error.
+Many failures of a protected panel are not visible with `curl`: JavaScript
+crashes, error notices in the UI, requests that fail because of the preflight.
+With the bypass in place you can drive a headless browser against the local
+application, listening for page errors and responses with error codes.
 
-Un caso real: un reordenamiento usaba un método HTTP que la configuración de
-CORS del servidor no permitía. Con `curl` el endpoint respondía perfectamente;
-desde el navegador fallaba el preflight y la interfaz solo decía "Failed to
-fetch". **Solo se veía conduciendo el navegador.**
+A real case: a reordering used an HTTP method that the server's CORS
+configuration did not allow. With `curl` the endpoint responded perfectly; from
+the browser the preflight failed and the UI only said "Failed to fetch". **It was
+only visible by driving the browser.**
 
-De ahí un gotcha que merece la pena recordar: **la configuración de CORS suele
-listar métodos explícitamente**. Un endpoint nuevo con un método no listado
-falla desde el navegador aunque exista y funcione. Se comprueba con una
-petición `OPTIONS` que declare el método.
+Hence a gotcha worth remembering: **CORS configuration usually lists methods
+explicitly**. A new endpoint with an unlisted method fails from the browser even
+though it exists and works. Check it with an `OPTIONS` request declaring the
+method.
 
-## Al terminar
+## When finished
 
-- Parar los servicios locales que levantaste.
-- Comprobar que la variable del bypass no quedó en ningún fichero que vaya a
-  un build.
+- Stop the local services you brought up.
+- Check that the bypass variable didn't end up in any file that goes into a
+  build.
 
-## Relacionado
+## Related
 
-- `/visual-test` — inspección visual de la interfaz una vez dentro
+- `/visual-test`: visual inspection of the UI once inside

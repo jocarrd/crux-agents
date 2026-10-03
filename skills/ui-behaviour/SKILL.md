@@ -1,114 +1,114 @@
 ---
 name: ui-behaviour
-description: Comprobar que los controles de una interfaz hacen algo útil y son alcanzables, no solo que existan y se vean bien. Pulsa cada botón desde un estado limpio y mide qué cambia, recorre la interfaz con el tabulador buscando lo que no se alcanza y las trampas de foco, y verifica los estados que solo existen al interactuar. Usa cuando termines una pantalla con filtros, pestañas, tablas ordenables, formularios o diálogos; cuando heredes una interfaz que no conoces; o cuando alguien pregunte si un botón sirve para algo.
+description: Check that an interface's controls do something useful and are reachable, not just that they exist and look good. Presses every button from a clean state and measures what changes, walks the interface with the tab key looking for what cannot be reached and for focus traps, and verifies the states that only exist when interacting. Use when you finish a screen with filters, tabs, sortable tables, forms or dialogs; when you inherit an interface you do not know; or when someone asks whether a button does anything ("¿esto sirve para algo?").
 ---
 
 # ui-behaviour
 
-La inspección visual dice si algo **se ve** bien. Esta dice si **hace** algo y si
-se puede **llegar** a ello.
+Visual inspection says whether something **looks** right. This says whether it
+**does** something and whether it can be **reached**.
 
-Son preguntas distintas y fallan por separado: un botón puede tener el contraste
-perfecto, el área táctil correcta, y no estar conectado a nada — o estarlo y no
-poder alcanzarse con el teclado.
+They are different questions and fail separately: a button can have perfect
+contrast, the right touch area, and not be wired to anything — or be wired and
+not reachable with the keyboard.
 
-## Cuándo usar
+## When to use
 
-- Terminas una pantalla con controles: filtros, pestañas, ordenación, paginación,
-  formularios, diálogos.
-- Heredas una interfaz y quieres saber qué está vivo y qué es decorado.
-- Sospechas de un control concreto: «¿esto sirve para algo?».
+- You finish a screen with controls: filters, tabs, sorting, pagination, forms,
+  dialogs.
+- You inherit an interface and want to know what is alive and what is decoration.
+- You suspect a specific control: «¿esto sirve para algo?».
 
-## Precondiciones
+## Preconditions
 
-Las mismas que `/visual-test`: Chrome del sistema, `playwright-core` en un
-directorio de caché, y la aplicación corriendo en local.
+The same as `/visual-test`: the system Chrome, `playwright-core` in a cache
+directory, and the application running locally.
 
-## Qué se comprueba
+## What is checked
 
-Seis familias. Las tres primeras se automatizan; las tres últimas piden criterio.
+Six families. The first three are automated; the last three call for judgement.
 
-**1. Que el control haga algo.** Pulsar y medir qué cambia.
+**1. That the control does something.** Press and measure what changes.
 
-**2. Que se pueda alcanzar con el teclado.** Tabular por la interfaz: todo
-control operable debe recibir foco, en un orden que siga la lectura, y con un
-anillo de foco visible. Un control que solo responde al ratón no existe para
-media población.
+**2. That it can be reached with the keyboard.** Tab through the interface: every
+operable control must receive focus, in an order that follows reading, and with
+a visible focus ring. A control that only responds to the mouse does not exist
+for half the population.
 
-**3. Que los diálogos se comporten.** Al abrirse, el foco entra; mientras está
-abierto, no se escapa; `Escape` cierra; al cerrarse, el foco vuelve al control
-que lo abrió. Un diálogo visualmente cerrado que retiene el foco es un fallo.
+**3. That dialogs behave.** When opened, focus goes in; while it is open, it does
+not escape; `Escape` closes; when closed, focus returns to the control that
+opened it. A visually closed dialog that retains focus is a failure.
 
-**4. Que los estados que solo existen al interactuar aguanten.** Hover, foco,
-activo, deshabilitado. Aquí es donde fallan las auditorías automáticas: miden el
-reposo. Si al pasar el ratón se rellena de color, hay que medir el contraste
-*ahí*. Si solo hay una pestaña activa a la vez, la auditoría solo ve la que
-viene por defecto y las demás pueden estar fallando.
+**4. That the states that only exist when interacting hold up.** Hover, focus,
+active, disabled. This is where automatic audits fail: they measure the resting
+state. If on hover it fills with colour, the contrast has to be measured
+*there*. If only one tab is active at a time, the audit only sees the one that
+comes by default and the others may be failing.
 
-**5. Que lo que solo aparece al pasar el ratón tenga otra vía.** Una acción que
-se revela en hover no existe en una pantalla táctil ni con teclado.
+**5. That whatever only appears on hover has another way in.** An action revealed
+on hover does not exist on a touch screen or with a keyboard.
 
-**6. Que los estados vacíos y de error digan algo.** Filtrar hasta cero
-resultados, enviar un formulario incompleto, cortar la red. La interfaz debe
-decir qué pasa, no quedarse en blanco.
+**6. That empty and error states say something.** Filtering down to zero results,
+submitting an incomplete form, cutting the network. The interface must say what
+is happening, not stay blank.
 
-## El método para la familia 1
+## The method for family 1
 
-**Enumera** los controles visibles y habilitados. **Toma una huella** de lo que
-el usuario vería cambiar —el contenido de las primeras filas de cada tabla, sus
-cabeceras, qué lleva la marca de activo, los contadores, cuántas fichas hay—; no
-sirve comparar el HTML entero, que cambia por motivos que no importan. **Pulsa,
-espera, vuelve a tomarla.** Lo que no cambia ninguna señal es sospechoso.
-**Investiga los sospechosos uno a uno**: ahí está el trabajo.
+**List** the visible, enabled controls. **Take a fingerprint** of what the user
+would see change —the content of the first rows of each table, their headers,
+what carries the active mark, the counters, how many cards there are—; comparing
+the whole HTML is no use, because it changes for reasons that do not matter.
+**Press, wait, take it again.** Whatever changes no signal is suspicious.
+**Investigate the suspects one by one**: that is where the work is.
 
-## Las dos trampas que dan falsos positivos
+## The two traps that give false positives
 
-Las dos me han pasado, y las dos me llevaron a punto de reportar bugs que no
-existían.
+Both have happened to me, and both brought me to the point of reporting bugs that
+did not exist.
 
-**Encadenar clics sin recargar.** Si pulsas «Oceanía» y luego, más abajo, otro
-«Oceanía», el segundo no cambia nada — porque ya estabas en Oceanía. **Recarga
-antes de cada control** que quieras juzgar de verdad. Es lento; hazlo solo con
-los sospechosos de la primera pasada.
+**Chaining clicks without reloading.** If you press «Oceanía» and then, further
+down, another «Oceanía», the second changes nothing — because you were already
+in Oceanía. **Reload before each control** you really want to judge. It is slow;
+do it only with the suspects from the first pass.
 
-**Selectores ambiguos entre componentes.** Una página puede tener dos botones
-«Reset», uno por herramienta, y un «Rank» que pertenece a una tabla y no a la
-otra. Si el selector no está acotado, pulsas uno y mides el otro, y concluyes
-que no funciona. **Acota siempre a la raíz del componente.**
+**Ambiguous selectors across components.** A page can have two «Reset» buttons,
+one per tool, and a «Rank» that belongs to one table and not the other. If the
+selector is not scoped, you press one and measure the other, and conclude that it
+does not work. **Always scope to the component's root.**
 
-## Lo que sí es correcto que no cambie nada
+## What is correctly allowed to change nothing
 
-- Un control **ya activo**: la pestaña seleccionada, el filtro puesto.
-- Un **reset sin nada que resetear**.
-- Un control cuyo efecto está **fuera de la huella** que mides: si abre un
-  diálogo, navega fuera o cambia algo que no observas, amplía la huella en vez
-  de darlo por muerto.
+- A control that is **already active**: the selected tab, the filter in place.
+- A **reset with nothing to reset**.
+- A control whose effect is **outside the fingerprint** you measure: if it opens a
+  dialog, navigates away or changes something you do not observe, widen the
+  fingerprint instead of writing it off as dead.
 
-## Uso
+## Usage
 
 ```bash
 cd ~/.cache/visual-test
-node ui-behaviour.mjs sweep    http://localhost:3000/ruta
-node ui-behaviour.mjs probe    http://localhost:3000/ruta "Reset" --scope .rt-root
-node ui-behaviour.mjs keyboard http://localhost:3000/ruta
+node ui-behaviour.mjs sweep    http://localhost:3000/path
+node ui-behaviour.mjs probe    http://localhost:3000/path "Reset" --scope .rt-root
+node ui-behaviour.mjs keyboard http://localhost:3000/path
 ```
 
-`sweep` hace la pasada rápida y lista los sospechosos. `probe` recarga, acota al
-componente y pulsa uno solo dos veces, enseñando la huella en cada paso — que es
-como se distingue un botón muerto de uno que coincide con el estado por defecto.
-`keyboard` tabula por la página y reporta los controles que no reciben foco, los
-que no tienen anillo visible, y los saltos de orden.
+`sweep` does the quick pass and lists the suspects. `probe` reloads, scopes to
+the component and presses a single one twice, showing the fingerprint at each
+step — which is how a dead button is told apart from one that coincides with the
+default state. `keyboard` tabs through the page and reports the controls that do
+not receive focus, those without a visible ring, and order jumps.
 
-Para el contraste en hover, `/visual-test states`.
+For contrast on hover, `/visual-test states`.
 
-## Qué reportar
+## What to report
 
-Un control sin efecto **no es un bug hasta que descartas las dos trampas**. Di
-qué pulsaste, desde qué estado y qué señal miraste. «El botón X no hace nada»
-sin eso es casi siempre un error del que mide.
+A control with no effect **is not a bug until you rule out the two traps**. Say
+what you pressed, from which state and which signal you looked at. «El botón X
+no hace nada» without that is almost always an error by whoever is measuring.
 
-## Relacionado
+## Related
 
-- `/visual-test` — la otra mitad: que se vea bien, que quepa, que contraste, y
-  que ninguna animación deje contenido invisible
-- `/e2e` — cuando el flujo merezca una prueba que se quede
+- `/visual-test` — the other half: that it looks right, fits, has contrast, and
+  that no animation leaves content invisible
+- `/e2e` — when the flow deserves a test that stays

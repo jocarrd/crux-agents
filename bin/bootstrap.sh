@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# crux bootstrap — dejar una máquina nueva lista para trabajar.
+# crux bootstrap — get a new machine ready to work.
 #
 #   crux bootstrap [--owner <owner>] [--parent <dir>] [--only a,b] [--dry-run]
 #
-# Verifica la máquina, descubre todos los proyectos y los trae. Es `crux clone`
-# repetido, más las dos cosas que en una máquina virgen no tienes: saber qué
-# proyectos existen y saber qué te falta instalar.
+# Checks the machine, discovers all the projects and fetches them. It is
+# `crux clone` repeated, plus the two things you do not have on a blank
+# machine: knowing which projects exist and knowing what you still have to
+# install.
 #
-# La lista sale del remoto, no de un inventario en un fichero. Un inventario
-# escrito a mano se desactualiza en cuanto creas un proyecto, y esto se usa
-# justamente el día en que no te acuerdas de cuáles tenías. Es el mismo criterio
-# que ya usa `crux clone` para la lista de repos de un proyecto: sale del
-# contrato.
+# The list comes from the remote, not from an inventory in a file. A
+# hand-written inventory goes stale as soon as you create a project, and this
+# is used precisely on the day you do not remember which ones you had. It is
+# the same criterion `crux clone` already uses for a project's repo list: it
+# comes from the contract.
 #
-# Lo que NO hace, y a propósito: mover credenciales. Las claves SSH, los tokens
-# y los secretos no se copian de una máquina a otra por una herramienta. Al
-# terminar dice qué necesita cada proyecto y dónde está documentado.
+# What it does NOT do, on purpose: move credentials. SSH keys, tokens and
+# secrets are not copied from one machine to another by a tool. When it
+# finishes it says what each project needs and where it is documented.
 
 set -uo pipefail
 
@@ -25,161 +26,162 @@ source "$CRUX_HOME/lib/common.sh"
 
 OWNER=""
 PARENT="$(projects_root)"
-SOLO=""
+ONLY=""
 DRY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --owner)   OWNER="$2"; shift 2 ;;
     --parent)  PARENT="$2"; shift 2 ;;
-    --only)    SOLO="$2"; shift 2 ;;
+    --only)    ONLY="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
-    *) die "opción desconocida: $1" ;;
+    *) die "unknown option: $1" ;;
   esac
 done
 
-# --- 1. La máquina, antes que nada -------------------------------------------
+# --- 1. The machine, first of all -------------------------------------------
 #
-# Clonar veinte repos para descubrir después que falta node es la peor forma de
-# enterarse. El doctor de máquina ya distingue lo imprescindible de lo que solo
-# limita algunas skills, así que aquí solo se decide si se sigue.
+# Cloning twenty repos to discover afterwards that node is missing is the worst
+# way to find out. The machine doctor already tells the indispensable apart
+# from what only limits some skills, so here the only decision is whether to go on.
 
-echo "1. la máquina"
+echo "1. the machine"
 echo
 if ! bash "$CRUX_HOME/bin/machine.sh"; then
   echo
-  die "arregla los errores de arriba y vuelve a lanzarlo"
+  die "fix the errors above and run it again"
 fi
 
-# --- 2. Quién eres en el remoto ----------------------------------------------
+# --- 2. Who you are on the remote ----------------------------------------------
 
 command -v gh >/dev/null 2>&1 \
-  || die "hace falta gh para descubrir los proyectos — instálalo, o clónalos uno a uno con 'crux clone'"
+  || die "gh is needed to discover the projects — install it, or clone them one by one with 'crux clone'"
 gh auth status >/dev/null 2>&1 \
-  || die "gh sin autenticar — 'gh auth login' y vuelve"
+  || die "gh not authenticated — 'gh auth login' and come back"
 
-[[ -n "$OWNER" ]] || OWNER="$(owner_por_defecto)"
-[[ -n "$OWNER" ]] || die "no sé bajo qué cuenta buscar — pásalo con --owner"
+[[ -n "$OWNER" ]] || OWNER="$(default_owner)"
+[[ -n "$OWNER" ]] || die "I do not know which account to search under — pass it with --owner"
 
-# --- 3. Qué proyectos hay ----------------------------------------------------
+# --- 3. Which projects exist ----------------------------------------------------
 #
-# Un proyecto es un repo `<algo>-docs` que lleva contrato. Lo segundo importa:
-# sin comprobarlo, cualquier repo que acabe en -docs entraría como proyecto.
+# A project is a `<something>-docs` repo that carries a contract. The second
+# part matters: without checking it, any repo ending in -docs would count as a project.
 
 echo
-echo "2. proyectos de $OWNER"
+echo "2. projects of $OWNER"
 echo
 
-todos_los_repos="$(gh repo list "$OWNER" --limit 300 --json name --jq '.[].name' 2>/dev/null | sort -u)"
-candidatos="$(proyectos_candidatos "$OWNER")"
+all_repos="$(gh repo list "$OWNER" --limit 300 --json name --jq '.[].name' 2>/dev/null | sort -u)"
+candidates="$(candidate_projects "$OWNER")"
 
-if [[ -n "$SOLO" ]]; then
-  filtro="$(echo "$SOLO" | tr ',' '\n' | sed '/^$/d' | sort -u)"
-  candidatos="$(comm -12 <(echo "$candidatos") <(echo "$filtro"))"
+if [[ -n "$ONLY" ]]; then
+  filter="$(echo "$ONLY" | tr ',' '\n' | sed '/^$/d' | sort -u)"
+  candidates="$(comm -12 <(echo "$candidates") <(echo "$filter"))"
 fi
 
-[[ -n "$candidatos" ]] || die "ningún repo *-docs bajo $OWNER"
+[[ -n "$candidates" ]] || die "no *-docs repo under $OWNER"
 
-proyectos=()
+projects=()
 while IFS= read -r p; do
   [[ -n "$p" ]] || continue
-  if tiene_contrato "$OWNER" "$p"; then
-    proyectos+=("$p")
+  if has_contract "$OWNER" "$p"; then
+    projects+=("$p")
     ok "$p"
   else
-    info "$p-docs sin contrato — no es un proyecto crux, se salta"
+    info "$p-docs has no contract — not a crux project, skipped"
   fi
-done <<< "$candidatos"
+done <<< "$candidates"
 
-[[ ${#proyectos[@]} -gt 0 ]] || die "ninguno lleva contrato"
+[[ ${#projects[@]} -gt 0 ]] || die "none carries a contract"
 
 if [[ $DRY -eq 1 ]]; then
   echo
-  echo "traería ${#proyectos[@]} proyectos a $PARENT: ${proyectos[*]}"
+  echo "would fetch ${#projects[@]} projects to $PARENT: ${projects[*]}"
   exit 0
 fi
 
-# --- 4. Traerlos -------------------------------------------------------------
+# --- 4. Fetching them -------------------------------------------------------------
 
 echo
-echo "3. trayendo ${#proyectos[@]} proyectos a $PARENT"
+echo "3. fetching ${#projects[@]} projects to $PARENT"
 
-traidos=(); fallidos=()
-for p in "${proyectos[@]}"; do
+fetched=(); failed_items=()
+for p in "${projects[@]}"; do
   echo
   echo "── $p"
   if bash "$CRUX_HOME/bin/clone.sh" "$p" --parent "$PARENT"; then
-    traidos+=("$p")
+    fetched+=("$p")
   else
-    fallidos+=("$p")
+    failed_items+=("$p")
   fi
 done
 
-# --- 5. Lo que sigue faltando ------------------------------------------------
+# --- 5. What is still missing ------------------------------------------------
 #
-# Un entorno con todo el código y sin credenciales no está listo, y el peor
-# final posible es uno que diga que sí lo está.
+# An environment with all the code and no credentials is not ready, and the
+# worst possible ending is one that says it is.
 
 echo
-echo "4. lo que falta"
+echo "4. what is missing"
 echo
 
-ok "${#traidos[@]} proyectos en $PARENT"
-if [[ ${#fallidos[@]} -gt 0 ]]; then
-  err "no pude con: ${fallidos[*]}"
+ok "${#fetched[@]} projects in $PARENT"
+if [[ ${#failed_items[@]} -gt 0 ]]; then
+  err "could not do: ${failed_items[*]}"
 fi
 
-con_credenciales=()
-for p in "${traidos[@]}"; do
+with_credentials=()
+for p in "${fetched[@]}"; do
   doc="$PARENT/$p/$p-docs/operations/machine-onboarding.md"
-  [[ -f "$doc" ]] && con_credenciales+=("$p")
+  [[ -f "$doc" ]] && with_credentials+=("$p")
 done
 
-if [[ ${#con_credenciales[@]} -gt 0 ]]; then
+if [[ ${#with_credentials[@]} -gt 0 ]]; then
   echo
-  warn "credenciales por poner a mano — no se copian de una máquina a otra:"
-  for p in "${con_credenciales[@]}"; do
+  warn "credentials to put in by hand — they are not copied from one machine to another:"
+  for p in "${with_credentials[@]}"; do
     info "$p  →  $p/$p-docs/operations/machine-onboarding.md"
   done
 fi
 
-# Un repo del remoto que no pertenece a ningún proyecto no lo trae esto, y
-# callárselo sería peor que no traerlo: te vas creyendo que está todo.
-sueltos=()
+# A remote repo that belongs to no project is not fetched by this, and keeping
+# quiet about it would be worse than not fetching it: you leave believing
+# everything is there.
+standalone_items=()
 while IFS= read -r r; do
   [[ -n "$r" ]] || continue
-  encontrado=0
+  found=0
   for d in "$PARENT"/*/"$r"; do
-    [[ -d "$d" ]] && { encontrado=1; break; }
+    [[ -d "$d" ]] && { found=1; break; }
   done
-  [[ $encontrado -eq 0 ]] && sueltos+=("$r")
-done <<< "$todos_los_repos"
+  [[ $found -eq 0 ]] && standalone_items+=("$r")
+done <<< "$all_repos"
 
-if [[ ${#sueltos[@]} -gt 0 ]]; then
+if [[ ${#standalone_items[@]} -gt 0 ]]; then
   echo
-  warn "repos de $OWNER que no son de ningún proyecto, así que no vienen aquí:"
-  info "${sueltos[*]}"
-  info "si alguno hace falta: git clone, o 'crux adopt' si merece ser un proyecto"
+  warn "repos of $OWNER that belong to no project, so they do not come here:"
+  info "${standalone_items[*]}"
+  info "if one is needed: git clone, or 'crux adopt' if it deserves to be a project"
 fi
 
-# Traer los proyectos y no enganchar nada deja una máquina que parece lista y no
-# lo está: todo lo que de verdad sostiene el estándar es automático, y sin los
-# hooks no queda ni uno. Se hace aquí, con los proyectos ya en disco, porque los
-# hooks por repo necesitan que existan.
+# Fetching the projects and hooking nothing leaves a machine that looks ready
+# and is not: everything that really sustains the standard is automatic, and
+# without the hooks not one is left. It is done here, with the projects already
+# on disk, because the per-repo hooks need them to exist.
 echo
-for p in "${traidos[@]}"; do
+for p in "${fetched[@]}"; do
   docs="$PARENT/$p/$p-docs"
   [[ -f "$docs/crux.json" ]] || continue
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1 \
-    && ok "hooks enganchados en $p" \
-    || warn "no pude enganchar los hooks en $p — hazlo con 'crux hooks install' desde su docs repo"
+    && ok "hooks installed in $p" \
+    || warn "could not install the hooks in $p — do it with 'crux hooks install' from its docs repo"
   if json_has "$docs/crux.json" 'mcp && Object.keys(root.mcp).length'; then
     ( cd "$docs" && bash "$CRUX_HOME/bin/mcp.sh" install ) >/dev/null 2>&1 \
-      && ok "servidores MCP escritos en $p" \
-      || warn "no pude escribir los servidores MCP en $p — 'crux mcp install' desde su docs repo"
+      && ok "MCP servers written in $p" \
+      || warn "could not write the MCP servers in $p — 'crux mcp install' from its docs repo"
   fi
 done
 
 echo
-info "'crux status' para ver cómo quedó todo"
-exit $(( ${#fallidos[@]} > 0 ? 1 : 0 ))
+info "'crux status' to see how everything turned out"
+exit $(( ${#failed_items[@]} > 0 ? 1 : 0 ))

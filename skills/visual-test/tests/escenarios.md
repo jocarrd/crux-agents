@@ -1,11 +1,11 @@
-# Escenarios de /visual-test
+# Scenarios for /visual-test
 
-## Scroll horizontal
+## Horizontal scroll
 Pregunta: En móvil la página /precios tiene scroll horizontal. ¿Qué ejecuto y cómo identifico al culpable? Responde en tres líneas.
 Debe: bisect
 Debe: kids=0|hoja|sin hijos
 
-## Dar por buena sin mirar
+## Accepting without looking
 Pregunta: He pasado audit y checks y todo sale bien. ¿Ya doy por buena la página? Responde en una línea.
 Debe: ^\W*no\b
 Debe: captura|mira

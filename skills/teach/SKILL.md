@@ -1,97 +1,99 @@
 ---
 name: teach
-description: Enseñar algo a lo largo de varias sesiones, anclado en el código del proyecto y no en ejemplos de manual: un directorio con el motivo por el que se aprende, las fuentes de confianza, las lecciones y el registro de lo ya aprendido. Usa cuando el usuario pida que le expliques una tecnología para aprenderla de verdad y no para salir del paso, cuando diga "no termino de entender", "explícame bien", "quiero aprender" o "hazme una guía", y cuando haga la misma pregunta de fondo por segunda vez.
+description: Teach something across several sessions, anchored in the project's code and not in textbook examples: a directory with the reason for learning, trusted sources, lessons and a log of what has been learned. Use when the user asks you to explain a technology so they truly learn it and not just to get by, when they say "no termino de entender", "explícame bien", "quiero aprender" or "hazme una guía", and when they ask the same underlying question a second time.
 ---
 
 # teach
 
-Una explicación en el chat se entiende mientras se lee y se evapora al cerrar
-la sesión. A la semana siguiente vuelve la misma pregunta con otras palabras.
+An explanation in the chat is understood while it is read and evaporates when the
+session closes. The following week the same question comes back in other words.
 
-Esta skill convierte esas explicaciones en un espacio con estado: un directorio
-donde queda por qué se está aprendiendo, de qué fuentes, qué lecciones se han
-dado y qué se ha aprendido de verdad. Cada sesión continúa la anterior.
+This skill turns those explanations into a space with state: a directory where
+the reason for learning, the sources, the lessons given and what has really been
+learned are kept. Each session continues the previous one.
 
-## La regla que la diferencia de un tutorial
+## The rule that sets it apart from a tutorial
 
-> **Todo se explica sobre el código que el usuario tiene delante.**
+> **Everything is explained on the code the user has in front of them.**
 
-Un tutorial de Prisma enseña `model User { id Int }`. Una lección útil enseña
-el `catalogSnapshot` de *su* esquema, con el problema real que resuelve y la
-regla que solo vive en un comentario. Lo primero se olvida porque no se usa; lo
-segundo se queda porque es el código que va a tocar mañana.
+A Prisma tutorial teaches `model User { id Int }`. A useful lesson teaches the
+`catalogSnapshot` of *their* schema, with the real problem it solves and the rule
+that only lives in a comment. The first is forgotten because it isn't used; the
+second sticks because it is the code they will touch tomorrow.
 
-Antes de escribir ninguna lección, lee el repo: el esquema, los ficheros de
-configuración, los sitios donde ya aparece el concepto. Si el proyecto tiene
-docs repo, léelo también. El ejemplo sale de ahí.
+Before writing any lesson, read the repo: the schema, the configuration files,
+the places where the concept already appears. If the project has a docs repo,
+read that too. The example comes from there.
 
-## El espacio de trabajo
+## The workspace
 
-El directorio actual es el espacio. Su estado vive en estos ficheros:
+The current directory is the workspace. Its state lives in these files:
 
-- **`MISION.md`** — por qué quiere aprender esto. Sin esto no se empieza: es lo
-  que decide qué entra en cada lección y qué sobra. Si está vacío, la primera
-  tarea es preguntarlo.
-- **`FUENTES.md`** — las fuentes de confianza, con enlace y una línea de qué
-  aporta cada una. La documentación oficial, el artículo del que lo diseñó, la
-  especificación. **No te fíes de lo que creas recordar**: búscalo y cítalo.
-- **`lecciones/NNNN-<nombre>.md`** — las lecciones, numeradas.
-- **`referencia/`** — lo destilado: chuletas, tablas, diagramas. Lo que se
-  consulta después, ya sin leer la lección entera.
-- **`aprendido/NNNN-<nombre>.md`** — el registro de lo aprendido. Son a la
-  enseñanza lo que un ADR a la arquitectura: lo no obvio, lo que costó, lo que
-  hubo que corregir. De aquí sale qué se puede enseñar después.
-- **`NOTAS.md`** — preferencias del usuario y apuntes de trabajo.
+- **`MISION.md`**: why they want to learn this. Without it you don't start: it is
+  what decides what goes into each lesson and what is left out. If it is empty,
+  the first task is to ask.
+- **`FUENTES.md`**: the trusted sources, with a link and one line on what each
+  contributes. The official documentation, the article by whoever designed it,
+  the specification. **Don't trust what you think you remember**: look it up and
+  cite it.
+- **`lecciones/NNNN-<name>.md`**: the lessons, numbered.
+- **`referencia/`**: what has been distilled: cheat sheets, tables, diagrams.
+  What gets consulted later, without rereading the whole lesson.
+- **`aprendido/NNNN-<name>.md`**: the log of what was learned. They are to
+  teaching what an ADR is to architecture: the non-obvious, what was hard, what
+  had to be corrected. What can be taught next comes from here.
+- **`NOTAS.md`**: the user's preferences and working notes.
 
-## Fluidez y retención
+## Fluency and retention
 
-Hay que separar dos cosas que se confunden:
+Two things that get confused have to be separated:
 
-- **Fluidez**: recuperar algo en el momento, con la explicación delante.
-- **Retención**: tenerlo dentro dentro de seis meses.
+- **Fluency**: recalling something in the moment, with the explanation in front
+  of you.
+- **Retention**: still having it inside six months from now.
 
-La fluidez da una sensación de dominio que es falsa. Quien acaba de leer una
-explicación clara cree que lo sabe, y una semana después no. El objetivo es la
-retención, y se consigue con dificultad deliberada:
+Fluency gives a false sense of mastery. Someone who has just read a clear
+explanation thinks they know it, and a week later they don't. The goal is
+retention, and it is achieved with deliberate difficulty:
 
-- **Recuperación**: que tenga que sacarlo de memoria antes de enseñárselo.
-  Una pregunta al principio de la lección siguiente vale más que un resumen.
-- **Espaciado**: repartir en el tiempo en vez de una sesión larga.
-- **Entrelazado**: mezclar temas relacionados en la práctica, no bloques puros.
+- **Retrieval**: make them pull it from memory before showing it to them. A
+  question at the start of the next lesson is worth more than a summary.
+- **Spacing**: spread it out over time instead of one long session.
+- **Interleaving**: mix related topics in practice, not pure blocks.
 
-## La lección
+## The lesson
 
-Una lección enseña **una** cosa acotada, atada a la misión, y se termina de una
-sentada. La memoria de trabajo es pequeña: una lección larga es una lección que
-no se completa.
+A lesson teaches **one** bounded thing, tied to the mission, and is finished in
+one sitting. Working memory is small: a long lesson is a lesson that doesn't get
+completed.
 
-Cada lección lleva:
+Each lesson carries:
 
-- Un ejemplo sacado del código del proyecto, con su ruta.
-- Una cosa que el usuario pueda hacer al terminar y antes no podía.
-- **Una fuente primaria** para ampliar, la mejor que hayas encontrado.
-- Un recordatorio de que puede preguntar: el agente es el profesor, no el PDF.
+- An example taken from the project's code, with its path.
+- One thing the user can do on finishing that they couldn't before.
+- **A primary source** to go further, the best one you have found.
+- A reminder that they can ask questions: the agent is the teacher, not the PDF.
 
-Cuando el usuario prefiera leerlo en otro formato, el destino natural en este
-entorno es un documento de Claude Docs por tema, que se puede seguir editando
-entre sesiones. Para lo que se imprime o se manda por correo, la convención del
-usuario es PDF en A5.
+When the user prefers to read it in another format, the natural destination in
+this environment is one Claude Docs document per topic, which can keep being
+edited between sessions. For what is printed or sent by email, the user's
+convention is A5 PDF.
 
-Pasa la skill `/redaccion` antes de entregar cualquier lección larga.
+Run the `/redaccion` skill before delivering any long lesson.
 
-## El cierre de cada sesión
+## Closing each session
 
-Antes de terminar:
+Before finishing:
 
-1. Escribe el registro en `aprendido/` de lo que costó o sorprendió.
-2. Destila a `referencia/` lo que se va a volver a consultar.
-3. Di cuál es el siguiente paso y por qué toca ese.
+1. Write the log in `aprendido/` of what was hard or surprising.
+2. Distil into `referencia/` what will be consulted again.
+3. Say what the next step is and why that one is next.
 
-Si el tema da para más de dos o tres sesiones, regístralo con `crux task` para
-que sobreviva al cierre de la sesión.
+If the topic runs to more than two or three sessions, register it with
+`crux task` so it survives the session closing.
 
 ---
 
-*Adaptada de la skill `teach` de
-[mattpocock/skills](https://github.com/mattpocock/skills), licencia MIT. El
-anclaje en el código del proyecto y el destino de las lecciones son propios.*
+*Adapted from the `teach` skill of
+[mattpocock/skills](https://github.com/mattpocock/skills), MIT license. The
+anchoring in the project's code and the destination of the lessons are our own.*

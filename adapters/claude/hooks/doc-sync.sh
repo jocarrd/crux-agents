@@ -1,83 +1,83 @@
 #!/usr/bin/env bash
-# Hook de Claude Code (Stop) — la puerta de la documentación.
+# Claude Code hook (Stop) — the documentation gate.
 #
-# Antes vigilaba una sola cosa: que no cerraras con ficheros sin commitear que
-# la doc mencionase por nombre. Eso dejaba fuera el caso que de verdad hace
-# daño, y que se comprobó el 2026-09-02: una sesión que mide cosas, descubre un
-# riesgo y resuelve una pregunta abierta, commitea limpio, y se cierra sin que
-# nada de ese conocimiento llegue al docs repo. Con el árbol limpio el hook
-# salía en la primera comprobación y el sistema parecía vigilado sin estarlo.
+# It used to watch a single thing: that you did not close with uncommitted
+# files that the docs mention by name. That left out the case that really does
+# harm, which was verified on 2026-09-02: a session that measures things,
+# discovers a risk and resolves an open question, commits clean, and closes
+# without any of that knowledge reaching the docs repo. With a clean tree the
+# hook exited at the first check and the system looked watched without being so.
 #
-# Ahora hace dos cosas:
+# Now it does two things:
 #
-#   1. Mide la deriva entre código y documentación (check-doc-drift.mjs).
-#   2. Si la sesión ha movido algo, BLOQUEA el cierre una vez y obliga a
-#      responder qué de lo hablado se queda en git.
+#   1. Measures the drift between code and documentation (check-doc-drift.mjs).
+#   2. If the session has moved something, it BLOCKS the close once and forces
+#      an answer about what of what was discussed stays in git.
 #
-# Bloquea como mucho una vez por sesión: la segunda pasada sale sola. Un hook
-# que bloquea siempre se acaba desinstalando, y entonces no vigila nada.
+# It blocks at most once per session: the second pass exits on its own. A hook
+# that always blocks ends up uninstalled, and then it watches nothing.
 
 set -u
 
-entrada=""
-[[ ! -t 0 ]] && entrada="$(cat 2>/dev/null || true)"
+entry=""
+[[ ! -t 0 ]] && entry="$(cat 2>/dev/null || true)"
 
-leer_json() {
-  local campo="$1"
-  [[ -z "$entrada" ]] && return 0
+read_json() {
+  local field="$1"
+  [[ -z "$entry" ]] && return 0
   node -e '
     let d = "";
     try { d = JSON.parse(process.argv[1] || "{}"); } catch { d = {}; }
     const v = d[process.argv[2]];
     if (v !== undefined && v !== null) process.stdout.write(String(v));
-  ' "$entrada" "$campo" 2>/dev/null || true
+  ' "$entry" "$field" 2>/dev/null || true
 }
 
-# Claude Code marca así el turno que ya viene de un Stop bloqueado. Sin esto,
-# bloquear en Stop es un bucle infinito.
-[[ "$(leer_json stop_hook_active)" == "true" ]] && exit 0
+# Claude Code flags the turn that already comes from a blocked Stop this way.
+# Without this, blocking on Stop is an infinite loop.
+[[ "$(read_json stop_hook_active)" == "true" ]] && exit 0
 
-sesion="$(leer_json session_id)"
-[[ -z "$sesion" ]] && sesion="sin-id"
+session="$(read_json session_id)"
+[[ -z "$session" ]] && session="no-id"
 
 CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)}"
 
-raiz="${CRUX_PROJECTS_DIR:-}"
-if [[ -z "$raiz" && -f "$HOME/.crux/config" ]]; then
-  raiz="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
-  if [[ -z "$raiz" ]]; then
+root="${CRUX_PROJECTS_DIR:-}"
+if [[ -z "$root" && -f "$HOME/.crux/config" ]]; then
+  root="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+  if [[ -z "$root" ]]; then
     kernel="$(grep -E '^CRUX_HOME=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
-    [[ -n "$kernel" ]] && raiz="$(dirname "$kernel")"
+    [[ -n "$kernel" ]] && root="$(dirname "$kernel")"
   fi
 fi
-[[ -n "$raiz" ]] || exit 0
+[[ -n "$root" ]] || exit 0
 
 cwd="$(pwd)"
 case "$cwd/" in
-  "$raiz"/*/*) ;;
+  "$root"/*/*) ;;
   *) exit 0 ;;
 esac
 
-rel="${cwd#"$raiz"/}"
+rel="${cwd#"$root"/}"
 project="${rel%%/*}"
 rest="${rel#*/}"
 repo="${rest%%/*}"
 
-docs_root="$raiz/$project/$project-docs"
+docs_root="$root/$project/$project-docs"
 [[ -f "$docs_root/crux.json" ]] || exit 0
 
-# --- 1. Deriva medible -------------------------------------------------------
+# --- 1. Measurable drift -------------------------------------------------------
 
-deriva=""
+drift=""
 if [[ -f "$CRUX_HOME/lib/check-doc-drift.mjs" ]]; then
-  deriva="$(node "$CRUX_HOME/lib/check-doc-drift.mjs" "$docs_root" 2>/dev/null || true)"
+  drift="$(node "$CRUX_HOME/lib/check-doc-drift.mjs" "$docs_root" 2>/dev/null || true)"
 fi
 
-# --- 2. Ficheros tocados que la doc menciona por nombre -----------------------
+# --- 2. Touched files that the docs mention by name -----------------------
 
-referenciados=""
+referenced=""
 if [[ -d "$docs_root/repos/$repo" ]]; then
-  modificados="$(git -C "$cwd" status --porcelain 2>/dev/null | awk '$1 !~ /^\?\?$/ {print $2}')"
+  modified="$(git -C "$cwd" status --porcelain 2>/dev/null | awk '$1 !~ /^\?\?$/ {print $2}')"
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     case "$f" in
@@ -85,80 +85,80 @@ if [[ -d "$docs_root/repos/$repo" ]]; then
     esac
     base="${f##*/}"
     if grep -rqF "$f" "$docs_root/repos/$repo/" 2>/dev/null; then
-      referenciados+="  - $f (referenciado por ruta)"$'\n'
+      referenced+="  - $f (referenced by path)"$'\n'
     elif grep -rqF "\`$base\`" "$docs_root/repos/$repo/" 2>/dev/null; then
-      referenciados+="  - $f (referenciado por nombre)"$'\n'
+      referenced+="  - $f (referenced by name)"$'\n'
     fi
-  done <<< "$modificados"
+  done <<< "$modified"
 fi
 
-# --- 3. ¿Ha pasado algo en esta sesión? --------------------------------------
+# --- 3. Has anything happened in this session? --------------------------------------
 #
-# Si no se ha tocado nada en el proyecto, no hay nada que promocionar y callar
-# es lo correcto. Preguntar en sesiones vacías es la forma más rápida de que
-# alguien desinstale el hook.
+# If nothing has been touched in the project, there is nothing to promote and
+# staying silent is right. Asking in empty sessions is the fastest way for
+# someone to uninstall the hook.
 
-hubo_actividad=0
-[[ -n "$deriva" || -n "$referenciados" ]] && hubo_actividad=1
-if [[ $hubo_actividad -eq 0 ]]; then
-  for d in "$raiz/$project"/*/; do
+had_activity=0
+[[ -n "$drift" || -n "$referenced" ]] && had_activity=1
+if [[ $had_activity -eq 0 ]]; then
+  for d in "$root/$project"/*/; do
     [[ -d "$d/.git" ]] || continue
     if [[ -n "$(git -C "$d" log -1 --since='12 hours ago' --format=%h 2>/dev/null)" ]]; then
-      hubo_actividad=1
+      had_activity=1
       break
     fi
   done
 fi
-[[ $hubo_actividad -eq 1 ]] || exit 0
+[[ $had_activity -eq 1 ]] || exit 0
 
-# --- 4. Una vez por sesión ---------------------------------------------------
+# --- 4. Once per session ---------------------------------------------------
 
-estado="$HOME/.crux/state"
-mkdir -p "$estado" 2>/dev/null || true
-marca="$estado/doc-gate-$(printf '%s' "$sesion" | tr -c 'A-Za-z0-9_.-' '_')"
-if [[ -f "$marca" ]]; then
+status="$HOME/.crux/state"
+mkdir -p "$status" 2>/dev/null || true
+marker="$status/doc-gate-$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
+if [[ -f "$marker" ]]; then
   exit 0
 fi
-: > "$marca" 2>/dev/null || true
+: > "$marker" 2>/dev/null || true
 
-# Sin dejar basura: las marcas de hace más de dos días no le sirven a nadie.
-find "$estado" -name 'doc-gate-*' -type f -mtime +2 -delete 2>/dev/null || true
+# No leftovers: markers older than two days are of no use to anyone.
+find "$status" -name 'doc-gate-*' -type f -mtime +2 -delete 2>/dev/null || true
 
-# --- 5. La puerta ------------------------------------------------------------
+# --- 5. The gate ------------------------------------------------------------
 
 {
-  echo "PUERTA DE DOCUMENTACIÓN — proyecto $project"
+  echo "DOCUMENTATION GATE — project $project"
   echo
-  echo "Esta sesión ha movido cosas. Antes de cerrar, responde en una línea qué"
-  echo "de lo que ha pasado se queda en $project-docs y qué no."
+  echo "This session has moved things. Before closing, answer in one line what"
+  echo "of what happened stays in $project-docs and what does not."
 
-  if [[ -n "$deriva" ]]; then
+  if [[ -n "$drift" ]]; then
     echo
-    echo "Deriva medida:"
-    while IFS= read -r l; do [[ -n "$l" ]] && echo "  $l"; done <<< "$deriva"
+    echo "Measured drift:"
+    while IFS= read -r l; do [[ -n "$l" ]] && echo "  $l"; done <<< "$drift"
   fi
 
-  if [[ -n "$referenciados" ]]; then
+  if [[ -n "$referenced" ]]; then
     echo
-    echo "Ficheros tocados que la documentación menciona:"
-    printf '%s' "$referenciados"
+    echo "Touched files that the documentation mentions:"
+    printf '%s' "$referenced"
   fi
 
   cat <<'GUIA'
 
-Repasa la conversación, no solo el diff. Lo que se pierde no suele ser un
-fichero, es lo que se midió, se decidió o se descubrió y nunca fue un fichero:
+Go over the conversation, not just the diff. What gets lost is not usually a
+file, it is what was measured, decided or discovered and never was a file:
 
-  - decisión con alternativas descartadas ....... decisions/ (ADR)
-  - algo medido que costaría repetir ............ repos/<repo>/ o operations/
-  - gotcha de infraestructura o despliegue ...... operations/
-  - riesgo nuevo ................................ operations/open-risks.md
-  - pregunta abierta que se ha resuelto ......... donde estaba la pregunta
-  - estado de un repo que ha cambiado ........... repos/<repo>/notes.md
+  - decision with discarded alternatives ........ decisions/ (ADR)
+  - something measured that would be costly to repeat ... repos/<repo>/ or operations/
+  - infrastructure or deployment gotcha ......... operations/
+  - new risk .................................... operations/open-risks.md
+  - open question that has been resolved ........ where the question was
+  - state of a repo that has changed ............ repos/<repo>/notes.md
 
-Si nada de la sesión encaja, dilo explícitamente y cierra: la respuesta "no hay
-nada que promocionar" es válida, pero tiene que ser una respuesta, no un olvido.
-Si algo encaja, usa /promote-to-docs ahora y commitea antes de cerrar.
+If nothing from the session fits, say so explicitly and close: the answer "there
+is nothing to promote" is valid, but it has to be an answer, not an oversight.
+If something fits, use /promote-to-docs now and commit before closing.
 GUIA
 } >&2
 

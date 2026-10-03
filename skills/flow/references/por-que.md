@@ -1,77 +1,80 @@
-# Por qué el ciclo es así
+# Why the cycle works this way
 
-El procedimiento está en `SKILL.md`. Aquí está el motivo de cada paso, para
-cuando haya que decidir si saltárselo tiene sentido.
+The procedure is in `SKILL.md`. Here is the reason for each step, for when you
+need to decide whether skipping one makes sense.
 
-## Aislar antes de empezar
+## Isolate before starting
 
-Es lo que evita el problema más caro de trabajar con varios agentes: dos
-sesiones sobre el mismo directorio se pisan los ficheros, mezclan sus cambios en
-el mismo commit y se pelean por el puerto y la base de datos. La rama nace
-separada y es la misma que acaba siendo la propuesta, así que el trabajo sale
-como algo que se revisa y no como cambios sueltos mezclados con los de otro.
+It is what avoids the most expensive problem of working with several agents: two
+sessions on the same directory trample each other's files, mix their changes in
+the same commit and fight over the port and the database. The branch is born
+separate and is the same one that ends up being the proposal, so the work comes
+out as something to be reviewed and not as loose changes mixed with someone
+else's.
 
-Aislar después de empezar obliga a mover cambios entre ramas, que es justo el
-lío que se quería evitar.
+Isolating after starting forces you to move changes between branches, which is
+exactly the mess you wanted to avoid.
 
-## Preguntar y planificar antes del código
+## Ask and plan before the code
 
-Un turno de preguntas sale más barato que un diff construido sobre una
-suposición. Un plan que dice "voy a cambiar el formato de la clave de caché" se
-rechaza en cinco segundos; el mismo error descubierto después es un diff que
-revisar y probablemente revertir.
+A round of questions is cheaper than a diff built on an assumption. A plan that
+says "I am going to change the cache key format" is rejected in five seconds;
+the same mistake discovered later is a diff to review and probably revert.
 
-## Tests y depuración durante, no al final
+## Tests and debugging during, not at the end
 
-Los tests escritos después se escriben para que pasen. Cambiar cosas a ver si
-funcionan es lo que convierte un bug en dos.
+Tests written afterwards are written so that they pass. Changing things to see
+whether they work is what turns one bug into two.
 
-## Enseñar antes de proponer
+## Show before proposing
 
-Va después de `/ship` para que lo que se enseña sea exactamente lo que se va a
-proponer, y antes de `finish` porque proponer ya es enseñar el trabajo a otros.
+It goes after `/ship` so that what is shown is exactly what is going to be
+proposed, and before `finish` because proposing already means showing the work
+to others.
 
-## Proponer y esperar al CI
+## Propose and wait for the CI
 
-`finish` se niega sin commit o sin puerta porque lo que no está en git no llega
-a la revisión, y así no se abre una propuesta de código que nadie ha revisado.
+`finish` refuses without a commit or without the gate because what is not in git
+does not reach the review, and this way no code proposal that nobody has
+reviewed gets opened.
 
-Esperar al CI delante de la pantalla bloquea la sesión minutos en los que nadie
-avanza. El rigor está en no dar por buena la propuesta hasta ver el resultado,
-y eso se cumple igual mirándolo después. El límite de tres intentos existe
-porque seguir empujando arreglos a ciegas deja una rama con diez commits de
-"fix ci": si al tercero sigue en rojo, el problema no era el que parecía.
+Waiting for the CI in front of the screen blocks the session for minutes in
+which nobody advances. The rigour lies in not accepting the proposal until the
+result is seen, and that is fulfilled just the same by looking at it later. The
+limit of three attempts exists because continuing to push blind fixes leaves a
+branch with ten "fix ci" commits: if on the third it is still red, the problem
+was not the one it seemed.
 
-## Revisar desde otro contexto
+## Review from another context
 
-`/ship` pregunta si está listo lo que hiciste; `/review-pr` pregunta si es
-correcto y completo lo que se propone, y lo pregunta alguien que no estaba
-dentro del problema. Es la diferencia entre revisar y confirmar.
+`/ship` asks whether what you did is ready; `/review-pr` asks whether what is
+being proposed is correct and complete, and it is asked by someone who was not
+inside the problem. It is the difference between reviewing and confirming.
 
-## Fusionar y vigilar
+## Merge and watch
 
-La decisión de fusionar es de una persona; el comando solo se asegura de que
-llega informada. "Nada lo bloquea" no es lo mismo que "está verificado". Si no
-se vigila el despliegue, el primero que ve el fallo es un usuario.
+The decision to merge belongs to a person; the command only makes sure it
+arrives informed. "Nothing blocks it" is not the same as "it is verified". If
+the deployment is not watched, the first to see the failure is a user.
 
-## Cerrar
+## Close
 
-Lo aprendido que no queda en el código se pierde con la sesión, y en tres meses
-alguien vuelve a descubrirlo.
+What was learned that does not stay in the code is lost with the session, and in
+three months someone discovers it again.
 
-## Lo que se paga al saltarse cada paso
+## What you pay for skipping each step
 
-| Paso | Si te lo saltas |
-| ---- | --------------- |
-| Entender | Escribes código para averiguar lo que la documentación ya dice |
-| Aislar | Te mezclas con otra sesión y resuelves conflictos que no existían |
-| Preguntar | Construyes bien lo que no era, y se ve al enseñarlo |
-| Planificar | Descubres el error cuando ya es un diff |
-| Tests durante | Los escribes para que pasen, no para que fallen |
-| La puerta | Entra trabajo roto, y se descubre en producción |
-| Enseñar | Se propone lo que quien decide no ha visto |
-| Proponer | El cambio no se revisa, o se revisa ya integrado |
-| Esperar al CI | El rojo se descubre al ir a fusionar, sin contexto |
-| Fusionar | Entra sin mirar el CI ni los conflictos |
-| Vigilar el despliegue | El primero que ve el fallo es un usuario |
-| Cerrar | Lo aprendido muere con la sesión |
+| Step | If you skip it |
+| ---- | -------------- |
+| Understand | You write code to find out what the documentation already says |
+| Isolate | You get mixed up with another session and resolve conflicts that did not exist |
+| Ask | You build well what was not wanted, and it shows when you present it |
+| Plan | You discover the error when it is already a diff |
+| Tests during | You write them to pass, not to fail |
+| The gate | Broken work gets in, and is discovered in production |
+| Show | What is proposed has not been seen by whoever decides |
+| Propose | The change is not reviewed, or is reviewed once already integrated |
+| Wait for CI | The red is discovered when going to merge, without context |
+| Merge | It gets in without looking at the CI or the conflicts |
+| Watch the deployment | The first to see the failure is a user |
+| Close | What was learned dies with the session |

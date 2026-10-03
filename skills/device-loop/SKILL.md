@@ -1,32 +1,33 @@
 ---
 name: device-loop
-description: Levantar y validar una app móvil React Native o Expo en un dispositivo Android físico vía adb, viendo la pantalla real con screencap e iterando con Fast Refresh sobre un development build. Usa cuando haya que probar la app nativa de verdad, reproducir un bug que solo ocurre en release, validar superficies que el navegador no reproduce (mapas GL, cámara, sensores) o hacer una pasada de QA en dispositivo.
+description: Bring up and validate a React Native or Expo mobile app on a physical Android device via adb, seeing the real screen with screencap and iterating with Fast Refresh on a development build. Use when the native app has to be genuinely tested, to reproduce a bug that only happens in release, to validate surfaces the browser does not reproduce (GL maps, camera, sensors) or to do a QA pass on a device.
 ---
 
 # device-loop
 
-El objetivo es que el agente **vea** la app nativa real y pueda iterar sobre
-ella. La vía es un dispositivo Android físico por `adb` más `screencap`.
+The goal is for the agent to **see** the real native app and be able to iterate
+on it. The route is a physical Android device over `adb` plus `screencap`.
 
-Para ver cambios de código en vivo hace falta un **development build** con
-Metro y Fast Refresh. Para validar un APK ya construido basta instalar,
-lanzar y capturar.
+To see code changes live you need a **development build** with Metro and Fast
+Refresh. To validate an already-built APK it is enough to install, launch and
+capture.
 
-Es la hermana nativa de `/visual-test`. Dispositivo físico, no emulador; el
-porqué de eso y de cada gotcha, en `<directorio-de-esta-skill>/references/por-que.md`.
+It is the native sibling of `/visual-test`. Physical device, not emulator; the
+why of that and of each gotcha is in
+`<this-skill-directory>/references/por-que.md`.
 
-## Cuándo usar
+## When to use
 
-- Hay que probar la app nativa, no una aproximación en navegador.
-- Validar superficies que el navegador no reproduce fielmente.
-- Reproducir un bug que solo aparece en el APK de release. Caso típico: las
-  variables de entorno que el bundler inyecta en desarrollo pero no en
-  release cuando se leen dinámicamente.
+- The native app has to be tested, not a browser approximation.
+- Validating surfaces the browser does not faithfully reproduce.
+- Reproducing a bug that only appears in the release APK. Typical case:
+  environment variables that the bundler injects in development but not in
+  release when they are read dynamically.
 
-## 1. adb sin sudo
+## 1. adb without sudo
 
-No hace falta el SDK entero. Descarga solo las platform-tools a una ruta
-estable, no a un directorio temporal de sesión:
+The whole SDK is not needed. Download only the platform-tools to a stable path,
+not to a temporary session directory:
 
 ```bash
 cd ~ && curl -sSL -o pt.zip \
@@ -36,21 +37,20 @@ export PATH="$HOME/platform-tools:$PATH"
 adb version
 ```
 
-## 2. Permisos del dispositivo
+## 2. Device permissions
 
-Es donde se pierde más tiempo la primera vez.
+It is where the most time is lost the first time.
 
-1. En el móvil: Ajustes, Información del teléfono, tocar siete veces el número
-   de compilación para desbloquear las opciones de desarrollador.
-2. Activar **depuración USB**. Algunos fabricantes exigen además activar la
-   instalación por USB.
-3. Conectar el cable en modo **transferencia de ficheros**, no en solo carga.
-4. Aceptar en el móvil el diálogo de permitir la depuración, marcando
-   "permitir siempre".
+1. On the phone: Settings, About phone, tap the build number seven times to
+   unlock the developer options.
+2. Enable **USB debugging**. Some manufacturers also require enabling install
+   via USB.
+3. Connect the cable in **file transfer** mode, not charge-only.
+4. Accept on the phone the dialog allowing debugging, ticking "always allow".
 
-Si `adb devices` responde `no permissions (missing udev rules)`, falta la
-regla udev. **Esto lo tiene que ejecutar el usuario en una terminal real**: el
-agente no puede, porque `sudo` necesita un TTY para pedir la contraseña.
+If `adb devices` answers `no permissions (missing udev rules)`, the udev rule is
+missing. **The user has to run this in a real terminal**: the agent cannot,
+because `sudo` needs a TTY to ask for the password.
 
 ```bash
 sudo tee /etc/udev/rules.d/51-android.rules >/dev/null <<'EOF'
@@ -59,41 +59,41 @@ EOF
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-El `idVendor` sale de `lsusb`. Después hay que **desconectar y reconectar** el
-cable, y reiniciar el servidor:
+The `idVendor` comes from `lsusb`. Afterwards you have to **unplug and replug**
+the cable, and restart the server:
 
 ```bash
 adb kill-server && adb start-server && adb devices -l
 ```
 
-Debe salir `device`, no `unauthorized` ni `no permissions`.
+It must show `device`, not `unauthorized` or `no permissions`.
 
-### Depuración inalámbrica
+### Wireless debugging
 
-Sin cable ni udev, en Android 11 o superior. Opciones de desarrollador,
-depuración inalámbrica, con el móvil y el PC en la misma red:
+Without cable or udev, on Android 11 or later. Developer options, wireless
+debugging, with the phone and the PC on the same network:
 
 ```bash
 PAIR=$(adb mdns services | grep pairing | awk '{print $3}' | head -1)
-adb pair "$PAIR" <codigo-de-6-digitos>
+adb pair "$PAIR" <6-digit-code>
 adb connect $(adb mdns services | grep connect | awk '{print $3}' | head -1)
 ```
 
-Dos avisos: el error `protocol fault (couldn't read status message): Success`
-suele significar que **sí** se vinculó — compruébalo en la lista de
-dispositivos emparejados del móvil. Y si la red tiene aislamiento de clientes,
-mDNS se ve pero la conexión TCP da "no route to host": ahí toca USB.
+Two warnings: the error `protocol fault (couldn't read status message): Success`
+usually means it **did** pair — check it in the phone's list of paired devices.
+And if the network has client isolation, mDNS is visible but the TCP connection
+gives "no route to host": then USB it is.
 
-## 3. Ver la pantalla
+## 3. See the screen
 
 ```bash
-adb exec-out screencap -p > <ruta>/phone.png
+adb exec-out screencap -p > <path>/phone.png
 ```
 
-Y después abrir el PNG para mirarlo.
+And then open the PNG to look at it.
 
-**Si la captura sale negra**, casi siempre es que el foco está en la cortina de
-notificaciones o en otra ventana, no en la app:
+**If the capture comes out black**, it is almost always that the focus is on the
+notification shade or on another window, not on the app:
 
 ```bash
 adb shell dumpsys window | grep mCurrentFocus
@@ -102,28 +102,28 @@ adb shell input keyevent KEYCODE_HOME
 adb shell monkey -p <package> -c android.intent.category.LAUNCHER 1
 ```
 
-Las vistas GL montadas sobre `TextureView` se capturan bien. Si la app usa
-`SurfaceView`, esa zona puede salir negra aunque el resto de la interfaz se
-vea; no es un fallo de la app.
+GL views mounted on `TextureView` are captured fine. If the app uses
+`SurfaceView`, that area may come out black even though the rest of the
+interface is visible; it is not an app failure.
 
-## 4. Iterar
+## 4. Iterate
 
-### Con recarga en vivo
+### With live reload
 
-Los perfiles de preview y producción son builds de release y **no** conectan
-con Metro. Para iterar hace falta un development build:
+The preview and production profiles are release builds and do **not** connect to
+Metro. To iterate you need a development build:
 
 ```bash
-eas build -p android --profile development   # una vez, tarda
+eas build -p android --profile development   # once, takes a while
 adb install -r <dev-client>.apk
 pnpm start
 ```
 
-A partir de ahí el bucle es: editar código, esperar al Fast Refresh, capturar,
-validar. Las variables de entorno las inyecta Metro desde el fichero local, no
-las del servicio de build.
+From there the loop is: edit code, wait for Fast Refresh, capture, validate.
+Environment variables are injected by Metro from the local file, not the build
+service's.
 
-### Validando un APK concreto
+### Validating a specific APK
 
 ```bash
 adb install -r <build>.apk
@@ -131,12 +131,12 @@ adb shell monkey -p <package> -c android.intent.category.LAUNCHER 1
 adb exec-out screencap -p > shot.png
 ```
 
-## 5. Navegar por la app
+## 5. Navigating the app
 
-**`adb shell input tap` no llega a la app en algunas capas de fabricante.** No
-intentes navegar con toques ni con teclas: **abre la pantalla por código**
-(instrumenta temporalmente el montaje, o usa su deep link), captura y revierte.
-Hace falta un montaje limpio, así que fuerza la parada y relanza:
+**`adb shell input tap` does not reach the app on some manufacturer layers.** Do
+not try to navigate with taps or keys: **open the screen by code** (temporarily
+instrument the mount, or use its deep link), capture and revert. A clean mount
+is needed, so force-stop and relaunch:
 
 ```bash
 adb shell am force-stop <package>
@@ -146,26 +146,26 @@ adb exec-out screencap -p > shot.png
 adb logcat -d -t 200 | grep -iE "ReactNative|Exception|FATAL"
 ```
 
-Si la pantalla está apagada o bloqueada:
+If the screen is off or locked:
 
 ```bash
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
 ```
 
-`dismiss-keyguard` solo funciona si el bloqueo no es seguro; con PIN o huella,
-lo desbloquea el usuario.
+`dismiss-keyguard` only works if the lock is not secure; with a PIN or
+fingerprint, the user unlocks it.
 
 ## Anti-patterns
 
-- **Dar por bueno un cambio sin una captura que lo confirme.** Es el punto
-  entero de la skill.
-- **Validar en navegador algo que en la app se comporta distinto.**
-- **Intentar `sudo` desde el agente.** Sin TTY no hay contraseña; se lo pides
-  al usuario.
-- **Fiarse de la primera captura tras lanzar.** Espera a que el foco sea la
-  actividad principal y a que la pantalla haya pintado.
+- **Accepting a change without a screenshot that confirms it.** It is the whole
+  point of the skill.
+- **Validating in a browser something that behaves differently in the app.**
+- **Trying `sudo` from the agent.** Without a TTY there is no password; ask the
+  user.
+- **Trusting the first capture after launching.** Wait for the focus to be the
+  main activity and for the screen to have painted.
 
-## Relacionado
+## Related
 
-- `/visual-test` — la hermana web, con Chrome headless
+- `/visual-test` — the web sibling, with headless Chrome

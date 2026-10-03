@@ -1,67 +1,67 @@
-# Por qué la revisión es así
+# Why the review works this way
 
-El procedimiento está en `SKILL.md`. Aquí está el motivo de cada regla.
+The procedure is in `SKILL.md`. Here is the reason for each rule.
 
-## No lo cubre `/ship`
+## `/ship` does not cover it
 
-Un cambio puede pasar `/ship` limpio y seguir incompleto: los tests que
-escribió el autor prueban lo que el autor pensó. El caso típico es arreglar un
-agujero por la puerta por la que se encontró, mientras la misma entrada llega
-por otra que nadie miró.
+A change can pass `/ship` clean and still be incomplete: the tests the author
+wrote prove what the author thought of. The typical case is fixing a hole
+through the door where it was found, while the same input arrives through
+another that nobody looked at.
 
-## Contexto independiente
+## Independent context
 
-Un hilo que acaba de defender cada decisión no está en posición de refutarlas:
-tiende a confirmar lo que ya concluyó y arrastra el razonamiento previo como si
-fuera evidencia.
+A thread that has just defended every decision is not in a position to refute
+them: it tends to confirm what it already concluded and carries its earlier
+reasoning along as if it were evidence.
 
-## `crux review` prepara, no revisa
+## `crux review` prepares, it does not review
 
-Reúne el material para que la revisión no dependa de que alguien se acuerde de
-juntarlo. Las convenciones no las da ningún comando: están escritas en la
-documentación del repo y no se adivinan.
+It gathers the material so the review does not depend on someone remembering to
+collect it. The conventions are not provided by any command: they are written
+in the repo's documentation and cannot be guessed.
 
-## Por qué no se lanzan todos los especialistas
+## Why not every specialist is launched
 
-Cada uno cuesta entre 20.000 y 50.000 tokens según el tamaño del cambio. Cuatro
-en cada propuesta multiplican por cinco el coste de revisar, y la mayoría no
-encontraría nada: un cambio de estilos no tiene consultas ni permisos. Con el
-reparto por diff, las erratas no lanzan ninguno, una pantalla lanza el de
-interfaz, y un endpoint con sesión o una migración lanzan dos o tres, que es
-donde se pagan solos porque el fallo no se ve en una captura.
+Each one costs between 20,000 and 50,000 tokens depending on the size of the
+change. Four on every proposal multiply the cost of reviewing by five, and most
+would find nothing: a styles change has no queries or permissions. With the
+split by diff, typo fixes launch none, a screen launches the UI one, and an
+endpoint with a session or a migration launch two or three, which is where they
+pay for themselves because the failure does not show in a screenshot.
 
-No todo proyecto merece la misma ceremonia; por eso el rigor mueve los
-umbrales.
+Not every project deserves the same ceremony; that is why rigor moves the
+thresholds.
 
-## El orden del recorrido
+## The order of the walkthrough
 
-Cada paso depende del anterior. La completitud es la pregunta que más rinde: un
-arreglo parcial es peor que ninguno, porque cierra el asunto en la cabeza de
-todos. Un test que pasa con y sin el arreglo no prueba nada, y comprobarlo
-cuesta un minuto. Los tests que fijan la implementación convierten cualquier
-refactor futuro en reescribir tests.
+Each step depends on the previous one. Completeness is the question that pays
+off most: a partial fix is worse than none, because it closes the matter in
+everyone's head. A test that passes with and without the fix proves nothing,
+and checking it takes a minute. Tests that pin the implementation turn any
+future refactor into rewriting tests.
 
-La deuda se mira aparte porque el código escrito con asistencia tiende a
-añadir redundancia en cada cambio, y el diff parece limpio porque cada trozo,
-por separado, lo es.
+Debt is looked at separately because code written with assistance tends to add
+redundancy in every change, and the diff looks clean because each piece, on its
+own, is.
 
-## Hallazgos confirmados y bien escritos
+## Confirmed and well-written findings
 
-«Considera mejorar el manejo de errores» suena a revisión y no dice nada: quien
-lo lee no sabe si tocar algo ni dónde. Una revisión con tres hallazgos ciertos
-se lee entera; una con quince, de los que cuatro son ruido, enseña a ignorar la
-siguiente.
+"Consider improving error handling" sounds like a review and says nothing: whoever
+reads it does not know whether to touch anything or where. A review with three
+true findings gets read in full; one with fifteen, four of which are noise,
+teaches people to ignore the next one.
 
-## Dos rondas como mucho
+## Two rounds at most
 
-Una tercera vuelta no converge: persigue lo que la anterior rompió, y cada
-pasada encuentra algo nuevo porque vuelve a mirar entero.
+A third pass does not converge: it chases what the previous one broke, and each
+pass finds something new because it looks at everything again.
 
-## Contarlo
+## Telling it
 
-Un comentario en un hilo que nadie abre hasta la semana siguiente queda
-archivado sin más. Sin el porqué, todo parece igual de urgente y quien decide no
-puede priorizar. Si no se dice qué se revisó sin encontrar nada, el silencio se
-lee como "no lo miré"; una revisión sin alcance declarado se lee como si lo
-cubriera todo. Después de fusionar, lo que se encuentre ya forma parte del
-código del repo.
+A comment in a thread nobody opens until the following week ends up archived
+and nothing more. Without the why, everything seems equally urgent and whoever
+decides cannot prioritise. If it is not said what was reviewed without finding
+anything, silence reads as "I did not look"; a review with no declared scope
+reads as if it covered everything. After merging, whatever is found is already
+part of the repo's code.

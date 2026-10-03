@@ -1,6 +1,6 @@
 {
   "name": "multi-repo",
-  "description": "Proyecto propio con uno o varios repos de código hermanos del docs repo.",
+  "description": "Our own project with one or more code repos that are siblings of the docs repo.",
   "pointers": {
     "write": true,
     "files": [
@@ -9,10 +9,10 @@
     ]
   },
   "rules": [
-    "La documentación específica de un repo vive en repos/<repo>/, nunca dentro del repo de código.",
-    "Al cambiar código que afecta a una doc, se actualiza la doc en el mismo turno.",
-    "Las notas de proyecto y las referencias van a git, no a memoria local del agente.",
-    "Los cambios en el docs repo se commitean y pushean al terminar."
+    "A repo's specific documentation lives in repos/<repo>/, never inside the code repo.",
+    "When changing code that affects a doc, the doc is updated in the same turn.",
+    "Project notes and references go to git, not to the agent's local memory.",
+    "Changes in the docs repo are committed and pushed when done."
   ],
   "commit": {
     "language": "en"

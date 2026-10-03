@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-// crux usage — qué skills se usan de verdad.
+// crux usage — which skills are really used.
 //
 //   crux usage [--days N] [--all]
 //
-// Un catálogo que solo crece acaba estorbando al descubrimiento: cuantas más
-// skills hay, peor se elige entre ellas. Esto mide el uso real contra el
-// catálogo instalado y separa lo vivo de lo muerto.
+// A catalog that only grows ends up getting in the way of discovery: the more
+// skills there are, the worse the choice between them. This measures real use
+// against the installed catalog and separates the live from the dead.
 //
-// La fuente son las transcripciones locales del agente. Es un formato interno
-// y puede cambiar; si un día deja de encontrar invocaciones, lo dice en vez de
-// reportar cero como si fuera un dato.
+// The source is the agent's local transcripts. It is an internal format and
+// may change; if one day it stops finding invocations, it says so instead of
+// reporting zero as if it were data.
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 
 const HOME = homedir()
-// La raíz de proyectos no se asume: sale de la config de la máquina o del sitio
-// donde está instalado el kernel, que siempre vive dentro de ella.
-function raizProyectos() {
+// The projects root is not assumed: it comes from the machine's config or from
+// where the kernel is installed, which always lives inside it.
+function projectsRoot() {
   if (process.env.CRUX_PROJECTS_DIR) return process.env.CRUX_PROJECTS_DIR
   try {
     const cfg = readFileSync(join(homedir(), '.crux', 'config'), 'utf8')
@@ -31,10 +31,11 @@ function raizProyectos() {
   return join(homedir(), 'Proyectos')
 }
 
-const PROYECTOS = raizProyectos()
-const CRUX_HOME = process.env.CRUX_HOME || join(PROYECTOS, 'crux')
-// CLAUDE_SKILLS_DIR lo redirige la suite y cualquier entorno aislado: si los
-// transcripts siguen saliendo del HOME real, se mide la máquina, no el sandbox.
+const PROJECTS = projectsRoot()
+const CRUX_HOME = process.env.CRUX_HOME || join(PROJECTS, 'crux')
+// CLAUDE_SKILLS_DIR is redirected by the suite and any isolated environment: if
+// the transcripts still come from the real HOME, the machine is measured, not
+// the sandbox.
 const TRANSCRIPTS = process.env.CRUX_TRANSCRIPTS
   || (process.env.CLAUDE_SKILLS_DIR
         ? join(dirname(process.env.CLAUDE_SKILLS_DIR), 'projects')
@@ -43,21 +44,21 @@ const TRANSCRIPTS = process.env.CRUX_TRANSCRIPTS
 const args = process.argv.slice(2)
 const showAll = args.includes('--all')
 
-// Un valor que no es número se dice, no se sustituye por el defecto en silencio.
-function leerDias(lista) {
-  const i = lista.findIndex(a => a === '--days' || a.startsWith('--days='))
+// A value that is not a number is reported, not silently replaced by the default.
+function readDays(list) {
+  const i = list.findIndex(a => a === '--days' || a.startsWith('--days='))
   if (i === -1) return 90
-  const crudo = lista[i].includes('=') ? lista[i].slice('--days='.length) : lista[i + 1]
-  const n = Number(crudo)
-  if (crudo === undefined || crudo === '' || !Number.isFinite(n) || n <= 0) {
-    console.error(`--days: '${crudo ?? ''}' no es un número de días`)
+  const raw = list[i].includes('=') ? list[i].slice('--days='.length) : list[i + 1]
+  const n = Number(raw)
+  if (raw === undefined || raw === '' || !Number.isFinite(n) || n <= 0) {
+    console.error(`--days: '${raw ?? ''}' is not a number of days`)
     process.exit(1)
   }
   return n
 }
-const days = leerDias(args)
+const days = readDays(args)
 
-function descripcionDe(dir) {
+function descriptionOf(dir) {
   try {
     const t = readFileSync(join(dir, 'SKILL.md'), 'utf8')
     const m = t.match(/^description:\s*([\s\S]*?)(?:\n[a-z-]+:|\n---)/m)
@@ -65,22 +66,22 @@ function descripcionDe(dir) {
   } catch { return '' }
 }
 
-const DESCRIPCIONES = new Map()
+const DESCRIPTIONS = new Map()
 
-function catalogo() {
+function catalog() {
   const out = new Map()
   const kernel = join(CRUX_HOME, 'skills')
   if (existsSync(kernel)) {
     for (const n of readdirSync(kernel)) {
       if (!statSync(join(kernel, n)).isDirectory()) continue
       out.set(n, 'kernel')
-      DESCRIPCIONES.set(n, descripcionDe(join(kernel, n)))
+      DESCRIPTIONS.set(n, descriptionOf(join(kernel, n)))
     }
   }
-  const proyectos = PROYECTOS
-  if (existsSync(proyectos)) {
-    for (const p of readdirSync(proyectos)) {
-      const dir = join(proyectos, p)
+  const projects = PROJECTS
+  if (existsSync(projects)) {
+    for (const p of readdirSync(projects)) {
+      const dir = join(projects, p)
       if (!statSync(dir).isDirectory()) continue
       for (const sub of readdirSync(dir)) {
         if (!sub.endsWith('-docs')) continue
@@ -89,7 +90,7 @@ function catalogo() {
         for (const n of readdirSync(skills)) {
           if (!statSync(join(skills, n)).isDirectory()) continue
           out.set(n, sub.replace('-docs', ''))
-          DESCRIPCIONES.set(n, descripcionDe(join(skills, n)))
+          DESCRIPTIONS.set(n, descriptionOf(join(skills, n)))
         }
       }
     }
@@ -97,11 +98,11 @@ function catalogo() {
   return out
 }
 
-// Los scripts de una skill son la otra cara de su uso: quien sigue el
-// procedimiento a mano los ejecuta sin llamar a la skill por su nombre, y
-// contando solo las llamadas esa skill sale como muerta. Pasó con la puerta de
-// calidad: cero invocaciones mientras se pasaba en cuatro propuestas seguidas.
-function scriptsDelCatalogo() {
+// A skill's scripts are the other face of its use: whoever follows the
+// procedure by hand runs them without calling the skill by name, and counting
+// only the calls that skill comes out as dead. It happened with the quality
+// gate: zero invocations while it was passed in four proposals in a row.
+function catalogScripts() {
   const out = new Map()
   const kernel = join(CRUX_HOME, 'skills')
   if (!existsSync(kernel)) return out
@@ -113,38 +114,38 @@ function scriptsDelCatalogo() {
   return out
 }
 
-// Un nombre de script aparece en muchos comandos que no lo ejecutan: leerlo,
-// copiarlo, buscar dentro. Se descarta cuando lo precede un verbo de lectura.
-const VERBO_DE_LECTURA = /\b(cat|sed|awk|grep|head|tail|less|ls|wc|chmod|cp|mv|rm|find|diff|git|shellcheck|vim|nano)\s+(-\S+\s+)*\S*$/
+// A script name appears in many commands that do not run it: reading it,
+// copying it, searching inside. It is discarded when a reading verb precedes it.
+const READ_VERB = /\b(cat|sed|awk|grep|head|tail|less|ls|wc|chmod|cp|mv|rm|find|diff|git|shellcheck|vim|nano)\s+(-\S+\s+)*\S*$/
 
-// Escribir una skill no es usarla. Las sesiones en que se desarrolla nombran su
-// script una y otra vez —heredocs que lo reescriben, chmod, calibraciones— y
-// sin esto la skill recién parida aparece como la más usada del catálogo.
-const EDITA_EL_SCRIPT = /<<\s*['"]?\w*(PY|EOF|SH)\b|chmod\s|cat\s*>|>>\s*\S|sed -i|\.replace\(/
+// Writing a skill is not using it. The sessions where it is developed name its
+// script over and over —heredocs that rewrite it, chmod, calibrations— and
+// without this the newborn skill shows up as the most used in the catalog.
+const EDITS_THE_SCRIPT = /<<\s*['"]?\w*(PY|EOF|SH)\b|chmod\s|cat\s*>|>>\s*\S|sed -i|\.replace\(/
 
-// Lo que delega una sesión cuelga de <sesión>/subagents/ y cuenta como esa sesión.
-function sesionesDe(dirProyecto) {
-  const grupos = new Map()
-  const visita = (dir, raiz) => {
-    let entradas
-    try { entradas = readdirSync(dir, { withFileTypes: true }) } catch { return }
-    for (const e of entradas) {
+// What a session delegates hangs under <session>/subagents/ and counts as that session.
+function sessionsOf(projectDir) {
+  const groups = new Map()
+  const visit = (dir, root) => {
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
       const full = join(dir, e.name)
-      if (e.isDirectory()) { visita(full, raiz || e.name); continue }
+      if (e.isDirectory()) { visit(full, root || e.name); continue }
       if (!e.name.endsWith('.jsonl')) continue
-      const id = raiz || e.name.slice(0, -'.jsonl'.length)
-      grupos.set(id, [...(grupos.get(id) || []), full])
+      const id = root || e.name.slice(0, -'.jsonl'.length)
+      groups.set(id, [...(groups.get(id) || []), full])
     }
   }
-  visita(dirProyecto, null)
-  return grupos
+  visit(projectDir, null)
+  return groups
 }
 
-function esDirectorio(ruta) {
-  try { return statSync(ruta).isDirectory() } catch { return false }
+function isDirectory(filePath) {
+  try { return statSync(filePath).isDirectory() } catch { return false }
 }
 
-const VACIAS = new Set(`esto esta este eso ese aqui alli para porque cuando donde
+const EMPTY = new Set(`esto esta este eso ese aqui alli para porque cuando donde
   como cual cuanto todo toda todos todas otro otra mucho mucha muy mas menos
   pero aunque desde hasta sobre entre segun tambien ahora antes despues siempre
   nunca hacer haces hace tiene tener puede poder debe deja pasa sigue vuelve
@@ -153,158 +154,159 @@ const VACIAS = new Set(`esto esta este eso ese aqui alli para porque cuando dond
   would could should about into your just like make made only over such than
   them then were will your`.split(/\s+/).filter(Boolean))
 
-// Solo el mensaje que abre la sesión: es el que escribe la persona, y es donde
-// se pide el trabajo. Tomando más, entraban pegados de código y de salida de
-// tests, y las sugerencias eran "classname", "const" y "ntests".
-function palabrasDelUsuario(texto) {
-  const palabras = []
-  let mensajes = 0
-  for (const m of texto.matchAll(/"type"\s*:\s*"user"[^\n]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
-    if (mensajes >= 1) break
-    const dicho = m[1]
-    if (dicho.length > 400) continue
-    if ((dicho.match(/\\n/g) || []).length > 2) continue
-    mensajes++
-    for (const w of dicho.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/)) {
-      if (w.length > 4 && w.length < 20 && !/\d/.test(w) && !VACIAS.has(w)) palabras.push(w)
+// Only the message that opens the session: it is the one the person writes, and
+// where the work is asked for. Taking more let in pasted code and test output,
+// and the suggestions were "classname", "const" and "ntests".
+function userWords(text) {
+  const words = []
+  let messages = 0
+  for (const m of text.matchAll(/"type"\s*:\s*"user"[^\n]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
+    if (messages >= 1) break
+    const said = m[1]
+    if (said.length > 400) continue
+    if ((said.match(/\\n/g) || []).length > 2) continue
+    messages++
+    for (const w of said.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/)) {
+      if (w.length > 4 && w.length < 20 && !/\d/.test(w) && !EMPTY.has(w)) words.push(w)
     }
   }
-  return palabras
+  return words
 }
 
-function invocaciones(desde) {
-  const cuenta = new Map()
-  const porScript = new Map()
-  const dichoAsi = new Map()
-  const scripts = scriptsDelCatalogo()
-  let sesiones = 0
-  if (!existsSync(TRANSCRIPTS)) return { cuenta, porScript, sesiones }
+function invocations(since) {
+  const count = new Map()
+  const byScript = new Map()
+  const saidThisWay = new Map()
+  const scripts = catalogScripts()
+  let sessions = 0
+  if (!existsSync(TRANSCRIPTS)) return { counts: count, byScript, sessions }
 
-  for (const proyecto of readdirSync(TRANSCRIPTS)) {
-    const dir = join(TRANSCRIPTS, proyecto)
-    if (!esDirectorio(dir)) continue
-    for (const partes of sesionesDe(dir).values()) {
-      const reciente = partes.some((f) => {
-        try { return statSync(f).mtimeMs >= desde } catch { return false }
+  for (const project of readdirSync(TRANSCRIPTS)) {
+    const dir = join(TRANSCRIPTS, project)
+    if (!isDirectory(dir)) continue
+    for (const parts of sessionsOf(dir).values()) {
+      const recent = parts.some((f) => {
+        try { return statSync(f).mtimeMs >= since } catch { return false }
       })
-      if (!reciente) continue
-      sesiones++
-      const texto = partes.map((f) => {
+      if (!recent) continue
+      sessions++
+      const text = parts.map((f) => {
         try { return readFileSync(f, 'utf8') } catch { return '' }
       }).join('\n')
-      const llamadasAqui = new Set()
-      for (const m of texto.matchAll(/"name"\s*:\s*"Skill"\s*,\s*"input"\s*:\s*\{\s*"skill"\s*:\s*"([^"]+)"/g)) {
-        llamadasAqui.add(m[1])
+      const callsHere = new Set()
+      for (const m of text.matchAll(/"name"\s*:\s*"Skill"\s*,\s*"input"\s*:\s*\{\s*"skill"\s*:\s*"([^"]+)"/g)) {
+        callsHere.add(m[1])
       }
-      for (const skill of llamadasAqui) {
-        cuenta.set(skill, (cuenta.get(skill) || 0) + 1)
+      for (const skill of callsHere) {
+        count.set(skill, (count.get(skill) || 0) + 1)
       }
       if (!scripts.size) continue
-      const scriptsAqui = new Set()
-      for (const m of texto.matchAll(/"name"\s*:\s*"Bash"\s*,\s*"input"\s*:\s*\{[^}]*?"command"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
+      const scriptsHere = new Set()
+      for (const m of text.matchAll(/"name"\s*:\s*"Bash"\s*,\s*"input"\s*:\s*\{[^}]*?"command"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
         const cmd = m[1]
-        if (EDITA_EL_SCRIPT.test(cmd)) continue
+        if (EDITS_THE_SCRIPT.test(cmd)) continue
         for (const [script, skill] of scripts) {
           for (const h of cmd.matchAll(new RegExp(script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))) {
-            if (VERBO_DE_LECTURA.test(cmd.slice(0, h.index))) continue
-            scriptsAqui.add(skill)
+            if (READ_VERB.test(cmd.slice(0, h.index))) continue
+            scriptsHere.add(skill)
           }
         }
       }
-      const dichas = scriptsAqui.size ? palabrasDelUsuario(texto) : []
-      for (const skill of scriptsAqui) {
-        porScript.set(skill, (porScript.get(skill) || 0) + 1)
-        if (llamadasAqui.has(skill)) continue
-        const cuentas = dichoAsi.get(skill) || new Map()
-        for (const w of dichas) cuentas.set(w, (cuentas.get(w) || 0) + 1)
-        dichoAsi.set(skill, cuentas)
+      const saidPhrases = scriptsHere.size ? userWords(text) : []
+      for (const skill of scriptsHere) {
+        byScript.set(skill, (byScript.get(skill) || 0) + 1)
+        if (callsHere.has(skill)) continue
+        const counts = saidThisWay.get(skill) || new Map()
+        for (const w of saidPhrases) counts.set(w, (counts.get(w) || 0) + 1)
+        saidThisWay.set(skill, counts)
       }
     }
   }
-  return { cuenta, porScript, sesiones, dichoAsi }
+  return { counts: count, byScript, sessions, saidThisWay }
 }
 
-const desde = Date.now() - days * 24 * 3600 * 1000
-const cat = catalogo()
-const { cuenta, porScript, sesiones, dichoAsi } = invocaciones(desde)
+const since = Date.now() - days * 24 * 3600 * 1000
+const cat = catalog()
+const { counts: count, byScript, sessions, saidThisWay } = invocations(since)
 
-console.log(`uso de skills — últimos ${days} días · ${sesiones} sesiones revisadas\n`)
+console.log(`skill usage — last ${days} days · ${sessions} sessions reviewed\n`)
 
-if (!sesiones) {
-  console.log('No hay transcripciones en el periodo. Sin datos, no sin uso.\n')
+if (!sessions) {
+  console.log('No transcripts in the period. No data, not no usage.\n')
   process.exit(0)
 }
-if (!cuenta.size && !porScript.size) {
-  console.log('Ninguna invocación encontrada. Puede que el formato de las')
-  console.log('transcripciones haya cambiado: compruébalo antes de concluir')
-  console.log('que no se usa ninguna skill.\n')
+if (!count.size && !byScript.size) {
+  console.log('No invocation found. The transcript format may have')
+  console.log('changed: check before concluding that no skill is')
+  console.log('used.\n')
   process.exit(0)
 }
 
-const nombres = new Set([...cuenta.keys(), ...porScript.keys()])
-const usadas = [...nombres]
-  .map(n => [n, cuenta.get(n) || 0, porScript.get(n) || 0])
+const names = new Set([...count.keys(), ...byScript.keys()])
+const used = [...names]
+  .map(n => [n, count.get(n) || 0, byScript.get(n) || 0])
   .sort((a, b) => (b[1] + b[2]) - (a[1] + a[2]))
 
-console.log('Usadas:\n')
-console.log("  llamada  script  origen           skill")
-for (const [nombre, n, s] of usadas) {
-  const origen = cat.get(nombre) || '(de otra fuente)'
-  console.log(`  ${String(n).padStart(7)}  ${String(s || '').padStart(6)}  ${origen.padEnd(16)} ${nombre}`)
+console.log('Used:\n')
+console.log("     call  script  origin           skill")
+for (const [name, n, s] of used) {
+  const origin = cat.get(name) || '(other source)'
+  console.log(`  ${String(n).padStart(7)}  ${String(s || '').padStart(6)}  ${origin.padEnd(16)} ${name}`)
 }
-// El procedimiento se sigue y la skill no se invoca: no es que sobre, es que su
-// descripción no se activa cuando el problema aparece. Es la única conclusión
-// que el informe puede sacar solo, y estaba a la vista de quien supiera leerla.
-const descripcionMuda = usadas.filter(([n, llamadas, scripts]) =>
-  llamadas === 0 && scripts > 0 && cat.has(n),
+// The procedure is followed and the skill is not invoked: it is not that it is
+// surplus, it is that its description does not activate when the problem
+// shows up. It is the only conclusion the report can draw by itself, and it
+// was in plain sight for anyone who knew how to read it.
+const silentDescription = used.filter(([n, calls, scripts]) =>
+  calls === 0 && scripts > 0 && cat.has(n),
 )
-if (descripcionMuda.length) {
-  console.log('\nSe siguieron a mano y nadie las llamó por su nombre:\n')
-  for (const [nombre, , scripts] of descripcionMuda) {
-    console.log(`  ${nombre} — ${scripts} ${scripts === 1 ? 'sesión' : 'sesiones'}`)
-    // Las palabras con las que se pidió el trabajo y que su descripción no
-    // lleva: es lo que hay que meterle para que se active sola.
-    const desc = DESCRIPCIONES.get(nombre) || ''
-    const faltan = [...(dichoAsi.get(nombre) || new Map())]
+if (silentDescription.length) {
+  console.log('\nFollowed by hand, and nobody called them by name:\n')
+  for (const [name, , scripts] of silentDescription) {
+    console.log(`  ${name} — ${scripts} ${scripts === 1 ? 'session' : 'sessions'}`)
+    // The words the work was asked for with that its description does not
+    // carry: that is what has to go in so it activates by itself.
+    const desc = DESCRIPTIONS.get(name) || ''
+    const missing = [...(saidThisWay.get(name) || new Map())]
       .filter(([w]) => !desc.includes(w))
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([w]) => w)
-    // Con una o dos palabras sueltas no hay señal, solo ruido con formato.
-    if (faltan.length >= 3) console.log(`      se pidió así: ${faltan.join(', ')}`)
+    // With one or two loose words there is no signal, only formatted noise.
+    if (missing.length >= 3) console.log(`      asked for like this: ${missing.join(', ')}`)
   }
-  console.log('\n  El trabajo se hizo, así que la skill no sobra: lo que falla es su')
-  console.log('  descripción, que no lleva las palabras con las que aparece el problema.')
+  console.log('\n  The work got done, so the skill is not surplus: what fails is its')
+  console.log('  description, which lacks the words the problem shows up with.')
 }
 
-console.log('\n  Ambas columnas cuentan SESIONES, no ejecuciones: un bucle que llama al')
-console.log('  script dieciocho veces sigue siendo una ocasión en que se usó.')
-console.log('\n  "llamada" es la skill invocada por su nombre. "script" es el rastro de')
-console.log('  sus scripts en comandos: el procedimiento seguido a mano. No se suman:')
-console.log('  una misma sesión puede aparecer en las dos. Las sesiones en que se')
-console.log('  escribió la propia skill no cuentan como uso.')
+console.log('\n  Both columns count SESSIONS, not executions: a loop that calls the')
+console.log('  script eighteen times is still one occasion on which it was used.')
+console.log('\n  "call" is the skill invoked by name. "script" is the trace of its')
+console.log('  scripts in commands: the procedure followed by hand. They do not add')
+console.log('  up: one session may appear in both. Sessions in which the skill itself')
+console.log('  was written do not count as use.')
 
-const huerfanas = usadas.filter(([n]) => !cat.has(n)).map(([n]) => n)
-if (huerfanas.length) {
-  console.log('\nInvocadas y ausentes de este catálogo:\n')
-  for (const n of huerfanas) console.log(`  ${n}`)
-  console.log('\n  Probablemente vengan del propio agente o de un plugin, y entonces no')
-  console.log('  hay nada que arreglar: crux solo conoce sus dos catálogos. Si en')
-  console.log('  cambio es un nombre tuyo que se renombró, corrige la referencia.')
+const orphans = used.filter(([n]) => !cat.has(n)).map(([n]) => n)
+if (orphans.length) {
+  console.log('\nInvoked and absent from this catalog:\n')
+  for (const n of orphans) console.log(`  ${n}`)
+  console.log('\n  They probably come from the agent itself or a plugin, and then there')
+  console.log('  is nothing to fix: crux only knows its two catalogs. If instead it is')
+  console.log('  a name of yours that was renamed, fix the reference.')
 }
 
-const nunca = [...cat.entries()].filter(([n]) => !cuenta.has(n) && !porScript.has(n))
-if (nunca.length) {
-  console.log(`\nSin usar en el periodo (${nunca.length} de ${cat.size}):\n`)
-  const porOrigen = new Map()
-  for (const [n, o] of nunca) porOrigen.set(o, [...(porOrigen.get(o) || []), n])
-  for (const [origen, lista] of porOrigen) {
-    console.log(`  ${origen}: ${showAll ? lista.join(', ') : lista.slice(0, 8).join(', ') + (lista.length > 8 ? `, +${lista.length - 8}` : '')}`)
+const never = [...cat.entries()].filter(([n]) => !count.has(n) && !byScript.has(n))
+if (never.length) {
+  console.log(`\nUnused in the period (${never.length} of ${cat.size}):\n`)
+  const byOrigin = new Map()
+  for (const [n, o] of never) byOrigin.set(o, [...(byOrigin.get(o) || []), n])
+  for (const [origin, list] of byOrigin) {
+    console.log(`  ${origin}: ${showAll ? list.join(', ') : list.slice(0, 8).join(', ') + (list.length > 8 ? `, +${list.length - 8}` : '')}`)
   }
-  console.log('\n  No es una lista de borrado. Una skill de incidencias que no se ha')
-  console.log('  usado es una buena noticia; una recién creada aún no ha tenido')
-  console.log('  ocasión. Lo que hay que mirar es la que existe hace meses, cubre')
-  console.log('  algo frecuente y aun así nadie invoca: casi siempre es que su')
-  console.log('  descripción no se activa cuando debería.')
+  console.log('\n  This is not a deletion list. An incident skill that has not been')
+  console.log('  used is good news; a newly created one has not had an occasion yet.')
+  console.log('  What to look at is the one that has existed for months, covers')
+  console.log('  something frequent and still nobody invokes: it is almost always')
+  console.log('  that its description does not activate when it should.')
 }
 console.log()

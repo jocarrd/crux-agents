@@ -1,103 +1,102 @@
 ---
 name: eval-fixtures
-description: Probar funcionalidad construida sobre un modelo de lenguaje, donde la salida no es determinista y un test de igualdad exacta no sirve: separar lo que sí se puede afirmar, validar estructura en vez de texto, montar un conjunto de casos con salidas juzgadas y vigilar la regresión. Usa cuando el proyecto tenga un chatbot, generación de texto, extracción, clasificación o llamada a herramientas, y quieras poder cambiar el prompt o el modelo sin romper nada a ciegas.
+description: Test functionality built on a language model, where the output is not deterministic and an exact-equality test is useless: separate what can be asserted, validate structure instead of text, build a set of cases with judged outputs and watch for regressions. Use when the project has a chatbot, text generation, extraction, classification or tool calling, and you want to be able to change the prompt or the model without breaking anything blindly.
 ---
 
 # eval-fixtures
 
-Un test normal no vale para una salida generada: dos ejecuciones no dan lo
-mismo, y aunque dieran, la respuesta correcta no es única. Pero **la mayoría de
-los fallos reales son estructurales**, y esos sí se pueden atrapar.
+A normal test is no good for generated output: two runs don't give the same
+result, and even if they did, the correct answer is not unique. But **most real
+failures are structural**, and those can be caught.
 
-## Las tres capas
+## The three layers
 
-Se prueban cosas distintas en cada una, y confundirlas es el error habitual.
+Different things are tested in each, and confusing them is the usual mistake.
 
-**1. Determinista — todo lo que rodea al modelo.**
-El montaje del prompt, el parseo de la respuesta, la validación del esquema, el
-manejo de errores y timeouts, el enrutado de herramientas. Aquí el modelo se
-sustituye por un doble con respuestas fijas y se testea como cualquier otro
-código. **Es donde está la mayoría de los bugs** y donde casi nadie mira.
+**1. Deterministic: everything around the model.**
+Prompt assembly, response parsing, schema validation, error and timeout
+handling, tool routing. Here the model is replaced by a double with fixed
+responses and tested like any other code. **This is where most bugs are** and
+where almost nobody looks.
 
-**2. Estructural — la forma de la salida.**
-Con el modelo de verdad, pero sin comparar texto: que la respuesta cumpla el
-esquema, que los campos obligatorios estén, que los tipos y rangos sean
-válidos, que las herramientas llamadas existan y reciban los argumentos con la
-forma correcta, que no se invente identificadores.
+**2. Structural: the shape of the output.**
+With the real model, but without comparing text: the response meets the schema,
+the required fields are there, types and ranges are valid, the tools called exist
+and receive arguments of the right shape, no identifiers are made up.
 
-Esta capa es barata, estable y **atrapa las regresiones de verdad**: cuando
-cambia el modelo o el prompt, lo primero que se rompe es la forma.
+This layer is cheap, stable and **catches the real regressions**: when the model
+or the prompt changes, the first thing to break is the shape.
 
-**3. De calidad — el contenido.**
-Un conjunto de casos con su salida esperada y un criterio de aceptación. No es
-igualdad: es un umbral. Aquí se mide si la respuesta está fundamentada en los
-datos que se le dieron, si responde lo que se preguntó y si respeta las reglas
-del dominio.
+**3. Quality: the content.**
+A set of cases with their expected output and an acceptance criterion. It is not
+equality: it is a threshold. Here you measure whether the response is grounded
+in the data it was given, whether it answers what was asked and whether it
+respects the domain's rules.
 
-## El conjunto de casos
+## The set of cases
 
-Es el activo, más que los tests. Se construye **desde los fallos reales**, no
-imaginando ejemplos:
+It is the asset, more than the tests. It is built **from real failures**, not by
+imagining examples:
 
-- Cada vez que alguien reporta una respuesta mala, entra al conjunto.
-- Cada caso límite del dominio que descubras, entra.
-- Los casos donde la respuesta correcta es "no lo sé" — los más olvidados y los
-  que más daño hacen cuando el modelo inventa.
+- Every time someone reports a bad response, it goes into the set.
+- Every domain edge case you discover goes in.
+- The cases where the correct answer is "I don't know": the most forgotten and
+  the ones that do the most damage when the model makes things up.
 
-Cada caso guarda: la entrada, el contexto que se le dio, qué debe cumplir la
-respuesta y por qué. Ese "por qué" es lo que permite revisar el criterio
-cuando cambie el producto.
+Each case stores: the input, the context it was given, what the response must
+satisfy and why. That "why" is what allows the criterion to be reviewed when the
+product changes.
 
-Empieza con veinte casos bien elegidos. Doscientos generados sin criterio no
-valen más y cuestan cada ejecución.
+Start with twenty well-chosen cases. Two hundred generated without criterion are
+no more valuable and cost money on every run.
 
-## Qué se puede afirmar sin ambigüedad
+## What can be asserted unambiguously
 
-Aunque la salida sea libre, casi siempre hay afirmaciones duras:
+Even if the output is free-form, there are almost always hard assertions:
 
-- **No inventa datos**: todo número, nombre o identificador de la respuesta
-  aparece en el contexto que se le pasó.
-- **Respeta los límites**: no promete lo que el producto no hace, no da
-  consejos que la política prohíbe.
-- **Es consistente**: la misma pregunta con el mismo contexto no da respuestas
-  contradictorias entre ejecuciones.
-- **Falla bien**: sin datos suficientes, dice que no lo sabe en vez de rellenar.
+- **It doesn't invent data**: every number, name or identifier in the response
+  appears in the context it was given.
+- **It respects limits**: it doesn't promise what the product doesn't do, doesn't
+  give advice the policy forbids.
+- **It is consistent**: the same question with the same context doesn't give
+  contradictory answers between runs.
+- **It fails well**: without enough data, it says it doesn't know instead of
+  filling in.
 
-Empieza por estas. Son objetivas y cubren el daño más caro.
+Start with these. They are objective and cover the most expensive damage.
 
-## Vigilar la regresión
+## Watching for regressions
 
-El valor aparece cuando cambias algo: prompt, modelo, versión, contexto
-recuperado. Sin una línea base, cada cambio es una apuesta.
+The value appears when you change something: prompt, model, version, retrieved
+context. Without a baseline, every change is a bet.
 
-Guarda el resultado del conjunto como referencia y compara. Lo que interesa es
-**qué casos pasaban antes y ahora no**. Un cambio que
-sube la media y rompe tres casos que funcionaban suele ser un mal cambio.
+Save the result of the set as a reference and compare. What matters is **which
+cases used to pass and now don't**. A change that raises the average and breaks
+three cases that worked is usually a bad change.
 
-## Coste
+## Cost
 
-Estas pruebas cuestan dinero y tiempo por ejecución, así que no van en el mismo
-sitio que los tests normales:
+These tests cost money and time per run, so they don't go in the same place as
+the normal tests:
 
-- La capa 1 corre siempre: es gratis y rápida.
-- Las capas 2 y 3 corren **cuando cambia algo que las afecta** —prompt, modelo,
-  recuperación de contexto— y antes de desplegar. No en cada commit.
+- Layer 1 always runs: it is free and fast.
+- Layers 2 and 3 run **when something that affects them changes** (prompt, model,
+  context retrieval) and before deploying. Not on every commit.
 
 ## Anti-patterns
 
-- **Comparar la salida con un texto exacto.** Se rompe siempre y no prueba
-  nada.
-- **Probar solo el camino feliz.** Lo que hunde un asistente es lo que hace
-  cuando no sabe.
-- **Fiarse solo de la nota media.** Esconde exactamente las regresiones que
-  buscas.
-- **Un conjunto de casos inventado.** Los casos que se te ocurren no son los que
-  fallan; los que te reportan, sí.
-- **Testear el modelo en vez de tu sistema.** Que el modelo sepa sumar no es tu
-  problema; que tu prompt le dé los datos correctos, sí.
+- **Comparing the output with exact text.** It always breaks and proves nothing.
+- **Testing only the happy path.** What sinks an assistant is what it does when
+  it doesn't know.
+- **Trusting only the average score.** It hides exactly the regressions you are
+  looking for.
+- **An invented set of cases.** The cases you think of are not the ones that
+  fail; the ones reported to you are.
+- **Testing the model instead of your system.** Whether the model can add is not
+  your problem; whether your prompt gives it the right data is.
 
-## Relacionado
+## Related
 
-- `/write-tests` — la capa 1 es esto, con un doble en medio
-- `/root-cause` — cuando una respuesta concreta sale mal y hay que entender por
-  qué
+- `/write-tests`: layer 1 is this, with a double in the middle
+- `/root-cause`: when a specific response comes out wrong and you need to
+  understand why

@@ -1,124 +1,126 @@
 ---
 name: before-after
-description: Enseñar a quien decide el antes y el después de un cambio visual —la versión publicada a la izquierda, la nueva a la derecha y una barra roja en medio, en escritorio, tablet y móvil— y no subir nada hasta su visto bueno; con el sí, esas capturas acompañan a la PR. Usa cuando termines un cambio que se ve —rediseño, pulido, página nueva, responsive—, cuando te pidan "enséñame cómo queda antes de subirlo", "pásame el antes y el después" o "quiero verlo en el móvil", o antes de subir la rama de algo que toca interfaz.
+description: Show whoever decides the before and after of a visual change —the published version on the left, the new one on the right and a red bar in the middle, on desktop, tablet and mobile— and push nothing until they approve; once approved, those screenshots go with the PR. Use when you finish a change that can be seen —redesign, polish, new page, responsive—, when asked "enséñame cómo queda antes de subirlo", "pásame el antes y el después" or "quiero verlo en el móvil", or before pushing the branch of anything that touches the interface.
 ---
 
 # before-after
 
-Un cambio visual está terminado cuando lo ha visto **quien decide**. Esta skill
-le prepara el antes y el después, pegados, en tres tamaños de pantalla, para
-decidir en un minuto desde el móvil. El porqué de cada paso y de cada gotcha:
-`<directorio-de-esta-skill>/references/por-que.md`.
+A visual change is finished when **whoever decides** has seen it. This skill
+prepares the before and the after for them, side by side, at three screen sizes,
+so they can decide in a minute from their phone. The reason behind each step and
+each gotcha: `<this-skill-directory>/references/por-que.md`.
 
-## Cuándo usar
+## When to use
 
-- El diff toca algo que se ve: interfaz, estilos, una página nueva, un gráfico.
-- Antes de proponer el cambio (`crux workspace finish`), después de `/ship`.
-- Otra vez si, tras enseñarlo, hubo cambios: por comentarios de la persona o de
-  la revisión de la propuesta.
+- The diff touches something that can be seen: interface, styles, a new page, a
+  chart.
+- Before proposing the change (`crux workspace finish`), after `/ship`.
+- Again if, after showing it, there were changes: from the person's comments or
+  from the proposal's review.
 
-## Cuándo no usar
+## When not to use
 
-- Cambios que no se ven: lógica, backend, datos, documentación.
-- Iterar tú sobre un detalle mientras maquetas: eso es `/render-loop`.
-- Medir la desviación contra un diseño oficial: eso es `/visual-diff`.
+- Changes that cannot be seen: logic, backend, data, documentation.
+- Iterating on a detail yourself while laying out: that is `/render-loop`.
+- Measuring the deviation against an official design: that is `/visual-diff`.
 
-## El procedimiento
+## The procedure
 
-### 1. Decidir qué se enseña
+### 1. Decide what is shown
 
-Las páginas que toca el diff, **no todo el sitio**, y en tres anchos: escritorio
-(1440), tablet (820) y móvil (390). Si hay piezas que no son páginas —un vídeo,
-un PDF, una imagen descargable—, se generan y se enseñan también, como fichero.
+The pages the diff touches, **not the whole site**, at three widths: desktop
+(1440), tablet (820) and mobile (390). If there are pieces that are not pages
+—a video, a PDF, a downloadable image—, they are generated and shown too, as a
+file.
 
-### 2. Capturar las dos versiones con el mismo script
+### 2. Capture both versions with the same script
 
-El **antes**, de lo publicado si la base es lo desplegado; si no, la base en
-otro puerto desde el checkout principal. El **después**, de la rama, mejor con
-el build de producción en local. Los dos con el mismo script y los mismos datos.
+The **before**, from what is published if the base is what is deployed;
+otherwise, the base on another port from the main checkout. The **after**, from
+the branch, preferably with the production build locally. Both with the same
+script and the same data.
 
 ```bash
 mkdir -p ~/.cache/visual-test && cd ~/.cache/visual-test
 [ -d node_modules/playwright-core ] || npm i playwright-core >/dev/null 2>&1
-cp "<directorio-de-esta-skill>/scripts/capture.mjs" .
+cp "<this-skill-directory>/scripts/capture.mjs" .
 
-node capture.mjs --base https://<publicado> --head http://localhost:<puerto> \
-  --paths /,/<otra> --widths 1440,820,390 --out <carpeta> \
-  --hide '<selectores de avisos de cookies, chat y capas flotantes>'
+node capture.mjs --base https://<published> --head http://localhost:<port> \
+  --paths /,/<other> --widths 1440,820,390 --out <folder> \
+  --hide '<selectors for cookie notices, chat and floating layers>'
 ```
 
-### 3. Montar las comparativas
+### 3. Assemble the comparisons
 
 ```bash
-python3 "<directorio-de-esta-skill>/scripts/compose.py" <carpeta> --lang es
+python3 "<this-skill-directory>/scripts/compose.py" <folder> --lang es
 ```
 
-Deja en `<carpeta>/compare/` un montaje por página y ancho (antes a la
-izquierda, después a la derecha, barra roja), en tramos de unos 3.000 px y en
-WebP.
+It leaves in `<folder>/compare/` one montage per page and width (before on the
+left, after on the right, red bar), in sections of about 3,000 px and in WebP.
 
-### 4. Mirarlas antes de mandarlas
+### 4. Look at them before sending them
 
-Abre cada montaje. Lo que veas mal se arregla antes de enseñar; distingue los
-artefactos de captura (ver Gotchas).
+Open each montage. Whatever looks wrong is fixed before showing; tell capture
+artefacts apart (see Gotchas).
 
-### 5. Enseñarlas y esperar
+### 5. Show them and wait
 
-Se mandan a quien decide por el canal de la conversación, con una línea de qué
-cambió. Los de escritorio y móvil primero; el de tablet si cambia algo propio.
-**No se sube nada** —ni push, ni propuesta— hasta que diga que sí.
+They are sent to whoever decides through the conversation channel, with one line
+on what changed. Desktop and mobile first; tablet if something specific to it
+changes. **Nothing is pushed** —neither push nor proposal— until they say yes.
 
-### 6. Anotar el sí
+### 6. Record the yes
 
 ```bash
-crux visual approve <carpeta>/compare --note "<lo que se revisó, en una frase>"
+crux visual approve <folder>/compare --note "<what was reviewed, in one sentence>"
 ```
 
-Guarda el recibo `.crux-visual` con el commit sobre el que se capturó. Si
-después entra otro commit, las capturas ya no enseñan lo que se propone: se
-vuelve al paso 2.
+It saves the `.crux-visual` receipt with the commit the capture was taken on. If
+another commit goes in afterwards, the screenshots no longer show what is being
+proposed: go back to step 2.
 
-### 7. Proponer
+### 7. Propose
 
-`crux workspace finish` lee el recibo y añade a la propuesta una sección
-«Antes y después». Según el perfil del proyecto:
+`crux workspace finish` reads the receipt and adds to the proposal a section
+"Antes y después". Depending on the project's profile:
 
-| `visual.publish` | Qué hace |
-| ---------------- | -------- |
-| `branch` (por defecto) | Sube las imágenes a una rama aparte que nunca se fusiona (`visual.branch`, `crux-review` por defecto) y las enlaza en la propuesta |
-| `none` (repos de cliente) | Solo la nota de revisión, sin imágenes y sin dejar nada nuestro en su repo |
+| `visual.publish` | What it does |
+| ---------------- | ------------ |
+| `branch` (default) | Pushes the images to a separate branch that is never merged (`visual.branch`, `crux-review` by default) and links them in the proposal |
+| `none` (client repos) | Only the review note, without images and without leaving anything of ours in their repo |
 
-Si la propuesta ya está abierta y se vuelve a enseñar tras comentarios:
-`crux visual pr <número>` reemplaza esa sección en lugar de añadir otra.
+If the proposal is already open and is shown again after comments:
+`crux visual pr <number>` replaces that section instead of adding another.
 
 ## Gotchas
 
-- **Una gráfica vacía en la captura** suele ser la animación reiniciada al
-  cambiar el tamaño de la ventana; `capture.mjs` ya espera. Compruébala en el
-  navegador antes de llamarlo bug.
-- **Lo que carga al entrar en pantalla** necesita recorrer la página; el script
-  lo hace.
-- **Con servidor de desarrollo, el Chrome del sistema puede no pintar;** mejor
-  el build de producción.
-- **Avisos de cookies, chat y capas flotantes:** `--hide` con sus selectores,
-  que van en el adaptador del proyecto.
-- **Los elementos fijos salen al final** de la captura completa: son de la
-  captura, no del diseño.
-- **Solo las páginas que tocó el diff:** veintisiete imágenes no las revisa
-  nadie.
+- **An empty chart in the capture** is usually the animation restarted when the
+  window is resized; `capture.mjs` already waits. Check it in the browser before
+  calling it a bug.
+- **What loads on entering the screen** needs the page to be scrolled through;
+  the script does it.
+- **With a development server, the system Chrome may not paint;** the production
+  build is better.
+- **Cookie notices, chat and floating layers:** `--hide` with their selectors,
+  which go in the project's adapter.
+- **Fixed elements appear at the end** of the full capture: they belong to the
+  capture, not the design.
+- **Only the pages the diff touched:** nobody reviews twenty-seven images.
 
 ## Anti-patterns
 
-- Mandar solo el escritorio.
-- Enseñar el después sin el antes.
-- Subir "para que lo vea en la propuesta": lo que se enseña para aprobar va
-  antes de subir.
-- Publicar capturas de un commit anterior (no se esquiva borrando el recibo).
+- Sending only desktop.
+- Showing the after without the before.
+- Pushing "so they can see it in the proposal": what is shown for approval goes
+  before pushing.
+- Publishing screenshots of an earlier commit (it is not dodged by deleting the
+  receipt).
 
-## Relacionado
+## Related
 
-- `/ship` — la puerta que va antes; su puerta 7 es la que ve el agente
-- `/visual-test` — inspeccionar una página en los dos anchos mientras se trabaja
-- `/render-loop` — iterar un detalle de maquetación
-- `/visual-diff` — medir contra un diseño oficial
-- `/flow` — dónde encaja esto en el ciclo
+- `/ship` — the gate that comes before; its gate 7 is the one the agent sees
+- `/visual-test` — inspect a page at both widths while working
+- `/render-loop` — iterate on a layout detail
+- `/visual-diff` — measure against an official design
+- `/flow` — where this fits in the cycle

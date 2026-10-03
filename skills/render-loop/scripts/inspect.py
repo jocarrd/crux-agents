@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Utilidades para mirar de verdad una salida renderizada.
+"""Utilities for really looking at a rendered output.
 
     inspect.py zoom  <img> <x0> <y0> <x1> <y1> [--out f] [--factor 2]
-    inspect.py stack <antes> <ahora> [--box x0 y0 x1 y1] [--out f]
-    inspect.py asset <fichero.png|.svg>
+    inspect.py stack <before> <after> [--box x0 y0 x1 y1] [--out f]
+    inspect.py asset <file.png|.svg>
 
-`zoom` recorta y amplía: mirar la página entera no sirve para juzgar 2 px.
-`stack` apila antes y después: un salto de 1 px es medible pero puede no ser
-visible hasta que se ven pegados.
-`asset` mide la geometría real de una imagen, que casi nunca coincide con su
-caja.
+`zoom` crops and enlarges: looking at the whole page is no use for judging 2 px.
+`stack` stacks before and after: a 1 px jump is measurable but may not be
+visible until they are seen side by side.
+`asset` measures an image's real geometry, which almost never matches its
+box.
 """
 
 import argparse
@@ -30,8 +30,8 @@ def cmd_zoom(args) -> int:
 
 
 def cmd_stack(args) -> int:
-    a = Image.open(args.antes)
-    b = Image.open(args.ahora)
+    a = Image.open(args.before)
+    b = Image.open(args.after)
     if args.box:
         box = tuple(args.box)
         a, b = a.crop(box), b.crop(box)
@@ -42,7 +42,7 @@ def cmd_stack(args) -> int:
     out.paste(a, (0, 0))
     out.paste(b, (0, a.height + gap))
     out.save(args.out)
-    print(f"{args.out} — arriba antes, abajo ahora")
+    print(f"{args.out} — before on top, after below")
     return 0
 
 
@@ -51,28 +51,28 @@ def cmd_asset(args) -> int:
     if path.suffix.lower() == ".svg":
         m = re.search(r'viewBox="([^"]+)"', path.read_text())
         if not m:
-            print("sin viewBox: la relación de aspecto real no está declarada")
+            print("no viewBox: the real aspect ratio is not declared")
             return 1
         _, _, w, h = (float(v) for v in m.group(1).split())
-        print(f"viewBox {w:g}x{h:g} — relación {w / h:.2f}:1")
-        print("Métela en una caja con esa relación, o se renderizará más pequeña de lo que crees.")
+        print(f"viewBox {w:g}x{h:g} — ratio {w / h:.2f}:1")
+        print("Put it in a box with that ratio, or it will render smaller than you think.")
         return 0
 
     im = Image.open(path).convert("RGBA")
     bbox = im.getchannel("A").getbbox()
     if bbox is None:
-        print("la imagen es completamente transparente")
+        print("the image is completely transparent")
         return 1
     x0, y0, x1, y1 = bbox
     w, h = im.size
     top, left = y0 / h, x0 / w
     right, bottom = (w - x1) / w, (h - y1) / h
-    print(f"caja {w}x{h} · contenido real {x1 - x0}x{y1 - y0} en {bbox}")
-    print(f"margen transparente — arriba {top:.0%}  abajo {bottom:.0%}  "
-          f"izq {left:.0%}  der {right:.0%}")
+    print(f"box {w}x{h} · real content {x1 - x0}x{y1 - y0} at {bbox}")
+    print(f"transparent margin — top {top:.0%}  bottom {bottom:.0%}  "
+          f"left {left:.0%}  right {right:.0%}")
     if max(top, bottom, left, right) > 0.05:
-        print("Aviso: posicionar o dimensionar este asset por su caja no dará el "
-              "resultado esperado. Compensa el margen o recorta el asset.")
+        print("Warning: positioning or sizing this asset by its box will not give the "
+              "expected result. Compensate for the margin or crop the asset.")
     return 0
 
 
@@ -87,7 +87,7 @@ def main() -> int:
     z.set_defaults(func=cmd_zoom)
 
     s = sub.add_parser("stack")
-    s.add_argument("antes"); s.add_argument("ahora")
+    s.add_argument("before"); s.add_argument("after")
     s.add_argument("--box", type=int, nargs=4)
     s.add_argument("--out", default="stack.png"); s.add_argument("--factor", type=int, default=2)
     s.set_defaults(func=cmd_stack)

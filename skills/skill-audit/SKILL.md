@@ -1,89 +1,91 @@
 ---
 name: skill-audit
-description: Revisar si alguna skill de un proyecto es en realidad un patrón que merece subir al kernel, o si alguna del kernel se ha llenado de casos particulares y debería bajar. Inventaría las skills de todos los proyectos, mide su densidad de nombres propios y detecta pares de proyectos distintos que resuelven lo mismo. Usa al crear una skill nueva, y de forma periódica en el cierre de sesión.
+description: Review whether any skill of a project is really a pattern that deserves moving up to the kernel, or whether any kernel skill has filled up with special cases and should move down. Inventories the skills of all projects, measures their density of proper names and detects pairs of different projects that solve the same thing. Use when creating a new skill, and periodically at session close.
 ---
 
 # skill-audit
 
-Mantiene la frontera entre el kernel y los proyectos, y el catálogo corto:
-procedimientos encerrados en un proyecto que deberían subir, skills del kernel
-llenas de casos particulares que deberían bajar, y skills que compiten por la
-misma frase. Los motivos y las mediciones detrás de cada umbral:
-`<directorio-de-esta-skill>/references/por-que.md`.
+It maintains the boundary between the kernel and the projects, and the short
+catalogue: procedures locked inside a project that should move up, kernel skills
+full of special cases that should move down, and skills that compete for the
+same sentence. The reasons and measurements behind each threshold:
+`<this-skill-directory>/references/por-que.md`.
 
-**Cuándo:** al crear una skill (¿patrón o adaptador?) y de forma periódica en el
-cierre de sesión.
+**When:** when creating a skill (pattern or adapter?) and periodically at
+session close.
 
-## El test
+## The test
 
-> Tapa todos los nombres propios de la skill. Si el procedimiento sigue teniendo
-> sentido y valor, hay un patrón dentro.
+> Cover all the proper names in the skill. If the procedure still makes sense and
+> has value, there is a pattern inside.
 
-Se promueve el procedimiento y en el proyecto queda un adaptador con rutas,
-credenciales y nombres. Dos guardas:
+The procedure is promoted and the project keeps an adapter with paths,
+credentials and names. Two guards:
 
-- **Dos ocurrencias:** se promueve cuando dos proyectos lo necesitan de verdad
-  (salvo valor alto demostrado y acoplamiento casi nulo).
-- **Camino inverso:** una skill del kernel con condicionales por proyecto baja a
+- **Two occurrences:** it is promoted when two projects genuinely need it
+  (except with demonstrated high value and almost no coupling).
+- **Reverse path:** a kernel skill with per-project conditionals moves down to
   `project/`.
 
-## Auditar
+## Audit
 
 ```bash
-node <directorio-de-esta-skill>/scripts/audit.mjs
+node <this-skill-directory>/scripts/audit.mjs
 ```
 
-Recorre los docs repos adoptados y reporta:
+It walks the adopted docs repos and reports:
 
-- **Baja densidad de nombres propios** (derivados del `crux.json` de cada
-  proyecto): sospechosas de contener un patrón.
-- **Pares de proyectos distintos que describen lo mismo:** la regla de las dos
-  ocurrencias ya se cumple.
-- **Las que ya son adaptadores**, aparte y fuera de las candidatas.
-- **Adaptadores que compiten con su procedimiento:** descripciones que se pisan
-  por encima de 0,18, o un adaptador que no nombra su proyecto en la
-  descripción.
+- **Low density of proper names** (derived from each project's `crux.json`):
+  suspected of containing a pattern.
+- **Pairs of different projects that describe the same thing:** the
+  two-occurrences rule is already met.
+- **Those that are already adapters**, separately and outside the candidates.
+- **Adapters that compete with their procedure:** descriptions that overlap by
+  more than 0.18, or an adapter that does not name its project in the
+  description.
 
-Son señales, no veredictos: el script señala, el test decide y la regla de las
-dos ocurrencias frena. El tamaño lo vigila el verificador de descripciones: una
-skill de más de 1.000 palabras se acorta con `/skill-creator`.
+They are signals, not verdicts: the script points, the test decides and the
+two-occurrences rule brakes. Size is watched by the description verifier: a
+skill of more than 1,000 words is shortened with `/skill-creator`.
 
-## Verificar la activación
+## Verify activation
 
 ```bash
-node <directorio-de-esta-skill>/scripts/probe.mjs "la frase con la que lo pedirías"
-node <directorio-de-esta-skill>/scripts/probe.mjs --casos
-node <directorio-de-esta-skill>/scripts/probe.mjs --adaptador <adaptador> <kernel> "<frase genérica>" "<frase propia>"
+node <this-skill-directory>/scripts/probe.mjs "the sentence you would ask for it with"
+node <this-skill-directory>/scripts/probe.mjs --casos
+node <this-skill-directory>/scripts/probe.mjs --adaptador <adapter> <kernel> "<generic sentence>" "<own sentence>"
 ```
 
-- `probe` dice qué skill gana una frase y **por cuánto**: por debajo del 15 %
-  del líder es un empate.
-- `--casos` pasa `casos/activacion.tsv` (frase real → skill esperada). Una frase
-  sin nombres propios tiene que activar el kernel, nunca un adaptador.
-- `--adaptador`: la frase genérica la gana el kernel y la propia, el adaptador.
+- `probe` says which skill wins a sentence and **by how much**: below 15 % of the
+  leader is a tie.
+- `--casos` runs `casos/activacion.tsv` (real sentence → expected skill). A
+  sentence without proper names has to activate the kernel, never an adapter.
+- `--adaptador`: the generic sentence is won by the kernel and the own one, by
+  the adapter.
 
-Sirve para comparar dos redacciones y para ver si un cambio apagó una skill. No
-predice al agente: un empate es fiable, un ganador no garantiza nada. **La frase
-se escribe como se pide el trabajo**, no copiada de la descripción.
+It is useful for comparing two wordings and for seeing whether a change switched
+a skill off. It does not predict the agent: a tie is reliable, a winner
+guarantees nothing. **The sentence is written the way the job is asked for**,
+not copied from the description.
 
-## Promover
+## Promote
 
-1. Separa el procedimiento de los datos.
-2. Escribe la skill del kernel sin proyectos ni herramientas de un agente.
-3. Deja en el proyecto un adaptador con rutas, credenciales y gotchas propios
-   que remita al kernel.
-4. Ejecuta la skill nueva contra el caso real de origen: tiene que dar el mismo
-   resultado.
-5. Reinstala el kernel.
+1. Separate the procedure from the data.
+2. Write the kernel skill without projects or tools of any one agent.
+3. Leave in the project an adapter with its own paths, credentials and gotchas
+   that points to the kernel.
+4. Run the new skill against the real case it came from: it has to give the same
+   result.
+5. Reinstall the kernel.
 
 ## Anti-patterns
 
-- Promover por si acaso: el kernel inflado es tan malo como el vacío.
-- Promover sin dejar adaptador.
-- Ignorar el camino inverso.
+- Promoting just in case: a bloated kernel is as bad as an empty one.
+- Promoting without leaving an adapter.
+- Ignoring the reverse path.
 
-## Relacionado
+## Related
 
-- `/skill-creator` — escribir o acortar una skill
-- `/end-session` — donde engancha la revisión periódica
-- `/promote-to-docs` — el equivalente para la documentación
+- `/skill-creator` — write or shorten a skill
+- `/end-session` — where the periodic review hooks in
+- `/promote-to-docs` — the equivalent for documentation

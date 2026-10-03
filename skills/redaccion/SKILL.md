@@ -1,67 +1,70 @@
 ---
 name: redaccion
-description: Escribir y revisar textos que no se lean como generados por un modelo. Da la lista concreta de marcadores que delatan un texto de IA —regla de tres, paralelismo negativo, raya larga, epigramas, vocabulario recurrente, grandilocuencia—, un script que los cuenta sobre el texto real, y el método para reescribir sin caer en ellos. Usa al redactar cualquier texto que vaya a leer otra persona: documentación, presentaciones, mensajes de commit, correos, propuestas y textos de interfaz. Y siempre antes de entregar un documento a un cliente.
+description: Write and review texts that do not read as model-generated. Gives the concrete list of markers that give away an AI text —rule of three, negative parallelism, em dash, epigrams, recurring vocabulary, grandiloquence—, a script that counts them on the real text, and the method for rewriting without falling into them. Use when writing any text another person will read: documentation, presentations, commit messages, emails, proposals and interface copy. And always before delivering a document to a client.
 ---
 
 # redaccion
 
-Un texto generado se reconoce por su forma antes que por su contenido. Los
-marcadores son pocos, concretos y se cuentan con un script. Más ejemplos y el
-porqué de cada regla: `<directorio-de-esta-skill>/references/por-que.md`.
+A generated text is recognised by its shape before its content. The markers are
+few, concrete and counted with a script. More examples and the reason behind
+each rule: `<this-skill-directory>/references/por-que.md`.
 
-**Cuándo:** antes de entregar un texto a alguien de fuera; al escribir
-documentación, una presentación, una propuesta o un correo largo; cuando alguien
-dice que un texto "suena a IA".
+**When:** before delivering a text to an outsider; when writing documentation, a
+presentation, a proposal or a long email; when someone says a text "suena a IA".
 
-## Los siete marcadores
+The skill's target is **Spanish text**: the examples, patterns and word lists
+below are Spanish on purpose, because they are the data it looks for.
 
-Los tres primeros bastan para reconocer un texto generado.
+## The seven markers
 
-1. **Paralelismo negativo.** «No es X, es Y», «X, no Y», «no se trata de X, sino
-   de Y». → Quita la negación y quédate con lo que afirmas: «Un plan sirve para
-   que alguien lo pare a tiempo».
-2. **Regla de tres.** Tres adjetivos o sintagmas donde el contenido pedía uno o
-   dos («claro, sencillo y directo»). → Si el tercero no añade nada, sobra.
-3. **Epigrama como titular.** «Lo que toda pieza tiene que cumplir» en vez de
-   «Requisitos». → El término estándar del oficio.
-4. **Raya larga en exceso**, donde iba una coma, un paréntesis o un punto. → Una
-   o dos por documento.
-5. **Dos puntos aforísticos** para rematar con una sentencia («El resultado es
-   claro: no funciona»). → Punto y seguido, o una sola afirmación.
-6. **Vocabulario recurrente:** clave, fundamental, crucial, robusto, sólido,
+The first three are enough to recognise a generated text.
+
+1. **Negative parallelism.** «No es X, es Y», «X, no Y», «no se trata de X, sino
+   de Y». → Drop the negation and keep what you assert: «Un plan sirve para que
+   alguien lo pare a tiempo».
+2. **Rule of three.** Three adjectives or phrases where the content called for
+   one or two («claro, sencillo y directo»). → If the third adds nothing, it is
+   surplus.
+3. **Epigram as headline.** «Lo que toda pieza tiene que cumplir» instead of
+   «Requisitos». → The standard term of the trade.
+4. **Excess em dashes**, where a comma, a parenthesis or a full stop belonged. →
+   One or two per document.
+5. **Aphoristic colons** to finish with a maxim («El resultado es claro: no
+   funciona»). → Full stop, or a single assertion.
+6. **Recurring vocabulary:** clave, fundamental, crucial, robusto, sólido,
    potente, riguroso, profundizar, panorama, enfoque, en última instancia, cabe
-   destacar, es importante señalar, no solo… sino también, permite (como
-   comodín), garantizar, optimizar, impulsar. → El verbo o el sustantivo
-   concreto: «permite mejorar la legibilidad» → «se lee mejor».
-7. **Grandilocuencia:** conectar algo con un tema mayor o cerrar con una
-   reflexión sin dato («Esto es lo que separa un dato de una afirmación»). →
-   Bórrala.
+   destacar, es importante señalar, no solo… sino también, permite (as a
+   catch-all), garantizar, optimizar, impulsar. → The concrete verb or noun:
+   «permite mejorar la legibilidad» → «se lee mejor».
+7. **Grandiloquence:** linking something to a bigger theme or closing with a
+   reflection that has no data («Esto es lo que separa un dato de una
+   afirmación»). → Delete it.
 
-## Cómo revisar
+## How to review
 
 ```bash
-node <directorio-de-esta-skill>/scripts/redaccion.mjs revisar <fichero…>    # cuenta
-node <directorio-de-esta-skill>/scripts/redaccion.mjs revisar --texto "…"   # una cadena
-node <directorio-de-esta-skill>/scripts/redaccion.mjs detalle <fichero>     # cada caso en su línea
+node <this-skill-directory>/scripts/redaccion.mjs check <file…>      # counts (revisar still works)
+node <this-skill-directory>/scripts/redaccion.mjs check --text "…"   # one string
+node <this-skill-directory>/scripts/redaccion.mjs detail <file>      # each case on its line
 ```
 
-El script cuenta y localiza; decidir si cada caso sobra te toca a ti. Solo
-puntúan los marcadores 1, 2, 3, 6 y 7; la raya larga y los dos puntos se
-informan aparte, porque una expresión regular no distingue un remate de una
-explicación.
+The script counts and locates; deciding whether each case is surplus is up to
+you. Only markers 1, 2, 3, 6 and 7 score; the em dash and the colons are
+reported separately, because a regular expression cannot tell a punchline from
+an explanation.
 
-**Umbral orientativo** para unas 2.000 palabras: cero paralelismos negativos,
-menos de tres reglas de tres, ningún titular epigramático.
+**Indicative threshold** for about 2,000 words: zero negative parallelisms, fewer
+than three rules of three, no epigrammatic headline.
 
-## Falsos positivos que el script ya excluye
+## False positives the script already excludes
 
-- «clave» como sustantivo (una clave SSH); solo cuenta como adjetivo.
-- «lo que hace falta», que contiene «lo que hace».
-- Los dos puntos que abren una enumeración.
+- «clave» as a noun (una clave SSH); it only counts as an adjective.
+- «lo que hace falta», which contains «lo que hace».
+- Colons that open an enumeration.
 
-## Lo que no arregla
+## What it does not fix
 
-El registro: un texto puede pasar los siete y no servir porque usa jerga que su
-lector no conoce. Antes de revisar la forma, pregúntate quién lo lee. Y no lo
-lleves al extremo: una raya bien puesta o una enumeración de tres cosas reales
-son buena escritura.
+Register: a text can pass all seven and be useless because it uses jargon its
+reader does not know. Before reviewing the form, ask yourself who reads it. And
+do not take it to the extreme: a well-placed dash or an enumeration of three real
+things is good writing.

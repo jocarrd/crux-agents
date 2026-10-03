@@ -1,42 +1,42 @@
 #!/usr/bin/env bash
-# Adaptador de memoria — Claude Code.
+# Memory adapter — Claude Code.
 #
-# Lo que sabe este fichero y no sabe el kernel: dónde guarda este agente sus
-# memorias y cómo declara el tipo de cada una.
+# What this file knows and the kernel does not: where this agent stores its
+# memories and how it declares the type of each one.
 #
-# Emite una línea por memoria, separada por tabuladores:
+# Emits one line per memory, tab-separated:
 #
-#   <tipo>	<ámbito>	<ruta>
+#   <type>	<scope>	<path>
 #
-# El tipo es el que declara el frontmatter. `?` si no declara ninguno y `!` si
-# el fichero está y no se puede leer: los dos casos los resuelve el kernel, y
-# aquí no se inventa un valor por defecto para seguir adelante.
+# The type is the one the frontmatter declares. `?` if it declares none and `!`
+# if the file is there and cannot be read: the kernel resolves both cases, and
+# no default value is invented here just to carry on.
 #
-# El ámbito se emite tal como lo nombra el agente —la ruta de trabajo con los
-# separadores cambiados por guiones— y sin decodificar. La vuelta atrás es
-# ambigua en cuanto un proyecto lleva un guion en el nombre; quien conoce los
-# proyectos que hay es el kernel, y la conversión que sí es unívoca es la suya.
+# The scope is emitted as the agent names it —the working path with the
+# separators changed to hyphens— and undecoded. The way back is ambiguous as
+# soon as a project has a hyphen in its name; the kernel is the one that knows
+# which projects exist, and the conversion that is unambiguous is theirs.
 
 set -uo pipefail
 
-raiz="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
-[[ -d "$raiz" ]] || exit 0
+root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+[[ -d "$root" ]] || exit 0
 
-for dir in "$raiz"/*/memory; do
+for dir in "$root"/*/memory; do
   [[ -d "$dir" ]] || continue
-  ambito="$(basename "$(dirname "$dir")")"
+  scope_name="$(basename "$(dirname "$dir")")"
 
   for f in "$dir"/*.md; do
     [[ -e "$f" ]] || continue
-    # El índice no es una memoria: es la tabla de contenidos de las demás.
+    # The index is not a memory: it is the table of contents of the others.
     [[ "$(basename "$f")" == "MEMORY.md" ]] && continue
 
     if [[ ! -r "$f" ]]; then
-      printf '!\t%s\t%s\n' "$ambito" "$f"
+      printf '!\t%s\t%s\n' "$scope_name" "$f"
       continue
     fi
 
-    tipo="$(awk '
+    kind="$(awk '
       NR == 1 && $0 != "---" { exit }
       NR > 1 && $0 == "---" { exit }
       /^[[:space:]]*type:[[:space:]]*/ {
@@ -47,6 +47,6 @@ for dir in "$raiz"/*/memory; do
       }
     ' "$f")"
 
-    printf '%s\t%s\t%s\n' "${tipo:-?}" "$ambito" "$f"
+    printf '%s\t%s\t%s\n' "${kind:-?}" "$scope_name" "$f"
   done
 done

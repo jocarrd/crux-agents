@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# crux status — qué hay abierto ahora mismo, en todos los proyectos.
+# crux status — what is open right now, across all projects.
 #
-#   crux status            los proyectos, sus espacios y el trabajo sin publicar
-#   crux status --check    además, pasa el doctor de cada proyecto; sale 1 si algo falla
+#   crux status            the projects, their workspaces and the unpublished work
+#   crux status --check    also runs each project's doctor; exits 1 if anything fails
 #
-# `doctor` responde por un proyecto. Esto responde por la mañana: dónde quedó
-# el trabajo, qué espacios siguen vivos y qué no está subido a ningún sitio.
-# Sin red: lo que no se puede saber en local no se pregunta.
+# `doctor` answers for one project. This answers for the morning: where the
+# work was left, which workspaces are still alive and what is pushed nowhere.
+# No network: what cannot be known locally is not asked.
 
 set -uo pipefail
 
@@ -15,126 +15,128 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/registry.sh"
 
-COMPROBAR=0
-[[ "${1:-}" == "--check" ]] && COMPROBAR=1
+CHECK=0
+[[ "${1:-}" == "--check" ]] && CHECK=1
 
-RAIZ="$(projects_root)"
+ROOT="$(projects_root)"
 
-echo "proyectos en $RAIZ"
+echo "projects in $ROOT"
 echo
 
-proyectos=0
-PROBLEMAS=0
-for docs in "$RAIZ"/*/*-docs; do
+projects=0
+PROBLEMS=0
+for docs in "$ROOT"/*/*-docs; do
   [[ -f "$docs/crux.json" ]] || continue
-  proyectos=$((proyectos + 1))
-  nombre="$(basename "$(dirname "$docs")")"
+  projects=$((projects + 1))
+  name="$(basename "$(dirname "$docs")")"
 
-  if ! motivo="$(json_valido "$docs/crux.json")"; then
-    printf '  %-14s %s\n' "$nombre" "contrato ilegible — $motivo"
-    info "arréglalo o mira qué le pasa: crux doctor $docs"
-    PROBLEMAS=$((PROBLEMAS + 1))
+  if ! reason="$(valid_json "$docs/crux.json")"; then
+    printf '  %-14s %s\n' "$name" "unreadable contract — $reason"
+    info "fix it or see what is wrong: crux doctor $docs"
+    PROBLEMS=$((PROBLEMS + 1))
     continue
   fi
 
   version="$(json_get "$docs/crux.json" crux 2>/dev/null || echo "?")"
   repos="$(json_get "$docs/crux.json" repos 2>/dev/null | wc -l | tr -d ' ')"
 
-  estado=""
-  if [[ $COMPROBAR -eq 1 ]]; then
-    salida="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" || PROBLEMAS=$((PROBLEMAS + 1))
-    estado="$(echo "$salida" | tail -1)"
-    [[ "$estado" == conforme* ]] && estado="conforme"
+  status=""
+  if [[ $CHECK -eq 1 ]]; then
+    output="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" || PROBLEMS=$((PROBLEMS + 1))
+    status="$(echo "$output" | tail -1)"
+    [[ "$status" == conformant* || "$status" == conforme* ]] && status="conformant"
   fi
-  printf '  %-14s crux %-8s %s repos%s\n' "$nombre" "$version" "$repos" "${estado:+  ·  $estado}"
+  printf '  %-14s crux %-8s %s repos%s\n' "$name" "$version" "$repos" "${status:+  ·  $status}"
 done
-[[ $proyectos -eq 0 ]] && info "ninguno bajo esa raíz ('install.sh --projects-dir' si no es la tuya)"
+[[ $projects -eq 0 ]] && info "none under that root ('install.sh --projects-dir' if it is not yours)"
 
 echo
-echo "espacios de trabajo"
+echo "workspaces"
 echo
 bash "$CRUX_HOME/bin/workspace.sh" heal --quiet 2>/dev/null | sed 's/^/  /' || true
 if [[ -f "$REGISTRY" ]]; then
   if [[ -z "$(registry_entries)" ]]; then
-    echo "  ninguno"
+    echo "  none"
   else
-    while IFS=$'\t' read -r n ruta rama slot; do
-      vivo=""; [[ -d "$ruta" ]] || vivo="  (sin worktree)"
-      printf '  %-14s %-24s slot %s%s\n' "$n" "$rama" "$slot" "$vivo"
+    while IFS=$'\t' read -r n path_value branch slot; do
+      alive=""; [[ -d "$path_value" ]] || alive="  (no worktree)"
+      printf '  %-14s %-24s slot %s%s\n' "$n" "$branch" "$slot" "$alive"
     done < <(registry_entries)
   fi
 
-  # Un espacio cuya rama ya no está en el remoto casi siempre es trabajo
-  # fusionado que nadie cerró. Sin red: se mira lo que git ya sabe del remoto.
-  registry_entries | while IFS=$'\t' read -r n path rama _slot; do
+  # A workspace whose branch is no longer on the remote is almost always merged
+  # work that nobody closed. No network: what git already knows of the remote
+  # is looked at.
+  registry_entries | while IFS=$'\t' read -r n path branch _slot; do
     [[ -d "$path" ]] || continue
-    seguimiento="$(git -C "$path" for-each-ref --format='%(upstream:track)' "refs/heads/$rama" 2>/dev/null || true)"
-    if [[ "$seguimiento" == *gone* ]]; then
-      warn "'$n': su rama ya no está en el remoto, probablemente fusionada — ciérralo con 'crux workspace rm $n'"
+    tracking="$(git -C "$path" for-each-ref --format='%(upstream:track)' "refs/heads/$branch" 2>/dev/null || true)"
+    if [[ "$tracking" == *gone* ]]; then
+      warn "'$n': its branch is no longer on the remote, probably merged — close it with 'crux workspace rm $n'"
     fi
   done
 
-  # Un worktree que crux no conoce no sale en ninguna lista ni lo protege nada.
-  registrados="$(registry_paths)"
+  # A worktree crux does not know about appears in no list and nothing protects it.
+  registered="$(registry_paths)"
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
-    printf '%s\n' "$registrados" | grep -qxF "$d" && continue
-    es_worktree "$d" || continue
-    warn "$(basename "$d") es un worktree que crux no conoce — regístralo: crux workspace adopt $d"
-  done < <(find "$RAIZ" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
+    printf '%s\n' "$registered" | grep -qxF "$d" && continue
+    is_worktree "$d" || continue
+    warn "$(basename "$d") is a worktree crux does not know about — register it: crux workspace adopt $d"
+  done < <(find "$ROOT" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null | sort)
 
-  # Una propuesta abierta desde una rama sin recibo es el atajo tomado por la
-  # espalda: legítimo si lo pidió una persona, pero tiene que verse. Sin esto,
-  # rodear la puerta no dejaba rastro en ningún sitio.
-  registry_entries | while IFS=$'\t' read -r n path rama _slot; do
+  # A proposal opened from a branch without a receipt is the shortcut taken
+  # behind the back: legitimate if a person asked for it, but it has to be
+  # visible. Without this, going around the gate left no trace anywhere.
+  registry_entries | while IFS=$'\t' read -r n path branch _slot; do
     [[ -d "$path" ]] || continue
     command -v gh >/dev/null || break
-    origen="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
-    [[ -n "$origen" ]] || continue
-    slug="$(echo "$origen" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
-    abierta="$(gh pr list --repo "$slug" --head "$rama" --state open --json number \
+    origin="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
+    [[ -n "$origin" ]] || continue
+    slug="$(echo "$origin" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+    open_pr="$(gh pr list --repo "$slug" --head "$branch" --state open --json number \
       --jq '.[0].number' 2>/dev/null || true)"
-    [[ -n "$abierta" && "$abierta" != "null" ]] || continue
-    recibo="$path/.crux-ship"
+    [[ -n "$open_pr" && "$open_pr" != "null" ]] || continue
+    receipt="$path/.crux-ship"
     head="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
-    sellado=""
-    [[ -f "$recibo" ]] && sellado="$(awk '/^sealed /{print $2}' "$recibo" | tail -1)"
-    if [[ "$sellado" != "$head" ]]; then
-      warn "$slug#$abierta ($n) está abierta y su rama no tiene recibo de la puerta"
+    sealed=""
+    [[ -f "$receipt" ]] && sealed="$(awk '/^sealed /{print $2}' "$receipt" | tail -1)"
+    if [[ "$sealed" != "$head" ]]; then
+      warn "$slug#$open_pr ($n) is open and its branch has no gate receipt"
     fi
   done
 else
-  echo "  ninguno"
+  echo "  none"
 fi
 
-# Las tareas abiertas que no tienen espacio en esta máquina: empezadas en otra,
-# o cuyo espacio se cerró sin terminarlas. Se retoman con `workspace resume`.
-sin_espacio="$(node -e '
+# Open tasks with no workspace on this machine: started on another, or whose
+# workspace was closed before finishing them. They are resumed with
+# `workspace resume`.
+without_workspace="$(node -e '
   const fs = require("fs");
-  const tareas = JSON.parse(process.argv[1] || "[]");
-  let vivos = new Set();
+  const tasks = JSON.parse(process.argv[1] || "[]");
+  let liveSet = new Set();
   try {
     const r = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-    vivos = new Set(Object.entries(r.workspaces || {}).filter(([, w]) => fs.existsSync(w.path)).map(([n]) => n));
+    liveSet = new Set(Object.entries(r.workspaces || {}).filter(([, w]) => fs.existsSync(w.path)).map(([n]) => n));
   } catch {}
-  for (const t of tareas) {
+  for (const t of tasks) {
     if (t.waiting) continue;
-    if (t.espacios.some((e) => vivos.has(e))) continue;
-    console.log(`${t.proyecto}/${t.tarea}\t${t.estado}\t${t.siguiente || ""}`);
+    if (t.workspaces.some((e) => liveSet.has(e))) continue;
+    console.log(`${t.project}/${t.task}\t${t.status}\t${t.next || ""}`);
   }
 ' "$(node "$CRUX_HOME/lib/task-sync.mjs" open 2>/dev/null)" "$REGISTRY" 2>/dev/null)"
-if [[ -n "$sin_espacio" ]]; then
+if [[ -n "$without_workspace" ]]; then
   echo
-  echo "tareas abiertas sin espacio en esta máquina"
+  echo "open tasks with no workspace on this machine"
   echo
-  while IFS=$'\t' read -r t estado siguiente; do
-    printf '  %-34s %-12s %s\n' "$t" "$estado" "${siguiente:0:60}"
-  done <<< "$sin_espacio"
-  info "se retoman con: crux workspace resume <tarea>"
+  while IFS=$'\t' read -r t status next_step; do
+    printf '  %-34s %-12s %s\n' "$t" "$status" "${next_step:0:60}"
+  done <<< "$without_workspace"
+  info "resume them with: crux workspace resume <task>"
 fi
 
-# Las que esperan a otra persona: no son trabajo pendiente nuestro, pero no se
-# pueden perder de vista. Pasado el plazo se sugiere insistir.
+# Those waiting on another person: not pending work of ours, but they cannot
+# be lost sight of. Once the deadline passes a nudge is suggested.
 waiting_tasks="$(node -e '
   const tasks = JSON.parse(process.argv[1] || "[]");
   const nudge = Number(process.env.CRUX_WAIT_NUDGE_DAYS) > 0 ? Number(process.env.CRUX_WAIT_NUDGE_DAYS) : 7;
@@ -142,55 +144,55 @@ waiting_tasks="$(node -e '
     if (!t.waiting) continue;
     const since = Date.parse(t.waiting.since);
     const days = Number.isNaN(since) ? null : Math.max(0, Math.floor((Date.now() - since) / 86400000));
-    const age = days === null ? "" : days === 0 ? "hoy" : days === 1 ? "ayer" : `hace ${days} días`;
-    console.log([`${t.proyecto}/${t.tarea}`, t.waiting.on, age, t.waiting.ask, days !== null && days >= nudge ? "1" : "", t.waiting.ref].join("\t"));
+    const age = days === null ? "" : days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+    console.log([`${t.project}/${t.task}`, t.waiting.on, age, t.waiting.ask, days !== null && days >= nudge ? "1" : "", t.waiting.ref].join("\t"));
   }
 ' "$(node "$CRUX_HOME/lib/task-sync.mjs" open 2>/dev/null)")"
 if [[ -n "$waiting_tasks" ]]; then
   echo
-  echo "esperando respuesta"
+  echo "waiting for an answer"
   echo
   while IFS=$'\t' read -r task on age ask nudge ref; do
-    printf '  %-34s a %s, %s\n' "$task" "$on" "$age"
+    printf '  %-34s to %s, %s\n' "$task" "$on" "$age"
     printf '  %-34s %s\n' "" "${ask:0:70}"
     [[ -n "$ref" ]] && printf '  %-34s %s\n' "" "$ref"
-    [[ -n "$nudge" ]] && warn "$task lleva el plazo cumplido: conviene insistir"
+    [[ -n "$nudge" ]] && warn "$task is past its deadline: worth a nudge"
   done <<< "$waiting_tasks"
-  info "cuando llegue la respuesta: crux workspace resume <tarea>"
+  info "when the answer arrives: crux workspace resume <task>"
 fi
 
 echo
-echo "trabajo sin publicar"
+echo "unpublished work"
 echo
 
-pendiente=0
-for repo in "$RAIZ"/*/*/; do
+pending=0
+for repo in "$ROOT"/*/*/; do
   repo="${repo%/}"
   [[ -d "$repo/.git" || -f "$repo/.git" ]] || continue
   git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1 || continue
-  es_worktree "$repo" && continue
+  is_worktree "$repo" && continue
 
-  nombre="$(basename "$(dirname "$repo")")/$(basename "$repo")"
-  rama="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
-  sucio="$(git -C "$repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-  sin_subir=0
+  name="$(basename "$(dirname "$repo")")/$(basename "$repo")"
+  branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
+  dirty="$(git -C "$repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+  unpushed=0
   if git -C "$repo" rev-parse '@{u}' >/dev/null 2>&1; then
-    sin_subir="$(git -C "$repo" log --oneline '@{u}..' 2>/dev/null | wc -l | tr -d ' ')"
+    unpushed="$(git -C "$repo" log --oneline '@{u}..' 2>/dev/null | wc -l | tr -d ' ')"
   else
-    sin_subir="$(git -C "$repo" log --oneline "$(rama_principal "$repo")..$rama" 2>/dev/null | wc -l | tr -d ' ')"
+    unpushed="$(git -C "$repo" log --oneline "$(main_branch "$repo")..$branch" 2>/dev/null | wc -l | tr -d ' ')"
   fi
 
-  [[ "$sucio" -eq 0 && "$sin_subir" -eq 0 ]] && continue
-  pendiente=$((pendiente + 1))
-  detalle=""
-  [[ "$sin_subir" -gt 0 ]] && detalle="$(cuenta "$sin_subir" commit commits) sin subir"
-  [[ "$sucio" -gt 0 ]] && detalle="${detalle:+$detalle, }$(cuenta "$sucio" "fichero tocado" "ficheros tocados")"
-  printf '  %-34s %-22s %s\n' "$nombre" "$rama" "$detalle"
+  [[ "$dirty" -eq 0 && "$unpushed" -eq 0 ]] && continue
+  pending=$((pending + 1))
+  detail=""
+  [[ "$unpushed" -gt 0 ]] && detail="$(count "$unpushed" commit commits) not pushed"
+  [[ "$dirty" -gt 0 ]] && detail="${detail:+$detail, }$(count "$dirty" "file touched" "files touched")"
+  printf '  %-34s %-22s %s\n' "$name" "$branch" "$detail"
 done
-if [[ $pendiente -eq 0 ]]; then
-  echo "  nada: todo está subido"
+if [[ $pending -eq 0 ]]; then
+  echo "  nothing: everything is pushed"
 fi
 
-# --check existe para engancharlo a algo automático: tiene que poder fallar.
-[[ $COMPROBAR -eq 1 && $PROBLEMAS -gt 0 ]] && exit 1
+# --check exists to hook it to something automatic: it has to be able to fail.
+[[ $CHECK -eq 1 && $PROBLEMS -gt 0 ]] && exit 1
 exit 0

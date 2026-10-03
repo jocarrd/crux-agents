@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# crux — kernel del sistema de trabajo con agentes.
-# Despachador de subcomandos. Ver STANDARD.md para el estándar completo.
+# crux — kernel of the agent work system.
+# Subcommand dispatcher. See STANDARD.md for the full standard.
 
 set -euo pipefail
 
@@ -13,45 +13,45 @@ source "$CRUX_HOME/lib/common.sh"
 
 usage() {
   cat <<'EOF'
-crux — kernel del sistema de trabajo con agentes
+crux — kernel of the agent work system
 
-  crux init <project>   crea el docs repo de un proyecto nuevo
-  crux clone <project>  trae un proyecto entero a esta máquina
-  crux bootstrap        deja una máquina nueva lista: todos los proyectos
-  crux adopt [dir]      registra un docs repo que ya existe
-  crux add-repo <repo>  registra un repo nuevo en el proyecto
-  crux review           reúne el material para revisar una propuesta
-  crux checks [n]       espera al CI de una propuesta y trae el log de lo que falla
-  crux merge <n>        mergea una propuesta diciendo antes cuál y de qué repo
-  crux link [dir]       genera y verifica los punteros de los repos de código
-  crux workspace ...    espacios aislados para trabajar en paralelo
-  crux task ...         el registro de la tarea: pasos, siguiente paso, evidencias
-  crux ship ...         la puerta de calidad, con recibo de lo ejecutado
-  crux visual ...       la revisión visual aprobada, con recibo y sección en la propuesta
-  crux hooks ...        engancha el estándar al cierre de sesión y al commit
-  crux mcp ...          los servidores MCP que el proyecto declara
-  crux stg ...          publica una carpeta construida en un staging con clave
-  crux usage            qué skills se usan de verdad
-  crux skill test <sk>  prueba una skill con sus escenarios y la compara con otra versión
-  crux memory [--check] memorias del agente que deberían estar en git
-  crux status [--check] qué hay abierto ahora mismo en todos los proyectos
-  crux sync [--leave]   pone al día lo que hay en esta máquina; nada atrapado al irte
-  crux doctor [dir]     verifica la conformidad con el estándar
-  crux doctor --machine verifica que esta máquina puede con todo
-  crux upgrade [dir]    re-materializa el kernel a la versión actual
-  crux release <ver>    publica una versión, verificando a quien la consume
-  crux version          versión del kernel y su ruta
+  crux init <project>   creates the docs repo of a new project
+  crux clone <project>  brings a whole project to this machine
+  crux bootstrap        gets a new machine ready: all projects
+  crux adopt [dir]      registers a docs repo that already exists
+  crux add-repo <repo>  registers a new repo in the project
+  crux review           gathers the material to review a proposal
+  crux checks [n]       waits for a proposal's CI and fetches the log of what fails
+  crux merge <n>        merges a proposal, stating first which one and from which repo
+  crux link [dir]       generates and verifies the pointers of the code repos
+  crux workspace ...    isolated spaces to work in parallel
+  crux task ...         the task record: steps, next step, evidence
+  crux ship ...         the quality gate, with a receipt of what was run
+  crux visual ...       the approved visual review, with receipt and section in the proposal
+  crux hooks ...        hooks the standard into session end and commit
+  crux mcp ...          the MCP servers the project declares
+  crux stg ...          publishes a built folder to a keyed staging
+  crux usage            which skills are really used
+  crux skill test <sk>  tests a skill with its scenarios and compares it with another version
+  crux memory [--check] agent memories that should be in git
+  crux status [--check] what is open right now across all projects
+  crux sync [--leave]   brings what is on this machine up to date; nothing trapped when you leave
+  crux doctor [dir]     verifies conformity with the standard
+  crux doctor --machine verifies that this machine can handle everything
+  crux upgrade [dir]    re-materializes the kernel at the current version
+  crux release <ver>    publishes a version, verifying whoever consumes it
+  crux version          kernel version and its path
 
-Sin argumento de directorio, los comandos operan sobre el docs repo que
-encuentran subiendo desde el directorio actual.
+Without a directory argument, commands operate on the docs repo they find
+walking up from the current directory.
 EOF
 }
 
 cmd="${1:-help}"
 [[ $# -gt 0 ]] && shift || true
 
-# La cabecera de cada script ya documenta su uso: se imprime en vez de mantener
-# un texto de ayuda aparte que envejece por su cuenta.
+# Each script's header already documents its usage: it is printed instead of
+# maintaining a separate help text that ages on its own.
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   for script in "$CRUX_HOME/bin/$cmd.sh" "$CRUX_HOME/bin/$cmd.mjs"; do
     [[ -f "$script" ]] || continue
@@ -87,5 +87,5 @@ case "$cmd" in
   release) exec bash "$CRUX_HOME/bin/release.sh" "$@" ;;
   version) echo "crux $(crux_version) — $CRUX_HOME" ;;
   help|-h|--help) usage ;;
-  *) err "subcomando desconocido: $cmd"; echo; usage; exit 1 ;;
+  *) err "unknown subcommand: $cmd"; echo; usage; exit 1 ;;
 esac

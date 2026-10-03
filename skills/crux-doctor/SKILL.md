@@ -1,69 +1,69 @@
 ---
 name: crux-doctor
-description: Pasar el doctor a un proyecto: verificar que su repo de documentación cumple el estándar —contrato, estructura obligatoria, repos declarados frente a los que hay, reglas del perfil, estado de los ADRs, enlaces markdown, documentos huérfanos y formato de las skills— y dejarlo en conforme. Usa después de migrar o reorganizar documentación, al registrar un repo nuevo, al volver a un proyecto que llevabas tiempo sin tocar, o cuando quieras comprobar si algo se ha desalineado.
+description: Give a project a checkup: verify that its documentation repo meets the standard (contract, mandatory structure, declared repos against those present, profile rules, ADR status, markdown links, orphan documents and skill format) and leave it conformant. Use after migrating or reorganizing documentation, when registering a new repo, when returning to a project you haven't touched in a while, or when you want to check whether something has drifted out of alignment.
 ---
 
 # crux-doctor
 
-Comprueba la conformidad de un docs repo con el estándar. El estándar sirve de
-poco si solo se confía en que se cumple.
+Checks a docs repo's conformance with the standard. The standard is of little use
+if you just trust that it is being followed.
 
-## Cuándo usar
+## When to use
 
-- Antes de cerrar una sesión de trabajo con cambios en documentación.
-- Después de mover, renombrar o borrar ficheros de documentación.
-- Al volver a un proyecto que llevabas meses sin tocar.
-- Tras actualizar el kernel, para ver qué proyectos quedaron desfasados.
+- Before closing a work session with documentation changes.
+- After moving, renaming or deleting documentation files.
+- When returning to a project you haven't touched in months.
+- After updating the kernel, to see which projects were left out of date.
 
-## Uso
+## Usage
 
 ```bash
-crux doctor          # sobre el proyecto del directorio actual
-crux doctor <dir>    # sobre otro
+crux doctor          # on the project in the current directory
+crux doctor <dir>    # on another one
 ```
 
-Sale con código 1 si hay errores. Los avisos no bloquean.
+It exits with code 1 if there are errors. Warnings don't block.
 
-## Qué comprueba
+## What it checks
 
-1. **El contrato.** Que existe `crux.json`, que tiene los campos obligatorios,
-   que el perfil declarado existe y qué versión del kernel se usó.
-2. **La estructura obligatoria.** Los ficheros del suelo del estándar, y que
-   el puntero de Claude sea un enlace al canónico y no una copia que diverja.
-3. **Repos declarados frente a la realidad.** Repos sin carpeta de
-   documentación, carpetas sin declarar, repos declarados que no están en
-   disco.
-4. **Las reglas del perfil.** En un proyecto propio, que cada repo tenga sus
-   punteros. En uno de cliente, que **nadie haya escrito** en el repo ajeno:
-   eso es error, no aviso.
-5. **Los enlaces markdown.** Que todos resuelvan dentro del docs repo.
-6. **Las skills del proyecto.** Frontmatter presente y nombre coherente con el
-   directorio.
+1. **The contract.** That `crux.json` exists, that it has the mandatory fields,
+   that the declared profile exists and which kernel version was used.
+2. **The mandatory structure.** The files in the standard's floor, and that the
+   Claude pointer is a link to the canonical one and not a copy that diverges.
+3. **Declared repos against reality.** Repos without a documentation folder,
+   undeclared folders, declared repos that aren't on disk.
+4. **The profile rules.** In an own-code project, that every repo has its
+   pointers. In a client one, that **nobody has written** to the foreign repo:
+   that is an error, not a warning.
+5. **Markdown links.** That all of them resolve inside the docs repo.
+6. **The project's skills.** Frontmatter present and name consistent with the
+   directory.
 
-## Cómo interpretar el resultado
+## How to interpret the result
 
-**Errores** — rompen el estándar y hay que arreglarlos: contrato ausente,
-enlaces rotos, escritura en código ajeno, repo declarado sin documentación.
+**Errors**: they break the standard and have to be fixed: missing contract,
+broken links, writing to foreign code, declared repo without documentation.
 
-**Avisos** — el proyecto sigue siendo válido, pero algo se está desalineando:
-versión del kernel desfasada, carpeta sin declarar, repo declarado que aún no
-está clonado. Merecen una decisión, no necesariamente una acción inmediata.
+**Warnings**: the project is still valid, but something is drifting out of
+alignment: outdated kernel version, undeclared folder, declared repo not yet
+cloned. They deserve a decision, not necessarily an immediate action.
 
-## Arreglos típicos
+## Typical fixes
 
-| Síntoma | Arreglo |
-| ------- | ------- |
-| Falta `crux.json` | `crux adopt` |
-| Versión desfasada | `crux upgrade` |
-| Repo sin puntero | `crux link` |
-| Carpeta en `repos/` sin declarar | `/add-repo-to-docs`, o borrarla si sobra |
-| Enlace a un fichero de otro repo | convertirlo a texto en backticks |
+| Symptom | Fix |
+| ------- | --- |
+| `crux.json` missing | `crux adopt` |
+| Outdated version | `crux upgrade` |
+| Repo without pointer | `crux link` |
+| Undeclared folder in `repos/` | `/add-repo-to-docs`, or delete it if surplus |
+| Link to a file in another repo | convert it to text in backticks |
 
-Un enlace markdown que apunta fuera del docs repo no se arregla corrigiendo la
-ruta: se convierte en texto plano. El estándar los prohíbe porque se rompen
-con cualquier reorganización y acaban mintiendo, y no hay build que los valide.
+A markdown link pointing outside the docs repo is not fixed by correcting the
+path: it is converted to plain text. The standard forbids them because they break
+with any reorganization and end up lying, and there is no build that validates
+them.
 
-## Relacionado
+## Related
 
-- `/end-session` — el ritual de cierre, que ejecuta esto como uno de sus pasos
-- `/crux-init` — crear un proyecto nuevo bajo el estándar
+- `/end-session`: the closing ritual, which runs this as one of its steps
+- `/crux-init`: create a new project under the standard

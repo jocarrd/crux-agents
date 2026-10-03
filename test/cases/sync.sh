@@ -1,290 +1,290 @@
 #!/usr/bin/env bash
 
-# `crux sync` es alternar de máquina: una se queda atrás mientras se trabaja en
-# la otra. Aquí las dos máquinas son dos clones del mismo remoto local, y el
-# `gh` es uno de mentira sin sesión, para que nunca se vaya a GitHub de verdad.
+# `crux sync` is for switching machines: one falls behind while work happens
+# on the other. Here the two machines are two clones of the same local remote,
+# and `gh` is a fake with no session, so it never goes to real GitHub.
 
-_sin_gh() {
+_no_gh() {
   mkdir -p "$SB/bin"
   printf '#!/usr/bin/env bash\nexit 1\n' > "$SB/bin/gh"
   chmod +x "$SB/bin/gh"
   export PATH="$SB/bin:$PATH"
 }
 
-_dos_maquinas() {
-  # Un remoto con un commit, clonado en esta máquina (dentro de la raíz) y en
-  # la otra (fuera). Deja OTRA con la ruta del segundo clon.
-  _sin_gh
-  git init -q --bare -b main "$SB/remoto.git"
-  git clone -q "$SB/remoto.git" "$SB/semilla" 2>/dev/null
-  git -C "$SB/semilla" commit -q --allow-empty -m "first"
-  git -C "$SB/semilla" push -q origin main
-  mkdir -p "$CRUX_PROJECTS_DIR/alfa"
-  git clone -q "$SB/remoto.git" "$CRUX_PROJECTS_DIR/alfa/app"
-  OTRA="$SB/semilla"
-  export CRUX_STATE_DIR="$SB/estado"
+_two_machines() {
+  # A remote with one commit, cloned on this machine (inside the root) and on
+  # the other (outside). Leaves OTHER with the path of the second clone.
+  _no_gh
+  git init -q --bare -b main "$SB/remote.git"
+  git clone -q "$SB/remote.git" "$SB/seed" 2>/dev/null
+  git -C "$SB/seed" commit -q --allow-empty -m "first"
+  git -C "$SB/seed" push -q origin main
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha"
+  git clone -q "$SB/remote.git" "$CRUX_PROJECTS_DIR/alpha/app"
+  OTHER="$SB/seed"
+  export CRUX_STATE_DIR="$SB/state"
 }
 
-_trabajo_en_la_otra() {
-  echo "$1" > "$OTRA/$1"
-  git -C "$OTRA" add "$1"
-  git -C "$OTRA" commit -q -m "$1"
-  git -C "$OTRA" push -q origin main
+_work_on_the_other() {
+  echo "$1" > "$OTHER/$1"
+  git -C "$OTHER" add "$1"
+  git -C "$OTHER" commit -q -m "$1"
+  git -C "$OTHER" push -q origin main
 }
 
-test_sync_avanza_la_rama_que_va_por_detras() {
+test_sync_advances_the_branch_that_is_behind() {
   sandbox >/dev/null
-  _dos_maquinas
-  _trabajo_en_la_otra hecho-alli
+  _two_machines
+  _work_on_the_other done-there
 
   local out
   out="$(crux sync 2>&1)"
 
-  assert_file "$CRUX_PROJECTS_DIR/alfa/app/hecho-alli" "lo de la otra máquina llega"
-  assert_contains "$out" "alfa/app" "dice qué repo avanzó"
-  assert_contains "$out" "1 commit nuevo" "y cuánto"
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app/done-there" "what the other machine did arrives"
+  assert_contains "$out" "alpha/app" "it says which repo advanced"
+  assert_contains "$out" "1 new commit" "and how many"
   teardown
 }
 
-test_sync_no_toca_una_rama_con_cambios_sin_commitear() {
+test_sync_does_not_touch_a_branch_with_uncommitted_changes() {
   sandbox >/dev/null
-  _dos_maquinas
-  echo "a medias" > "$CRUX_PROJECTS_DIR/alfa/app/nota"
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" add nota
-  _trabajo_en_la_otra hecho-alli
+  _two_machines
+  echo "half done" > "$CRUX_PROJECTS_DIR/alpha/app/note"
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" add note
+  _work_on_the_other done-there
 
   local out rc
   out="$(crux sync 2>&1)"; rc=$?
 
-  assert_no_file "$CRUX_PROJECTS_DIR/alfa/app/hecho-alli" "no avanza encima de trabajo sin commitear"
-  assert_contains "$out" "cambios sin commitear" "y dice por qué"
-  assert_eq 1 "$rc" "sale con error: hay algo que decidir"
+  assert_no_file "$CRUX_PROJECTS_DIR/alpha/app/done-there" "it does not advance over uncommitted work"
+  assert_contains "$out" "uncommitted changes" "and says why"
+  assert_eq 1 "$rc" "it exits with an error: there is something to decide"
   teardown
 }
 
-test_sync_no_junta_ramas_separadas() {
+test_sync_does_not_join_diverged_branches() {
   sandbox >/dev/null
-  _dos_maquinas
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" commit -q --allow-empty -m "aqui"
-  _trabajo_en_la_otra hecho-alli
+  _two_machines
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" commit -q --allow-empty -m "here"
+  _work_on_the_other done-there
 
-  local out antes
-  antes="$(git -C "$CRUX_PROJECTS_DIR/alfa/app" rev-parse HEAD)"
+  local out before
+  before="$(git -C "$CRUX_PROJECTS_DIR/alpha/app" rev-parse HEAD)"
   out="$(crux sync 2>&1)"
 
-  assert_eq "$antes" "$(git -C "$CRUX_PROJECTS_DIR/alfa/app" rev-parse HEAD)" "ni mezcla ni reescribe"
-  assert_contains "$out" "se han separado" "avisa de que hay que decidir"
+  assert_eq "$before" "$(git -C "$CRUX_PROJECTS_DIR/alpha/app" rev-parse HEAD)" "neither merges nor rewrites"
+  assert_contains "$out" "have diverged" "it warns that a decision is needed"
   teardown
 }
 
-test_sync_leave_falla_con_commits_sin_subir() {
+test_sync_leave_fails_with_unpushed_commits() {
   sandbox >/dev/null
-  _dos_maquinas
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" commit -q --allow-empty -m "sin subir"
+  _two_machines
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" commit -q --allow-empty -m "unpushed"
 
   local out rc
   out="$(crux sync --leave 2>&1)"; rc=$?
 
-  assert_eq 1 "$rc" "no deja irse con commits atrapados"
-  assert_contains "$out" "sin subir" "y dice cuáles"
+  assert_eq 1 "$rc" "it does not let you leave with trapped commits"
+  assert_contains "$out" "not pushed" "and says which"
   teardown
 }
 
-test_sync_leave_falla_con_una_rama_que_no_esta_en_el_remoto() {
+test_sync_leave_fails_with_a_branch_not_on_the_remote() {
   sandbox >/dev/null
-  _dos_maquinas
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" switch -q -c solo-aqui
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" commit -q --allow-empty -m "local"
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" switch -q main
+  _two_machines
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" switch -q -c only-here
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" commit -q --allow-empty -m "local"
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" switch -q main
 
   local out
   out="$(crux sync --leave 2>&1)"
 
-  assert_contains "$out" "solo-aqui no está en ningún remoto" "la rama local sale por su nombre"
+  assert_contains "$out" "only-here is in no remote" "the local branch comes out by name"
   teardown
 }
 
-test_sync_leave_no_bloquea_por_ramas_fusionadas() {
+test_sync_leave_does_not_block_on_merged_branches() {
   sandbox >/dev/null
-  _dos_maquinas
-  local app="$CRUX_PROJECTS_DIR/alfa/app"
-  # Una propuesta fusionada con squash: su rama se borró del remoto y sus
-  # commits no están en la principal. Bloquear por esto sería ruido.
-  git -C "$app" switch -q -c propuesta
-  git -C "$app" commit -q --allow-empty -m "cambio"
-  git -C "$app" push -q -u origin propuesta 2>/dev/null
+  _two_machines
+  local app="$CRUX_PROJECTS_DIR/alpha/app"
+  # A proposal merged with squash: its branch was deleted from the remote and its
+  # commits are not in the main one. Blocking on this would be noise.
+  git -C "$app" switch -q -c proposal
+  git -C "$app" commit -q --allow-empty -m "change"
+  git -C "$app" push -q -u origin proposal 2>/dev/null
   git -C "$app" switch -q main
-  git -C "$app" push -q origin --delete propuesta 2>/dev/null
+  git -C "$app" push -q origin --delete proposal 2>/dev/null
   git -C "$app" fetch -q --prune
 
-  assert_exit 0 "una rama fusionada no atrapa nada" crux sync --leave
+  assert_exit 0 "a merged branch traps nothing" crux sync --leave
   teardown
 }
 
-test_sync_leave_pasa_si_todo_esta_subido() {
+test_sync_leave_passes_if_everything_is_pushed() {
   sandbox >/dev/null
-  _dos_maquinas
+  _two_machines
 
   local out
   out="$(crux sync --leave 2>&1)"
-  assert_contains "$out" "nada atrapado" "lo dice en claro"
-  assert_exit 0 "y sale bien" crux sync --leave
+  assert_contains "$out" "nothing trapped" "it says so plainly"
+  assert_exit 0 "and it exits fine" crux sync --leave
   teardown
 }
 
-test_sync_hook_calla_si_todo_esta_al_dia_y_no_repite() {
+test_sync_hook_stays_quiet_if_up_to_date_and_does_not_repeat() {
   sandbox >/dev/null
-  _dos_maquinas
+  _two_machines
   mkdir -p "$SB/home"
 
   local out
   out="$(HOME="$SB/home" crux sync --hook < /dev/null 2>&1)"
-  assert_eq "" "$out" "sin novedades no mete nada en el contexto"
+  assert_eq "" "$out" "with no news it puts nothing in the context"
 
-  _trabajo_en_la_otra hecho-alli
+  _work_on_the_other done-there
   out="$(HOME="$SB/home" crux sync --hook < /dev/null 2>&1)"
-  assert_eq "" "$out" "dentro del intervalo no vuelve a sincronizar"
+  assert_eq "" "$out" "within the interval it does not sync again"
 
   out="$(HOME="$SB/home" CRUX_SYNC_EVERY_MIN=0 crux sync --hook < /dev/null 2>&1)"
-  assert_contains "$out" "1 commit nuevo" "pasado el intervalo trae lo nuevo y lo cuenta"
+  assert_contains "$out" "1 new commit" "past the interval it brings what is new and says so"
   teardown
 }
 
-test_hooks_install_engancha_la_sincronizacion() {
+test_hooks_install_hooks_the_sync() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
   ( cd "$SB" && crux hooks install ) >/dev/null 2>&1
 
-  assert_contains "$(cat "$CLAUDE_SETTINGS")" "session-sync.sh" "install engancha el hook de inicio de sesión"
-  assert_contains "$(cat "$CLAUDE_SETTINGS")" "SessionStart" "en el evento de inicio"
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "session-sync.sh" "install hooks the session start hook"
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "SessionStart" "on the start event"
   ( cd "$SB" && crux hooks remove ) >/dev/null 2>&1
-  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "session-sync" "y remove lo retira"
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "session-sync" "and remove takes it off"
   teardown
 }
 
-test_sync_hook_no_repite_un_remoto_que_ya_no_existe() {
+test_sync_hook_does_not_repeat_a_remote_that_no_longer_exists() {
   sandbox >/dev/null
-  _dos_maquinas
+  _two_machines
   mkdir -p "$SB/home" "$CRUX_PROJECTS_DIR/beta"
-  git init -q "$CRUX_PROJECTS_DIR/beta/huerfano"
-  git -C "$CRUX_PROJECTS_DIR/beta/huerfano" remote add origin "$SB/no-existe.git"
+  git init -q "$CRUX_PROJECTS_DIR/beta/orphan"
+  git -C "$CRUX_PROJECTS_DIR/beta/orphan" remote add origin "$SB/does-not-exist.git"
 
   local out
   out="$(HOME="$SB/home" crux sync --hook < /dev/null 2>&1)"
-  assert_eq "" "$out" "un remoto borrado no se anuncia en cada sesión"
+  assert_eq "" "$out" "a deleted remote is not announced in every session"
   out="$(crux sync 2>&1)"
-  assert_contains "$out" "beta/huerfano" "pero a mano sí se lista"
+  assert_contains "$out" "beta/orphan" "but by hand it is listed"
   teardown
 }
 
-test_sync_no_trae_proyectos_que_la_maquina_no_tiene() {
+test_sync_does_not_bring_projects_the_machine_does_not_have() {
   sandbox >/dev/null
-  _dos_maquinas
-  # Un gh con sesión que anuncia un proyecto con contrato. Cada máquina tiene
-  # los suyos: sync pone al día lo que hay, no clona lo que no está.
-  _maquina_lista
-  _gh_falso "otro-docs" "otro"
+  _two_machines
+  # A gh with a session that announces a project with a contract. Each machine
+  # has its own: sync brings up to date what is there, it does not clone what is not.
+  _ready_machine
+  _fake_gh "other-docs" "other"
 
   crux sync >/dev/null 2>&1
-  assert_no_file "$CRUX_PROJECTS_DIR/otro" "un proyecto del remoto que no está aquí se queda fuera"
+  assert_no_file "$CRUX_PROJECTS_DIR/other" "a project on the remote that is not here stays out"
   teardown
 }
 
-test_sync_leave_ve_un_remoto_que_ya_no_existe() {
+test_sync_leave_sees_a_remote_that_no_longer_exists() {
   sandbox >/dev/null
-  _dos_maquinas
-  # Con el remoto borrado, las referencias locales dicen que todo está subido.
-  mv "$SB/remoto.git" "$SB/remoto-borrado.git"
+  _two_machines
+  # With the remote deleted, the local references say everything is pushed.
+  mv "$SB/remote.git" "$SB/remote-deleted.git"
 
   local out rc
   out="$(crux sync --leave 2>&1)"; rc=$?
-  assert_contains "$out" "su remoto ya no existe" "lo dice"
-  assert_eq 1 "$rc" "y no deja irse creyendo que está a salvo"
+  assert_contains "$out" "its remote no longer exists" "it says so"
+  assert_eq 1 "$rc" "and it does not let you leave believing it is safe"
   teardown
 }
 
-test_sync_leave_ve_commits_con_head_separado() {
+test_sync_leave_sees_commits_on_a_detached_head() {
   sandbox >/dev/null
-  _dos_maquinas
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" checkout -q --detach
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" commit -q --allow-empty -m "fuera de toda rama"
+  _two_machines
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" checkout -q --detach
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" commit -q --allow-empty -m "outside any branch"
 
   local out rc
   out="$(crux sync --leave 2>&1)"; rc=$?
-  assert_contains "$out" "HEAD separado" "el commit suelto sale"
-  assert_eq 1 "$rc" "y bloquea"
+  assert_contains "$out" "detached HEAD" "the loose commit shows up"
+  assert_eq 1 "$rc" "and it blocks"
   teardown
 }
 
-test_sync_avanza_tambien_las_ramas_que_no_estan_en_uso() {
+test_sync_also_advances_branches_that_are_not_in_use() {
   sandbox >/dev/null
-  _dos_maquinas
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" switch -q -c trabajo
-  _trabajo_en_la_otra hecho-alli
+  _two_machines
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" switch -q -c work
+  _work_on_the_other done-there
 
   local out
   out="$(crux sync 2>&1)"
-  assert_eq 0 "$(git -C "$CRUX_PROJECTS_DIR/alfa/app" rev-list --count main..origin/main)" \
-    "main queda al día aunque se esté en otra rama"
-  assert_contains "$out" "main, 1 commit nuevo" "y lo cuenta"
+  assert_eq 0 "$(git -C "$CRUX_PROJECTS_DIR/alpha/app" rev-list --count main..origin/main)" \
+    "main is up to date even when on another branch"
+  assert_contains "$out" "main, 1 new commit" "and says so"
   teardown
 }
 
-test_sync_dos_a_la_vez_no_se_pisan() {
+test_sync_two_at_once_do_not_step_on_each_other() {
   sandbox >/dev/null
-  _dos_maquinas
-  _trabajo_en_la_otra hecho-alli
-  # Otra sincronización en marcha, representada por su candado. Lanzarlas de
-  # verdad en paralelo solo choca a veces, y un test que falla a veces no sirve.
+  _two_machines
+  _work_on_the_other done-there
+  # Another sync running, represented by its lock. Launching them for real in
+  # parallel only clashes sometimes, and a test that sometimes fails is useless.
   mkdir -p "$CRUX_STATE_DIR/sync.lock"
 
   local out
   out="$(HOME="$SB" CRUX_SYNC_EVERY_MIN=0 crux sync --hook < /dev/null 2>&1)"
-  assert_eq "" "$out" "el hook no se mete si ya hay una en marcha"
-  assert_no_file "$CRUX_PROJECTS_DIR/alfa/app/hecho-alli" "ni toca nada"
+  assert_eq "" "$out" "the hook does not step in if one is already running"
+  assert_no_file "$CRUX_PROJECTS_DIR/alpha/app/done-there" "nor touches anything"
 
   ( sleep 2; rmdir "$CRUX_STATE_DIR/sync.lock" ) &
   out="$(crux sync 2>&1)"
   wait
-  assert_contains "$out" "otra sincronización en marcha" "a mano, espera y lo dice"
-  assert_file "$CRUX_PROJECTS_DIR/alfa/app/hecho-alli" "y al quedar libre sincroniza"
+  assert_contains "$out" "another sync is running" "by hand, it waits and says so"
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app/done-there" "and when it is free it syncs"
   teardown
 }
 
-test_sync_dice_si_un_contrato_no_se_puede_leer() {
+test_sync_says_if_a_contract_cannot_be_read() {
   sandbox >/dev/null
-  _dos_maquinas
-  mkdir -p "$CRUX_PROJECTS_DIR/alfa/alfa-docs"
-  printf '{"crux":"0.60.0","repos":["app","nue' > "$CRUX_PROJECTS_DIR/alfa/alfa-docs/crux.json"
+  _two_machines
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha/alpha-docs"
+  printf '{"crux":"0.60.0","repos":["app","nue' > "$CRUX_PROJECTS_DIR/alpha/alpha-docs/crux.json"
 
   local out
   out="$(crux sync 2>&1)"
-  assert_contains "$out" "crux.json ilegible" "un contrato roto no se toma por uno sin nada que traer"
+  assert_contains "$out" "crux.json unreadable" "a broken contract is not taken for one with nothing to bring"
   teardown
 }
 
-test_sync_un_remoto_secundario_caido_no_deja_el_repo_sin_respuesta() {
+test_sync_a_down_secondary_remote_does_not_leave_the_repo_unanswered() {
   sandbox >/dev/null
-  _dos_maquinas
-  git -C "$CRUX_PROJECTS_DIR/alfa/app" remote add viejo "$SB/no-existe.git"
-  _trabajo_en_la_otra hecho-alli
+  _two_machines
+  git -C "$CRUX_PROJECTS_DIR/alpha/app" remote add old "$SB/does-not-exist.git"
+  _work_on_the_other done-there
 
   local out
   out="$(crux sync 2>&1)"
-  assert_not_contains "$out" "sin respuesta" "origin respondió: el repo está al día"
-  assert_file "$CRUX_PROJECTS_DIR/alfa/app/hecho-alli" "y avanza"
+  assert_not_contains "$out" "no answer" "origin answered: the repo is up to date"
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app/done-there" "and it advances"
   teardown
 }
 
-test_sync_dice_por_que_no_puede_avanzar() {
+test_sync_says_why_it_cannot_advance() {
   sandbox >/dev/null
-  _dos_maquinas
-  _trabajo_en_la_otra choca
-  echo "mio" > "$CRUX_PROJECTS_DIR/alfa/app/choca"
+  _two_machines
+  _work_on_the_other clashes
+  echo "mine" > "$CRUX_PROJECTS_DIR/alpha/app/clashes"
 
   local out
   out="$(crux sync 2>&1)"
-  assert_contains "$out" "choca con uno que llega" "nombra la causa"
-  assert_eq "mio" "$(cat "$CRUX_PROJECTS_DIR/alfa/app/choca")" "y no pisa el fichero de aquí"
+  assert_contains "$out" "clashes with one that is arriving" "it names the cause"
+  assert_eq "mine" "$(cat "$CRUX_PROJECTS_DIR/alpha/app/clashes")" "and does not overwrite the local file"
   teardown
 }

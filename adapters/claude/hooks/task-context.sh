@@ -1,52 +1,51 @@
 #!/usr/bin/env bash
-# Hook de Claude Code (UserPromptSubmit).
+# Claude Code hook (UserPromptSubmit).
 #
-# Dentro de un espacio de trabajo, recuerda en qué punto quedó su tarea: estado,
-# pasos y siguiente paso, con la ruta del registro. Una vez por sesión y por
-# espacio.
+# Inside a workspace, reminds where its task was left: status, steps and next
+# step, with the path of the record. Once per session and per workspace.
 #
-# Existe porque retomar dependía de la conversación. Una compactación, un
-# reinicio o volver al día siguiente perdían la lista de pasos y lo comprobado,
-# y había que reconstruirlo. La instrucción de "lee el registro al retomar"
-# compite por atención; un hook llega solo. Ver ADR-012.
+# It exists because resuming depended on the conversation. A compaction, a
+# restart or coming back the next day lost the list of steps and what was
+# checked, and it had to be rebuilt. The instruction "read the record when
+# resuming" competes for attention; a hook arrives on its own. See ADR-012.
 
 set -u
 
-entrada="$(cat 2>/dev/null || true)"
-silencio() { exit 0; }
+entry="$(cat 2>/dev/null || true)"
+silence() { exit 0; }
 
-aqui="$(git rev-parse --show-toplevel 2>/dev/null)" || silencio
-[[ "$aqui" == *-ws-* ]] || silencio
+here="$(git rev-parse --show-toplevel 2>/dev/null)" || silence
+[[ "$here" == *-ws-* ]] || silence
 
 kernel="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)"
-[[ -f "$kernel/lib/common.sh" && -f "$kernel/lib/task.mjs" ]] || silencio
+[[ -f "$kernel/lib/common.sh" && -f "$kernel/lib/task.mjs" ]] || silence
 # shellcheck source=../../../lib/common.sh
 source "$kernel/lib/common.sh"
 
-registro="$(task_file_for_path "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}" "$aqui" 2>/dev/null)" || silencio
-[[ -f "$registro" ]] || silencio
+task_record="$(task_file_for_path "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}" "$here" 2>/dev/null)" || silence
+[[ -f "$task_record" ]] || silence
 
-sesion="$(printf '%s' "$entrada" | node -e '
+session="$(printf '%s' "$entry" | node -e '
   let s = "";
   process.stdin.on("data", (d) => (s += d));
   process.stdin.on("end", () => {
     try { process.stdout.write(String(JSON.parse(s).session_id || "")); } catch { }
   });
 ' 2>/dev/null || true)"
-[[ -n "$sesion" ]] || sesion="$PPID"
+[[ -n "$session" ]] || session="$PPID"
 
-# La marca va a ~/.crux/state y no a /tmp: el nombre llevaba dentro la ruta
-# del repo, o sea el cliente y la tarea, en un directorio legible por
-# cualquiera en la maquina y sin que nadie las limpiara nunca.
-estado="$HOME/.crux/state"
-( umask 077 && mkdir -p "$estado" ) 2>/dev/null || true
-marca="$estado/task-context-$(printf '%s' "$sesion-$aqui" | \
+# The marker goes to ~/.crux/state and not to /tmp: the name carried the repo
+# path inside, that is the client and the task, in a directory readable by
+# anyone on the machine and that nobody ever cleaned.
+status="$HOME/.crux/state"
+( umask 077 && mkdir -p "$status" ) 2>/dev/null || true
+marker="$status/task-context-$(printf '%s' "$session-$here" | \
   cksum | tr -d ' ' | tr -c 'A-Za-z0-9' '_')"
-find "$estado" -name 'task-context-*' -type f -mtime +2 -delete 2>/dev/null || true
-[[ -e "$marca" ]] && silencio
+find "$status" -name 'task-context-*' -type f -mtime +2 -delete 2>/dev/null || true
+[[ -e "$marker" ]] && silence
 
-IFS=$'\x1f' read -r tarea estado pasos siguiente < <(node "$kernel/lib/task.mjs" summary --file "$registro" 2>/dev/null) || silencio
-: > "$marca"
+IFS=$'\x1f' read -r task status steps next_step < <(node "$kernel/lib/task.mjs" summary --file "$task_record" 2>/dev/null) || silence
+: > "$marker"
 
-echo "Tarea '$tarea' · $estado${pasos:+ · pasos $pasos}${siguiente:+ · siguiente: $siguiente}"
-echo "Registro: $registro — léelo antes de seguir; se actualiza con 'crux task'."
+echo "Task '$task' · $status${steps:+ · steps $steps}${next_step:+ · next: $next_step}"
+echo "Record: $task_record — read it before continuing; it is updated with 'crux task'."

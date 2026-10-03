@@ -1,56 +1,57 @@
 ---
 name: share-local
-description: Abrir el entorno local a alguien de fuera con un túnel público, sin desplegar nada. Elige la vía disponible, arregla las direcciones absolutas de la aplicación para que la página no llegue rota, comprueba que se ve de verdad desde fuera y deja el túnel cerrado al terminar. Usa cuando haya que enseñar un trabajo en curso a un cliente o a un compañero, revisar un diseño entre varios, probar en un móvil real, o recibir una llamada de un servicio externo que necesita una dirección pública.
+description: Open the local environment to someone outside with a public tunnel, without deploying anything. Picks the available route, fixes the application's absolute addresses so the page does not arrive broken, checks that it really renders from outside and leaves the tunnel closed when finished. Use when you need to show work in progress to a client or a colleague, review a design among several people, test on a real phone, or receive a call from an external service that needs a public address.
 ---
 
 # share-local
 
-Publica lo que corre en tu máquina bajo una dirección de internet, sin
-desplegar. Los detalles de cada problema y el supervisor completo están en
-`<directorio-de-esta-skill>/references/por-que.md`.
+Publishes what runs on your machine under an internet address, without
+deploying. The details of each problem and the full supervisor are in
+`<this-skill-directory>/references/por-que.md`.
 
-**No es un despliegue de pruebas permanente:** el túnel dura lo que la sesión y
-su dirección cambia. Para algo estable, despliega.
+**It is not a permanent test deployment:** the tunnel lasts as long as the
+session and its address changes. For something stable, deploy.
 
-## Antes de abrir nada
+## Before opening anything
 
-El túnel expone **todo lo que sirve ese puerto**. Comprueba en voz alta: ¿hay un
-panel de administración sin contraseña? ¿la base de datos local tiene datos de
-personas? ¿se sirven claves o ficheros de entorno? Si algo es que sí, ciérralo
-antes o no abras el túnel. Una dirección aleatoria no es seguridad.
+The tunnel exposes **everything that port serves**. Check out loud: is there an
+admin panel without a password? does the local database hold personal data? are
+keys or environment files being served? If any answer is yes, close it first or
+do not open the tunnel. A random address is not security.
 
-## Elegir la vía
+## Choosing the route
 
-**1. cloudflared**, sin instalar nada:
+**1. cloudflared**, without installing anything:
 
 ```bash
-npx --yes cloudflared tunnel --url http://localhost:<puerto>
+npx --yes cloudflared tunnel --url http://localhost:<port>
 ```
 
-La dirección aguanta la sesión, pero a veces tarda en resolver o no llega a
-hacerlo (`NXDOMAIN`). Comprueba que responde antes de repartir el enlace.
+The address lasts the session, but sometimes it takes a while to resolve or
+never does (`NXDOMAIN`). Check that it responds before handing out the link.
 
-**2. SSH puro**, si la primera no resuelve. Responde en segundos; la dirección
-rota:
+**2. Plain SSH**, if the first does not resolve. It responds in seconds; the
+address rotates:
 
 ```bash
 ssh -tt -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 \
-    -o ExitOnForwardFailure=yes -R 80:localhost:<puerto> nokey@localhost.run
+    -o ExitOnForwardFailure=yes -R 80:localhost:<port> nokey@localhost.run
 ```
 
-`-tt` es obligatorio (sin él no imprime la dirección) y el usuario es `nokey@`
-(con tu clave hace falta haberla registrado). No instales un binario descargado
-solo para esto.
+`-tt` is mandatory (without it the address is not printed) and the user is
+`nokey@` (with your own key you must have registered it). Do not install a
+downloaded binary just for this.
 
-## Las direcciones absolutas
+## Absolute addresses
 
-Si la aplicación guarda su propia dirección como `localhost`, desde fuera llega
-una página en blanco o sin estilos mientras tú la ves bien. Está en sitios como
-`WP_HOME`/`WP_SITEURL` en WordPress, la variable de URL pública de un framework
-de JavaScript, o un `base_url`/`app_url`.
+If the application stores its own address as `localhost`, from outside a blank
+or unstyled page arrives while you see it fine. It lives in places like
+`WP_HOME`/`WP_SITEURL` in WordPress, the public URL variable of a JavaScript
+framework, or a `base_url`/`app_url`.
 
-La dirección se deduce de la petición cuando no es local, y la conexión se
-marca como segura (el túnel cifra hacia fuera y te habla por HTTP):
+The address is deduced from the request when it is not local, and the
+connection is marked as secure (the tunnel encrypts outwards and talks to you
+over HTTP):
 
 ```php
 $host = $_SERVER['HTTP_HOST'] ?? '';
@@ -62,51 +63,51 @@ if (!$es_local) {
 }
 ```
 
-## Comprobar que se ve
+## Check that it renders
 
-Que el proceso siga vivo no significa nada. Pide la página por la dirección
-pública:
+That the process is still alive means nothing. Request the page through the
+public address:
 
 ```bash
 curl -sS -o /tmp/tunel.html -w "%{http_code} · %{size_download} bytes\n" \
-     -m 45 https://<direccion-del-tunel>/<ruta>
-grep -c "localhost" /tmp/tunel.html     # 0, o casi
+     -m 45 https://<tunnel-address>/<path>
+grep -c "localhost" /tmp/tunel.html     # 0, or almost
 ```
 
-Y ábrela con el ancho de un móvil. Las referencias a `localhost` guardadas en
-base de datos (favicon, canónica) suelen ser cosméticas.
+And open it at a phone's width. References to `localhost` stored in the
+database (favicon, canonical) are usually cosmetic.
 
-## Si tiene que durar
+## If it has to last
 
-Supervísalo: un bucle que reabre la conexión cuando cae, con espera creciente,
-desacoplado de la sesión (`setsid`) y que **relee la dirección mientras la
-conexión vive** y escribe la vigente en un fichero (la última que aparezca en la
-salida, no la primera). La dirección puede cambiar sin que la conexión se caiga.
-El supervisor de ejemplo está en la referencia.
+Supervise it: a loop that reopens the connection when it drops, with growing
+back-off, decoupled from the session (`setsid`) and that **rereads the address
+while the connection lives** and writes the current one to a file (the last one
+that appears in the output, not the first). The address can change without the
+connection dropping. The example supervisor is in the reference.
 
-Cada reconexión trae una dirección nueva. No prometas una dirección estable sin
-haber registrado antes la clave en el servicio, un túnel con dominio propio o
-una redirección contra un servidor tuyo.
+Each reconnection brings a new address. Do not promise a stable address without
+having registered the key with the service first, a tunnel with its own domain
+or a redirect against a server of yours.
 
-## Al terminar
+## When finished
 
-Cierra el túnel **por su PID**. Nunca con `pkill` ni `killall`: matan por nombre
-otros procesos, y el guardia de comandos destructivos los bloquea.
+Close the tunnel **by its PID**. Never with `pkill` or `killall`: they kill other
+processes by name, and the destructive-command guard blocks them.
 
 ```bash
-pgrep -af "localhost.run|cloudflared"   # localiza el PID
+pgrep -af "localhost.run|cloudflared"   # locates the PID
 kill <PID>
 ```
 
-Si lo lanzaste en segundo plano en una sesión de agente, no se cierra solo al
-terminar la conversación.
+If you launched it in the background in an agent session, it does not close by
+itself when the conversation ends.
 
-## Señales de que algo va mal
+## Signs that something is wrong
 
-| Lo que ves | Lo que suele ser |
+| What you see | What it usually is |
 |---|---|
-| Túnel conectado pero sin dirección | Falta `-tt` |
-| `Permission denied (publickey)` tras el saludo | Tu clave no está registrada; usa `nokey@` |
-| Página en blanco desde fuera, bien desde dentro | Direcciones absolutas a `localhost` |
-| Estilos ausentes y avisos de contenido mixto | La aplicación no sabe que la conexión es HTTPS |
-| Lento y a ratos caído | Límite del servicio gratuito; para algo sostenido, despliega |
+| Tunnel connected but no address | Missing `-tt` |
+| `Permission denied (publickey)` after the greeting | Your key is not registered; use `nokey@` |
+| Blank page from outside, fine from inside | Absolute addresses to `localhost` |
+| Styles missing and mixed-content warnings | The application does not know the connection is HTTPS |
+| Slow and intermittently down | Free-service limit; for something sustained, deploy |

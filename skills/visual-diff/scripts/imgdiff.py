@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Mide cuánto se desvía un render respecto a una referencia visual.
+"""Measures how far a render deviates from a visual reference.
 
-    imgdiff.py <actual> <referencia> [opciones]
+    imgdiff.py <actual> <reference> [options]
 
-Acepta PDF (se rasteriza con pdftoppm) o imágenes. Produce, en el directorio
-de salida: report.md ordenado por desviación descendente, scores.json y una
-superposición por página con el actual en rojo y la referencia en azul.
+Accepts PDF (rasterized with pdftoppm) or images. Produces, in the output
+directory: report.md sorted by descending deviation, scores.json and a
+per-page overlay with the actual in red and the reference in blue.
 
-El desenfoque previo es lo que hace utilizable la comparación entre
-renderizadores distintos: sin él, el antialias domina la señal y todo parece
-diferente. Con él sobreviven los defectos reales de posición, tamaño y color.
+The prior blur is what makes comparison across different renderers usable:
+without it antialiasing dominates the signal and everything looks different.
+With it the real defects of position, size and color survive.
 """
 
 import argparse
@@ -33,7 +33,7 @@ def rasterize(path: Path, dpi: int, workdir: Path, tag: str) -> list[Path]:
     )
     pages = sorted(workdir.glob(f"{tag}-*.png"))
     if not pages:
-        sys.exit(f"pdftoppm no produjo páginas para {path}")
+        sys.exit(f"pdftoppm produced no pages for {path}")
     return pages
 
 
@@ -55,8 +55,9 @@ def cell_scores(a: np.ndarray, b: np.ndarray, cols: int, rows: int,
             y0, y1 = r * h // rows, (r + 1) * h // rows
             x0, x1 = c * w // cols, (c + 1) * w // cols
             ca, cb = a[y0:y1, x0:x1], b[y0:y1, x0:x1]
-            # Una celda casi blanca en ambas no aporta señal: son los márgenes,
-            # y sin este filtro inflan la media y esconden los defectos reales.
+            # A cell almost white in both carries no signal: they are margins,
+            # and without this filter they inflate the mean and hide the real
+            # defects.
             if ca.mean() > white_skip and cb.mean() > white_skip:
                 continue
             out.append({
@@ -68,10 +69,10 @@ def cell_scores(a: np.ndarray, b: np.ndarray, cols: int, rows: int,
 
 
 def label_for(cell: dict, blocks: list[dict], w: int, h: int) -> str | None:
-    """Nombra la celda con el bloque semántico que la contiene.
+    """Names the cell with the semantic block that contains it.
 
-    Un informe que dice "la cabecera está desplazada" es accionable; uno que
-    dice "celda 3,7" obliga a ir a mirar el PNG para entender qué pasa.
+    A report that says "the header is shifted" is actionable; one that says
+    "cell 3,7" forces you to go look at the PNG to understand what is happening.
     """
     cx = (cell["box"][0] + cell["box"][2]) / 2 / w
     cy = (cell["box"][1] + cell["box"][3]) / 2 / h
@@ -83,9 +84,9 @@ def label_for(cell: dict, blocks: list[dict], w: int, h: int) -> str | None:
 
 
 def overlay(a: np.ndarray, b: np.ndarray) -> Image.Image:
-    """Superpone ambas: lo que coincide sale gris neutro, y el desalineo
-    aparece como fantasma de color — azul donde solo hay contenido en el
-    actual, cálido donde solo lo hay en la referencia."""
+    """Overlays both: what matches comes out neutral grey, and misalignment
+    shows as a colored ghost: blue where only the actual has content, warm
+    where only the reference does."""
     ga = a.mean(axis=2)
     gb = b.mean(axis=2)
     rgb = np.stack([255 - (255 - ga) , 255 - ((255 - ga) + (255 - gb)) / 2, 255 - (255 - gb)], axis=2)
@@ -97,12 +98,12 @@ def main() -> int:
     ap.add_argument("actual")
     ap.add_argument("reference")
     ap.add_argument("--out", default="diff-out")
-    ap.add_argument("--grid", default="12x18", help="columnas x filas")
+    ap.add_argument("--grid", default="12x18", help="columns x rows")
     ap.add_argument("--dpi", type=int, default=150)
     ap.add_argument("--blur", type=float, default=1.5)
-    ap.add_argument("--thresh", type=float, default=10.0, help="error de celda que se reporta")
+    ap.add_argument("--thresh", type=float, default=10.0, help="cell error that gets reported")
     ap.add_argument("--white-skip", type=float, default=250.0)
-    ap.add_argument("--blocks", help="JSON con bloques semánticos en coordenadas 0-1")
+    ap.add_argument("--blocks", help="JSON with semantic blocks in 0-1 coordinates")
     args = ap.parse_args()
 
     cols, rows = (int(n) for n in args.grid.lower().split("x"))
@@ -117,7 +118,7 @@ def main() -> int:
         pages_b = rasterize(Path(args.reference), args.dpi, work, "b")
 
         if len(pages_a) != len(pages_b):
-            print(f"aviso: {len(pages_a)} páginas frente a {len(pages_b)}; se comparan las comunes")
+            print(f"warning: {len(pages_a)} pages versus {len(pages_b)}; comparing the common ones")
 
         results = []
         for i, (pa, pb) in enumerate(zip(pages_a, pages_b), start=1):
@@ -140,20 +141,20 @@ def main() -> int:
 
     (outdir / "scores.json").write_text(json.dumps(results, indent=2) + "\n")
 
-    lines = ["# Diff de fidelidad", ""]
-    lines += [f"- actual: `{args.actual}`", f"- referencia: `{args.reference}`",
-              f"- rejilla {cols}x{rows} · {args.dpi} dpi · blur {args.blur} · umbral {args.thresh}", ""]
+    lines = ["# Fidelity diff", ""]
+    lines += [f"- actual: `{args.actual}`", f"- reference: `{args.reference}`",
+              f"- grid {cols}x{rows} · {args.dpi} dpi · blur {args.blur} · threshold {args.thresh}", ""]
 
     worst_overall = []
     for page in results:
         over = [c for c in page["cells"] if c["error"] >= args.thresh]
-        lines.append(f"## Página {page['page']} — error medio {page['mean_error']:.2f}")
+        lines.append(f"## Page {page['page']} — mean error {page['mean_error']:.2f}")
         lines.append("")
         if not over:
-            lines += ["Sin celdas por encima del umbral.", ""]
+            lines += ["No cells above the threshold.", ""]
             continue
-        lines.append("| error | zona | celda |")
-        lines.append("| ----- | ---- | ----- |")
+        lines.append("| error | area | cell |")
+        lines.append("| ----- | ---- | ---- |")
         for c in over[:20]:
             lines.append(f"| {c['error']:.1f} | {c['label'] or '—'} | {c['col']},{c['row']} |")
         lines.append("")
@@ -161,14 +162,14 @@ def main() -> int:
 
     if worst_overall:
         worst_overall.sort(reverse=True)
-        lines += ["## Lo peor, en orden", ""]
+        lines += ["## The worst, in order", ""]
         for err, page, label in worst_overall[:10]:
-            lines.append(f"- {err:.1f} — página {page}, {label or 'zona sin nombre'}")
+            lines.append(f"- {err:.1f} — page {page}, {label or 'unnamed area'}")
         lines.append("")
 
     (outdir / "report.md").write_text("\n".join(lines))
     print("\n".join(lines[:40]))
-    print(f"\nsalida completa en {outdir}/")
+    print(f"\nfull output in {outdir}/")
     return 1 if worst_overall else 0
 
 

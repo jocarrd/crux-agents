@@ -1,23 +1,20 @@
-# Por qué se lee así
+# Why it is read this way
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## Los gotchas, con su porqué
+## The gotchas, with their why
 
-- **El extractor de texto plano falla en silencio con los escaneados.** Devuelve
-  un fichero vacío y código de salida cero, así que un agente con prisa concluye
-  "el documento no dice nada" y sigue adelante. La herramienta de referencia, en
-  cambio, falla con código distinto de cero y explica que hace falta OCR. Es la
-  razón principal para preferirla.
-- **Un fichero puede estar vacío de verdad y no ser culpa de la conversión.**
-  Antes de acusar a la herramienta, mira dentro: las presentaciones exportadas
-  por algunas suites salen sin ninguna diapositiva. Comprueba el original antes
-  de buscar otra herramienta.
-- **La primera ejecución descarga el paquete.** Cuenta unos segundos y unos
-  megas la primera vez; después queda en caché.
-- **El CSV no tiene firma que lo identifique.** Si el contenido llega por
-  entrada estándar, o el nombre no acaba en `.csv`, hay que declarar el formato
-  a mano.
-- **Los formatos de texto se procesan en local.** El OCR de escaneados, no: eso
-  es un servicio de pago del fabricante. No lo asumas disponible.
-
+- **The plain-text extractor fails silently with scans.** It returns an empty
+  file and exit code zero, so an agent in a hurry concludes "the document says
+  nothing" and carries on. The reference tool, by contrast, fails with a non-zero
+  code and explains that OCR is needed. It is the main reason to prefer it.
+- **A file can be genuinely empty and not be the conversion's fault.** Before
+  accusing the tool, look inside: presentations exported by some suites come out
+  with no slides at all. Check the original before looking for another tool.
+- **The first run downloads the package.** Count a few seconds and a few
+  megabytes the first time; afterwards it stays cached.
+- **CSV has no signature that identifies it.** If the content arrives via
+  standard input, or the name does not end in `.csv`, the format has to be
+  declared by hand.
+- **Text formats are processed locally.** OCR of scans is not: that is a paid
+  service from the vendor. Do not assume it is available.

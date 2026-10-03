@@ -1,56 +1,55 @@
-# Por qué el plan es así
+# Why the plan works this way
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## Un plan se escribe para pararlo
+## A plan is written to be stopped
 
-Un plan que dice "voy a cambiar el formato de la clave de caché" se rechaza en
-cinco segundos con "no, eso rompe las claves existentes, usa un prefijo
-versionado". El mismo arreglo después de escribir el código es un diff que
-revisar y probablemente revertir.
+A plan that says "I am going to change the cache key format" is rejected in five
+seconds with "no, that breaks existing keys, use a versioned prefix". The same
+fix after writing the code is a diff to review and probably revert.
 
-## La traza
+## The trace
 
-Es la sección que casi nadie escribe y la que hace útil el plan. Quien lee no
-tiene que reconstruir tu razonamiento ni fiarse de él: lo verifica. Y obliga a
-la especificidad: al escribir "comprobé X y resultó Y" descubres las veces que
-en realidad no lo comprobaste.
+It is the section almost nobody writes and the one that makes the plan useful.
+Whoever reads does not have to reconstruct your reasoning or trust it: they
+verify it. And it forces specificity: when writing "I checked X and it turned
+out Y" you discover the times you did not in fact check it.
 
-## El reverso
+## The reverse
 
-Distingue una decisión de ida y vuelta de una de un solo sentido, y por tanto
-cuánto había que pensarla. Un `git revert` baja el listón de la discusión.
+It distinguishes a round-trip decision from a one-way one, and therefore how
+much thought it needed. A `git revert` lowers the bar of the discussion.
 
-## Las alternativas con motivo
+## Alternatives with a reason
 
-Evitan repetir el mismo análisis dentro de tres meses, y permiten que alguien
-diga "ese motivo ya no aplica, reabramos".
+They avoid repeating the same analysis three months from now, and allow someone
+to say "that reason no longer applies, let us reopen".
 
-## Lo que no sé
+## What I do not know
 
-Un plan que finge cubrirlo todo es peor que uno que señala sus huecos: el hueco
-sigue ahí y ahora además está escondido.
+A plan that pretends to cover everything is worse than one that points out its
+gaps: the gap is still there and now it is also hidden.
 
-## La forma
+## The form
 
-Una tabla permite decidir de un vistazo, que es el objetivo. Un diagrama de
-secuencia evita reconstruir el orden de memoria; un grafo enseña de golpe lo que
-no se ve leyendo. El porqué y los riesgos no caben en una tabla sin perder el
-matiz, y tres números no necesitan ejes. Un diagrama transmite lo mismo que la
-prosa a menos coste, cuando hay algo que dibujar.
+A table allows deciding at a glance, which is the goal. A sequence diagram
+avoids reconstructing the order from memory; a graph shows at once what is not
+seen by reading. The why and the risks do not fit in a table without losing the
+nuance, and three numbers do not need axes. A diagram conveys the same as prose
+at lower cost, when there is something to draw.
 
-## Cerrar el plan
+## Closing the plan
 
-Un plan aprobado y ejecutado sin desviaciones es raro. Las desviaciones son
-decisiones tomadas con el código delante y más información que al escribirlo;
-si no quedan escritas, se pierde justo lo que costó descubrir. Es la misma
-regla que la sincronización entre código y documentación, aplicada al documento
-que produjiste tú.
+A plan approved and executed without deviations is rare. The deviations are
+decisions made with the code in front of you and more information than when it
+was written; if they are not written down, exactly what was costly to discover
+is lost. It is the same rule as keeping code and documentation in sync, applied
+to the document you produced yourself.
 
-## Los anti-patrones
+## The anti-patterns
 
-Un flujo de cuatro cajas obvias hace parecer el plan más profundo de lo que es.
-Una lista de pasos no dice nada discutible. La plantilla completa por costumbre
-es el modo de fallo de los RFC: se rellenan secciones que no aportan, sube el
-detalle y la gente deja de leerlos; cinco secciones cortas se leen, doce no. Sin
-la traza, aprobar es confiar, y confiar no es revisar.
+A flow of four obvious boxes makes the plan look deeper than it is. A list of
+steps says nothing debatable. The full template out of habit is the failure mode
+of RFCs: sections that add nothing get filled in, the detail goes up and people
+stop reading them; five short sections get read, twelve do not. Without the
+trace, approving is trusting, and trusting is not reviewing.

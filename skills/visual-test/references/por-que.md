@@ -1,59 +1,59 @@
-# Los casos detrás de cada comprobación
+# The cases behind each check
 
-El procedimiento está en `SKILL.md`. Aquí están los fallos reales que dieron
-origen a cada comprobación.
+The procedure is in `SKILL.md`. Here are the real failures that gave rise to
+each check.
 
-## Por qué playwright-core en una caché
+## Why playwright-core in a cache
 
-Lanza el Chrome del sistema en vez de descargar un navegador, y se instala en un
-directorio de caché junto al script porque ESM resuelve el import relativo al
-fichero.
+It launches the system Chrome instead of downloading a browser, and it is
+installed in a cache directory next to the script because ESM resolves the
+import relative to the file.
 
-## Las cuatro comprobaciones que nadie más hace
+## The four checks nobody else does
 
-Ni el build, ni el typecheck, ni axe ven ninguna de estas.
+Neither the build, nor the typecheck, nor axe sees any of these.
 
-**`invisible`.** Una animación de entrada oculta el elemento y lo revela al
-entrar en pantalla. Si el disparador se pierde (porque el contenido carga solo
-y cambia el alto de la página después de calcular las posiciones), el elemento
-se queda en `opacity: 0` para siempre. El HTML está ahí, el test pasa y el
-usuario no ve nada. Si a un item se le escapa el disparador se nota poco; si es
-una sección entera, es un tramo de página inaccesible. Una diapositiva fuera de
-pantalla en horizontal no intersecta nunca, de ahí excluir los carruseles.
+**`invisible`.** An entrance animation hides the element and reveals it on
+entering the screen. If the trigger is lost (because the content loads on its
+own and changes the page height after the positions are computed), the element
+stays at `opacity: 0` forever. The HTML is there, the test passes and the user
+sees nothing. If one item misses the trigger it is barely noticeable; if it is a
+whole section, it is an inaccessible stretch of the page. An off-screen slide in
+a horizontal carousel never intersects, hence excluding carousels.
 
-**`hydration`.** Un desajuste entre lo que pinta el servidor y el cliente hace
-que el framework tire el HTML y repinte entero. Solo se ve escuchando
-`pageerror` mientras se recorre.
+**`hydration`.** A mismatch between what the server and the client paint makes
+the framework throw away the HTML and repaint everything. It is only seen by
+listening to `pageerror` while walking the page.
 
-**`states`.** axe mide el estado en reposo; un botón puede pasar parado y
-fallar al pasar el ratón. Si solo hay una pestaña activa a la vez, axe
-únicamente ve la seleccionada por defecto.
+**`states`.** axe measures the resting state; a button can pass at rest and fail
+on hover. If only one tab is active at a time, axe only sees the one selected by
+default.
 
-**`rhythm`.** El caso que lo originó: una regla que no suma el aire de dos
-bandas seguidas del mismo fondo, aplicada a una página que pinta su banda con
-una clase propia en vez de declararla, y que pierde el aire justo donde el
-fondo cambia.
+**`rhythm`.** The case that originated it: a rule that does not add up the
+spacing of two consecutive bands of the same background, applied to a page that
+paints its band with its own class instead of declaring it, and that loses the
+spacing exactly where the background changes.
 
-## Por qué `min-width: 0` y no otra cosa
+## Why `min-width: 0` and not something else
 
-El `min-width: auto` por defecto de un flex-item impide encoger, y manda el
-ancho mínimo del contenido. `overflow-x: hidden` en la raíz enmascara el
-problema en esa página y reaparece en cualquier otra.
+The default `min-width: auto` of a flex item prevents shrinking, and the
+content's minimum width rules. `overflow-x: hidden` on the root masks the problem
+on that page and it reappears on any other.
 
-## Los gotchas, con su porqué
+## The gotchas, with their why
 
-- Con islas o carga diferida, un barrido rápido mide el marcado del servidor: el
-  mismo bloque puede dar 4.766 px o 1.463 según haya hidratado o no.
-- Al volver al principio, lo del fondo queda bajo el pliegue y la comprobación
-  de invisibles da un falso positivo.
-- `node script | head` mata el proceso por SIGPIPE antes de que escriba, y
-  acabas comparando contra datos viejos.
-- Un servidor estático no avisa si el puerto ya está ocupado: puedes estar
-  midiendo otra aplicación.
-- Algunos bundlers en desarrollo no recompilan de forma fiable el layout raíz,
-  y medirías el estado anterior.
-- Los errores de carga de chunks dinámicos en el primer render headless pueden
-  disparar el error boundary; el script calienta dos veces para evitarlo.
-- Los decorativos en `position: absolute` dentro de un `overflow: hidden` son
-  falsos positivos; el script ya ignora `absolute` y `fixed`.
-- Un `pkill` por patrón puede llevarse por delante tu propia shell.
+- With islands or lazy loading, a fast sweep measures the server markup: the
+  same block can give 4,766 px or 1,463 depending on whether it has hydrated.
+- On returning to the top, what is at the bottom ends up below the fold and the
+  invisible check gives a false positive.
+- `node script | head` kills the process with SIGPIPE before it writes, and you
+  end up comparing against old data.
+- A static server does not warn if the port is already taken: you may be
+  measuring another application.
+- Some bundlers in development do not reliably recompile the root layout, and
+  you would measure the previous state.
+- Dynamic chunk loading errors on the first headless render can trigger the
+  error boundary; the script warms up twice to avoid it.
+- Decorative elements with `position: absolute` inside an `overflow: hidden` are
+  false positives; the script already ignores `absolute` and `fixed`.
+- A `pkill` by pattern can take your own shell with it.

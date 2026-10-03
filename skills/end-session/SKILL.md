@@ -1,139 +1,140 @@
 ---
 name: end-session
-description: Ritual de cierre de sesión. Revisa lo que pasó en la conversación y promociona a la documentación lo que merezca sobrevivir (decisiones, gotchas, convenciones, notas). Verifica conformidad y drift. Aplica higiene de memoria del agente. Commit y push de lo pendiente. Usa cuando vayas a cerrar el agente o termines trabajo significativo, o cuando el usuario diga "ya está", "vale", "termina", "cierra sesión".
+description: Session closing ritual. Reviews what happened in the conversation and promotes to the documentation whatever deserves to survive (decisions, gotchas, conventions, notes). Verifies conformance and drift. Applies agent-memory hygiene. Commits and pushes whatever is pending. Use when about to close the agent or after finishing significant work, or when the user says "ya está", "vale", "termina", "cierra sesión".
 ---
 
 # end-session
 
-Ritual de cierre bajo el estándar. Garantiza que **nada relevante se pierde**
-cuando termina la sesión.
+Closing ritual under the standard. It guarantees that **nothing relevant is
+lost** when the session ends.
 
-## Cuándo usar
+## When to use
 
-- El usuario está terminando una sesión de trabajo significativa.
-- Dice algo tipo "ya está", "vale", "perfecto", "cierra sesión", "termina".
-- Llevas más de diez turnos de trabajo sin ningún cierre.
-- Antes de cambiar de máquina.
+- The user is finishing a significant work session.
+- They say something like "ya está", "vale", "perfecto", "cierra sesión",
+  "termina".
+- You are more than ten turns of work in with no closing.
+- Before switching machines.
 
-## Cuándo no usar
+## When not to use
 
-- Sesiones cortas de pregunta y respuesta, sin cambios ni decisiones.
-- Cuando el usuario solo pidió información y no hay nada que durabilizar.
-- Si ya se ejecutó este ritual en la misma sesión.
+- Short question-and-answer sessions, with no changes or decisions.
+- When the user only asked for information and there is nothing to make durable.
+- If this ritual was already run in the same session.
 
-## Las cuatro preguntas
+## The four questions
 
-Repasa la sesión y pregúntate, por cada categoría, si ha aparecido algo:
+Go over the session and ask yourself, for each category, whether anything came
+up:
 
-**1. Decisiones que no quedan en el código.**
-Señales: "hemos decidido X", "elegimos Y", acuerdos sobre arquitectura,
-naming o dependencias.
-Destino: `<project>-docs/decisions/index.md` si cruza repos;
-`<project>-docs/repos/<repo>/decisions.md` si afecta a uno solo.
+**1. Decisions that don't stay in the code.**
+Signals: "we decided X", "we chose Y", agreements on architecture, naming or
+dependencies.
+Destination: `<project>-docs/decisions/index.md` if it crosses repos;
+`<project>-docs/repos/<repo>/decisions.md` if it affects only one.
 
-**2. Gotchas o información operativa.**
-Señales: "ojo con X", "esto se rompe si Y", "el header tiene que ser
-exactamente Z", problemas con infraestructura o datos externos.
-Destino: `<project>-docs/operations/<tema>.md`.
+**2. Gotchas or operational information.**
+Signals: "watch out for X", "this breaks if Y", "the header has to be exactly
+Z", problems with infrastructure or external data.
+Destination: `<project>-docs/operations/<topic>.md`.
 
-**3. Convenciones o reglas nuevas.**
-Señales: "siempre usamos X", "nunca hagas Y", patrones que deberían aplicar
-a futuras sesiones.
-Destino: `<project>-docs/conventions/<tema>.md`, o el registro del repo si
-solo aplica a uno.
+**3. New conventions or rules.**
+Signals: "we always use X", "never do Y", patterns that should apply to future
+sessions.
+Destination: `<project>-docs/conventions/<topic>.md`, or the repo's registry if
+it only applies to one.
 
-**4. Preferencias del usuario sobre cómo trabajar.**
-Señales: "prefiero X", "no me gusta Y", correcciones de estilo o de ritmo.
-Destino: la memoria local del agente, tipo `user` o `feedback`. Estas se
-quedan locales por diseño: son sobre la persona, no sobre el proyecto.
+**4. User preferences about how to work.**
+Signals: "I prefer X", "I don't like Y", corrections of style or pace.
+Destination: the agent's local memory, type `user` or `feedback`. These stay
+local by design: they are about the person, not the project.
 
-## Flujo
+## Flow
 
-### 1. Inventario de lo que no está en el remoto
+### 1. Inventory of what is not on the remote
 
 ```bash
 crux sync --leave
 ```
 
-Recorre todos los repos y dice lo que se quedaría solo en esta máquina:
-cambios sin commitear, commits sin subir, ramas que no están en ningún remoto y
-stashes. Si mañana se trabaja desde otro ordenador, lo que salga aquí no estará
-allí.
+It walks all the repos and says what would remain only on this machine:
+uncommitted changes, unpushed commits, branches that are on no remote, and
+stashes. If tomorrow the work is done from another computer, whatever shows up
+here won't be there.
 
-### 2. Higiene de la memoria del agente
+### 2. Agent memory hygiene
 
 ```bash
 crux memory
 ```
 
-Lista las memorias de tipo `project` y `reference` que siguen solo en local, de
-esta sesión y de las anteriores, con el docs repo al que pertenecen. El
-estándar dice que esas van a git: promuévelas (con `/promote-to-docs` o
-directamente) y borra la copia local, incluida su línea en el índice de
-memorias.
+It lists the `project` and `reference` memories that are still only local, from
+this session and earlier ones, with the docs repo they belong to. The standard
+says those go to git: promote them (with `/promote-to-docs` or directly) and
+delete the local copy, including its line in the memory index.
 
-Las que salen sin docs repo son de un ámbito que no es ningún proyecto. Ahí el
-destino lo decides tú: el comando no lo adivina por el nombre del fichero,
-porque acertaría a veces y colocaría documentación en el proyecto equivocado el
-resto.
+The ones that come out without a docs repo belong to a scope that is no project.
+There the destination is your call: the command doesn't guess it from the file
+name, because it would be right some of the time and would put documentation in
+the wrong project the rest.
 
-### 3. Conformidad y drift
+### 3. Conformance and drift
 
 ```bash
 crux doctor
 ```
 
-Verifica el contrato, la estructura, los repos declarados, las reglas del
-perfil y los enlaces markdown. Si aparecen enlaces rotos:
+It verifies the contract, the structure, the declared repos, the profile rules
+and the markdown links. If broken links appear:
 
-- **A ficheros dentro del docs repo**: arréglalos; la doc referenciada se ha
-  movido o renombrado.
-- **A ficheros de un repo hermano**: conviértelos a texto plano en backticks.
-  El estándar prohíbe enlazar fuera del docs repo porque esos enlaces se
-  rompen con cualquier reorganización y terminan mintiendo.
+- **To files inside the docs repo**: fix them; the referenced doc has been moved
+  or renamed.
+- **To files of a sibling repo**: convert them to plain text in backticks. The
+  standard forbids linking outside the docs repo because those links break with
+  any reorganization and end up lying.
 
-### 4. Frontera de las skills, si tocaste alguna
+### 4. Skill boundary, if you touched any
 
-Si en la sesión se creó o cambió una skill, decídelo ahora en caliente:
-¿patrón o adaptador? Es el momento en que se sabe. Cada cierto número de
-cierres, pasa además la revisión completa con `/skill-audit`.
+If a skill was created or changed in the session, decide it now while it is
+fresh: pattern or adapter? This is the moment when it is known. Every so many
+closings, also run the full review with `/skill-audit`.
 
-### 5. Presentar el balance al usuario
+### 5. Present the balance to the user
 
-Un resumen estructurado por las cuatro categorías, con lo encontrado en cada
-una, y confirmación por cada elemento. Si no hay nada, dilo tal cual: sesión
-sin nada que durabilizar.
+A summary structured by the four categories, with what was found in each, and
+confirmation for each item. If there is nothing, say so plainly: a session with
+nothing to make durable.
 
-**El usuario confirma o veta cada elemento.** No se promueve nada
-unilateralmente.
+**The user confirms or vetoes each item.** Nothing is promoted unilaterally.
 
-### 6. Escribir y commitear
+### 6. Write and commit
 
-Un commit por categoría, no uno gigante:
+One commit per category, not one giant one:
 
-- `docs(decisions): ...` para ADRs nuevos
-- `docs(operations): ...` para gotchas
-- `docs(conventions): ...` para convenciones
-- `docs(repos/<repo>): ...` para notas de un repo
+- `docs(decisions): ...` for new ADRs
+- `docs(operations): ...` for gotchas
+- `docs(conventions): ...` for conventions
+- `docs(repos/<repo>): ...` for a repo's notes
 
-Push de cada repo afectado.
+Push each affected repo.
 
-### 7. Reporte final
+### 7. Final report
 
-Qué se escribió y dónde, qué se corrigió, qué repos se pushearon. Si queda
-trabajo sin commitear a propósito, dilo explícitamente en vez de callarlo.
+What was written and where, what was fixed, which repos were pushed. If work is
+left uncommitted on purpose, say so explicitly instead of staying silent.
 
 ## Anti-patterns
 
-- **Promover todo lo que se dijo.** El filtro es: ¿le serviría esto a otra
-  sesión dentro de seis meses? Si no, no es durable.
-- **Promover y no borrar la copia local.** Queda duplicada y divergirá.
-- **Saltarse la verificación.** Es el único momento en que se comprueba
-  proactivamente que la documentación no miente.
-- **Cerrar sin preguntar.** El usuario decide qué sobrevive.
+- **Promoting everything that was said.** The filter is: would this help another
+  session six months from now? If not, it isn't durable.
+- **Promoting and not deleting the local copy.** It stays duplicated and will
+  diverge.
+- **Skipping the verification.** It is the only moment when it is proactively
+  checked that the documentation doesn't lie.
+- **Closing without asking.** The user decides what survives.
 
-## Relacionado
+## Related
 
-- `/promote-to-docs` — promover un elemento suelto en mitad de la sesión
-- `/skill-audit` — revisar si alguna skill nueva merece subir al kernel
-- El estándar completo, en `STANDARD.md` del kernel
+- `/promote-to-docs`: promote a single item in the middle of the session
+- `/skill-audit`: review whether any new skill deserves to move up to the kernel
+- The full standard, in the kernel's `STANDARD.md`

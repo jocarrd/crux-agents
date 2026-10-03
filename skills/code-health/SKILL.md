@@ -1,107 +1,108 @@
 ---
 name: code-health
-description: Medir la salud estructural de un repo y su tendencia: duplicación real, funciones largas con ramas, anidamiento, exports que nadie importa, dependencias sin usar y qué ficheros se remueven más. Guarda una línea base para responder si el código está peor que la última vez. Usa cuando te preguntes por la deuda técnica, si esto se está pudriendo o por dónde empezar a limpiar; antes de planificar un refactor, al heredar un repo, y cuando lleves una temporada generando mucho código con agentes.
+description: Measure a repo's structural health and its trend: real duplication, long functions with branches, nesting, exports nobody imports, unused dependencies and which files churn the most. It saves a baseline to answer whether the code is worse than last time. Use when wondering about technical debt, whether this is rotting, or where to start cleaning up; before planning a refactor, when inheriting a repo, and after a stretch of generating lots of code with agents.
 ---
 
 # code-health
 
-La revisión de código mira **el diff**. Esto mide **el conjunto**, que es lo que
-nadie mira y lo que se erosiona despacio.
+Code review looks at **the diff**. This measures **the whole**, which is what
+nobody looks at and what erodes slowly.
 
-Importa especialmente cuando se trabaja con agentes: el patrón medido en el
-sector es que el código generado dispara la **duplicación**, porque el modelo
-tiende a repetir una solución en vez de buscar la que ya existe en el repo. No
-se nota en ningún diff concreto; se nota tres meses después.
+It matters especially when working with agents: the pattern measured across the
+industry is that generated code sends **duplication** soaring, because the model
+tends to repeat a solution instead of looking for the one that already exists in
+the repo. It isn't noticeable in any specific diff; it is noticeable three months
+later.
 
-## Uso
+## Usage
 
 ```bash
-node <directorio-de-esta-skill>/scripts/health.mjs [ruta] [--save] [--tests] [--top N]
+node <this-skill-directory>/scripts/health.mjs [path] [--save] [--tests] [--top N]
 ```
 
-Sin dependencias: solo necesita ficheros y git. Funciona sobre TypeScript,
-JavaScript, Python, Go, Rust, Java y Ruby.
+No dependencies: it only needs files and git. It works on TypeScript,
+JavaScript, Python, Go, Rust, Java and Ruby.
 
-`--save` guarda la línea base en `.crux-health.json`. **Ese es el punto**: a
-partir de ahí la pregunta deja de ser "¿está bien esto?" —que no tiene respuesta
-sin discutir umbrales— y pasa a ser **"¿está peor que la última vez?"**, que sí
-la tiene.
+`--save` stores the baseline in `.crux-health.json`. **That is the point**: from
+then on the question stops being "is this fine?" (which has no answer without
+arguing over thresholds) and becomes **"is it worse than last time?"**, which
+does.
 
-Los tests quedan fuera por defecto. Su duplicación es en buena parte legítima
-—el mismo montaje repetido— y ahoga la del código de producción, que es la que
-importa. Con `--tests` se incluyen.
+Tests are left out by default. Their duplication is largely legitimate (the same
+setup repeated) and drowns out that of the production code, which is the one that
+matters. With `--tests` they are included.
 
-## Qué mide y cómo interpretarlo
+## What it measures and how to interpret it
 
-**Duplicación.** Bloques de lógica repetidos, normalizados para que no dependan
-del formateo. Solo cuenta lo que tiene lógica de verdad: los imports
-multilínea, los objetos literales y los comentarios están filtrados, porque si
-no dominan el informe y lo vuelven inservible.
+**Duplication.** Repeated blocks of logic, normalized so they don't depend on
+formatting. It only counts what has real logic: multiline imports, object
+literals and comments are filtered out, because otherwise they dominate the
+report and make it useless.
 
-> Un bloque en dos sitios puede ser casualidad. **En cuatro es una función que
-> falta.** Si además está en cuatro ficheros del mismo módulo, la función falta
-> en ese módulo.
+> A block in two places may be chance. **In four it is a missing function.** If
+> in addition it is in four files of the same module, the function is missing in
+> that module.
 
-**Funciones largas y con ramas.** Largo no es lo mismo que complejo: un
-catálogo de datos de 1.500 líneas no es un problema. Por eso solo se reporta lo
-que es largo **y** tiene ramificación. Lo que se busca es "esto hace demasiadas
-cosas", no "esto ocupa mucho".
+**Long functions with branches.** Long is not the same as complex: a 1,500-line
+data catalogue is not a problem. That is why only what is long **and** has
+branching is reported. What is sought is "this does too many things", not "this
+takes up a lot of space".
 
-**Anidamiento.** Profundidad máxima por fichero. A partir de siete niveles, el
-lector deja de sostener el estado mental.
+**Nesting.** Maximum depth per file. Beyond seven levels, the reader stops
+holding the mental state.
 
-**Exports que nadie importa.** Candidatos a código muerto. **Cuidado**: pueden
-ser API pública consumida desde fuera, puntos de entrada o cosas usadas por
-reflexión. Es una lista para revisar, no para borrar.
+**Exports nobody imports.** Dead-code candidates. **Careful**: they may be public
+API consumed from outside, entry points or things used by reflection. It is a
+list to review, not to delete.
 
-**Dependencias declaradas y sin usar.** Suelen ser restos de algo que se probó.
-Cada una es superficie de ataque y tiempo de instalación.
+**Declared and unused dependencies.** They are usually leftovers from something
+that was tried. Each one is attack surface and install time.
 
-**Ficheros más removidos.** Del historial de git. Por sí solo no dice nada
-malo: lo que se toca mucho suele ser el corazón del repo.
+**Most churned files.** From the git history. On its own it says nothing bad:
+what is touched a lot is usually the heart of the repo.
 
-## La lectura que de verdad importa
+## The reading that really matters
 
-Cruza dos listas: **un fichero que aparece a la vez en "más removido" y en "muy
-anidado" o "función larga" es donde el refactor se paga solo.** Se toca mucho y
-cuesta tocarlo. Refactorizar algo complejo que nadie toca es tiempo tirado.
+Cross two lists: **a file that shows up in both "most churned" and "deeply
+nested" or "long function" is where the refactor pays for itself.** It is touched
+a lot and hard to touch. Refactoring something complex that nobody touches is
+wasted time.
 
-## Cadencia
+## Cadence
 
-No es una skill de cada día. Tiene sentido:
+It is not an everyday skill. It makes sense:
 
-- Cada cierto número de semanas, para ver la tendencia.
-- Antes de planificar un refactor, para elegir **dónde** en vez de por
-  intuición.
-- Al heredar un repo, junto con `/repo-map`.
-- Después de una temporada de generar mucho código.
+- Every so many weeks, to see the trend.
+- Before planning a refactor, to choose **where** instead of going by intuition.
+- When inheriting a repo, together with `/repo-map`.
+- After a stretch of generating a lot of code.
 
-Guarda la línea base la primera vez. Sin ella el informe es una foto, y lo
-valioso es la película.
+Save the baseline the first time. Without it the report is a snapshot, and what
+is valuable is the film.
 
-## Qué hacer con el resultado
+## What to do with the result
 
-1. **Duplicación primero.** Es lo más barato de arreglar y lo que más deuda
-   evita: extraer una función es de riesgo bajo y efecto inmediato.
-2. **Después el cruce removido × complejo.** Ahí va el refactor de verdad.
-3. **Los huérfanos y las dependencias, en una pasada de limpieza aparte.** Son
-   ruido de fondo, no urgencia.
-4. **Y lo que no vas a arreglar, ni lo mires.** Un informe que produce una lista
-   de deseos que nadie ejecuta deja de leerse.
+1. **Duplication first.** It is the cheapest to fix and avoids the most debt:
+   extracting a function is low-risk with immediate effect.
+2. **Then the churned x complex crossing.** That is where the real refactor goes.
+3. **Orphans and dependencies, in a separate cleanup pass.** They are background
+   noise, not urgency.
+4. **And what you are not going to fix, don't even look at.** A report that
+   produces a wish list nobody executes stops being read.
 
 ## Anti-patterns
 
-- **Perseguir el cero.** Algo de duplicación es sana; abstraer dos cosas que se
-  parecen hoy pero evolucionan distinto es peor que repetirlas.
-- **Borrar exports huérfanos sin comprobar.** Es la forma más rápida de romper
-  un consumidor externo.
-- **Medir sin línea base.** Los números absolutos invitan a discutir umbrales;
-  la tendencia no admite discusión.
-- **Convertirlo en una puerta de CI.** Bloquear un commit por una métrica
-  estructural genera trampas, no calidad. Esto informa decisiones, no las toma.
+- **Chasing zero.** Some duplication is healthy; abstracting two things that look
+  alike today but evolve differently is worse than repeating them.
+- **Deleting orphan exports without checking.** It is the fastest way to break an
+  external consumer.
+- **Measuring without a baseline.** Absolute numbers invite arguing over
+  thresholds; the trend admits no argument.
+- **Turning it into a CI gate.** Blocking a commit over a structural metric
+  breeds tricks, not quality. This informs decisions, it doesn't make them.
 
-## Relacionado
+## Related
 
-- `/ship` — la revisión del diff, aguas arriba de esto
-- `/repo-map` — orientarse en un repo, complementario al heredarlo
-- `/write-tests` — antes de refactorizar lo que este informe señale
+- `/ship`: the diff review, upstream of this
+- `/repo-map`: orienting yourself in a repo, complementary when inheriting it
+- `/write-tests`: before refactoring what this report points to

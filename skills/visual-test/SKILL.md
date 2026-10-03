@@ -1,83 +1,84 @@
 ---
 name: visual-test
-description: Inspeccionar visualmente páginas y componentes web en viewport móvil (390px) y escritorio (1280px) con Chrome headless. Hace capturas, detecta scroll horizontal y localiza el elemento exacto que desborda, reporta señales objetivas de usabilidad móvil, ejecuta una auditoría de accesibilidad real con axe-core, y caza cuatro cosas que ninguna de las anteriores ve: contenido que una animación de entrada deja invisible para siempre, fallos de hidratación, contraste que solo falla en hover o en estado activo, y el ritmo vertical entre secciones. Usa cuando pulas diseño responsive, te reporten que algo se ve mal en móvil, caces un desbordamiento horizontal, revises animaciones de entrada, o quieras comparar móvil y escritorio antes de desplegar.
+description: Visually inspect web pages and components at mobile (390px) and desktop (1280px) viewports with headless Chrome. Takes screenshots, detects horizontal scroll and locates the exact element that overflows, reports objective mobile-usability signals, runs a real accessibility audit with axe-core, and catches four things none of the above sees: content that an entrance animation leaves invisible forever, hydration failures, contrast that only fails on hover or in the active state, and the vertical rhythm between sections. Use when polishing responsive design, when someone reports that something looks wrong on mobile, when chasing a horizontal overflow, when reviewing entrance animations, or when you want to compare mobile and desktop before deploying.
 ---
 
 # Visual test
 
-Inspección visual headless con el Chrome del sistema: ver la página como en un
-móvil real, detectar scroll horizontal y cazar el elemento culpable. Los casos
-reales detrás de cada comprobación y los gotchas completos están en
-`<directorio-de-esta-skill>/references/por-que.md`.
+Headless visual inspection with the system Chrome: see the page as on a real
+phone, detect horizontal scroll and catch the culprit element. The real cases
+behind each check and the full gotchas are in
+`<this-skill-directory>/references/por-que.md`.
 
-## Preparación, una vez
+## Setup, once
 
-Hace falta `google-chrome` o `chromium` (se autodetecta; se fuerza con
-`CHROME_BIN`) y la aplicación corriendo en local.
+It needs `google-chrome` or `chromium` (autodetected; forced with `CHROME_BIN`)
+and the application running locally.
 
 ```bash
 mkdir -p ~/.cache/visual-test && cd ~/.cache/visual-test
 [ -d node_modules/playwright-core ] || npm i playwright-core >/dev/null 2>&1
-cp "<directorio-de-esta-skill>/scripts/visual.mjs" .
+cp "<this-skill-directory>/scripts/visual.mjs" .
 ```
 
-## Uso
+## Usage
 
 ```bash
 cd ~/.cache/visual-test
-node visual.mjs shot http://localhost:3000/ruta /tmp/a.png [--scroll 560] [--desktop]
-node visual.mjs audit <url> [<url>…]       # scroll horizontal
-node visual.mjs bisect <url>               # qué elemento desborda
-node visual.mjs checks <url>               # señales de usabilidad móvil
-node visual.mjs a11y <url> [--desktop]     # WCAG con axe-core (necesita red)
-node visual.mjs invisible <url> [<url>…]   # contenido que se queda en opacity 0
-node visual.mjs hydration <url> [<url>…]   # fallos de hidratación
-node visual.mjs states <url>               # contraste en reposo y en hover
-node visual.mjs rhythm <url>               # aire entre secciones
+node visual.mjs shot http://localhost:3000/path /tmp/a.png [--scroll 560] [--desktop]
+node visual.mjs audit <url> [<url>…]       # horizontal scroll
+node visual.mjs bisect <url>               # which element overflows
+node visual.mjs checks <url>               # mobile usability signals
+node visual.mjs a11y <url> [--desktop]     # WCAG with axe-core (needs network)
+node visual.mjs invisible <url> [<url>…]   # content that stays at opacity 0
+node visual.mjs hydration <url> [<url>…]   # hydration failures
+node visual.mjs states <url>               # contrast at rest and on hover
+node visual.mjs rhythm <url>               # spacing between sections
 ```
 
-**Abre las capturas y míralas.** No es opcional: la skill es para ver, no para
-deducir. Ninguna página se da por buena sin haber mirado su captura en móvil y
-en escritorio, pasen lo que pasen los comandos.
+**Open the screenshots and look at them.** It is not optional: the skill is for
+seeing, not for deducing. No page is accepted without having looked at its
+screenshot on mobile and on desktop, whatever the commands report.
 
-## Cómo leer los resultados
+## How to read the results
 
-- `checks` da pistas, no veredictos (áreas táctiles < 44px, texto < 12px,
-  imágenes sin alt, texto pegado al borde); algunas son intencionadas. `a11y` es
-  la fuente fiable de accesibilidad.
-- `audit`: `innerWidth=390 overflowH=0px ok` está bien; un `innerWidth` mayor
-  significa que algo fuerza ese ancho. Entonces `bisect`.
-- `bisect`: el culpable es el nodo con `kids=0`; sus ancestros salen porque al
-  ocultarlos también desaparece.
-- `invisible` sale con código 1 si encuentra algo.
-- `states`: el estado activo de pestañas y similares hay que provocarlo a mano;
-  axe solo ve el que viene seleccionado.
+- `checks` gives hints, not verdicts (touch areas < 44px, text < 12px, images
+  without alt, text stuck to the edge); some are intentional. `a11y` is the
+  reliable source for accessibility.
+- `audit`: `innerWidth=390 overflowH=0px ok` is fine; a larger `innerWidth`
+  means something forces that width. Then `bisect`.
+- `bisect`: the culprit is the node with `kids=0`; its ancestors show up because
+  hiding them makes it disappear too.
+- `invisible` exits with code 1 if it finds anything.
+- `states`: the active state of tabs and the like has to be triggered by hand;
+  axe only sees the one that comes selected.
 
-Dos reglas de las animaciones de entrada: no ocultes nunca un contenedor entero,
-y excluye lo que viva dentro de un carrusel.
+Two rules for entrance animations: never hide a whole container, and exclude
+whatever lives inside a carousel.
 
-## Causas típicas de scroll horizontal
+## Typical causes of horizontal scroll
 
-- Un flex-item sin `min-width: 0` con texto que no se parte. Se arregla en el
-  contenedor.
-- Un elemento a sangre con márgenes negativos fuera del contenedor que pone el
-  padding. Se envuelve en un elemento con ese padding.
-- `overflow-x: hidden` en la raíz lo tapa pero no lo arregla. Busca la causa con
-  `bisect`.
+- A flex item without `min-width: 0` with text that does not wrap. Fix it on the
+  container.
+- A full-bleed element with negative margins outside the container that sets the
+  padding. Wrap it in an element with that padding.
+- `overflow-x: hidden` on the root hides it but does not fix it. Look for the
+  cause with `bisect`.
 
 ## Gotchas
 
-- Mide después de hidratar: baja en tramos con pausa y espera a un selector que
-  solo exista hidratado.
-- Recorre sin volver arriba, o `invisible` da falsos positivos.
-- No encadenes `| head`: el proceso muere antes de escribir. Redirige a fichero.
-- Comprueba que el puerto sirve la aplicación que crees.
-- Tras tocar el layout raíz, reinicia el servidor de desarrollo.
-- Si sale la página de error por chunks dinámicos, reintenta.
-- Mata el servidor de desarrollo por PID, nunca con `pkill`.
+- Measure after hydrating: scroll down in stages with a pause and wait for a
+  selector that only exists once hydrated.
+- Walk the page without returning to the top, or `invisible` gives false
+  positives.
+- Do not chain `| head`: the process dies before writing. Redirect to a file.
+- Check that the port serves the application you think it does.
+- After touching the root layout, restart the development server.
+- If the error page for dynamic chunks appears, retry.
+- Kill the development server by PID, never with `pkill`.
 
-## Relacionado
+## Related
 
-- `/device-loop` — la app real en un dispositivo físico
-- `/render-loop` — iterar sobre una salida renderizada
-- `/ui-behaviour` — que los controles hagan algo útil
+- `/device-loop` — the real app on a physical device
+- `/render-loop` — iterate on a rendered output
+- `/ui-behaviour` — that controls do something useful

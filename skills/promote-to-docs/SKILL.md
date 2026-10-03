@@ -1,101 +1,102 @@
 ---
 name: promote-to-docs
-description: Llevar al docs repo lo que solo existe en la conversación, en la memoria local del agente o en un mensaje de commit, y commitearlo donde toca: `decisions/`, `operations/`, `conventions/` o `repos/<repo>/notes.md`. Usa cuando vayas a escribir una memoria de tipo project o reference, cuando digas «esto habría que documentarlo», cuando una sesión haya destapado una gotcha operativa o un porqué que no queda en el código, y antes de que se pierda al cerrar.
+description: Move to the docs repo what only exists in the conversation, in the agent's local memory or in a commit message, and commit it where it belongs: `decisions/`, `operations/`, `conventions/` or `repos/<repo>/notes.md`. Use when about to write a memory of type project or reference, when you say «esto habría que documentarlo», when a session has uncovered an operational gotcha or a why that isn't left in the code, and before it gets lost on closing.
 ---
 
 # promote-to-docs
 
-Mueve información del ámbito local y efímero al ámbito durable: git.
+It moves information from the local, ephemeral scope to the durable one: git.
 
-## Cuándo usar
+## When to use
 
-- Estás a punto de guardar una memoria de tipo `project` o `reference`. El
-  estándar dice que esas van a git, no a local.
-- Una conversación ha decidido algo, descubierto un gotcha o fijado una
-  convención que ahora mismo no está en ningún sitio duradero.
+- You are about to save a memory of type `project` or `reference`. The standard
+  says those go to git, not to local.
+- A conversation has decided something, discovered a gotcha or fixed a convention
+  that right now is not anywhere durable.
 
-## Cuándo no usar
+## When not to use
 
-- Para memorias de tipo `user` o `feedback`: esas se quedan locales, son sobre
-  la persona y no sobre el proyecto.
-- Para detalles de implementación que el propio código ya explica.
-- Para todo lo que se te ocurra. Promover es selectivo: si en seis meses no va
-  a ayudar a nadie, no merece la pena.
+- For memories of type `user` or `feedback`: those stay local, they are about the
+  person and not the project.
+- For implementation details the code itself already explains.
+- For everything that occurs to you. Promoting is selective: if in six months it
+  won't help anyone, it isn't worth it.
 
-## Flujo
+## Flow
 
-### 1. Identificar la pieza
+### 1. Identify the piece
 
-- Qué se va a documentar, en una o dos líneas.
-- A qué proyecto pertenece.
-- De qué tipo es: decisión cross-repo, decisión single-repo, operativa,
-  convención o nota de estado.
+- What is going to be documented, in one or two lines.
+- Which project it belongs to.
+- What type it is: cross-repo decision, single-repo decision, operational,
+  convention or status note.
 
-### 2. Localizar el docs repo
+### 2. Locate the docs repo
 
-`~/Proyectos/<project>/<project>-docs/`. Si no existe, el proyecto no está
-bajo el estándar todavía: usa `/crux-init` o `crux adopt` antes.
+`~/Proyectos/<project>/<project>-docs/`. If it doesn't exist, the project is not
+under the standard yet: use `/crux-init` or `crux adopt` first.
 
-### 3. Decidir el destino
+### 3. Decide the destination
 
-| Tipo | Destino |
-| ---- | ------- |
-| Decisión cross-repo | `decisions/index.md`, como ADR nuevo |
-| Decisión single-repo | `repos/<repo>/decisions.md` |
-| Operativa, gotcha, infraestructura | `operations/<tema>.md` |
-| Convención de código transversal | `conventions/<tema>.md` |
-| Estado o contexto de un repo | `repos/<repo>/notes.md` |
+| Type | Destination |
+| ---- | ----------- |
+| Cross-repo decision | `decisions/index.md`, as a new ADR |
+| Single-repo decision | `repos/<repo>/decisions.md` |
+| Operational, gotcha, infrastructure | `operations/<topic>.md` |
+| Cross-cutting code convention | `conventions/<topic>.md` |
+| A repo's status or context | `repos/<repo>/notes.md` |
 
-Ante la duda entre cross y single-repo, empieza por single: promocionarlo
-después está previsto en el formato; separarlo, no.
+When in doubt between cross-repo and single-repo, start with single: promoting it
+later is provided for in the format; splitting it is not.
 
-### 4. Escribir
+### 4. Write
 
-- **ADRs**: plantilla canónica de `decisions/README.md`, con el siguiente
-  número correlativo del registro donde va.
-- **operations/ y conventions/**: si ya hay un fichero del mismo tema, añade
-  una sección; no crees uno nuevo. Estas carpetas se vuelven inútiles cuando
-  cada gotcha tiene su propio fichero.
-- **notes.md**: entradas con fecha, la más reciente arriba.
+- **ADRs**: canonical template from `decisions/README.md`, with the next
+  sequential number of the log where it goes.
+- **operations/ and conventions/**: if there is already a file on the same topic,
+  add a section; don't create a new one. These folders become useless when every
+  gotcha has its own file.
+- **notes.md**: dated entries, the most recent on top.
 
-Fechas en absoluto (`2026-08-01`), nunca en relativo: "la semana pasada" no
-significa nada cuando alguien lo lea en marzo.
+Absolute dates (`2026-08-01`), never relative: "last week" means nothing when
+someone reads it in March.
 
-### 5. Limpiar el origen
+### 5. Clean up the source
 
-Si venía de la memoria local del agente, bórrala junto con su línea en el
-índice. Si no, queda duplicada en dos sitios que divergirán.
+If it came from the agent's local memory, delete it along with its line in the
+index. Otherwise it stays duplicated in two places that will diverge.
 
-### 6. Commitear
+### 6. Commit
 
-Un mensaje que diga dónde fue y qué es:
+A message that says where it went and what it is:
 
 ```
-docs(decisions): add ADR-NNN <título>
-docs(operations): document <título>
-docs(conventions): add <título>
-docs(repos/<repo>): note on <título>
+docs(decisions): add ADR-NNN <title>
+docs(operations): document <title>
+docs(conventions): add <title>
+docs(repos/<repo>): note on <title>
 ```
 
-Preguntar antes de pushear.
+Ask before pushing.
 
-## Cómo distinguir el tipo
+## How to tell the type
 
-| Pista | Tipo probable |
-| ----- | ------------- |
-| "Por qué decidimos X", afecta a un repo | decisión single-repo |
-| "Por qué decidimos X", afecta a varios | decisión cross-repo |
-| "Cuando pase X, hacer Y" en infra o datos externos | operativa |
-| "Regla aplicable en todos los repos" | convención |
-| "X está bloqueado porque Y" | nota de estado |
+| Clue | Likely type |
+| ---- | ----------- |
+| "Why we decided X", affects one repo | single-repo decision |
+| "Why we decided X", affects several | cross-repo decision |
+| "When X happens, do Y" in infrastructure or external data | operational |
+| "Rule applicable in all repos" | convention |
+| "X is blocked because of Y" | status note |
 
 ## Anti-patterns
 
-- **Promover por promover.** Si el commit ya lo explica bien, no hace falta.
-- **Crear fichero nuevo habiendo uno del mismo tema.**
-- **Olvidar el borrado del origen local.**
+- **Promoting for the sake of promoting.** If the commit already explains it well,
+  it isn't needed.
+- **Creating a new file when one on the same topic exists.**
+- **Forgetting to delete the local source.**
 
-## Relacionado
+## Related
 
-- `/end-session` — el ritual completo de cierre, que incluye esto
-- `/add-repo-to-docs` — registrar un repo nuevo en el proyecto
+- `/end-session`: the full closing ritual, which includes this
+- `/add-repo-to-docs`: register a new repo in the project

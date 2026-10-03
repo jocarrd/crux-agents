@@ -1,115 +1,116 @@
-# Decisiones (ADRs) — convención y formato
+# Decisions (ADRs) — convention and format
 
-Esta carpeta contiene el **registro cross-repo** (`index.md`). Cada repo tiene
-además su propio registro en `repos/<repo>/decisions.md` cuando aplica.
+This folder holds the **cross-repo registry** (`index.md`). Each repo also has
+its own registry in `repos/<repo>/decisions.md` when applicable.
 
-## ¿Dónde va un ADR nuevo?
+## Where does a new ADR go?
 
-| Si la decisión afecta a… | Va en… |
-| ------------------------ | ------ |
-| Más de un repo del proyecto | `decisions/index.md` |
-| Solo un repo | `repos/<repo>/decisions.md` |
+| If the decision affects… | It goes in… |
+| ------------------------ | ----------- |
+| More than one repo of the project | `decisions/index.md` |
+| Only one repo | `repos/<repo>/decisions.md` |
 
-Si dudas, empieza por single-repo. Si más tarde resulta cross-repo, se
-promociona (ver abajo).
+If in doubt, start with single-repo. If it later turns out to be cross-repo, it
+is promoted (see below).
 
-## Plantilla canónica
+## Canonical template
 
-Única para ambos niveles, para que un agente no lea dos formatos distintos y
-los trate como cosas diferentes.
+The same for both levels, so that an agent does not read two different formats
+and treat them as different things.
 
 ```markdown
-### ADR-NNN: Título
+### ADR-NNN: Title
 
 - **Date**: YYYY-MM-DD
-- **Status**: uno de los cinco de la tabla de abajo
-- **Context**: qué problema o situación lo motiva
-- **Decision**: qué decidimos
-- **Consequences**: cómo cambia el código, la operación o el despliegue
-- **Reversibility**: cómo de caro sería deshacerlo (recomendado siempre: es lo
-  que deja decidir con la cabeza fría si merece la pena probar)
-- **Related**: refs a otros ADRs o issues (opcional)
+- **Status**: one of the five in the table below
+- **Context**: what problem or situation motivates it
+- **Decision**: what we decided
+- **Consequences**: how the code, the operation or the deployment changes
+- **Reversibility**: how costly it would be to undo (always recommended: it is
+  what lets you decide with a cool head whether it is worth trying)
+- **Related**: refs to other ADRs or issues (optional)
 ```
 
-### Los estados
+### The statuses
 
-| Estado | Significa | Referencia |
-| ------ | --------- | ---------- |
-| `Open` | Hay que decidir y todavía no hay propuesta. `Decision` dice "ninguna" | — |
-| `Proposed` | Hay una propuesta sobre la mesa, aún no se aplica | — |
-| `Accepted` | Vigente | — |
-| `Inherited` | No la tomamos nosotros: venía con el código | — |
-| `Superseded by <ref>` | Ya no vale: otra decisión ocupa su lugar | obligatoria, admite varias separadas por coma |
-| `Amended by <ref>` | Sigue vigente, pero otra decisión cambió una parte | obligatoria |
-| `Deprecated` | Ya no se aplica y nada la reemplaza | — |
+| Status | Means | Reference |
+| ------ | ----- | --------- |
+| `Open` | A decision is needed and there is no proposal yet. `Decision` says "none" | — |
+| `Proposed` | There is a proposal on the table, not yet applied | — |
+| `Accepted` | In force | — |
+| `Inherited` | We did not make it: it came with the code | — |
+| `Superseded by <ref>` | No longer valid: another decision takes its place | mandatory, accepts several separated by commas |
+| `Amended by <ref>` | Still in force, but another decision changed a part | mandatory |
+| `Deprecated` | No longer applies and nothing replaces it | — |
 
-Tres de ellos existen porque la alternativa es peor:
+Three of them exist because the alternative is worse:
 
-`Amended` — una decisión de la que solo cambió una parte no está superada: el
-resto sigue mandando, y marcarla como superada hace que alguien la descarte
-entera.
+`Amended` — a decision of which only one part changed is not superseded: the
+rest still governs, and marking it as superseded makes someone discard all of
+it.
 
-`Open` — un problema conocido sin decidir **es** información, y de la más útil:
-avisa a quien llega de que ahí hay un hueco y no un descuido. Sin este estado
-acaba sin registrar, que es como se repite el mismo debate cada seis meses.
+`Open` — a known problem left undecided **is** information, and among the most
+useful: it tells whoever arrives that there is a gap there and not an
+oversight. Without this status it ends up unrecorded, which is how the same
+debate repeats every six months.
 
-`Inherited` — separa lo que decidimos de lo que nos encontramos. Importa en
-cualquier proyecto con código heredado y es obligatorio en el perfil
-`client-repo`, donde confundir ambas cosas significa atribuirle al cliente una
-decisión nuestra, o al revés.
+`Inherited` — separates what we decided from what we found. It matters in any
+project with inherited code and is mandatory in the `client-repo` profile,
+where confusing the two means attributing to the client a decision of ours, or
+the other way round.
 
-Sin un estado para cada caso, el matiz termina escrito en prosa dentro del
-campo, que es donde ningún lector automático lo encuentra.
+Without a status for each case, the nuance ends up written as prose inside the
+field, which is where no automatic reader finds it.
 
-Reglas:
+Rules:
 
-- `NNN` es correlativo dentro del registro donde vive: cada `decisions.md`
-  empieza en 001.
-- **El campo `Status` contiene el estado y sus referencias, nada más.** El
-  porqué del cambio va en `Consequences` del ADR nuevo, que es quien lo conoce.
-- Las referencias se citan como dice "Cómo citar entre registros": `ADR-014`
-  dentro del mismo registro, `decisions/ADR-014` al cruzar.
-- `Reversibility` se pone siempre que se pueda: es lo que deja estimar el coste
-  de cambiar de opinión más adelante, y sin ese dato la decisión se juzga a
-  ciegas. Solo se omite cuando de verdad no aplica.
+- `NNN` is consecutive within the registry where it lives: each `decisions.md`
+  starts at 001.
+- **The `Status` field contains the status and its references, nothing else.**
+  The why of the change goes in `Consequences` of the new ADR, which is the one
+  that knows it.
+- References are cited as "How to cite across registries" says: `ADR-014`
+  within the same registry, `decisions/ADR-014` when crossing.
+- `Reversibility` is set whenever possible: it is what lets you estimate the
+  cost of changing your mind later, and without that datum the decision is
+  judged blind. It is omitted only when it truly does not apply.
 
-### Decisiones con fecha de caducidad
+### Decisions with an expiry date
 
-Un parche que se acepta sabiendo que hay que retirarlo lleva un campo más:
+A patch that is accepted knowing it has to be removed carries one more field:
 
 ```markdown
 - **Status**: Accepted
-- **Sunset**: cuando el CMS asuma los redirects (ver ADR-022)
+- **Sunset**: when the CMS takes over the redirects (see ADR-022)
 ```
 
-`Sunset` es un campo y no un estado porque las dos cosas son ciertas a la vez:
-la decisión está aceptada **y** tiene fecha de retirada. Como estado habría que
-elegir una de las dos y se perdería la otra.
+`Sunset` is a field and not a status because both things are true at once: the
+decision is accepted **and** has a withdrawal date. As a status you would have
+to choose one of the two and lose the other.
 
-## Cómo citar entre registros
+## How to cite across registries
 
-La numeración es local a cada registro, así que al cruzar se usa el prefijo del
-path:
+Numbering is local to each registry, so when crossing, the path prefix is used:
 
-| Contexto | Cómo citar |
-| -------- | ---------- |
-| Dentro del mismo registro | `ADR-007` |
-| Cruzando registros | `decisions/ADR-013`, `repos/<repo>/ADR-007` |
+| Context | How to cite |
+| ------- | ----------- |
+| Within the same registry | `ADR-007` |
+| Crossing registries | `decisions/ADR-013`, `repos/<repo>/ADR-007` |
 
-## Promoción single-repo → cross-repo
+## Promotion single-repo → cross-repo
 
-Cuando una decisión que empezó afectando a un repo termina afectando a varios:
+When a decision that started by affecting one repo ends up affecting several:
 
-1. Crear entrada nueva en `decisions/index.md` con el siguiente número
-   correlativo, replicando el contenido y ampliando el contexto.
-2. Marcar el ADR viejo como `Status: Superseded by decisions/ADR-NNN`.
-3. **No borrar el ADR viejo** — la historia importa.
+1. Create a new entry in `decisions/index.md` with the next consecutive number,
+   replicating the content and expanding the context.
+2. Mark the old ADR as `Status: Superseded by decisions/ADR-NNN`.
+3. **Do not delete the old ADR** — history matters.
 4. Commit: `docs(decisions): promote repos/<repo>/ADR-X to cross-repo as ADR-NNN`.
 
-## Añadir un ADR
+## Adding an ADR
 
-- **Cross-repo**: abrir `index.md`, añadir al final con el siguiente número.
-  Commit: `docs(decisions): add ADR-NNN <título>`.
-- **Single-repo**: abrir o crear `repos/<repo>/decisions.md` con la cabecera
-  mínima que remite a este formato, y añadir la entrada.
-  Commit: `docs(repos/<repo>): add ADR-NNN <título>`.
+- **Cross-repo**: open `index.md`, add at the end with the next number.
+  Commit: `docs(decisions): add ADR-NNN <title>`.
+- **Single-repo**: open or create `repos/<repo>/decisions.md` with the minimal
+  header that points to this format, and add the entry.
+  Commit: `docs(repos/<repo>): add ADR-NNN <title>`.

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# crux add-repo — registra un repo nuevo en un proyecto ya adoptado.
+# crux add-repo — registers a new repo in an already adopted project.
 #
 #   crux add-repo <repo> [--description "..."] [dir]
 #
-# Crea su carpeta de documentación, lo declara en crux.json, lo registra en la
-# tabla de repos/README.md y regenera los punteros.
+# Creates its documentation folder, declares it in crux.json, registers it in
+# the table of repos/README.md and regenerates the pointers.
 
 set -euo pipefail
 
@@ -13,11 +13,11 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
 REPO="${1:-}"
-[[ -n "$REPO" ]] || die "uso: crux add-repo <repo> [--description \"...\"]"
-nombre_valido "$REPO" || die "el nombre debe ir en kebab-case minúscula, sin barras: $REPO"
+[[ -n "$REPO" ]] || die "usage: crux add-repo <repo> [--description \"...\"]"
+valid_name "$REPO" || die "the name must be lowercase kebab-case, without slashes: $REPO"
 shift
 
-DESCRIPTION="Qué hace este repo, en una línea."
+DESCRIPTION="What this repo does, in one line."
 TARGET="$PWD"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,21 +26,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-DOCS="$(find_docs_repo "$TARGET")" || die "no encuentro un docs repo desde $TARGET"
+DOCS="$(find_docs_repo "$TARGET")" || die "cannot find a docs repo from $TARGET"
 CONFIG="$DOCS/crux.json"
-[[ -f "$CONFIG" ]] || die "falta crux.json — ejecuta 'crux adopt' primero"
+[[ -f "$CONFIG" ]] || die "crux.json is missing — run 'crux adopt' first"
 
 PROJECT="$(json_get "$CONFIG" project)"
 ROOT="$(dirname "$DOCS")"
 
-json_get "$CONFIG" repos 2>/dev/null | grep -qxF "$REPO" && die "$REPO ya está declarado en crux.json"
-[[ -d "$DOCS/repos/$REPO" ]] && die "ya existe repos/$REPO/ en el docs repo"
+json_get "$CONFIG" repos 2>/dev/null | grep -qxF "$REPO" && die "$REPO is already declared in crux.json"
+[[ -d "$DOCS/repos/$REPO" ]] && die "repos/$REPO/ already exists in the docs repo"
 
-[[ -d "$ROOT/$REPO" ]] || warn "$REPO no está todavía en $ROOT/ — se registra igual"
+[[ -d "$ROOT/$REPO" ]] || warn "$REPO is not yet in $ROOT/ — registering it anyway"
 
 render_template "$CRUX_HOME/templates/repo-doc/README.md" "$DOCS/repos/$REPO/README.md" \
   "REPO=$REPO" "PROJECT=$PROJECT" "DESCRIPTION=$DESCRIPTION"
-ok "creado repos/$REPO/README.md"
+ok "created repos/$REPO/README.md"
 
 node -e '
   const fs = require("fs");
@@ -50,14 +50,15 @@ node -e '
   if (!o.repos.includes(repo)) o.repos.push(repo);
   fs.writeFileSync(file, JSON.stringify(o, null, 2) + "\n");
 ' "$CONFIG" "$REPO"
-ok "declarado en crux.json"
+ok "declared in crux.json"
 
-# Si el repo ya tiene origin y la plantilla del contrato no lo compone, clone no
-# sabría de dónde traerlo. adopt lo deduce igual; aquí se quedaba sin declarar.
+# If the repo already has an origin and the contract template does not compose
+# it, clone would not know where to fetch it from. adopt deduces it the same
+# way; here it was left undeclared.
 if [[ -d "$ROOT/$REPO/.git" ]]; then
-  ORIGEN="$(git -C "$ROOT/$REPO" remote get-url origin 2>/dev/null || true)"
-  ESPERADA="$(remote_url "$CONFIG" "$REPO" 2>/dev/null || true)"
-  if [[ -n "$ORIGEN" && "$ORIGEN" != "$ESPERADA" ]]; then
+  ORIGIN="$(git -C "$ROOT/$REPO" remote get-url origin 2>/dev/null || true)"
+  EXPECTED="$(remote_url "$CONFIG" "$REPO" 2>/dev/null || true)"
+  if [[ -n "$ORIGIN" && "$ORIGIN" != "$EXPECTED" ]]; then
     node -e '
       const fs = require("fs");
       const [file, repo, url] = process.argv.slice(1);
@@ -66,15 +67,15 @@ if [[ -d "$ROOT/$REPO/.git" ]]; then
       o.remote.repos = o.remote.repos || {};
       o.remote.repos[repo] = url;
       fs.writeFileSync(file, JSON.stringify(o, null, 2) + "\n");
-    ' "$CONFIG" "$REPO" "$ORIGEN"
-    ok "remoto tomado de su origin: $ORIGEN"
+    ' "$CONFIG" "$REPO" "$ORIGIN"
+    ok "remote taken from its origin: $ORIGIN"
   fi
 fi
 
-# La tabla de repos/README.md es el índice que lee un humano; se mantiene sola
-# mientras exista, y si el proyecto la borró no se reinventa.
+# The table in repos/README.md is the index a human reads; it maintains itself
+# while it exists, and if the project deleted it, it is not reinvented.
 INDEX="$DOCS/repos/README.md"
-if [[ -f "$INDEX" ]] && grep -q '^| *Carpeta' "$INDEX"; then
+if [[ -f "$INDEX" ]] && grep -qE '^\| *(Carpeta|Folder)' "$INDEX"; then
   node -e '
     const fs = require("fs");
     const [file, repo, project, desc] = process.argv.slice(1);
@@ -87,13 +88,13 @@ if [[ -f "$INDEX" ]] && grep -q '^| *Carpeta' "$INDEX"; then
     if (empty !== -1) lines[empty] = row; else lines.splice(last + 1, 0, row);
     fs.writeFileSync(file, lines.join("\n"));
   ' "$INDEX" "$REPO" "$PROJECT" "$DESCRIPTION"
-  ok "registrado en repos/README.md"
+  ok "registered in repos/README.md"
 else
-  warn "repos/README.md sin tabla — regístralo a mano"
+  warn "repos/README.md has no table — register it by hand"
 fi
 
 echo
 bash "$CRUX_HOME/bin/link.sh" "$DOCS"
 
 echo
-info "commit sugerido: docs(repos): add $REPO"
+info "suggested commit: docs(repos): add $REPO"

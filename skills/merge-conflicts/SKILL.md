@@ -1,79 +1,80 @@
 ---
 name: merge-conflicts
-description: Resolver un merge o un rebase que ha quedado a medias, hunk por hunk, por la intención de cada lado y no por lo que parezca correcto en la pantalla; después pasar las comprobaciones del repo y terminar la operación. Usa cuando git deje conflictos sin resolver, cuando un rebase se pare a mitad, cuando aparezcan marcadores `<<<<<<<` en los ficheros, o cuando el usuario diga que tiene un conflicto, que no sabe qué rama se queda o que se le ha liado el merge.
+description: Resolve a merge or rebase left half done, hunk by hunk, by the intent of each side and not by what looks right on screen; then run the repo's checks and finish the operation. Use when git leaves unresolved conflicts, when a rebase stops midway, when `<<<<<<<` markers appear in files, or when the user says they have a conflict, don't know which branch wins or have got tangled up in the merge.
 ---
 
 # merge-conflicts
 
-Un conflicto no se resuelve leyendo las dos versiones y eligiendo la que se ve
-mejor. Las dos se veían bien cuando se escribieron. Lo que hay que recuperar es
-**por qué** se escribió cada una, y eso no está en el hunk.
+A conflict is not resolved by reading both versions and picking the one that looks
+better. Both looked fine when they were written. What has to be recovered is
+**why** each one was written, and that is not in the hunk.
 
-**Nunca `--abort`.** Abortar tira el trabajo de entender el conflicto y lo deja
-igual para la próxima vez. Si de verdad hay que abortar, lo decide el usuario.
+**Never `--abort`.** Aborting throws away the work of understanding the conflict
+and leaves it the same for next time. If it truly has to be aborted, the user
+decides.
 
-## 1. Ver dónde estás
+## 1. See where you are
 
 ```bash
 git status
 git log --oneline --graph --left-right HEAD...MERGE_HEAD   # merge
 git log --oneline REBASE_HEAD                              # rebase
-git diff --name-only --diff-filter=U                       # ficheros en conflicto
+git diff --name-only --diff-filter=U                       # conflicted files
 ```
 
-En un rebase, `ours` y `theirs` van al revés de como los lees: `ours` es la
-rama sobre la que rebasas, `theirs` es tu commit. Comprobar esto antes de
-resolver nada evita resolver el conflicto entero del lado contrario.
+In a rebase, `ours` and `theirs` are the opposite of how you read them: `ours` is
+the branch you are rebasing onto, `theirs` is your commit. Checking this before
+resolving anything avoids resolving the whole conflict on the wrong side.
 
-## 2. Buscar la fuente primaria de cada lado
+## 2. Find the primary source for each side
 
-Por cada conflicto, averigua qué intención traía cada versión:
+For each conflict, find out what intent each version carried:
 
 ```bash
-git log --oneline -3 <sha-de-ese-lado> -- <fichero>
-git show <sha>                     # el commit completo, con su mensaje
-gh pr list --search <sha> --state all   # la PR que lo trajo
+git log --oneline -3 <sha-of-that-side> -- <file>
+git show <sha>                     # the full commit, with its message
+gh pr list --search <sha> --state all   # the PR that brought it
 ```
 
-El mensaje del commit, la PR y el issue valen más que el código. Si el commit
-dice «fix: el middleware vuelve a cargar en Edge», ese cambio tiene un motivo
-que no se ve en el diff y que se pierde si lo descartas.
+The commit message, the PR and the issue are worth more than the code. If the
+commit says "fix: the middleware loads on Edge again", that change has a reason
+that isn't visible in the diff and gets lost if you discard it.
 
-**Si no encuentras la intención de un lado, pregunta.** Resolver a ciegas es la
-forma de reintroducir el fallo que ese commit arreglaba.
+**If you can't find one side's intent, ask.** Resolving blindly is the way to
+reintroduce the failure that commit fixed.
 
-## 3. Resolver hunk por hunk
+## 3. Resolve hunk by hunk
 
-- **Conserva las dos intenciones** siempre que se pueda. La mayoría de los
-  conflictos son dos cambios compatibles que tocaron líneas vecinas.
-- **Si son incompatibles**, gana el que cumple el objetivo declarado del merge,
-  y el otro se anota como coste asumido.
-- **No inventes comportamiento nuevo.** Un conflicto está para que sobrevivan
-  dos cambios que ya existían. Mejorar el código de paso va en un commit
-  aparte.
-- **Los ficheros generados no se resuelven a mano.** `package-lock.json`,
-  clientes de Prisma, snapshots: se regeneran. `git checkout --ours` sobre el
-  fichero y después el comando que lo genera.
+- **Keep both intents** whenever possible. Most conflicts are two compatible
+  changes that touched neighbouring lines.
+- **If they are incompatible**, the one that meets the declared goal of the merge
+  wins, and the other is noted as an accepted cost.
+- **Don't invent new behaviour.** A conflict exists so that two changes that
+  already existed survive. Improving the code along the way goes in a separate
+  commit.
+- **Generated files are not resolved by hand.** `package-lock.json`, Prisma
+  clients, snapshots: they are regenerated. `git checkout --ours` on the file and
+  then the command that generates it.
 
-## 4. Pasar las comprobaciones del repo
+## 4. Run the repo's checks
 
-Un merge resuelto compila pero no funciona más veces de las que parece: cada
-lado era coherente por separado y la unión no.
+A resolved merge compiles but doesn't work more often than it seems: each side was
+coherent on its own and the union isn't.
 
-Averigua qué comprueba el repo y ejecútalo, normalmente en este orden:
-typecheck, tests, formato. En un repo con `/ship`, pásalo.
+Find out what the repo checks and run it, normally in this order: typecheck,
+tests, formatting. In a repo with `/ship`, run it.
 
-## 5. Terminar
+## 5. Finish
 
 ```bash
-git add -A && git commit        # merge: no reescribas el mensaje por defecto
-git rebase --continue           # rebase: hasta que no queden commits
+git add -A && git commit        # merge: don't rewrite the default message
+git rebase --continue           # rebase: until no commits remain
 ```
 
-En un rebase pueden aparecer conflictos en varios commits seguidos. Vuelve al
-paso 1 con cada uno.
+In a rebase, conflicts can appear in several commits in a row. Go back to step 1
+with each one.
 
 ---
 
-*Adaptada de la skill `resolving-merge-conflicts` de
-[mattpocock/skills](https://github.com/mattpocock/skills), licencia MIT.*
+*Adapted from the `resolving-merge-conflicts` skill of
+[mattpocock/skills](https://github.com/mattpocock/skills), MIT license.*

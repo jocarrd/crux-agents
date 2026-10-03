@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Suite de tests del kernel.
+# The kernel's test suite.
 #
-#   test/run.sh              todos los casos
-#   test/run.sh <patrón>     solo los que casan con el patrón
+#   test/run.sh              all the cases
+#   test/run.sh <pattern>    only those matching the pattern
 #
-# Sin dependencias: bash y node, lo mismo que necesita el propio kernel.
+# No dependencies: bash and node, the same the kernel itself needs.
 #
-# Cada caso corre en un sandbox aislado y con los directorios de agentes
-# redirigidos, así que la suite NUNCA toca ~/.claude, ~/.codex ni ~/Proyectos.
+# Each case runs in an isolated sandbox with the agent directories redirected,
+# so the suite NEVER touches ~/.claude, ~/.codex or ~/Proyectos.
 
 set -uo pipefail
 
 CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export CRUX_HOME
-# Lo leen los comandos que a su vez ejecutan la suite, para no llamarse en bucle.
+# Read by the commands that in turn run the suite, so they do not call each
+# other in a loop.
 export CRUX_IN_TESTS=1
 
 PASS=0; FAIL=0; CURRENT=""; FAILED_CASES=()
@@ -24,58 +25,59 @@ else
   T_RED=""; T_GRN=""; T_DIM=""; T_OFF=""
 fi
 
-# --- Aserciones --------------------------------------------------------------
+# --- Assertions --------------------------------------------------------------
 #
-# Todas registran el fallo y siguen: un caso puede reportar varios problemas.
+# All of them record the failure and carry on: a case can report several
+# problems.
 
 _fail() {
   FAIL=$((FAIL + 1))
   FAILED_CASES+=("$CURRENT: $1")
-  echo "  ${T_RED}fallo${T_OFF} $1"
+  echo "  ${T_RED}fail${T_OFF} $1"
 }
 
 assert_eq() {
-  # assert_eq <esperado> <obtenido> <descripción>
+  # assert_eq <expected> <got> <description>
   if [[ "$1" == "$2" ]]; then PASS=$((PASS + 1)); else
-    _fail "$3 — esperaba '$1', obtuve '$2'"
+    _fail "$3 — expected '$1', got '$2'"
   fi
 }
 
 assert_contains() {
-  # assert_contains <texto> <fragmento> <descripción>
+  # assert_contains <text> <fragment> <description>
   if [[ "$1" == *"$2"* ]]; then PASS=$((PASS + 1)); else
-    _fail "$3 — no contiene '$2'"
+    _fail "$3 — does not contain '$2'"
   fi
 }
 
 assert_not_contains() {
   if [[ "$1" != *"$2"* ]]; then PASS=$((PASS + 1)); else
-    _fail "$3 — no debería contener '$2'"
+    _fail "$3 — should not contain '$2'"
   fi
 }
 
 assert_file() {
-  if [[ -f "$1" ]]; then PASS=$((PASS + 1)); else _fail "$2 — no existe $1"; fi
+  if [[ -f "$1" ]]; then PASS=$((PASS + 1)); else _fail "$2 — does not exist: $1"; fi
 }
 
 assert_symlink() {
-  # assert_symlink <ruta> <destino esperado> <descripción>
+  # assert_symlink <path> <expected target> <description>
   if [[ -L "$1" && "$(readlink "$1")" == "$2" ]]; then PASS=$((PASS + 1)); else
-    _fail "$3 — $1 no enlaza a $2"
+    _fail "$3 — $1 does not link to $2"
   fi
 }
 
 assert_no_file() {
-  if [[ ! -e "$1" ]]; then PASS=$((PASS + 1)); else _fail "$2 — existe y no debería: $1"; fi
+  if [[ ! -e "$1" ]]; then PASS=$((PASS + 1)); else _fail "$2 — exists and should not: $1"; fi
 }
 
 assert_exit() {
-  # assert_exit <código esperado> <descripción> <comando...>
+  # assert_exit <expected code> <description> <command...>
   local expected="$1" desc="$2"; shift 2
   "$@" >/dev/null 2>&1
   local got=$?
   if [[ $got -eq $expected ]]; then PASS=$((PASS + 1)); else
-    _fail "$desc — esperaba exit $expected, obtuve $got"
+    _fail "$desc — expected exit $expected, got $got"
   fi
 }
 
@@ -85,26 +87,26 @@ sandbox() {
   SB="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-XXXXXX")"
   export CRUX_PROJECTS_DIR="$SB/Proyectos"
   export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
-  # Sin esto, los casos de memoria leerían las memorias reales de quien ejecuta
-  # la suite, y el resultado dependería de la máquina.
+  # Without this, the memory cases would read the real memories of whoever runs
+  # the suite, and the result would depend on the machine.
   export CLAUDE_CONFIG_DIR="$SB/home/.claude"
-  # Y sin esto, cualquier caso que instale hooks los engancha en los ajustes
-  # reales: al correr la suite desde un worktree, la máquina se queda con los
-  # hooks apuntando a un directorio que se borra al cerrar el espacio.
+  # And without this, any case that installs hooks hooks them into the real
+  # settings: when the suite runs from a worktree, the machine is left with
+  # hooks pointing at a directory that is deleted when the workspace closes.
   export CLAUDE_SETTINGS="$SB/settings.json"
-  # La identidad de git venía de la máquina. En un runner limpio no hay ninguna,
-  # así que los `git commit` de los casos fallaban, y un `|| true` se lo tragaba:
-  # la suite pasaba en local y llevaba días en rojo en CI por un motivo que no
-  # se parecía en nada al mensaje. Un arnés no puede depender del entorno.
+  # The git identity used to come from the machine. A clean runner has none, so
+  # the cases' `git commit` failed and a `|| true` swallowed it: the suite
+  # passed locally and had been red in CI for days for a reason that looked
+  # nothing like the message. A harness cannot depend on the environment.
   export GIT_AUTHOR_NAME="crux test" GIT_AUTHOR_EMAIL="test@localhost"
   export GIT_COMMITTER_NAME="crux test" GIT_COMMITTER_EMAIL="test@localhost"
   export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
   export CODEX_HOME_DIR="$SB/home/.codex"
-  # Sin esto, un caso que use workspace y olvide declararlo escribe en el
-  # registro real de quien ejecuta la suite.
+  # Without this, a case that uses workspace and forgets to declare it writes
+  # into the real registry of whoever runs the suite.
   export CRUX_REGISTRY="$SB/registry.json"
-  # Y el estado local —marcas, candados, la base de la réplica de tareas—, que
-  # si no se escribiría en el ~/.crux de quien ejecuta la suite.
+  # And the local state —marks, locks, the base of the task replica—, which
+  # would otherwise be written to the ~/.crux of whoever runs the suite.
   export CRUX_STATE_DIR="$SB/state"
   mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
   echo "$SB"
@@ -115,7 +117,7 @@ teardown() { [[ -n "${SB:-}" && "$SB" == *"crux-test-"* ]] && rm -rf "$SB"; }
 crux() { bash "$CRUX_HOME/bin/crux" "$@"; }
 
 new_project() {
-  # new_project <nombre> [opciones de init...] — devuelve la ruta del docs repo
+  # new_project <name> [init options...] — prints the docs repo path
   local name="$1"; shift
   crux init "$name" --no-remote --parent "$CRUX_PROJECTS_DIR" "$@" >/dev/null 2>&1
   echo "$CRUX_PROJECTS_DIR/$name/$name-docs"
@@ -132,35 +134,51 @@ PATTERN="${1:-}"
 echo "crux test — $(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
 echo
 
-HOME_LIMPIO="$HOME"; TMPDIR_LIMPIO="${TMPDIR:-/tmp}"; PWD_LIMPIO="$PWD"
+CLEAN_HOME="$HOME"; CLEAN_TMPDIR="${TMPDIR:-/tmp}"; CLEAN_PWD="$PWD"
+
+# Each case starts in an empty directory of its own, never in the one the suite
+# was launched from. A `( cd "$ws" && a; b )` whose cd fails runs b right here,
+# and from the repo that meant a case writing a red gate receipt into the
+# developer's own worktree.
+STRAY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-cwd.XXXXXX")"
+trap 'rm -rf "$STRAY_DIR"' EXIT
 
 for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   [[ -n "$PATTERN" && "$fn" != *"$PATTERN"* ]] && continue
+  if [[ -n "${CRUX_TEST_FILE:-}" ]]; then
+    defined_in="$(shopt -s extdebug; declare -F "$fn" | awk '{print $3}')"
+    [[ "$(basename "$defined_in" .sh)" == "$CRUX_TEST_FILE" ]] || continue
+  fi
   CURRENT="${fn#test_}"
   echo "${T_DIM}· ${CURRENT//_/ }${T_OFF}"
   before=$FAIL
+  cd "$STRAY_DIR" || exit 1
   "$fn"
-  # Un caso que cargue un script estricto dejaría 'set -e' activo y mataría la
-  # suite en la primera aserción negativa, sin decir por qué.
+  # A case that loads a strict script would leave 'set -e' on and kill the
+  # suite at the first negative assertion, without saying why.
   set +e; set -uo pipefail
 
-  # Y un caso que exporte HOME o TMPDIR se los lleva al siguiente, que al
-  # borrarse el sandbox se queda apuntando a un directorio que ya no existe.
-  # Eso colgó la suite entera una vez, sin un solo mensaje.
-  if [[ "$HOME" != "$HOME_LIMPIO" || "${TMPDIR:-/tmp}" != "$TMPDIR_LIMPIO" ]]; then
-    _fail "el caso exporta HOME o TMPDIR — pásalos por invocación, no al shell de la suite"
-    HOME="$HOME_LIMPIO"; TMPDIR="$TMPDIR_LIMPIO"
+  # And a case that exports HOME or TMPDIR carries them into the next one,
+  # which, once the sandbox is deleted, is left pointing at a directory that no
+  # longer exists. That hung the whole suite once, without a single message.
+  if [[ "$HOME" != "$CLEAN_HOME" || "${TMPDIR:-/tmp}" != "$CLEAN_TMPDIR" ]]; then
+    _fail "the case exports HOME or TMPDIR — pass them per invocation, not to the suite shell"
+    HOME="$CLEAN_HOME"; TMPDIR="$CLEAN_TMPDIR"
   fi
 
-  # Un caso que devuelva los ajustes del agente a su sitio real —con un unset,
-  # normalmente— se los deja así al siguiente, y el que instale hooks engancha
-  # los de quien ejecuta la suite. Pasó, y dejó la máquina con tres hooks
-  # apuntando a un worktree borrado.
-  if [[ -n "${SB:-}" && ( -z "${CLAUDE_SETTINGS:-}" || "${CLAUDE_SETTINGS}" == "$HOME_LIMPIO"/.claude/* ) ]]; then
-    _fail "el caso deja CLAUDE_SETTINGS fuera del sandbox — los hooks reales acaban tocados"
+  # A case that puts the agent settings back to their real place —with an
+  # unset, usually— leaves them like that for the next one, and the one that
+  # installs hooks hooks those of whoever runs the suite. It happened, and it
+  # left the machine with three hooks pointing at a deleted worktree.
+  if [[ -n "${SB:-}" && ( -z "${CLAUDE_SETTINGS:-}" || "${CLAUDE_SETTINGS}" == "$CLEAN_HOME"/.claude/* ) ]]; then
+    _fail "the case leaves CLAUDE_SETTINGS outside the sandbox — the real hooks end up touched"
     export CLAUDE_SETTINGS="$SB/settings.json"
   fi
-  cd "$PWD_LIMPIO" || exit 1
+  if [[ -n "$(ls -A "$STRAY_DIR" 2>/dev/null)" ]]; then
+    _fail "the case wrote into the directory it was started from: $(ls -A "$STRAY_DIR" | tr '\n' ' ')"
+    find "$STRAY_DIR" -mindepth 1 -delete
+  fi
+  cd "$CLEAN_PWD" || exit 1
 
   teardown
   [[ $FAIL -eq $before ]] || true
@@ -168,9 +186,9 @@ done
 
 echo
 if [[ $FAIL -eq 0 ]]; then
-  echo "${T_GRN}$PASS aserciones, 0 fallos${T_OFF}"
+  echo "${T_GRN}$PASS assertions, 0 failures${T_OFF}"
 else
-  echo "${T_RED}$FAIL fallos${T_OFF} de $((PASS + FAIL)) aserciones:"
+  echo "${T_RED}$FAIL failures${T_OFF} of $((PASS + FAIL)) assertions:"
   for c in "${FAILED_CASES[@]}"; do echo "  - $c"; done
 fi
 exit $(( FAIL > 0 ? 1 : 0 ))

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Hook de cierre de sesión (Stop).
+# Session-end hook (Stop).
 #
-# Avisa de las memorias que el estándar guarda en git y siguen solo en local.
-# Silencioso mientras no haya ninguna.
+# Warns about the memories that the standard keeps in git and that are still
+# only local. Silent as long as there are none.
 #
-# Vive en un hook y no en el ritual de cierre porque el ritual se invocaba en 2
-# de 46 sesiones: la regla existía, la comprobación dependía de que alguien se
-# acordase, y las memorias de proyecto se quedaban en una máquina.
+# It lives in a hook and not in the closing ritual because the ritual was
+# invoked in 2 of 46 sessions: the rule existed, the check depended on someone
+# remembering, and project memories stayed on one machine.
 
 set -u
 
@@ -16,8 +16,8 @@ if [[ -z "$kernel" && -f "$HOME/.crux/config" ]]; then
 fi
 [[ -n "$kernel" && -f "$kernel/bin/memory.sh" ]] || exit 0
 
-# Una línea, no el informe entero: esto se dispara en cada cierre de sesión, y
-# un aviso que ocupa media pantalla se aprende a ignorar en dos días.
+# One line, not the whole report: this fires at every session close, and a
+# warning that takes up half the screen is learned to be ignored in two days.
 bash "$kernel/bin/memory.sh" --brief 2>&1
 
 exit 0

@@ -1,102 +1,102 @@
 #!/usr/bin/env bash
 
-# La activación es lo que decide si una skill llega a usarse, y era lo único del
-# sistema que no se verificaba. Estos casos montan el defecto real —un adaptador
-# que repite el procedimiento que adapta— y comprueban que se ve.
+# Activation is what decides whether a skill ever gets used, and it was the one
+# thing in the system that was not verified. These cases build the real flaw —an
+# adapter that repeats the procedure it adapts— and check that it shows.
 
-skill_falsa() {
-  # skill_falsa <directorio> <nombre> <descripción> [cuerpo]
+fake_skill() {
+  # fake_skill <directory> <name> <description> [body]
   local dir="$1/$2"
   mkdir -p "$dir"
   printf -- '---\nname: %s\ndescription: %s\n---\n\n# %s\n\n%s\n' \
-    "$2" "$3" "$2" "${4:-Procedimiento.}" > "$dir/SKILL.md"
+    "$2" "$3" "$2" "${4:-Procedure.}" > "$dir/SKILL.md"
 }
 
-test_activacion_probe_senala_el_empate_entre_dos_descripciones() {
+test_activation_probe_flags_tie_between_two_descriptions() {
   sandbox >/dev/null
-  skill_falsa "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
-  skill_falsa "$CLAUDE_SKILLS_DIR" beta "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
-  # Hacen falta más skills en el catálogo, y no por decorar: una palabra que
-  # está en el 100% de las descripciones no distingue nada y pesa cero, así que
-  # con solo las dos gemelas no puntuaría ninguna.
-  skill_falsa "$CLAUDE_SKILLS_DIR" gamma "Renovar el certificado del servidor de correo. Usa cuando caduque."
-  skill_falsa "$CLAUDE_SKILLS_DIR" delta "Rotar las claves de acceso del almacenamiento. Usa cada trimestre."
+  fake_skill "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
+  fake_skill "$CLAUDE_SKILLS_DIR" beta "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
+  # More skills are needed in the catalog, and not for decoration: a word that
+  # is in 100% of the descriptions distinguishes nothing and weighs zero, so
+  # with only the two twins nothing would score.
+  fake_skill "$CLAUDE_SKILLS_DIR" gamma "Renovar el certificado del servidor de correo. Usa cuando caduque."
+  fake_skill "$CLAUDE_SKILLS_DIR" delta "Rotar las claves de acceso del almacenamiento. Usa cada trimestre."
 
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" "purgar la caché del radar" 2>&1)"
-  assert_contains "$out" "no se distinguen" "dos descripciones idénticas dan empate"
+  assert_contains "$out" "not distinguishable" "two identical descriptions tie"
 }
 
-test_activacion_probe_no_puntua_lo_que_esta_en_todas() {
+test_activation_probe_does_not_score_what_is_in_all() {
   sandbox >/dev/null
-  skill_falsa "$CLAUDE_SKILLS_DIR" alfa "Desplegar el servicio. Usa cuando toque."
-  skill_falsa "$CLAUDE_SKILLS_DIR" beta "Reiniciar el servicio. Usa cuando toque."
+  fake_skill "$CLAUDE_SKILLS_DIR" alfa "Desplegar el servicio. Usa cuando toque."
+  fake_skill "$CLAUDE_SKILLS_DIR" beta "Reiniciar el servicio. Usa cuando toque."
 
-  # `servicio` está en las dos: no ayuda a elegir y no debe inventar un ganador.
+  # `servicio` is in both: it does not help choose and must not invent a winner.
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" "el servicio" 2>&1)"
-  assert_contains "$out" "ninguna skill comparte vocabulario" \
-    "una palabra presente en todo el catálogo no decide nada"
+  assert_contains "$out" "no skill shares vocabulary" \
+    "a word present in the whole catalog decides nothing"
 }
 
-test_activacion_probe_distingue_lo_que_si_se_distingue() {
+test_activation_probe_distinguishes_what_is_distinguishable() {
   sandbox >/dev/null
-  skill_falsa "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
-  skill_falsa "$CLAUDE_SKILLS_DIR" beta "Renovar el certificado del servidor de correo. Usa cuando caduque."
+  fake_skill "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
+  fake_skill "$CLAUDE_SKILLS_DIR" beta "Renovar el certificado del servidor de correo. Usa cuando caduque."
 
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" "purgar la caché del radar" 2>&1)"
-  assert_not_contains "$out" "no se distinguen" "descripciones distintas no dan empate"
+  assert_not_contains "$out" "not distinguishable" "different descriptions do not tie"
 }
 
-test_activacion_los_casos_fallan_cuando_gana_otra() {
+test_activation_cases_fail_when_another_wins() {
   sandbox >/dev/null
-  skill_falsa "$CLAUDE_SKILLS_DIR" correcta "Renovar el certificado del servidor de correo. Usa cuando caduque."
-  skill_falsa "$CLAUDE_SKILLS_DIR" ladrona "Renovar el certificado caducado del correo. Usa cuando el certificado del correo esté caducado y haya que renovarlo."
-  printf 'correcta\thay que renovar el certificado del correo que ha caducado\n' > "$SB/casos.tsv"
+  fake_skill "$CLAUDE_SKILLS_DIR" correcta "Renovar el certificado del servidor de correo. Usa cuando caduque."
+  fake_skill "$CLAUDE_SKILLS_DIR" thiefa "Renovar el certificado caducado del correo. Usa cuando el certificado del correo esté caducado y haya que renovarlo."
+  printf 'correcta\thay que renovar el certificado del correo que ha caducado\n' > "$SB/cases.tsv"
 
-  local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --casos "$SB/casos.tsv" 2>&1)"
-  assert_contains "$out" "FALLA" "un caso que pierde se reporta"
-  assert_exit 1 "y el comando sale en rojo" \
-    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --casos "$SB/casos.tsv"
+  local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --cases "$SB/cases.tsv" 2>&1)"
+  assert_contains "$out" "FAIL" "a losing case is reported"
+  assert_exit 1 "and the command exits red" \
+    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --cases "$SB/cases.tsv"
 }
 
-test_activacion_los_casos_del_kernel_siguen_pasando() {
-  # Mide el catálogo del kernel de verdad: es la red que avisa si una descripción
-  # nueva apaga una que ya se activaba. El directorio va por invocación —nunca
-  # heredado— porque el caso anterior deja exportado el suyo, apuntando a un
-  # sandbox ya borrado.
+test_activation_kernel_cases_keep_passing() {
+  # Measures the real kernel catalog: it is the net that warns if a new
+  # description switches off one that used to activate. The directory goes per
+  # invocation —never inherited— because the previous case leaves its own
+  # exported, pointing at a sandbox already deleted.
   #
-  # Se afirma el número de casos y la identidad del fallo tolerado, no solo un
-  # contador: con un contador suelto, un fichero vaciado, con los tabuladores
-  # convertidos en espacios, o con un fallo distinto que sustituya al conocido,
-  # pasaban los tres en verde.
-  local casos="$CRUX_HOME/skills/skill-audit/casos/activacion.tsv"
-  assert_file "$casos" "el fichero de casos del kernel existe"
+  # What is asserted is the number of cases and the identity of the tolerated
+  # failure, not just a counter: with a bare counter, an emptied file, one with
+  # the tabs turned into spaces, or a different failure replacing the known
+  # one all passed green.
+  local cases="$CRUX_HOME/skills/skill-audit/casos/activacion.tsv"
+  assert_file "$cases" "the kernel cases file exists"
 
-  local esperados; esperados="$(grep -cve '^[[:space:]]*$' -e '^#' "$casos")"
+  local expected_list; expected_list="$(grep -cve '^[[:space:]]*$' -e '^#' "$cases")"
   local out
   out="$(env CLAUDE_SKILLS_DIR="$CRUX_HOME/skills" \
-    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --casos "$casos" 2>&1)"
+    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --cases "$cases" 2>&1)"
 
-  assert_contains "$out" "$esperados casos ·" "se evalúan todos los casos del fichero"
+  assert_contains "$out" "$expected_list cases ·" "every case in the file is evaluated"
 
-  local fallan; fallan="$(echo "$out" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) fallan.*/\1/p')"
-  local veredicto=mal
-  [[ -n "$fallan" && "$fallan" -le 1 ]] && veredicto=bien
-  assert_eq "bien" "$veredicto" "no empeoran (fallan: ${fallan:-sin medir})"
+  local failing; failing="$(echo "$out" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) fail .*/\1/p')"
+  local verdict=bad
+  [[ -n "$failing" && "$failing" -le 1 ]] && verdict=good
+  assert_eq "good" "$verdict" "they do not get worse (failing: ${failing:-unmeasured})"
 
-  # `end-session` y `promote-to-docs` se solapan porque una contiene a la otra.
-  # Es el único fallo admitido, y se nombra: si el que falla pasa a ser otro, es
-  # una regresión con el contador intacto.
-  if [[ "${fallan:-0}" -eq 1 ]]; then
-    assert_contains "$out" "esperaba end-session" "el único fallo sigue siendo el anotado"
+  # `end-session` and `promote-to-docs` overlap because one contains the other.
+  # It is the only accepted failure, and it is named: if the failing one becomes
+  # another, it is a regression with the counter intact.
+  if [[ "${failing:-0}" -eq 1 ]]; then
+    assert_contains "$out" "expected end-session" "the only failure is still the recorded one"
   fi
 }
 
-test_activacion_audit_ve_al_adaptador_que_se_parece_a_su_procedimiento() {
+test_activation_audit_sees_adapter_resembling_its_procedure() {
   sandbox >/dev/null
   local docs; docs="$(new_project omega --repos "web")"
 
-  # Un adaptador que, en vez de aportar datos, vuelve a contar el método: es lo
-  # que deja una promoción mal rematada.
+  # An adapter that, instead of providing data, retells the method: it is what
+  # a badly finished promotion leaves behind.
   local desc
   desc="$(awk '/^---$/{n++;next} n==1 && /^description:/{p=1} n==1 && p && /^[a-z_-]+:/ && !/^description:/{p=0} n==1 && p{print}' \
     "$CRUX_HOME/skills/render-loop/SKILL.md" | sed 's/^description: *//' | tr '\n' ' ')"
@@ -105,97 +105,97 @@ test_activacion_audit_ve_al_adaptador_que_se_parece_a_su_procedimiento() {
     "$desc" > "$docs/.claude/skills/project/omega-render/SKILL.md"
 
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/audit.mjs" "$CRUX_PROJECTS_DIR" 2>&1)"
-  assert_contains "$out" "parecidos a su procedimiento" "señala el par para comprobarlo"
-  assert_contains "$out" "omega-render" "y nombra al adaptador"
-  assert_contains "$out" "--adaptador omega-render render-loop" "y da el comando que da el veredicto"
+  assert_contains "$out" "similar to their procedure" "points at the pair to check it"
+  assert_contains "$out" "omega-render" "and names the adapter"
+  assert_contains "$out" "--adaptador omega-render render-loop" "and gives the command that gives the verdict"
 }
 
-test_activacion_audit_ve_al_adaptador_que_no_se_nombra() {
+test_activation_audit_sees_adapter_that_does_not_name_itself() {
   sandbox >/dev/null
   local docs; docs="$(new_project sigma --repos "web")"
-  mkdir -p "$docs/.claude/skills/project/callado"
-  printf -- '---\nname: callado\ndescription: Comparar una salida con su referencia. Usa cuando dudes.\n---\n\n# callado\n\nAdapta visual-diff.\n' \
-    > "$docs/.claude/skills/project/callado/SKILL.md"
+  mkdir -p "$docs/.claude/skills/project/quiet"
+  printf -- '---\nname: quiet\ndescription: Comparar una salida con su referencia. Usa cuando dudes.\n---\n\n# quiet\n\nAdapta visual-diff.\n' \
+    > "$docs/.claude/skills/project/quiet/SKILL.md"
 
   local out; out="$(node "$CRUX_HOME/skills/skill-audit/scripts/audit.mjs" "$CRUX_PROJECTS_DIR" 2>&1)"
-  assert_contains "$out" "no nombran su proyecto en la descripción" "detecta al adaptador indistinguible"
-  assert_contains "$out" "callado" "y lo nombra"
+  assert_contains "$out" "do not name their project in the description" "detects the indistinguishable adapter"
+  assert_contains "$out" "quiet" "and names it"
 }
 
-test_activacion_check_descripcion_caza_los_defectos() {
+test_activation_check_description_catches_defects() {
   sandbox >/dev/null
-  local dir="$SB/catalogo"
-  skill_falsa "$dir" muda "Ayuda con los despliegues del sistema."
-  skill_falsa "$dir" buena "Desplegar sin CI. Usa cuando el pipeline esté caído."
-  mkdir -p "$dir/rota"
-  printf 'sin frontmatter\n' > "$dir/rota/SKILL.md"
+  local dir="$SB/catalog"
+  fake_skill "$dir" mute "Ayuda con los despliegues del sistema."
+  fake_skill "$dir" good "Desplegar sin CI. Usa cuando el pipeline esté caído."
+  mkdir -p "$dir/broken"
+  printf 'no frontmatter\n' > "$dir/broken/SKILL.md"
 
   local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$dir" es 2>&1)"
-  assert_contains "$out" "no dice cuándo usarla" "caza la descripción que no se activa"
-  assert_contains "$out" "sin frontmatter" "caza la skill que el agente no podrá cargar"
-  assert_not_contains "$out" "'buena'" "no marca la que sí dispara"
+  assert_contains "$out" "does not say when to use it" "catches the description that does not activate"
+  assert_contains "$out" "without frontmatter" "catches the skill the agent will not be able to load"
+  assert_not_contains "$out" "'good'" "does not flag the one that does fire"
 }
 
-test_activacion_check_descripcion_pasa_el_catalogo_del_kernel() {
-  local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$CRUX_HOME/skills" es 2>&1)"
-  assert_eq "" "$out" "ninguna skill del kernel tiene la descripción mal formada"
+test_activation_check_description_passes_kernel_catalog() {
+  local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$CRUX_HOME/skills" en 2>&1)"
+  assert_eq "" "$out" "no kernel skill has a malformed description"
 }
 
-test_activacion_un_adaptador_tiene_que_repartir() {
+test_activation_adapter_must_split() {
   sandbox >/dev/null
-  # El procedimiento genérico y su adaptador, bien repartidos: el adaptador
-  # aporta los nombres propios y no vuelve a contar el método entero.
-  skill_falsa "$CLAUDE_SKILLS_DIR" metodo \
+  # The generic procedure and its adapter, well split: the adapter provides
+  # the proper names and does not retell the whole method.
+  fake_skill "$CLAUDE_SKILLS_DIR" method \
     "Probar una aplicación móvil en un dispositivo físico conectado por cable. Usa cuando haya que validar en nativo."
-  skill_falsa "$CLAUDE_SKILLS_DIR" adaptador \
-    "Datos de Chispas: package, deep-link y terminal de referencia. Usa junto a metodo para el QA de Chispas."
-  skill_falsa "$CLAUDE_SKILLS_DIR" otra "Renovar certificados del correo. Usa cuando caduquen."
+  fake_skill "$CLAUDE_SKILLS_DIR" adapter \
+    "Datos de Chispas: package, deep-link y terminal de referencia. Usa junto a method para el QA de Chispas."
+  fake_skill "$CLAUDE_SKILLS_DIR" other "Renovar certificados del correo. Usa cuando caduquen."
 
-  assert_exit 0 "un adaptador que reparte pasa la prueba" \
-    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador adaptador metodo \
+  assert_exit 0 "an adapter that splits passes the test" \
+    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adapter adapter method \
       "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal"
 }
 
-test_activacion_un_adaptador_que_roba_lo_generico_falla() {
+test_activation_adapter_stealing_generic_fails() {
   sandbox >/dev/null
-  skill_falsa "$CLAUDE_SKILLS_DIR" metodo \
+  fake_skill "$CLAUDE_SKILLS_DIR" method \
     "Probar una aplicación móvil en un dispositivo físico. Usa cuando haya que validar en nativo."
-  # Este repite el método entero y además añade lo suyo: gana las dos.
-  skill_falsa "$CLAUDE_SKILLS_DIR" ladron \
+  # This one repeats the whole method and adds its own on top: it wins both.
+  fake_skill "$CLAUDE_SKILLS_DIR" greedy-adapter \
     "Probar una aplicación móvil en un dispositivo físico conectado por cable, con los datos de Chispas. Usa cuando haya que validar en nativo la aplicación en el dispositivo."
-  skill_falsa "$CLAUDE_SKILLS_DIR" otra "Renovar certificados del correo. Usa cuando caduquen."
+  fake_skill "$CLAUDE_SKILLS_DIR" other "Renovar certificados del correo. Usa cuando caduquen."
 
   local out
-  out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador ladron metodo \
+  out="$(node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adapter greedy-adapter method \
     "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal" 2>&1)"
-  assert_contains "$out" "NO reparte" "un adaptador que gana lo genérico se reporta"
-  assert_exit 1 "y el comando sale en rojo" \
-    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adaptador ladron metodo \
+  assert_contains "$out" "does NOT split" "an adapter that wins the generic one is reported"
+  assert_exit 1 "and the command exits red" \
+    node "$CRUX_HOME/skills/skill-audit/scripts/probe.mjs" --adapter greedy-adapter method \
       "probar la aplicación en un dispositivo físico" "probar Chispas en el terminal"
 }
 
-test_activacion_una_skill_no_pasa_de_mil_palabras() {
-  # Se carga entera en el contexto cada vez que se usa: lo que sobra suele ser
-  # el porqué de cada regla, que va en references/.
+test_activation_skill_stays_under_thousand_words() {
+  # It is loaded whole into the context every time it is used: what is in
+  # excess is usually the why of each rule, which belongs in references/.
   sandbox >/dev/null
-  local dir="$SB/catalogo"
-  _skill_de() {
+  local dir="$SB/catalog"
+  _skill_of() {
     mkdir -p "$dir/$1"
     { printf -- '---\nname: %s\ndescription: Hacer algo. Usa cuando haga falta.\n---\n\n' "$1"
-      yes palabra | head -n "$2" | tr '\n' ' '; } > "$dir/$1/SKILL.md"
+      yes word | head -n "$2" | tr '\n' ' '; } > "$dir/$1/SKILL.md"
   }
-  _skill_de corta 300
-  _skill_de larga 1200
-  _skill_de vieja-crece 1300
-  _skill_de vieja-cabe 800
-  _skill_de vieja-igual 1100
-  printf '# heredadas\nvieja-crece 1150\nvieja-cabe 1100\nvieja-igual 1200\n' > "$dir/.oversized"
+  _skill_of short 300
+  _skill_of long 1200
+  _skill_of old-grows 1300
+  _skill_of old-fits 800
+  _skill_of old-same 1100
+  printf '# inherited\nold-grows 1150\nold-fits 1100\nold-same 1200\n' > "$dir/.oversized"
 
   local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$dir" es 2>&1)"
-  assert_contains "$out" "skill 'larga':" "una nueva que pasa del tope da aviso"
-  assert_contains "$out" "references/" "y dice cómo arreglarla"
-  assert_contains "$out" "skill 'vieja-crece': ha crecido" "una heredada no puede crecer"
-  assert_contains "$out" "skill 'vieja-cabe': ya cabe" "una heredada que ya cabe tiene que salir de la lista"
-  assert_not_contains "$out" "'vieja-igual'" "una heredada que no crece no molesta"
-  assert_not_contains "$out" "'corta'" "ni una que cabe"
+  assert_contains "$out" "skill 'long':" "a new one over the cap warns"
+  assert_contains "$out" "references/" "and says how to fix it"
+  assert_contains "$out" "skill 'old-grows': has grown" "an inherited one cannot grow"
+  assert_contains "$out" "skill 'old-fits': now fits" "an inherited one that now fits has to leave the list"
+  assert_not_contains "$out" "'old-same'" "an inherited one that does not grow does not bother"
+  assert_not_contains "$out" "'short'" "nor one that fits"
 }

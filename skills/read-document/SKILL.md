@@ -1,120 +1,123 @@
 ---
 name: read-document
-description: Poner en contexto un documento que no se puede abrir directamente —un Word, un PowerPoint, un Excel, un ODF, un EPUB o un PDF largo— convirtiéndolo a Markdown, eligiendo la vía correcta según el tipo y comprobando que no ha salido vacío. Usa cuando llegue un adjunto ofimático, cuando haya que leer una presentación o una hoja de cálculo, cuando un PDF sea demasiado largo para leerlo entero, o cuando alguien diga "mira este documento", "resume este informe" o "qué dice el adjunto".
+description: Bring into context a document that cannot be opened directly —a Word, a PowerPoint, an Excel, an ODF, an EPUB or a long PDF— by converting it to Markdown, choosing the right route by type and checking that the output is not empty. Use when an office attachment arrives, when a presentation or a spreadsheet has to be read, when a PDF is too long to read whole, or when someone says "mira este documento", "resume este informe" or "qué dice el adjunto".
 ---
 
 # read-document
 
-Un documento que no se puede abrir es un documento que no existe. Esta skill lo
-convierte a Markdown para poder leerlo, citarlo y volver a él.
+A document that cannot be opened is a document that does not exist. This skill
+converts it to Markdown so it can be read, quoted and returned to.
 
-El comando de conversión es una línea. Lo que aporta esta skill son tres
-decisiones: **por qué vía**, **cómo saber que salió bien** y **qué se perdió por
-el camino**.
+The conversion command is one line. What this skill contributes are three
+decisions: **which route**, **how to know it went well** and **what was lost
+along the way**.
 
-## Cuándo usar
+## When to use
 
-- Llega un adjunto `.docx`, `.pptx`, `.xlsx`, `.odt`, `.odp`, `.ods`, `.rtf`,
-  `.epub` o `.csv`. Sin conversión no hay forma de leerlos.
-- Un PDF es largo o está lleno de datos y hace falta el contenido, no la
-  maquetación.
-- Hay que citar literalmente un fragmento de un documento en la respuesta o en
-  el código.
+- An attachment arrives as `.docx`, `.pptx`, `.xlsx`, `.odt`, `.odp`, `.ods`,
+  `.rtf`, `.epub` or `.csv`. Without conversion there is no way to read them.
+- A PDF is long or full of data and the content is needed, not the layout.
+- A fragment of a document has to be quoted literally in the answer or in the
+  code.
 
-## Cuándo no usar
+## When not to use
 
-- **Un PDF que se juzga por cómo se ve**: un informe maquetado, un diseño, una
-  factura cuya disposición importa. Ábrelo directamente, que conserva la
-  maquetación. Convertirlo tira justo lo que hay que mirar.
-- **Un documento del que solo hace falta un dato suelto** que ya se conoce y se
-  puede buscar con una herramienta de texto.
-- **Extraer campos estructurados a JSON**. Esto entrega Markdown; el trabajo de
-  extracción es posterior y distinto.
-- **Un escaneado o un documento fotografiado.** Aquí no hay texto que extraer:
-  hace falta OCR, que es otra cosa. Ver el paso 3.
+- **A PDF judged by how it looks**: a laid-out report, a design, an invoice
+  whose layout matters. Open it directly, which preserves the layout.
+  Converting it throws away exactly what has to be looked at.
+- **A document from which only a single known piece of data is needed** that can
+  be searched for with a text tool.
+- **Extracting structured fields to JSON**. This delivers Markdown; the
+  extraction work is later and different.
+- **A scan or a photographed document.** There is no text to extract here: OCR
+  is needed, which is something else. See step 3.
 
-## 1. Elegir la vía
+## 1. Choose the route
 
-| Entrada | Vía | Por qué |
+| Input | Route | Why |
 | --- | --- | --- |
-| Ofimático (Word, PowerPoint, Excel, ODF, RTF, EPUB, CSV) | Convertir a Markdown | No hay alternativa: el fichero es un ZIP de XML |
-| PDF con texto, largo o de datos | Convertir a Markdown | Sale con las tablas ya estructuradas y ocupa mucho menos que el volcado plano |
-| PDF de maquetación o visual | Abrirlo directamente, sin convertir | La conversión tira la disposición, que es lo que se juzga |
-| PDF escaneado o fotografiado | Ninguna: parar y decirlo | Sin capa de texto no hay nada que extraer |
+| Office (Word, PowerPoint, Excel, ODF, RTF, EPUB, CSV) | Convert to Markdown | No alternative: the file is a ZIP of XML |
+| PDF with text, long or data-heavy | Convert to Markdown | Comes out with the tables already structured and takes up much less than the flat dump |
+| Layout or visual PDF | Open it directly, without converting | Conversion throws away the layout, which is what is being judged |
+| Scanned or photographed PDF | None: stop and say so | Without a text layer there is nothing to extract |
 
-## 2. Convertir
+## 2. Convert
 
-La herramienta de referencia es `anydoc`: un binario que lee los catorce
-formatos y emite Markdown con un solo serializador, así que la salida es
-consistente venga de donde venga. Licencia MIT, sin credenciales, sin servicio
-externo para los formatos de texto.
-
-```bash
-npx -y @firecrawl/anydoc <fichero> -o <destino>.md
-```
-
-Guarda el resultado en un fichero temporal en vez de dejarlo solo en la
-conversación: permite citarlo, buscar dentro y no reconvertir en cada vuelta.
-
-Si la herramienta no está disponible, hay plan B según el formato, con pérdidas:
-
-- PDF: el extractor de texto del sistema, con la disposición preservada. Sale
-  mucho más largo y sin estructura de tabla.
-- Ofimático: la suite de oficina en modo headless convierte a HTML o a texto.
-  **No sabe convertir presentaciones a texto**: para ellas hay que pasar antes
-  por PDF, y entonces se pierde el orden y las notas.
-
-## 3. Comprobar que salió algo
-
-**Este es el paso que evita el fallo caro**, y no es opcional.
+The reference tool is `anydoc`: a binary that reads the fourteen formats and
+emits Markdown with a single serialiser, so the output is consistent wherever
+it comes from. MIT licence, no credentials, no external service for the text
+formats.
 
 ```bash
-wc -c <destino>.md
+npx -y @firecrawl/anydoc <file> -o <destination>.md
 ```
 
-Contrasta el tamaño con lo que cabría esperar del documento. Un documento de
-varias páginas que produce cuatro líneas indica una conversión fallida.
+Save the result in a temporary file instead of leaving it only in the
+conversation: it lets you quote it, search inside it and not reconvert on every
+round.
 
-Si la herramienta avisa de que hace falta OCR, **para y dilo**. No sigas con
-media conversión ni afirmes que el documento está vacío. El documento tiene
-contenido; lo que falla es la vía de lectura. Ofrece las salidas reales —pedir el original en otro
-formato, o usar un servicio de OCR— y deja la decisión a quien pregunta.
+If the tool is not available, there is a plan B depending on the format, with
+losses:
 
-## 4. Decir qué se perdió
+- PDF: the system text extractor, with the layout preserved. It comes out much
+  longer and without table structure.
+- Office: the office suite in headless mode converts to HTML or text. **It
+  cannot convert presentations to text**: for them you have to go through PDF
+  first, and then the order and the notes are lost.
 
-Antes de trabajar sobre el Markdown, comprueba si la conversión se comió algo
-que luego se vaya a necesitar, y avísalo:
+## 3. Check that something came out
 
-- **Las presentaciones pierden la separación entre diapositivas.** El texto sale
-  seguido, sin marca de dónde empieza cada una. Si después hay que citar "la
-  diapositiva 4", esa referencia ya no existe.
-- **Las tablas complejas de PDF salen descuadradas.** Celdas combinadas y
-  cabeceras a varios niveles se reconstruyen mal: las columnas bailan. Sirve
-  para leer, no para copiar cifras a ciegas.
-- **Las imágenes, los gráficos y el color desaparecen.** Si el argumento del
-  documento está en un gráfico, en el Markdown no queda nada de él.
+**This is the step that avoids the expensive failure**, and it is not optional.
+
+```bash
+wc -c <destination>.md
+```
+
+Compare the size with what the document would be expected to yield. A document
+of several pages that produces four lines indicates a failed conversion.
+
+If the tool warns that OCR is needed, **stop and say so**. Do not carry on with
+half a conversion or claim that the document is empty. The document has content;
+what fails is the reading route. Offer the real ways out —ask for the original
+in another format, or use an OCR service— and leave the decision to whoever is
+asking.
+
+## 4. Say what was lost
+
+Before working on the Markdown, check whether the conversion swallowed something
+that will be needed later, and say so:
+
+- **Presentations lose the separation between slides.** The text comes out in one
+  run, with no mark of where each one starts. If later you have to quote "slide
+  4", that reference no longer exists.
+- **Complex PDF tables come out misaligned.** Merged cells and multi-level
+  headers are rebuilt badly: the columns dance. It is good for reading, not for
+  copying figures blindly.
+- **Images, charts and colour disappear.** If the document's argument is in a
+  chart, nothing of it remains in the Markdown.
 
 ## Gotchas
 
-- **El extractor de texto plano falla en silencio con los escaneados** (fichero
-  vacío y código 0); `anydoc` falla con código distinto de cero y avisa de OCR.
-- **Un fichero puede estar vacío de verdad:** mira el original antes de culpar a
-  la herramienta.
-- **La primera ejecución descarga el paquete;** después queda en caché.
-- **El CSV sin extensión `.csv`** o por entrada estándar hay que declararlo.
-- **El OCR de escaneados es un servicio de pago;** no lo asumas disponible.
+- **The plain-text extractor fails silently with scans** (empty file and code
+  0); `anydoc` fails with a non-zero code and warns about OCR.
+- **A file can be genuinely empty:** look at the original before blaming the
+  tool.
+- **The first run downloads the package;** afterwards it stays cached.
+- **A CSV without the `.csv` extension** or via standard input has to be
+  declared.
+- **OCR of scans is a paid service;** do not assume it is available.
 
 ## Anti-patterns
 
-- **Convertir un PDF que había que mirar.** Si lo que se juzga es la maquetación,
-  la conversión destruye la pregunta.
-- **Resumir sin comprobar el tamaño de la salida.** Un resumen de una conversión
-  vacía es una invención con formato de respuesta.
-- **Citar la diapositiva o la página tras convertir.** Esas referencias no
-  sobreviven al Markdown; si hacen falta, hay que volver al original.
-- **Reconvertir en cada vuelta.** Guarda el Markdown y trabaja sobre él.
+- **Converting a PDF that had to be looked at.** If what is judged is the
+  layout, conversion destroys the question.
+- **Summarising without checking the output size.** A summary of an empty
+  conversion is an invention in the shape of an answer.
+- **Quoting the slide or the page after converting.** Those references do not
+  survive into Markdown; if they are needed, go back to the original.
+- **Reconverting on every round.** Save the Markdown and work on it.
 
-## Relacionado
+## Related
 
-- `/render-loop` — la dirección contraria: iterar sobre una salida renderizada
-- `/visual-diff` — cuando lo que hay que comparar es cómo se ve, no qué dice
+- `/render-loop` — the opposite direction: iterate on a rendered output
+- `/visual-diff` — when what has to be compared is how it looks, not what it says

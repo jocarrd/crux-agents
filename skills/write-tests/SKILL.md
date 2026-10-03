@@ -1,105 +1,107 @@
 ---
 name: write-tests
-description: Escribir tests que valgan la pena: elegir qué merece cobertura y qué no, cubrir el caso que duele antes que el feliz, mantenerlos deterministas y validarlos en negativo. Usa cuando haya que añadir tests a algo que no los tiene, cuando añadas comportamiento nuevo, cuando arregles un bug y quieras que no vuelva, cuando vayas a refactorizar algo sin red, o cuando te pidan subir la cobertura.
+description: Write tests worth having: choose what deserves coverage and what doesn't, cover the painful case before the happy one, keep them deterministic and validate them in the negative. Use when tests have to be added to something that has none, when you add new behaviour, when you fix a bug and want it not to come back, when you are about to refactor something with no safety net, or when asked to raise coverage.
 ---
 
 # write-tests
 
-Escribir tests es fácil. Escribir los que valen la pena, no.
+Writing tests is easy. Writing the ones worth having is not.
 
-## El criterio: testea lo que duele si falla
+## The criterion: test what hurts if it fails
 
-No se testea por cobertura, se testea por **consecuencia**. Antes de escribir
-un test, pregunta qué pasa si eso se rompe en producción y nadie se entera.
+You don't test for coverage, you test for **consequence**. Before writing a test,
+ask what happens if that breaks in production and nobody notices.
 
-| Merece test | No lo merece |
-| ----------- | ------------ |
-| Cálculos con reglas de negocio | Getters, mapeos triviales |
-| Transformación de datos externos | Que un framework haga lo que promete |
-| Casos límite y valores frontera | Que una constante valga lo que vale |
-| Todo bug que ya ocurrió una vez | Detalles de implementación privados |
-| Contratos entre módulos o servicios | Maquetación, salvo que sea medible |
-| Lógica que un refactor va a mover | Código que va a desaparecer la semana que viene |
+| Deserves a test | Doesn't |
+| --------------- | ------- |
+| Calculations with business rules | Getters, trivial mappings |
+| Transformation of external data | A framework doing what it promises |
+| Edge cases and boundary values | A constant having the value it has |
+| Every bug that has already happened once | Private implementation details |
+| Contracts between modules or services | Layout, unless it is measurable |
+| Logic a refactor is going to move | Code that will be gone next week |
 
-**Un test por cada bug real.** Es la regla con mejor retorno que existe: el bug
-ya demostró que ese camino se rompe, así que la probabilidad de que vuelva no
-es teórica.
+**One test per real bug.** It is the rule with the best return there is: the bug
+already proved that path breaks, so the probability of it coming back is not
+theoretical.
 
-## Empieza por el caso que duele
+## Start with the painful case
 
-El camino feliz suele estar cubierto de rebote por el uso. Lo que nadie prueba
-es lo otro:
+The happy path is usually covered incidentally by use. What nobody tests is the
+rest:
 
-- Vacío, nulo, cero, cadena vacía, lista vacía.
-- El máximo y el mínimo, y uno más allá de cada uno.
-- Entrada mal formada, en el formato equivocado, con acentos, muy larga.
-- Duplicados, orden inverso, concurrencia.
-- El error del servicio externo: timeout, 500, respuesta con la forma cambiada.
+- Empty, null, zero, empty string, empty list.
+- The maximum and the minimum, and one past each.
+- Malformed input, in the wrong format, with accents, very long.
+- Duplicates, reverse order, concurrency.
+- The external service's error: timeout, 500, a response with a changed shape.
 
-Si solo vas a escribir tres tests, que sean de aquí.
+If you are only going to write three tests, make them from here.
 
-## Un test tiene que ser determinista
+## A test has to be deterministic
 
-Un test que falla una de cada veinte veces es peor que no tenerlo: enseña al
-equipo a reintentar sin mirar, y el día que falle de verdad nadie lo creerá.
+A test that fails one time in twenty is worse than not having it: it teaches the
+team to retry without looking, and the day it fails for real nobody will believe
+it.
 
-Las cuatro fuentes de indeterminismo, y qué hacer con ellas:
+The four sources of nondeterminism, and what to do about them:
 
-| Fuente | Qué hacer |
-| ------ | --------- |
-| Tiempo y fechas | Inyectar el reloj, nunca leerlo dentro de la lógica |
-| Aleatoriedad | Semilla fija, o inyectar el generador |
-| Red y servicios externos | Dobles con respuestas fijas; el fixture es el contrato |
-| Orden de ejecución y estado compartido | Cada test crea y destruye lo suyo |
+| Source | What to do |
+| ------ | ---------- |
+| Time and dates | Inject the clock, never read it inside the logic |
+| Randomness | Fixed seed, or inject the generator |
+| Network and external services | Doubles with fixed responses; the fixture is the contract |
+| Execution order and shared state | Each test creates and destroys its own |
 
-## Valídalo en negativo
+## Validate it in the negative
 
-**Un test que no has visto fallar no sirve.** Es el error más común y el más
-caro, porque produce confianza falsa.
+**A test you have never seen fail is worthless.** It is the most common mistake
+and the most expensive, because it produces false confidence.
 
-Después de escribirlo: rompe a propósito lo que testea, comprueba que el test
-se pone rojo por el motivo correcto —no por otro error—, y revierte. Treinta
-segundos que te dicen si la red existe.
+After writing it: deliberately break what it tests, check that the test goes red
+for the right reason (not because of some other error), and revert. Thirty
+seconds that tell you whether the safety net exists.
 
-## Qué hacer cuando cuesta escribirlo
+## What to do when it is hard to write
 
-Un test difícil de escribir casi nunca es un problema del test: es el diseño
-avisando. Si necesitas simular cinco dependencias para probar una función, esa
-función hace cinco cosas.
+A test that is hard to write is almost never a problem with the test: it is the
+design giving a warning. If you need to simulate five dependencies to test one
+function, that function does five things.
 
-Antes de montar el andamiaje, prueba a extraer la lógica pura y testear eso.
-La parte que habla con el mundo se queda fina y sin lógica, y deja de necesitar
-tests complicados.
+Before building the scaffolding, try extracting the pure logic and testing that.
+The part that talks to the world stays thin and logic-free, and stops needing
+complicated tests.
 
-## Nombres
+## Names
 
-El nombre del test es lo primero que se lee cuando falla en un log, meses
-después. Que diga **la condición y lo esperado**, no el nombre de la función:
+The test name is the first thing read when it fails in a log, months later. Make
+it state **the condition and the expectation**, not the function name:
 
-- Mal: `test_calcular`, `it("funciona")`
-- Bien: `devuelve cero cuando la lista está vacía`,
-  `rechaza la fecha si el fin es anterior al inicio`
+- Bad: `test_calculate`, `it("works")`
+- Good: `returns zero when the list is empty`,
+  `rejects the date if the end is before the start`
 
-## Antes de dar por buena una tanda
+## Before accepting a batch
 
-- ¿Falla alguno si rompo a propósito lo que prueban?
-- ¿Pasan en orden aleatorio y en paralelo?
-- ¿Pasan en una máquina limpia, sin tu caché ni tu base de datos?
-- ¿Alguno tarda tanto que la gente va a empezar a saltárselos?
+- Does any fail if I deliberately break what they test?
+- Do they pass in random order and in parallel?
+- Do they pass on a clean machine, without your cache or your database?
+- Is any so slow that people will start skipping them?
 
 ## Anti-patterns
 
-- **Testear la implementación en vez del comportamiento.** Si el test se rompe
-  con cada refactor sin que cambie nada observable, está mal escrito.
-- **Un test gigante que lo prueba todo.** Cuando falla no sabes qué falló.
-- **Aserciones de más.** Comprobar veinte campos por si acaso convierte
-  cualquier cambio legítimo en un test roto.
-- **Dobles que devuelven lo que le conviene al test.** Si el doble no se parece
-  a la respuesta real, el test pasa y producción falla.
-- **Escribir tests para subir un número.** La cobertura es una señal, no un
-  objetivo. Se puede tener el 90% y no probar nada que importe.
+- **Testing the implementation instead of the behaviour.** If the test breaks on
+  every refactor without anything observable changing, it is badly written.
+- **One giant test that tests everything.** When it fails you don't know what
+  failed.
+- **Too many assertions.** Checking twenty fields just in case turns any
+  legitimate change into a broken test.
+- **Doubles that return whatever suits the test.** If the double doesn't look
+  like the real response, the test passes and production fails.
+- **Writing tests to raise a number.** Coverage is a signal, not a goal. You can
+  have 90% and test nothing that matters.
 
-## Relacionado
+## Related
 
-- `/ship` — las puertas 1 y 5, que son estos tests
-- `/root-cause` — antes de escribir el test de un bug, entiende el bug
+- `/ship`: gates 1 and 5, which are these tests
+- `/root-cause`: before writing the test for a bug, understand the bug

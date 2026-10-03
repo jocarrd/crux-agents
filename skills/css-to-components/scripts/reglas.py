@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Lista todas las reglas CSS que tocan un selector, en orden de cascada.
+"""Lists every CSS rule that touches a selector, in cascade order.
 
-    python3 reglas.py estilos.css "nombre-del-bloque"
+    python3 reglas.py styles.css "block-name"
 
-El patrón es una expresión regular contra el selector. Se imprimen las reglas
-en el orden en que aparecen, con la media query que las envuelve: la última que
-coincide es la que manda.
+The pattern is a regular expression against the selector. Rules are printed
+in the order they appear, with the media query that wraps them: the last one
+that matches wins.
 """
 import re
 import sys
@@ -13,8 +13,8 @@ import sys
 if len(sys.argv) != 3:
     sys.exit(__doc__)
 
-ruta, patron = sys.argv[1], sys.argv[2]
-lines = open(ruta).read().split("\n")
+path, pattern = sys.argv[1], sys.argv[2]
+lines = open(path).read().split("\n")
 
 i = 0
 media = []
@@ -29,25 +29,25 @@ while i < len(lines):
         continue
 
     if stripped.endswith("{") and not stripped.startswith(("@", "/*")):
-        abre = i
-        inicio = i
-        while inicio > 0 and lines[inicio - 1].strip().endswith(","):
-            inicio -= 1
-        sel = " ".join(l.strip() for l in lines[inicio : abre + 1])[:-1].strip()
+        opens = i
+        start = i
+        while start > 0 and lines[start - 1].strip().endswith(","):
+            start -= 1
+        sel = " ".join(l.strip() for l in lines[start : opens + 1])[:-1].strip()
 
-        fin, d = abre, 0
-        while fin < len(lines):
-            d += lines[fin].count("{") - lines[fin].count("}")
-            fin += 1
+        end, d = opens, 0
+        while end < len(lines):
+            d += lines[end].count("{") - lines[end].count("}")
+            end += 1
             if d == 0:
                 break
 
-        if re.search(patron, sel):
-            marco = f"   [{media[-1][0]}]" if media else ""
-            print(f"L{inicio + 1}{marco}")
-            for k in range(inicio, fin):
+        if re.search(pattern, sel):
+            wrapper = f"   [{media[-1][0]}]" if media else ""
+            print(f"L{start + 1}{wrapper}")
+            for k in range(start, end):
                 print("   " + lines[k])
-        i = fin
+        i = end
         continue
 
     depth += lines[i].count("{") - lines[i].count("}")

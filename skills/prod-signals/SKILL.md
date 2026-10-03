@@ -1,95 +1,95 @@
 ---
 name: prod-signals
-description: Leer qué está pasando en producción —logs, errores, estado de los contenedores, disponibilidad— desde las fuentes de solo lectura que declara el proyecto, agrupando los errores repetidos para que quepan en el contexto. Usa cuando algo falle en producción, después de un despliegue que no se comporta, antes de depurar un fallo que solo pasa en el servidor, o cuando pregunten si la web o la API están dando errores.
+description: Read what is happening in production (logs, errors, container status, availability) from the read-only sources the project declares, grouping repeated errors so they fit in the context. Use when something fails in production, after a deployment that misbehaves, before debugging a failure that only happens on the server, or when asked whether the site or the API is throwing errors.
 ---
 
 # prod-signals
 
-Depurar un fallo de producción empezando por lo que alguien cuenta es empezar
-por la versión que menos datos tiene. Producción ya sabe qué falla, cuántas
-veces y desde cuándo: está en sus logs.
+Debugging a production failure starting from what someone tells you is starting
+from the version with the least data. Production already knows what fails, how
+many times and since when: it is in its logs.
 
-El problema es que un log son miles de líneas casi iguales. Esto las lee, se
-queda con lo que parece un problema y agrupa las que solo cambian en fechas,
-números o identificadores. Lo que llega al contexto es un resumen de veinte
-líneas, no el log.
+The problem is that a log is thousands of nearly identical lines. This reads
+them, keeps what looks like a problem and groups the ones that differ only in
+dates, numbers or identifiers. What reaches the context is a twenty-line summary,
+not the log.
 
-## Qué declara el proyecto
+## What the project declares
 
-Las fuentes son **comandos de solo lectura**, en el `crux.json` del proyecto:
+The sources are **read-only commands**, in the project's `crux.json`:
 
 ```json
 "observability": {
   "sources": [
-    { "name": "app", "command": "ssh <host> docker logs --since {since} <contenedor>" },
-    { "name": "contenedores", "command": "ssh <host> docker ps --format '{{.Names}} {{.Status}}'" },
-    { "name": "web", "command": "<cli de la plataforma> logs <proyecto> --since {since}" }
+    { "name": "app", "command": "ssh <host> docker logs --since {since} <container>" },
+    { "name": "containers", "command": "ssh <host> docker ps --format '{{.Names}} {{.Status}}'" },
+    { "name": "web", "command": "<platform CLI> logs <project> --since {since}" }
   ]
 }
 ```
 
-`{since}` se sustituye por la ventana que se pida. **Nunca un comando que
-escriba, reinicie o borre**: esto se lanza sin preguntar, así que tiene que
-poder lanzarse sin consecuencias.
+`{since}` is replaced by the requested window. **Never a command that writes,
+restarts or deletes**: this is launched without asking, so it has to be
+launchable without consequences.
 
-El contrato es del equipo y vive en el repo de documentación, así que no se
-bloquea nada. Si tiene cambios sin commitear, el script lo avisa antes de
-ejecutar: un comando tocado a mano y olvidado se ejecuta igual.
+The contract belongs to the team and lives in the documentation repo, so nothing
+is blocked. If it has uncommitted changes, the script warns before running: a
+command edited by hand and forgotten runs all the same.
 
-Las credenciales no van en el comando: van en la configuración de la máquina
-(`~/.ssh/config`, la sesión de la CLI). El `crux.json` está en git.
+Credentials don't go in the command: they go in the machine's configuration
+(`~/.ssh/config`, the CLI session). `crux.json` is in git.
 
-## Cómo se usa
+## How it is used
 
 ```bash
-bash <directorio-de-esta-skill>/scripts/signals.sh                 # todas, última hora
-bash <directorio-de-esta-skill>/scripts/signals.sh --since 24h app # una fuente, un día
-bash <directorio-de-esta-skill>/scripts/signals.sh --all contenedores
+bash <this-skill-directory>/scripts/signals.sh                 # all, last hour
+bash <this-skill-directory>/scripts/signals.sh --since 24h app # one source, one day
+bash <this-skill-directory>/scripts/signals.sh --all containers
 ```
 
-`--all` quita el filtro de errores: para fuentes de estado, donde cada línea
-importa.
+`--all` removes the error filter: for status sources, where every line matters.
 
-Salida: `0` leído, `1` alguna fuente no respondió, `2` el proyecto no declara
-fuentes.
+Output: `0` read, `1` some source didn't respond, `2` the project declares no
+sources.
 
-## Qué se hace con el resumen
+## What to do with the summary
 
-1. **El grupo que más se repite no es siempre el importante.** Un aviso que
-   sale en cada petición desde hace meses es ruido; un error que empezó hace
-   veinte minutos es la noticia. Se compara con una ventana anterior
-   (`--since 24h` frente a `--since 1h`) antes de concluir.
-2. **Se cruza con lo último desplegado.** Si el error empieza justo después de
-   un despliegue, el diff de ese despliegue es el primer sospechoso.
-3. **Se sigue con `/root-cause`**, que es donde se reproduce y se arregla. Esto
-   da el punto de partida, no el diagnóstico.
+1. **The most repeated group is not always the important one.** A warning that
+   appears on every request for months is noise; an error that started twenty
+   minutes ago is the news. Compare against an earlier window (`--since 24h`
+   versus `--since 1h`) before concluding.
+2. **Cross it with the latest deployment.** If the error starts right after a
+   deployment, that deployment's diff is the first suspect.
+3. **Continue with `/root-cause`**, which is where it is reproduced and fixed.
+   This gives the starting point, not the diagnosis.
 
-## Lo que cuesta
+## What it costs
 
-Lo que se lee del log no entra en el contexto: entra el resumen, que tiene un
-tope de grupos por fuente (`--max`, 15 por defecto). Una consulta ronda unos
-pocos miles de tokens, frente a los cientos de miles de volcar el log.
+What is read from the log doesn't enter the context: the summary does, which has
+a cap on groups per source (`--max`, 15 by default). A query is around a few
+thousand tokens, versus the hundreds of thousands of dumping the log.
 
-## Lo que esto no es
+## What this is not
 
-No es un sistema de alertas ni vigila producción de forma continua. Se lanza
-cuando hay motivo. Tener un agente mirando producción las veinticuatro horas
-solo compensa con tráfico y equipo detrás; a escala de pocas personas, lo que
-compensa es que cuando alguien pregunte, la respuesta tarde un minuto.
+It is not an alerting system and doesn't watch production continuously. It is
+launched when there is a reason. Having an agent watching production around the
+clock only pays off with traffic and a team behind it; at the scale of a few
+people, what pays off is that when someone asks, the answer takes a minute.
 
-Si el proyecto ya tiene alertas —un monitor de disponibilidad, un servicio de
-errores—, la alerta es el disparador natural: quien la recibe lanza esto.
+If the project already has alerts (an uptime monitor, an error service), the
+alert is the natural trigger: whoever receives it launches this.
 
 ## Anti-patterns
 
-- **Volcar el log entero en el contexto.** No cabe, y lo que importa se pierde.
-- **Declarar comandos que escriben.** Esto se ejecuta sin confirmación.
-- **Concluir con una sola ventana.** Sin comparar, no se sabe si el error es
-  nuevo.
-- **Poner credenciales en el `crux.json`.** Está en git.
+- **Dumping the whole log into the context.** It doesn't fit, and what matters
+  gets lost.
+- **Declaring commands that write.** This runs without confirmation.
+- **Concluding from a single window.** Without comparing, you don't know whether
+  the error is new.
+- **Putting credentials in `crux.json`.** It is in git.
 
-## Relacionado
+## Related
 
-- `/root-cause` — lo siguiente, con el resumen delante
-- `/deploy-watch` — cuando la señal aparece justo después de desplegar
-- `/runbook` — cuando el incidente se ha resuelto y hay que dejarlo escrito
+- `/root-cause`: the next step, with the summary in front of you
+- `/deploy-watch`: when the signal appears right after deploying
+- `/runbook`: when the incident has been resolved and has to be written down

@@ -1,65 +1,67 @@
-# Por qué la puerta es así
+# Why the gate works this way
 
-El procedimiento está en `SKILL.md`. Aquí está el motivo de cada regla, para
-cuando haya que decidir si una excepción tiene sentido.
+The procedure is in `SKILL.md`. Here is the reason for each rule, for when you
+need to decide whether an exception makes sense.
 
-## La puerta se gradúa
+## The gate is graded
 
-Si cuesta lo mismo para una errata que para un cambio de esquema, se deja de
-invocar en dos semanas y la puerta fracasa. Un cambio de solo documentación no
-tiene código que pueda estar mal ni tests que puedan regresar: pasarle las
-nueve puertas no lo verifica más, solo lo encarece.
+If it costs the same for a typo as for a schema change, it stops being invoked
+within two weeks and the gate fails. A documentation-only change has no code
+that can be wrong and no tests that can regress: running all nine gates on it
+does not verify it any more, it only makes it more expensive.
 
-Lo decide el clasificador porque a ojo todo parece pequeño, y así es como se
-salta justo la puerta que hacía falta.
+The classifier decides because by eye everything looks small, and that is how
+the very gate that was needed gets skipped.
 
-## Sanidad antes que nada, y solo con lo afectado
+## Sanity first, and only with what is affected
 
-La puerta 1 responde a una pregunta: ¿el rojo ya venía de antes? Para eso basta
-con los tests afectados. La suite entera es la puerta 6; correrla en las dos es
-pagar la más cara dos veces para responder dos preguntas distintas. Es la
-puerta más barata y la que más tiempo ahorra: evita depurar media hora un fallo
-que ya estaba.
+Gate 1 answers one question: was the red already there before? The affected
+tests are enough for that. The whole suite is gate 6; running it in both is
+paying the most expensive one twice to answer two different questions. It is
+the cheapest gate and the one that saves the most time: it avoids spending half
+an hour debugging a failure that was already there.
 
-Los artefactos sueltos en la raíz los arrastra un `git add -A` sin que los vea
-ningún test ni el linter.
+Stray artefacts in the root are dragged in by a `git add -A` without any test or
+the linter seeing them.
 
-## Convenciones antes que calidad, y calidad después de correctitud
+## Conventions before quality, and quality after correctness
 
-Las convenciones se suelen leer después de escribir el código, cuando ya solo
-sirven para reordenar. Autoevaluarse el estilo sin abrir el documento siempre
-sale que sí: por eso la puerta lista ficheros y no hace preguntas.
+Conventions are usually read after writing the code, when they only serve to
+reorder things. Self-assessing style without opening the document always comes
+out as a yes: that is why the gate lists files and does not ask questions.
 
-Reestructurar dos veces es tirar el trabajo: una convención aplicada después
-obliga a mover lo que la puerta de calidad iba a simplificar, y simplificar
-código incorrecto también es tirarlo.
+Restructuring twice is throwing the work away: a convention applied later forces
+you to move what the quality gate was going to simplify, and simplifying
+incorrect code is also throwing it away.
 
-## La suite entera al final
+## The whole suite at the end
 
-Los arreglos de las puertas 3 a 5 también rompen cosas, y rompen justo lo que
-no estabas mirando.
+The fixes from gates 3 to 5 also break things, and they break exactly what you
+were not looking at.
 
-Un test que ya existía y se pone rojo suele tener razón, y el diagnóstico no.
-Editarlo para que pase borra la única prueba de que el cambio rompe algo.
+A test that already existed and turns red is usually right, and the diagnosis
+is not. Editing it to make it pass erases the only proof that the change breaks
+something.
 
-## Levantar el entorno solo cuando toca
+## Bring up the environment only when needed
 
-Levantarlo siempre mata la costumbre; no levantarlo nunca deja pasar los fallos
-que los tests no ven. En el espacio de trabajo de la tarea no chocas con tu
-propio servidor de desarrollo.
+Always bringing it up kills the habit; never bringing it up lets through the
+failures the tests do not see. In the task's workspace you do not collide with
+your own development server.
 
-## La documentación, en el mismo turno
+## Documentation, in the same turn
 
-Es la disciplina que sostiene todo el estándar. Muchos cambios no afectan a
-ninguna doc, por eso el aviso del clasificador es una señal y no un veredicto.
+It is the discipline that holds the whole standard together. Many changes do not
+affect any doc, which is why the classifier's warning is a signal and not a
+verdict.
 
-## El recibo
+## The receipt
 
-Antes, el propio agente escribía un sha después de afirmar que había
-verificado. Eso no prueba que verificara: prueba que escribió un sha. Por eso
-las comprobaciones pasan por `crux ship run`, que ejecuta el comando y anota
-el resultado real, y `finish` exige el recibo sellado contra HEAD.
+Before, the agent itself wrote a sha after claiming to have verified. That does
+not prove it verified: it proves it wrote a sha. That is why the checks go
+through `crux ship run`, which runs the command and records the real result,
+and `finish` demands the receipt sealed against HEAD.
 
-`crux ship body` existe porque la descripción de la propuesta era el único
-artefacto del flujo que no comprobaba nadie, y es el que acaba delante del
-cliente.
+`crux ship body` exists because the proposal description was the only artefact
+of the flow that nobody checked, and it is the one that ends up in front of the
+client.

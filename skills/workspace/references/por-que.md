@@ -1,51 +1,49 @@
-# Por qué los espacios de trabajo son así
+# Why workspaces are the way they are
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## El runtime es lo que se olvida
+## The runtime is what gets forgotten
 
-Un worktree separa los ficheros y parece suficiente. Pero dos procesos que
-comparten puerto no arrancan, y dos que comparten base de datos arrancan,
-funcionan y se pisan los datos. Es peor que un conflicto de merge porque no
-avisa. Rellenar la sección `workspace` del contrato es la diferencia entre poder
-lanzar dos tareas y poder lanzar cinco. Si dos espacios leen el mismo `.env`,
-aislar puertos y base de datos no sirve de nada.
+A worktree separates the files and seems enough. But two processes sharing a
+port do not start, and two sharing a database start, work and trample each
+other's data. It is worse than a merge conflict because it gives no warning.
+Filling in the contract's `workspace` section is the difference between being
+able to launch two tasks and being able to launch five. If two spaces read the
+same `.env`, isolating ports and database is of no use.
 
-## Por qué el worktree va al lado del repo
+## Why the worktree goes next to the repo
 
-El estándar apoya los punteros de contexto en rutas relativas
-(`../<project>-docs/`). Desde un directorio fuera del proyecto esas rutas no
-resuelven, y el agente del espacio se quedaría sin el contexto del proyecto.
+The standard rests the context pointers on relative paths
+(`../<project>-docs/`). From a directory outside the project those paths do not
+resolve, and the space's agent would be left without the project's context.
 
-## El nombre de la rama
+## The branch name
 
-El nombre del espacio es local; el de la rama se publica. En el repo de un
-cliente, `ws/<nombre>` acabaría visible con nuestra nomenclatura y en el idioma
-del nombre.
+The space's name is local; the branch's is published. In a client's repo,
+`ws/<name>` would end up visible with our naming and in the language of the
+name.
 
-## Perfiles de cliente
+## Client profiles
 
-Un worktree crea una rama en el repo de origen, y eso es escribir en código
-ajeno. Que haga falta `--force` obliga a que sea una decisión.
+A worktree creates a branch in the origin repo, and that is writing into someone
+else's code. Needing `--force` makes it a decision.
 
-## Paralelo
+## Parallel
 
-Dos tareas sobre el mismo fichero acaban en un conflicto que resuelves tú. Las
-migraciones van solas porque el esquema es compartido en cuanto las ramas
-vuelven a juntarse. `fix-login` te dice qué hay dentro dentro de dos días;
-`ws-3`, no.
+Two tasks on the same file end in a conflict that you resolve. Migrations go
+alone because the schema is shared as soon as the branches come together again.
+`fix-login` tells you what is inside two days from now; `ws-3` does not.
 
-## La rama principal cerrada
+## The closed main branch
 
-El `pre-push` rechaza el push directo a la principal de los repos de código y
-del kernel. Un `--no-verify` lo salta: la protección de verdad es del lado del
-servidor, y en un repo privado sin plan de pago no está disponible. Cubre el
-descuido, que es el caso real. Los repos de docs se suben directos, como dice su
-regla.
+The `pre-push` rejects direct pushes to main in code repos and in the kernel. A
+`--no-verify` skips it: the real protection is on the server side, and in a
+private repo without a paid plan it is not available. It covers carelessness,
+which is the real case. Docs repos are pushed directly, as their rule says.
 
-## Por qué `merge` pide `--yes` y `rm` deja la rama
+## Why `merge` asks for `--yes` and `rm` leaves the branch
 
-La decisión de fusionar es de una persona; el comando solo se asegura de que
-llega informada. El espacio es desechable y el trabajo no, por eso la rama
-sobrevive a `rm`. El atajo de borrar a mano deja la entrada en el registro y la
-tarea sin cerrar.
+The decision to merge belongs to a person; the command only makes sure it
+arrives informed. The space is disposable and the work is not, which is why the
+branch survives `rm`. The shortcut of deleting by hand leaves the entry in the
+registry and the task unclosed.

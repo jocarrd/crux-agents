@@ -1,30 +1,30 @@
 ---
 name: drive-browser
-description: Pilotar un navegador CON la sesión ya iniciada del usuario desde la terminal (navegar, clicar, rellenar, capturar) por el protocolo de depuración (CDP), cuando no hay una herramienta MCP de navegador disponible. Usa cuando tengas que operar un panel externo autenticado —Vercel, Stripe, un dashboard, la consola de un proveedor— reusando las cookies del Chrome del usuario; cuando digan "conéctate a mi navegador", "usa mi sesión", "hazlo tú en Vercel/Stripe"; o cuando intentes abrir un puerto de depuración y Chrome lo rechace o salga a la pantalla de login.
+description: Drive a browser WITH the user's already-logged-in session from the terminal (navigate, click, fill, capture) over the debugging protocol (CDP), when no browser MCP tool is available. Use when you have to operate an authenticated external panel —Vercel, Stripe, a dashboard, a provider's console— reusing the cookies of the user's Chrome; when they say "conéctate a mi navegador", "usa mi sesión", "hazlo tú en Vercel/Stripe"; or when you try to open a debugging port and Chrome rejects it or lands on the login screen.
 ---
 
 # drive-browser
 
-Controlar el Chrome del usuario, con sus cookies de sesión, desde la terminal
-por CDP (`--remote-debugging-port`), cuando hay que operar una web autenticada
-y no hay herramienta de navegador. Por qué cada restricción:
-`<directorio-de-esta-skill>/references/por-que.md`.
+Control the user's Chrome, with its session cookies, from the terminal over CDP
+(`--remote-debugging-port`), when an authenticated website has to be operated
+and there is no browser tool. Why each restriction:
+`<this-skill-directory>/references/por-que.md`.
 
-**No usar** para capturas de tu propia app en local (`/visual-test`), ni si hay
-un MCP de navegador disponible: compruébalo con `claude mcp list`. Si vas a
-repetir, instala uno (carga al reiniciar el agente):
+**Do not use** for screenshots of your own local app (`/visual-test`), nor if a
+browser MCP is available: check with `claude mcp list`. If you are going to
+repeat this, install one (it loads when the agent restarts):
 `claude mcp add chrome-devtools -s user -- npx -y chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222`.
 
-## Hace falta
+## Needed
 
-- `google-chrome` y **sesión de escritorio** (`echo $DISPLAY` no vacío): tiene
-  que ser headed.
-- `python3` con `websockets`.
-- El llavero desbloqueado (lo está si el usuario tiene Chrome abierto).
+- `google-chrome` and a **desktop session** (`echo $DISPLAY` non-empty): it has
+  to be headed.
+- `python3` with `websockets`.
+- The keyring unlocked (it is if the user has Chrome open).
 
-## Procedimiento
+## Procedure
 
-1. **El perfil con la sesión** (no suele ser `Default`):
+1. **The profile with the session** (it is usually not `Default`):
 
    ```bash
    python3 - <<'PY'
@@ -37,35 +37,36 @@ repetir, instala uno (carga al reiniciar el agente):
    PY
    ```
 
-2. **Lanza Chrome headed sobre una copia del perfil**, como tarea en segundo
-   plano persistente:
-   `<directorio-de-esta-skill>/scripts/chrome-session.sh ~/.config/google-chrome/"Profile 1"`.
-   Espera a `curl -s http://127.0.0.1:9222/json/version`.
+2. **Launch headed Chrome on a copy of the profile**, as a persistent background
+   task:
+   `<this-skill-directory>/scripts/chrome-session.sh ~/.config/google-chrome/"Profile 1"`.
+   Wait for `curl -s http://127.0.0.1:9222/json/version`.
 
-3. **Comprueba que la sesión viajó:**
-   `python3 <directorio-de-esta-skill>/scripts/cdp.py goto https://vercel.com/dashboard /tmp/dash.png 6`.
-   Si acaba en la página de login, el descifrado falló (casi siempre por lanzar headless).
+3. **Check that the session came across:**
+   `python3 <this-skill-directory>/scripts/cdp.py goto https://vercel.com/dashboard /tmp/dash.png 6`.
+   If it ends up on the login page, decryption failed (almost always from
+   launching headless).
 
-4. **Pilota** con llamadas cortas y separadas:
-   - Clic: **la acción `click` de `cdp.py`**, que manda eventos de ratón reales.
-     El `.click()` de JS o un `MouseEvent` sintético no disparan nada en muchas
-     SPA; úsalos solo si `click` no encuentra el elemento.
-   - Leer y ejecutar: `cdp.py eval '<js>'` y `cdp.py evalshot '<js>' <png> <s>`.
-   - Inputs controlados: el setter nativo y `input`/`change`. Con
-     autocompletado, el valor a "" con el setter y luego `type`; si no sale el
-     desplegable, Enter.
-   - En React muchos botones son `div`: búscalos por texto.
+4. **Drive** with short, separate calls:
+   - Click: **the `click` action of `cdp.py`**, which sends real mouse events.
+     JS `.click()` or a synthetic `MouseEvent` trigger nothing on many SPAs; use
+     them only if `click` does not find the element.
+   - Read and execute: `cdp.py eval '<js>'` and `cdp.py evalshot '<js>' <png> <s>`.
+   - Controlled inputs: the native setter and `input`/`change`. With
+     autocomplete, set the value to "" with the setter and then `type`; if the
+     dropdown does not appear, Enter.
+   - In React many buttons are `div`: find them by text.
 
-5. **Al terminar**, cierra por puerto y borra la copia, que tiene cookies:
+5. **When finished**, close by port and delete the copy, which has cookies:
 
    ```bash
    fuser -k 9222/tcp; rm -rf /tmp/cdp-profile
    ```
 
-## Secretos: nunca los imprimas
+## Secrets: never print them
 
-Deja el valor en `window.__X__` y vuélcalo a fichero con `writefile`, que
-escribe con `chmod 600` e imprime solo la longitud:
+Leave the value in `window.__X__` and dump it to a file with `writefile`, which
+writes with `chmod 600` and prints only the length:
 
 ```bash
 python3 .../cdp.py eval 'window.__X__=document.body.innerText.match(/DATABASE_URL=(\S+)/)[1]; "len="+window.__X__.length'
@@ -74,24 +75,24 @@ python3 .../cdp.py writefile 'window.__X__' /tmp/secret
 
 ## Gotchas
 
-- **Google no acepta el perfil copiado:** pide al usuario que inicie sesión una
-  vez en la ventana headed y sigue tú. Otras webs sí aceptan las cookies.
-- **Chrome no depura el perfil por defecto** ni puedes adjuntarte al Chrome
-  real del usuario: siempre una copia en otro `--user-data-dir`.
-- **Headless no descifra las cookies:** headed, con
-  `--password-store=gnome-libsecret` y copiando también `Local State` (el
-  script ya lo hace).
-- **Si `eval` se queda colgado,** no mates Chrome: abre pestaña nueva
-  (`curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"`) y cierra la vieja
+- **Google does not accept the copied profile:** ask the user to sign in once in
+  the headed window and carry on yourself. Other sites do accept the cookies.
+- **Chrome does not debug the default profile** and you cannot attach to the
+  user's real Chrome: always a copy in another `--user-data-dir`.
+- **Headless does not decrypt the cookies:** headed, with
+  `--password-store=gnome-libsecret` and also copying `Local State` (the script
+  already does).
+- **If `eval` hangs,** do not kill Chrome: open a new tab
+  (`curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"`) and close the old one
   (`/json/close/<targetId>`).
-- **Mata por puerto (`fuser -k 9222/tcp`), nunca con `pkill`.**
-- **El entorno mata los procesos en segundo plano** al terminar cada llamada:
-  Chrome va como tarea persistente.
-- `urllib` a `127.0.0.1` puede salir por un proxy; `cdp.py` ya lo evita.
-- El contenedor con scroll es el `div` con `scrollHeight > clientHeight`.
+- **Kill by port (`fuser -k 9222/tcp`), never with `pkill`.**
+- **The environment kills background processes** when each call ends: Chrome
+  goes as a persistent task.
+- `urllib` to `127.0.0.1` may go out through a proxy; `cdp.py` already avoids it.
+- The scrolling container is the `div` with `scrollHeight > clientHeight`.
 
-## Relacionado
+## Related
 
-- `/visual-test` — capturas headless de tu app, sin sesión
-- `/share-local` — abrir tu local al exterior
-- `/oauth-reauthorize` — cuando falla un token OAuth, no la sesión web
+- `/visual-test` — headless screenshots of your app, without a session
+- `/share-local` — open your local environment to the outside
+- `/oauth-reauthorize` — when an OAuth token fails, not the web session

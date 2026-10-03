@@ -1,89 +1,92 @@
 ---
 name: carry-env
-description: Llevarte los ficheros de entorno de un proyecto a otra máquina. Los reúne en una carpeta con el mapa de a dónde va cada uno y el script que los devuelve a su sitio, sin abrirlos y sin que ningún valor pase por el contexto del agente. Usa cuando cambies de ordenador, montes un portátil desde cero, o vayas a reinstalar y necesites recuperar después lo que no está en git.
+description: Carry a project's environment files to another machine. It gathers them into a folder with the map of where each one goes and the script that puts them back, without opening them and without any value passing through the agent's context. Use when switching computers, setting up a laptop from scratch, or about to reinstall and needing to recover afterwards whatever isn't in git.
 ---
 
 # carry-env
 
-Todo lo que hace falta para trabajar está en git menos una cosa: los ficheros de
-entorno. Están ignorados a propósito, así que un `clone` te deja el código
-completo y el proyecto sin arrancar.
+Everything needed to work is in git except one thing: the environment files.
+They are ignored on purpose, so a `clone` gives you the complete code and a
+project that won't start.
 
-Esto los reúne en una carpeta que puedes llevarte y, sobre todo,
-deja escrito **a dónde vuelve cada uno**. Doce ficheros con nombres planos y
-ninguna pista de su ruta no valen nada dentro de tres meses, que es justo cuando
-se usan.
+This gathers them into a folder you can carry and, above all, leaves written
+**where each one goes back to**. Twelve files with flat names and no hint of
+their path are worthless three months from now, which is exactly when they get
+used.
 
-## Cuándo NO usar esto
+## When NOT to use this
 
-**Para compartir secretos con otra persona.** Esto es una copia en claro para ti
-mismo entre dos máquinas tuyas. Un secreto que hay que compartir se comparte por
-un gestor de contraseñas, y uno que ha pasado por un canal que no controlas se
-rota, no se reutiliza.
+**To share secrets with another person.** This is a plaintext copy for yourself
+between two machines of yours. A secret that has to be shared goes through a
+password manager, and one that has passed through a channel you don't control is
+rotated, not reused.
 
-**Como copia de seguridad de producción.** Los ficheros del servidor viven en el
-servidor. Sacarlos de ahí es una decisión distinta, más delicada, y no la
-resuelve un `cp`.
+**As a production backup.** The server's files live on the server. Taking them
+out of there is a different, more delicate decision, and a `cp` doesn't resolve
+it.
 
-## Reunirlos
-
-```bash
-<directorio-de-esta-skill>/scripts/collect.sh --project ~/Proyectos/<proyecto>
-```
-
-Deja en `~/entornos-<proyecto>` los ficheros, `RESTAURAR.md` con la tabla de
-destinos y `restaurar.sh`, que es el camino de vuelta. Carpeta en 0700 y
-ficheros en 0600.
-
-El ancla es siempre la raíz del proyecto. Si le apuntas a un repo de dentro
-—o al docs repo— sube hasta la raíz y te lo dice, porque el mapa guarda rutas
-relativas a ella y es lo que la otra máquina sabrá encontrar. El nombre sale del
-`project` declarado en `crux.json`, no del directorio: es el que usa
-`crux bootstrap` para crear la carpeta en el destino.
-
-**No abre ningún fichero.** Copia con `cp` y reporta nombres y rutas. Si esto lo
-ejecuta un agente, ningún valor entra en su contexto ni queda escrito en la
-transcripción de la sesión — y un secreto que ha quedado escrito en una
-transcripción ya no es un secreto.
-
-### Qué deja fuera, y por qué importa
-
-| Se salta | Motivo |
-| -------- | ------ |
-| `*-ws-*` | Copias que genera `crux workspace` del repo principal. Son derivadas: restaurarlas encima de las buenas te deja un entorno que parece bien y apunta a otros puertos. |
-| `.next/`, `dist/`, `build/`, `out/` | El mismo fichero, copiado por la herramienta de construcción. Restaurar el artefacto no arregla la fuente. |
-| `*.example`, `*.sample`, `*.template` | Plantillas sin valores. Ya están en el repo. |
-
-Y lo que no busca siquiera: nada personal y regenerable —claves SSH, sesiones de
-CLI, tokens de registro, OAuth—. Eso se genera en cada máquina. Copiarlo es
-peor que regenerarlo, porque un token que viaja es un token que ya no sabes por
-dónde ha pasado. Esa lista va en el onboarding de máquina del proyecto.
-
-## Devolverlos
-
-En la máquina nueva, con los repos ya clonados (`crux bootstrap`):
+## Gather them
 
 ```bash
-cd ~/entornos-<proyecto>
-./restaurar.sh            # dice qué haría
-./restaurar.sh --hazlo    # los copia
+<this-skill-directory>/scripts/collect.sh --project ~/Proyectos/<project>
 ```
 
-Busca el proyecto en `~/Proyectos/<proyecto>`; si no está, mira un nivel más
-adentro por si la carpeta se reunió apuntando a un repo, y si tampoco, se lo
-pasas como argumento. **No sobreescribe nunca**: si el destino ya existe lo salta
-y lo dice, porque perder un valor que solo estaba ahí es peor que copiar de menos.
+It leaves in `~/entornos-<project>` the files, `RESTAURAR.md` with the table of
+destinations and `restaurar.sh`, which is the way back. Folder at 0700 and files
+at 0600.
 
-Distingue tres finales —`puesto`, `ya existe`, `sin repo clonado`— y el tercero
-es el que hay que mirar: significa que ese repo no está, así que o falta clonarlo
-o ya no pertenece al proyecto.
+The anchor is always the project root. If you point it at a repo inside (or at
+the docs repo) it climbs up to the root and tells you, because the map stores
+paths relative to it and that is what the other machine will know how to find.
+The name comes from the `project` declared in `crux.json`, not from the
+directory: it is the one `crux bootstrap` uses to create the folder at the
+destination.
 
-## Al terminar
+**It doesn't open any file.** It copies with `cp` and reports names and paths. If
+an agent runs this, no value enters its context or gets written into the session
+transcript, and a secret that has been written into a transcript is no longer a
+secret.
 
-Borra la carpeta. Es lo único de todo el flujo que lleva secretos en claro fuera
-de su sitio, y su valor caduca en cuanto has restaurado.
+### What it leaves out, and why it matters
 
-## Relacionado
+| Skipped | Reason |
+| ------- | ------ |
+| `*-ws-*` | Copies generated by `crux workspace` from the main repo. They are derived: restoring them over the good ones leaves you an environment that looks fine and points at other ports. |
+| `.next/`, `dist/`, `build/`, `out/` | The same file, copied by the build tool. Restoring the artifact doesn't fix the source. |
+| `*.example`, `*.sample`, `*.template` | Templates without values. They are already in the repo. |
 
-- `crux bootstrap` — trae los repos; esto trae lo que los repos no llevan
-- `operations/machine-onboarding.md` del proyecto — lo personal, que sí se regenera
+And what it doesn't even look for: anything personal and regenerable (SSH keys,
+CLI sessions, registry tokens, OAuth). That is generated on each machine. Copying
+it is worse than regenerating it, because a token that travels is a token whose
+path you no longer know. That list goes in the project's machine onboarding.
+
+## Put them back
+
+On the new machine, with the repos already cloned (`crux bootstrap`):
+
+```bash
+cd ~/entornos-<project>
+./restaurar.sh            # says what it would do
+./restaurar.sh --apply    # copies them (--hazlo still works)
+```
+
+It looks for the project in `~/Proyectos/<project>`; if it isn't there, it looks
+one level deeper in case the folder was gathered by pointing at a repo, and if
+that fails too, you pass it as an argument. **It never overwrites**: if the
+destination already exists it skips it and says so, because losing a value that
+was only there is worse than copying too little.
+
+It distinguishes three endings (`placed`, `exists`, `no repo`) and
+the third is the one to look at: it means that repo isn't there, so either it
+still needs cloning or it no longer belongs to the project.
+
+## When finished
+
+Delete the folder. It is the only thing in the whole flow that carries plaintext
+secrets outside their place, and its value expires as soon as you have restored.
+
+## Related
+
+- `crux bootstrap`: brings the repos; this brings what the repos don't carry
+- `operations/machine-onboarding.md` of the project: the personal stuff, which
+  does get regenerated

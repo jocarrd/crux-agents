@@ -1,90 +1,90 @@
 ---
 name: motion-video
-description: Montar un vídeo de motion graphics renderizado desde código —de producto, de lanzamiento, de trayectoria o un explicativo— con la marca real, música sintetizada al pulso y un bucle de crítica sobre sus propios fotogramas. Usa cuando pidan un vídeo, un reel, un showreel, un anuncio animado, un vídeo para redes o "como esos vídeos de motion graphics", y antes de escribir la primera escena.
+description: Build a motion-graphics video rendered from code —product, launch, track record or explainer— with the real brand, music synthesised to the beat and a critique loop over its own frames. Use when asked for a video ("un vídeo"), a reel, a showreel, an animated ad, a video for social media or "como esos vídeos de motion graphics", and before writing the first scene.
 ---
 
 # motion-video
 
-Un vídeo generado es un programa: una función que pinta el fotograma exacto de
-cualquier instante. El guion es el 10 % del resultado; el resto es el arnés que
-lo renderiza, le pone sonido y le obliga a mirarse. Los detalles de cada paso
-están en `<directorio-de-esta-skill>/references/metodo.md`.
+A generated video is a program: a function that paints the exact frame at any
+instant. The script is 10 % of the result; the rest is the harness that renders
+it, gives it sound and forces it to look at itself. The details of each step are
+in `<this-skill-directory>/references/metodo.md`.
 
-## Antes de escribir una escena
+## Before writing a scene
 
-Reúne esto y enséñalo. Sin esto no se escribe código:
+Gather this and show it. Without it, no code is written:
 
-1. **Qué tiene que quedar.** Una frase: el hilo conductor. Todo el vídeo se
-   comprueba contra ella. Si el público no es técnico, sin terminales ni jerga.
-2. **Los activos reales.** Capturas del producto en marcha, logo, colores y
-   tipografías de su sistema de diseño. Nunca redibujar la interfaz de memoria.
-   Las cifras salen de los datos, nunca a mano.
-3. **La lista de planos sobre la rejilla.** Elige un tempo (120 BPM da un pulso
-   cada 0,5 s) y coloca cada corte en un pulso: plano, duración, texto en
-   pantalla, sonido. Un gancho en los 2 primeros segundos y algo nuevo cada
-   2 a 4. **Espera el visto bueno.**
+1. **What it has to end up as.** One sentence: the through-line. The whole video
+   is checked against it. If the audience is not technical, no terminals and no
+   jargon.
+2. **The real assets.** Screenshots of the product running, logo, colours and
+   typefaces from its design system. Never redraw the interface from memory.
+   Figures come from the data, never by hand.
+3. **The shot list on the grid.** Choose a tempo (120 BPM gives a beat every
+   0.5 s) and place every cut on a beat: shot, duration, on-screen text, sound.
+   A hook in the first 2 seconds and something new every 2 to 4. **Wait for the
+   go-ahead.**
 
-## El contrato del escenario
+## The stage contract
 
-Un HTML que expone `window.__duration` y `window.__seek(t)`. `seek` es puro:
-el mismo `t` da el mismo fotograma, sin temporizadores, sin transiciones CSS,
-sin estado entre fotogramas y con ruido sembrado. El primer fotograma se lee
-entero: es la miniatura.
+An HTML that exposes `window.__duration` and `window.__seek(t)`. `seek` is pure:
+the same `t` gives the same frame, with no timers, no CSS transitions, no state
+between frames and with seeded noise. The first frame is read whole: it is the
+thumbnail.
 
-- Movimiento con **muelles de forma cerrada**, no curvas fijas. Un valor que
-  cambia de destino varias veces suma un muelle por cambio (`track`).
-- Texto dentro de algo que cambia: entra después del cambio y sale antes del
-  siguiente.
-- Nada de `will-change` en lo que la cámara escala: el texto sale borroso.
+- Motion with **closed-form springs**, not fixed curves. A value that changes
+  target several times adds one spring per change (`track`).
+- Text inside something that changes: it enters after the change and leaves
+  before the next one.
+- No `will-change` on what the camera scales: the text comes out blurry.
 
-**Looks prohibidos**, porque delatan un vídeo generado: título centrado sobre
-degradado, todo apareciendo por fundido, rótulos en las esquinas y marcos,
-brillos sobre la interfaz, explosiones de partículas genéricas, un pulso muerto
-sin nada nuevo.
+**Banned looks**, because they give away a generated video: centred title over a
+gradient, everything appearing by fade, labels in the corners and frames, glows
+over the interface, generic particle explosions, a dead beat with nothing new.
 
-## Sonido
+## Sound
 
-Si hay pista, se mide su rejilla. Si no, se sintetiza sobre el mismo guion que
-la imagen: cada golpe o barrido cae en el instante del corte que
-acompaña. No se puede escuchar lo que se genera, así que **se mide**: energía
-por bandas y sonoridad por tramos. Mezcla final a −14 LUFS.
+If there is a track, its grid is measured. If not, it is synthesised over the
+same script as the image: each hit or sweep falls on the instant of the cut it
+accompanies. What is generated cannot be listened to, so **it is measured**:
+energy per band and loudness per section. Final mix at −14 LUFS.
 
-## El bucle de crítica
+## The critique loop
 
-Antes del render completo, y tantas rondas como haga falta:
-
-```bash
-scripts/sheets.sh salida.mp4 critica/     # hoja por pulso, prueba de móvil, tira
-```
-
-Mira las tres hojas como un director exigente, no como su autor. Puntúa de 1 a
-10: gancho, legibilidad a 360 px de ancho, calidad del movimiento, variedad,
-composición, fidelidad a la marca y sincronía con el sonido. Escribe los tres
-peores problemas con su segundo, arréglalos y repite hasta que todo esté en 8 o
-más.
-
-## Renderizar
+Before the full render, and as many rounds as needed:
 
 ```bash
-node scripts/render.mjs escenario.html fotogramas/ 120 1080 1350   # fps × sub, ancho, alto
-scripts/encode.sh fotogramas/ salida.mp4 30 --sub 4 --audio musica.wav
+scripts/sheets.sh output.mp4 critique/     # per-beat sheet, mobile test, strip
 ```
 
-Renderizar a 120 y codificar con `--sub 4` mezcla cuatro subfotogramas por
-fotograma: desenfoque de movimiento real. Cuadruplica el tiempo; úsalo solo en el render final.
-Salida en H.264 `yuv420p`: es lo que aceptan las redes.
+Look at the three sheets like a demanding director, not like its author. Score
+from 1 to 10: hook, legibility at 360 px wide, quality of motion, variety,
+composition, fidelity to the brand and sync with the sound. Write the three
+worst problems with their second, fix them and repeat until everything is 8 or
+more.
 
-Varios formatos (9:16, 1:1, 16:9) salen del mismo guion con una función de
-maquetación por formato, no recortando uno de ellos.
+## Render
 
-## Entrega
+```bash
+node scripts/render.mjs scene.html frames/ 120 1080 1350   # fps × sub, width, height
+scripts/encode.sh frames/ output.mp4 30 --sub 4 --audio music.wav
+```
 
-El MP4, la hoja de contacto, el fotograma de portada y una línea con lo que
-mejorarías en la siguiente ronda. **Nada se publica** sin el visto bueno de quien
-lo encargó.
+Rendering at 120 and encoding with `--sub 4` blends four subframes per frame:
+real motion blur. It quadruples the time; use it only for the final render.
+Output in H.264 `yuv420p`: it is what social networks accept.
 
-## Relacionado
+Several formats (9:16, 1:1, 16:9) come out of the same script with one layout
+function per format, not by cropping one of them.
 
-- `visual-test` — capturar el producto en marcha para los activos.
-- `render-loop` — iterar maquetación sobre una salida renderizada.
-- `x-posts` — el texto que acompaña al vídeo cuando se publica.
+## Delivery
+
+The MP4, the contact sheet, the cover frame and one line with what you would
+improve in the next round. **Nothing is published** without the approval of
+whoever commissioned it.
+
+## Related
+
+- `visual-test` — capture the product running for the assets.
+- `render-loop` — iterate on layout over a rendered output.
+- `x-posts` — the text that accompanies the video when it is published.

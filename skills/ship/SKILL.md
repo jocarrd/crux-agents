@@ -1,132 +1,135 @@
 ---
 name: ship
-description: Puerta de calidad antes de commitear, graduada según lo que toca el diff: clasificar el cambio para saber qué puertas aplican, comprobar en verde los tests afectados, leer el diff completo, revisar correctitud, buscar la implementación más simple, pasar la suite entera, validar en el entorno real solo si el cambio toca superficie observable, revisar si alguna documentación quedó desalineada y commitear. Usa cuando termines un trozo de trabajo y vayas a commitear, o cuando quieras una revisión seria de lo que llevas hecho.
+description: Quality gate before committing, graded by what the diff touches: classify the change to know which gates apply, confirm the affected tests are green, read the full diff, review correctness, look for the simplest implementation, run the whole suite, validate in the real environment only if the change touches an observable surface, check whether any documentation has drifted and commit. Use when you finish a piece of work and are about to commit, or when you want a serious review of what you have done so far.
 ---
 
 # ship
 
-Cadena de puertas antes de commitear. Se para en cuanto una falla. El porqué de
-cada regla está en `<directorio-de-esta-skill>/references/por-que.md`; léelo si
-dudas de alguna o vas a proponer una excepción.
+A chain of gates before committing. It stops as soon as one fails. The reason
+behind each rule is in `<this-skill-directory>/references/por-que.md`; read it
+if you doubt one or are about to propose an exception.
 
-## 0. Qué puertas hacen falta
+## 0. Which gates are needed
 
-Antes que nada:
-
-```bash
-bash <directorio-de-esta-skill>/scripts/diff-scope.sh
-```
-
-Dice qué puertas aplican, qué tests correr en la 1 y si hay que levantar el
-entorno. Lo decide el clasificador, no tu criterio.
-
-| Lo que toca el diff | Puertas |
-| ------------------- | ------- |
-| Solo texto (documentación, licencias, `.gitignore`) | 2, 8, 9 |
-| Código que no se ve desde fuera | 1 a 6, 8, 9 |
-| Superficie observable: interfaz, API, datos, dependencias, integración | todas |
-
-## 1. Sanidad
-
-Pasa los tests afectados (línea `tests:` del clasificador), no la suite entera,
-antes de mirar nada. Si ya estaban rojos, no es tu diff: dilo y para.
-
-Si el informe trae `artefactos:` (capturas, volcados, temporales sueltos en la
-raíz), sácalos del stage o añádelos al `.gitignore`. Nunca se commitean.
-
-## 2. Leer el diff
-
-Entero. Comprueba que hace exactamente lo que se pretendía. Para y pregunta si
-hay ficheros que no venían a cuento, formato mezclado con lógica, código muerto
-o restos de depuración.
-
-## 3. Correctitud
-
-Casos límite, nulos, errores no gestionados, condiciones invertidas,
-concurrencia. Si hay revisión automática, va aquí.
-
-## 4. Convenciones
+First of all:
 
 ```bash
-bash <directorio-de-esta-skill>/scripts/conventions.sh
+bash <this-skill-directory>/scripts/diff-scope.sh
 ```
 
-Lista los documentos de convenciones que aplican y señales concretas (literales
-repetidos, tipos en ficheros de constantes, catálogos redeclarados). Las señales
-son heurísticas; **abrir los documentos que lista no es opcional**.
+It says which gates apply, which tests to run in gate 1 and whether the
+environment has to be brought up. The classifier decides, not your judgement.
 
-## 5. Calidad
+| What the diff touches | Gates |
+| --------------------- | ----- |
+| Text only (documentation, licences, `.gitignore`) | 2, 8, 9 |
+| Code not visible from outside | 1 to 6, 8, 9 |
+| Observable surface: UI, API, data, dependencies, integration | all |
 
-Solo ahora: ¿hay una forma más simple? Reutilizar lo que existe, abstracción a
-la altura correcta, nombres que dicen lo que hacen.
+## 1. Sanity
 
-## 6. Regresión
+Run the affected tests (the classifier's `tests:` line), not the whole suite,
+before looking at anything. If they were already red, it is not your diff: say
+so and stop.
 
-La suite entera, después de los arreglos de 3 a 5.
+If the report has `artifacts:` (screenshots, dumps, stray temporaries in the
+root), take them out of the stage or add them to `.gitignore`. They are never
+committed.
 
-**Un test que ya existía y se pone rojo no se edita para que pase.** Para y
-dilo. Solo se cambia si quien decide confirma que ese comportamiento ya no se
-quiere.
+## 2. Read the diff
 
-## 7. Realidad, solo si la puerta 0 lo pide
+All of it. Check that it does exactly what was intended. Stop and ask if there
+are files that were beside the point, formatting mixed with logic, dead code or
+debugging leftovers.
 
-| Lo que toca el diff | Qué validar |
-| ------------------- | ----------- |
-| Interfaz | Verlo en los viewports que importen; después, `/before-after` para que lo apruebe quien decide |
-| API | Llamar a los endpoints afectados, no solo sus tests |
-| Datos | Que la migración aplique **y revierta** |
-| Dependencias | Que arranque desde cero, no desde tu caché |
+## 3. Correctness
 
-Levanta el entorno en el espacio de trabajo de la tarea.
+Edge cases, nulls, unhandled errors, inverted conditions, concurrency. If there
+is an automatic review, it goes here.
 
-## 8. Deriva de la documentación
+## 4. Conventions
 
-Si el cambio invalida alguna documentación, se actualiza en el mismo turno. El
-aviso del clasificador es una señal, no un veredicto.
+```bash
+bash <this-skill-directory>/scripts/conventions.sh
+```
+
+It lists the convention documents that apply and concrete signals (repeated
+literals, types in constants files, redeclared catalogues). The signals are
+heuristics; **opening the documents it lists is not optional**.
+
+## 5. Quality
+
+Only now: is there a simpler way? Reuse what exists, abstraction at the right
+level, names that say what they do.
+
+## 6. Regression
+
+The whole suite, after the fixes from 3 to 5.
+
+**A test that already existed and turns red is not edited to make it pass.**
+Stop and say so. It is only changed if whoever decides confirms that behaviour
+is no longer wanted.
+
+## 7. Reality, only if gate 0 asks for it
+
+| What the diff touches | What to validate |
+| --------------------- | ---------------- |
+| UI | See it in the viewports that matter; then `/before-after` so whoever decides approves it |
+| API | Call the affected endpoints, not just their tests |
+| Data | That the migration applies **and rolls back** |
+| Dependencies | That it starts from scratch, not from your cache |
+
+Bring up the environment in the task's workspace.
+
+## 8. Documentation drift
+
+If the change invalidates any documentation, it is updated in the same turn.
+The classifier's warning is a signal, not a verdict.
 
 ## 9. Commit
 
-Conventional commit, imperativo y minúscula, con un cuerpo que explique el
-porqué. Un tipo de cambio por commit.
+Conventional commit, imperative and lowercase, with a body that explains the
+why. One type of change per commit.
 
-## Dejar constancia
+## Leaving a record
 
-Las comprobaciones se ejecutan a través de crux, que anota el resultado real:
-
-```bash
-crux ship gate                  # lo que declara quality.gate del contrato
-crux ship run -- <comando>      # una comprobación suelta
-crux ship seal                  # después del commit
-```
-
-`seal` se niega si algo quedó en rojo y cierra el recibo contra HEAD. `crux
-workspace finish` no abre la propuesta sin ese recibo. `finish --skip-gate`
-existe solo para obedecer a quien decide, nunca para ahorrarse un paso.
-
-`.crux-ship` va en el `.gitignore` del repo.
-
-## Antes de publicar la propuesta
+The checks run through crux, which records the real result:
 
 ```bash
-crux ship body <fichero con el cuerpo>
+crux ship gate                  # what quality.gate in the contract declares
+crux ship run -- <command>      # a single check
+crux ship seal                  # after the commit
 ```
 
-Busca la firma de la herramienta y, en perfil `client-repo`, cualquier mención
-de nuestro tooling.
+`seal` refuses if anything is left red and closes the receipt against HEAD.
+`crux workspace finish` does not open the proposal without that receipt.
+`finish --skip-gate` exists only to obey whoever decides, never to save
+yourself a step.
+
+`.crux-ship` goes in the repo's `.gitignore`.
+
+## Before publishing the proposal
+
+```bash
+crux ship body <file with the body>
+```
+
+It looks for the tool's signature and, in `client-repo` profile, any mention of
+our tooling.
 
 ## Anti-patterns
 
-- Decidir las puertas a ojo en vez de con la puerta 0.
-- Pasar las nueve a un cambio de documentación.
-- Empezar por la 3: sin la 1 no sabes si el rojo es tuyo.
-- Cerrar la 4 sin abrir el documento.
-- Simplificar (5) antes de verificar (3).
-- Saltarse la 6 porque el cambio era pequeño.
-- Dar por pasada la 7 sin haber visto la pantalla ni llamado al endpoint.
-- Commitear con una puerta en rojo.
+- Deciding the gates by eye instead of with gate 0.
+- Running all nine on a documentation change.
+- Starting at 3: without 1 you do not know whether the red is yours.
+- Closing 4 without opening the document.
+- Simplifying (5) before verifying (3).
+- Skipping 6 because the change was small.
+- Considering 7 passed without having seen the screen or called the endpoint.
+- Committing with a gate red.
 
-## Relacionado
+## Related
 
-- `/workspace` — el entorno aislado de la puerta 7
-- `/visual-test` — la revisión visual de la puerta 7
-- `/end-session` — el cierre de la sesión
+- `/workspace` — the isolated environment for gate 7
+- `/visual-test` — the visual review for gate 7
+- `/end-session` — closing the session

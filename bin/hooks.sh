@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# crux hooks — engancha el estándar a los momentos en que se aplica.
+# crux hooks — hooks the standard into the moments where it applies.
 #
-#   crux hooks status     qué hay puesto y si apunta a algo que existe
-#   crux hooks install    instala los del agente y, si procede, los de git
-#   crux hooks remove     retira solo los que gestiona crux
+#   crux hooks status     what is installed and whether it points at something real
+#   crux hooks install    installs the agent's hooks and, where it applies, git's
+#   crux hooks remove     removes only the ones crux manages
 #
-# Un estándar que hay que acordarse de comprobar se comprueba a veces. Estos
-# hooks lo comprueban siempre.
+# A standard you have to remember to check gets checked sometimes. These hooks
+# check it every time.
 
 set -euo pipefail
 
@@ -27,12 +27,12 @@ SESSION_IDLE="$CRUX_HOME/adapters/claude/hooks/session-idle.sh"
 CLAUDE_PLUGIN="$CRUX_HOME/adapters/claude/plugin"
 CODEX_DIR="${CODEX_HOME_DIR:-${CODEX_HOME:-$HOME/.codex}}"
 CODEX_HOOKS="$CODEX_DIR/hooks.json"
-CODEX_CONTEXTO="$CRUX_HOME/adapters/codex/hooks/contexto.sh"
+CODEX_CONTEXT="$CRUX_HOME/adapters/codex/hooks/contexto.sh"
 COMMIT_MSG="$CRUX_HOME/adapters/git/commit-msg.sh"
 MARK="crux/adapters"
 
-# En un worktree, .git es un fichero y los hooks viven en el directorio común
-# del repo. Preguntárselo a git es lo único que funciona en los dos casos.
+# In a worktree, .git is a file and the hooks live in the repo's common
+# directory. Asking git is the only thing that works in both cases.
 dir_hooks() {
   local d
   d="$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
@@ -42,234 +42,234 @@ dir_hooks() {
 }
 
 cmd_status() {
-  echo "hooks del agente — $SETTINGS"
+  echo "agent hooks — $SETTINGS"
   if [[ ! -f "$SETTINGS" ]]; then
-    warn "no existe todavía"
+    warn "does not exist yet"
   else
     node -e '
       const fs = require("fs");
       const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
       const hooks = s.hooks || {};
       let n = 0;
-      for (const [evento, grupos] of Object.entries(hooks)) {
-        for (const g of grupos) for (const h of (g.hooks || [])) {
+      for (const [event, groups] of Object.entries(hooks)) {
+        for (const g of groups) for (const h of (g.hooks || [])) {
           n++;
           const cmd = h.command || "";
           const path = cmd.replace(/^~/, process.env.HOME).split(" ")[0];
-          const existe = fs.existsSync(path);
-          const propio = cmd.includes(process.argv[2]);
-          console.log(`      ${existe ? "ok " : "ROTO"}  ${evento.padEnd(12)} ${propio ? "[crux] " : ""}${cmd}`);
+          const exists = fs.existsSync(path);
+          const own = cmd.includes(process.argv[2]);
+          console.log(`      ${exists ? "ok " : "BROKEN"}  ${event.padEnd(12)} ${own ? "[crux] " : ""}${cmd}`);
         }
       }
-      if (!n) console.log("      ninguno configurado");
+      if (!n) console.log("      none configured");
     ' "$SETTINGS" "$MARK"
   fi
 
   echo
   local docs
   if docs="$(find_docs_repo "$PWD" 2>/dev/null)"; then
-    echo "hooks de git — $(basename "$docs")"
+    echo "git hooks — $(basename "$docs")"
     if [[ -f "$(dir_hooks "$docs")/pre-commit" ]] && grep -q "$MARK\|crux doctor" "$(dir_hooks "$docs")/pre-commit"; then
-      ok "pre-commit instalado"
+      ok "pre-commit installed"
     else
-      info "sin pre-commit de crux"
+      info "no crux pre-commit"
     fi
     if [[ -f "$(dir_hooks "$docs")/pre-push" ]] && grep -q "crux workspace" "$(dir_hooks "$docs")/pre-push"; then
-      ok "pre-push instalado — sin push directo a la principal"
+      ok "pre-push installed — no direct push to the main branch"
     else
-      info "sin pre-push de crux"
+      info "no crux pre-push"
     fi
     if [[ -f "$(dir_hooks "$docs")/commit-msg" ]]; then
-      ok "commit-msg instalado — los mensajes, en inglés"
+      ok "commit-msg installed — messages in English"
     else
-      info "sin commit-msg de crux"
+      info "no crux commit-msg"
     fi
   fi
 }
 
-# Reemplaza las entradas que apuntan a una versión anterior del mismo hook
-# (incluidas las que quedaron rotas al mover los scripts al kernel) y deja el
-# resto intacto: el fichero es del usuario, no nuestro.
-enganchar() {
-  # enganchar <evento> <comando> <patrón de lo anterior>
+# Replaces the entries that point at an earlier version of the same hook
+# (including the ones left broken when the scripts moved into the kernel) and
+# leaves the rest untouched: the file is the user's, not ours.
+hook_up() {
+  # hook_up <event> <command> <pattern of the previous one>
   node -e '
     const fs = require("fs");
-    const [file, evento, cmd, patron, matcher = ""] = process.argv.slice(1);
+    const [file, event, cmd, pattern, matcher = ""] = process.argv.slice(1);
     const s = JSON.parse(fs.readFileSync(file, "utf8"));
     s.hooks = s.hooks || {};
-    const grupos = (s.hooks[evento] = s.hooks[evento] || []);
-    const previo = new RegExp(patron);
-    let reemplazados = 0;
-    for (const g of grupos) {
+    const groups = (s.hooks[event] = s.hooks[event] || []);
+    const previous = new RegExp(pattern);
+    let replaced = 0;
+    for (const g of groups) {
       g.hooks = (g.hooks || []).map((h) => {
-        if (!previo.test(h.command || "")) return h;
-        reemplazados++;
+        if (!previous.test(h.command || "")) return h;
+        replaced++;
         return { ...h, command: cmd };
       });
     }
-    if (!reemplazados) {
-      grupos.push({ matcher, hooks: [{ type: "command", command: cmd }] });
+    if (!replaced) {
+      groups.push({ matcher, hooks: [{ type: "command", command: cmd }] });
     }
     fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
-    console.log(reemplazados ? `      reemplazadas ${reemplazados} entradas previas` : "      entrada nueva");
+    console.log(replaced ? `      replaced ${replaced} previous entries` : "      new entry");
   ' "$SETTINGS" "$1" "$2" "$3" "${4:-}"
 }
 
-# El plugin de Claude Code (adapters/claude/plugin) solo existe para Claude: se
-# carga por CLAUDE_CODE_PLUGIN_DIRS en el settings.json de Claude, que ningún
-# otro agente lee. Lleva el mod que pinta el recordatorio de tareas como panel.
+# The Claude Code plugin (adapters/claude/plugin) only exists for Claude: it is
+# loaded through CLAUDE_CODE_PLUGIN_DIRS in Claude's settings.json, which no
+# other agent reads. It carries the mod that draws the task reminder as a panel.
 plugin_claude() {
   # plugin_claude add|remove
   node -e '
     const fs = require("fs");
-    const [file, accion, dir] = process.argv.slice(1);
+    const [file, action, dir] = process.argv.slice(1);
     const s = JSON.parse(fs.readFileSync(file, "utf8"));
     s.env = s.env || {};
-    const otras = (s.env.CLAUDE_CODE_PLUGIN_DIRS || "").split(":")
+    const others = (s.env.CLAUDE_CODE_PLUGIN_DIRS || "").split(":")
       .filter((d) => d && !/\/adapters\/claude\/plugin\/?$/.test(d));
-    if (accion === "add") otras.push(dir);
-    if (otras.length) s.env.CLAUDE_CODE_PLUGIN_DIRS = otras.join(":");
+    if (action === "add") others.push(dir);
+    if (others.length) s.env.CLAUDE_CODE_PLUGIN_DIRS = others.join(":");
     else delete s.env.CLAUDE_CODE_PLUGIN_DIRS;
     if (!Object.keys(s.env).length) delete s.env;
     fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
   ' "$SETTINGS" "$1" "$CLAUDE_PLUGIN"
 }
 
-# Codex lee los hooks de ~/.codex/hooks.json con el mismo formato que Claude
-# Code, así que se registran los mismos scripts. Diferencias: Codex no tiene
-# herramientas de ficheros propias (edita con apply_patch y lee por Bash), los
-# hooks que dan contexto en texto pasan por adapters/codex/hooks/contexto.sh, y
-# el guardián de memorias no va porque revisa las de Claude.
+# Codex reads its hooks from ~/.codex/hooks.json in the same format as Claude
+# Code, so the same scripts are registered. Differences: Codex has no file
+# tools of its own (it edits with apply_patch and reads through Bash), the
+# hooks that give context as text go through adapters/codex/hooks/contexto.sh,
+# and the memory guard is left out because it reviews Claude's memories.
 codex_hooks() {
   # codex_hooks add|remove
   node -e '
     const fs = require("fs");
-    const [file, accion, ctx, sync, idle, cycle, task, destr, wt, prop, doc] = process.argv.slice(1);
+    const [file, action, ctx, sync, idle, cycle, task, destr, wt, prop, doc] = process.argv.slice(1);
     const s = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
     s.hooks = s.hooks || {};
-    const deCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|contexto\.sh/;
-    for (const [ev, grupos] of Object.entries(s.hooks)) {
-      s.hooks[ev] = grupos
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !deCrux.test(h.command || "")) }))
+    const isCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|contexto\.sh/;
+    for (const [ev, groups] of Object.entries(s.hooks)) {
+      s.hooks[ev] = groups
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isCrux.test(h.command || "")) }))
         .filter((g) => g.hooks.length);
       if (!s.hooks[ev].length) delete s.hooks[ev];
     }
-    if (accion === "add") {
+    if (action === "add") {
       const cmd = (c) => ({ type: "command", command: c });
       const q = (p) => JSON.stringify(p);
-      const poner = (ev, matcher, comandos) =>
-        (s.hooks[ev] = s.hooks[ev] || []).push({ ...(matcher ? { matcher } : {}), hooks: comandos.map(cmd) });
-      poner("SessionStart", "startup|resume|clear", [sync]);
-      poner("UserPromptSubmit", "", [
+      const put = (ev, matcher, commands) =>
+        (s.hooks[ev] = s.hooks[ev] || []).push({ ...(matcher ? { matcher } : {}), hooks: commands.map(cmd) });
+      put("SessionStart", "startup|resume|clear", [sync]);
+      put("UserPromptSubmit", "", [
         `${q(ctx)} UserPromptSubmit ${q(cycle)}`,
         `${q(ctx)} UserPromptSubmit ${q(task)}`,
         idle,
       ]);
-      poner("PreToolUse", "Bash", [destr, wt, prop]);
-      poner("Stop", "", [doc]);
+      put("PreToolUse", "Bash", [destr, wt, prop]);
+      put("Stop", "", [doc]);
     }
     if (!Object.keys(s.hooks).length) delete s.hooks;
     fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
-  ' "$CODEX_HOOKS" "$1" "$CODEX_CONTEXTO" "$SESSION_SYNC" "$SESSION_IDLE" "$CYCLE_GUARD" "$TASK_CONTEXT" \
+  ' "$CODEX_HOOKS" "$1" "$CODEX_CONTEXT" "$SESSION_SYNC" "$SESSION_IDLE" "$CYCLE_GUARD" "$TASK_CONTEXT" \
     "$DESTRUCTIVE_GUARD" "$WORKTREE_GUARD" "$PROPOSAL_GUARD" "$DOC_SYNC"
 }
 
 cmd_install() {
-  [[ -f "$DOC_SYNC" ]] || die "falta $DOC_SYNC"
-  [[ -f "$CYCLE_GUARD" ]] || die "falta $CYCLE_GUARD"
-  [[ -f "$MEMORY_GUARD" ]] || die "falta $MEMORY_GUARD"
-  [[ -f "$TASK_CONTEXT" ]] || die "falta $TASK_CONTEXT"
-  [[ -f "$WORKTREE_GUARD" ]] || die "falta $WORKTREE_GUARD"
-  [[ -f "$DESTRUCTIVE_GUARD" ]] || die "falta $DESTRUCTIVE_GUARD"
-  [[ -f "$PROPOSAL_GUARD" ]] || die "falta $PROPOSAL_GUARD"
-  [[ -f "$SESSION_SYNC" ]] || die "falta $SESSION_SYNC"
-  [[ -f "$SESSION_IDLE" ]] || die "falta $SESSION_IDLE"
-  [[ -f "$COMMIT_MSG" ]] || die "falta $COMMIT_MSG"
+  [[ -f "$DOC_SYNC" ]] || die "missing $DOC_SYNC"
+  [[ -f "$CYCLE_GUARD" ]] || die "missing $CYCLE_GUARD"
+  [[ -f "$MEMORY_GUARD" ]] || die "missing $MEMORY_GUARD"
+  [[ -f "$TASK_CONTEXT" ]] || die "missing $TASK_CONTEXT"
+  [[ -f "$WORKTREE_GUARD" ]] || die "missing $WORKTREE_GUARD"
+  [[ -f "$DESTRUCTIVE_GUARD" ]] || die "missing $DESTRUCTIVE_GUARD"
+  [[ -f "$PROPOSAL_GUARD" ]] || die "missing $PROPOSAL_GUARD"
+  [[ -f "$SESSION_SYNC" ]] || die "missing $SESSION_SYNC"
+  [[ -f "$SESSION_IDLE" ]] || die "missing $SESSION_IDLE"
+  [[ -f "$COMMIT_MSG" ]] || die "missing $COMMIT_MSG"
   chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$DESTRUCTIVE_GUARD" "$PROPOSAL_GUARD" "$SESSION_SYNC" "$SESSION_IDLE" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
   cp "$SETTINGS" "$SETTINGS.bak"
 
-  enganchar Stop "$DOC_SYNC" 'doc-sync|check-doc-sync'
-  ok "hook de deriva de documentación al cerrar sesión"
+  hook_up Stop "$DOC_SYNC" 'doc-sync|check-doc-sync'
+  ok "hook for documentation drift when closing a session"
 
-  enganchar UserPromptSubmit "$CYCLE_GUARD" 'cycle-guard'
-  ok "hook del ciclo al empezar en la rama principal"
+  hook_up UserPromptSubmit "$CYCLE_GUARD" 'cycle-guard'
+  ok "hook for the cycle when starting on the main branch"
 
-  enganchar Stop "$MEMORY_GUARD" 'memory-guard'
-  ok "hook de memorias de proyecto sin promover al cerrar sesión"
+  hook_up Stop "$MEMORY_GUARD" 'memory-guard'
+  ok "hook for unpromoted project memories when closing a session"
 
-  enganchar UserPromptSubmit "$TASK_CONTEXT" 'task-context'
-  ok "hook que trae la tarea al retomar un espacio de trabajo"
+  hook_up UserPromptSubmit "$TASK_CONTEXT" 'task-context'
+  ok "hook that brings the task back when resuming a workspace"
 
-  enganchar PreToolUse "$WORKTREE_GUARD" 'worktree-guard' Bash
-  ok "hook que para el borrado a mano de un espacio registrado"
+  hook_up PreToolUse "$WORKTREE_GUARD" 'worktree-guard' Bash
+  ok "hook that stops manual deletion of a registered workspace"
 
-  enganchar PreToolUse "$DESTRUCTIVE_GUARD" 'destructive-guard' 'Bash|Read|Edit|Write|MultiEdit|NotebookEdit'
-  ok "hook que para comandos destructivos y la lectura de claves privadas"
+  hook_up PreToolUse "$DESTRUCTIVE_GUARD" 'destructive-guard' 'Bash|Read|Edit|Write|MultiEdit|NotebookEdit'
+  ok "hook that stops destructive commands and reading private keys"
 
-  enganchar PreToolUse "$PROPOSAL_GUARD" 'proposal-guard' Bash
-  ok "hook que para abrir a mano una propuesta sin el recibo de la puerta"
+  hook_up PreToolUse "$PROPOSAL_GUARD" 'proposal-guard' Bash
+  ok "hook that stops opening a proposal by hand without the gate receipt"
 
-  enganchar SessionStart "$SESSION_SYNC" 'session-sync'
-  ok "hook que pone la máquina al día con el remoto al abrir sesión"
+  hook_up SessionStart "$SESSION_SYNC" 'session-sync'
+  ok "hook that syncs the machine with the remote when opening a session"
 
-  enganchar UserPromptSubmit "$SESSION_IDLE" 'session-idle'
-  ok "hook que hace lo mismo al volver a una sesión que llevaba horas parada"
+  hook_up UserPromptSubmit "$SESSION_IDLE" 'session-idle'
+  ok "hook that does the same when returning to a session idle for hours"
 
-  # Solo si Codex está en la máquina: crear su carpeta no instala nada.
-  if [[ -d "$CODEX_DIR" && -f "$CODEX_CONTEXTO" ]]; then
-    chmod +x "$CODEX_CONTEXTO"
+  # Only if Codex is on the machine: creating its folder installs nothing.
+  if [[ -d "$CODEX_DIR" && -f "$CODEX_CONTEXT" ]]; then
+    chmod +x "$CODEX_CONTEXT"
     codex_hooks add
-    ok "hooks de Codex en $CODEX_HOOKS (apruébalos la primera vez que abras Codex)"
+    ok "Codex hooks in $CODEX_HOOKS (approve them the first time you open Codex)"
   fi
 
   if [[ -f "$CLAUDE_PLUGIN/.claude-plugin/plugin.json" ]]; then
     plugin_claude add
-    ok "plugin de Claude Code: el recordatorio de tareas como panel (solo Claude)"
+    ok "Claude Code plugin: the task reminder as a panel (Claude only)"
   fi
 
-  info "copia previa en $SETTINGS.bak"
+  info "previous copy in $SETTINGS.bak"
 
-  # Impedir el push directo a la rama principal. La protección de verdad es del
-  # lado del servidor, pero en un repo privado sin plan de pago no está
-  # disponible: esto cubre el descuido, que es el caso real. Un `--no-verify`
-  # lo salta, y eso es aceptable porque entonces es una decisión.
-  instalar_pre_push() {
-    local repo="$1" principal hooks
+  # Block direct pushes to the main branch. The real protection is server
+  # side, but on a private repo without a paid plan it is not available: this
+  # covers the slip, which is the real case. `--no-verify` skips it, and that
+  # is acceptable because then it is a decision.
+  install_pre_push() {
+    local repo="$1" main_name hooks
     hooks="$(dir_hooks "$repo")" || return 1
-    # La principal del repo, no la del worktree en el que estemos ahora.
-    # `|| true`: si no hay origin/HEAD el pipeline falla y con pipefail se lleva
-    # por delante el script entero.
-    # Por orden: lo que el proyecto declare, lo que diga el remoto, y lo que el
-    # repo esté usando. Asumir "main" dejaba el hook vigilando una rama que no
-    # existe, y entonces no bloquea nada.
-    principal="$(rama_principal "$repo")"
-    # El nombre acaba dentro de un heredoc sin comillas, o sea como codigo del
-    # hook. Sale de crux.json, que es un fichero versionado: quien manda una
-    # propuesta puede cambiarlo. Un refname valido no lleva nada de esto.
-    if [[ ! "$principal" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
-      warn "rama principal con caracteres no validos: '$principal'"
-      info "el pre-push de $(basename "$repo") no se instala"
+    # The repo's main branch, not that of the worktree we happen to be in.
+    # `|| true`: without origin/HEAD the pipeline fails and with pipefail it
+    # takes the whole script down with it.
+    # In order: what the project declares, what the remote says, and what the
+    # repo is using. Assuming "main" left the hook watching a branch that does
+    # not exist, and then it blocks nothing.
+    main_name="$(main_branch "$repo")"
+    # The name ends up inside an unquoted heredoc, that is, as hook code. It
+    # comes from crux.json, which is a versioned file: whoever sends a proposal
+    # can change it. A valid refname carries none of this.
+    if [[ ! "$main_name" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+      warn "main branch with invalid characters: '$main_name'"
+      info "the pre-push of $(basename "$repo") is not installed"
       return 1
     fi
     cat > "$hooks/pre-push" <<EOF
 #!/usr/bin/env bash
-# Instalado por crux hooks install.
-# El trabajo entra por propuesta, no por push directo a $principal.
+# Installed by crux hooks install.
+# Work comes in through a proposal, not by direct push to $main_name.
 while read -r _ _ remote_ref remote_sha; do
-  [[ "\$remote_ref" == "refs/heads/$principal" ]] || continue
-  # Si el remoto aún no tiene la rama, este push la crea: es la primera subida
-  # de un repo nuevo, no trabajo que se salta la propuesta.
+  [[ "\$remote_ref" == "refs/heads/$main_name" ]] || continue
+  # If the remote does not have the branch yet, this push creates it: it is the
+  # first upload of a new repo, not work skipping the proposal.
   [[ "\$remote_sha" =~ ^0+\$ ]] && continue
   echo
-  echo "push directo a $principal bloqueado"
+  echo "direct push to $main_name blocked"
   echo
-  echo "  crux workspace new <tarea>     # rama propia y entorno aislado"
-  echo "  crux workspace finish <tarea>  # sube la rama y abre la propuesta"
+  echo "  crux workspace new <task>      # own branch and isolated environment"
+  echo "  crux workspace finish <task>   # pushes the branch and opens the proposal"
   echo
-  echo "Si de verdad hace falta: git push --no-verify"
+  echo "If you really need to: git push --no-verify"
   exit 1
 done
 exit 0
@@ -277,22 +277,22 @@ EOF
     chmod +x "$hooks/pre-push"
   }
 
-  # Se copia en vez de invocar al kernel desde el hook: así sigue funcionando
-  # aunque `crux` no esté en el PATH de quien commitea.
+  # It is copied instead of calling the kernel from the hook: that way it keeps
+  # working even if `crux` is not on the PATH of whoever commits.
   #
-  # El alcance se fija al instalar. En el repo de un cliente solo se quita la
-  # firma de la herramienta: su idioma y su formato de commit son suyos, y
-  # imponerles los nuestros sería el mismo error que el perfil client-repo
-  # existe para evitar.
-  instalar_commit_msg() {
-    local repo="$1" alcance="${2:-full}" idioma="${3:-en}" hooks
+  # The scope is fixed at install time. In a client's repo only the tool's
+  # signature is stripped: their language and commit format are theirs, and
+  # imposing ours would be the same mistake the client-repo profile exists to
+  # avoid.
+  install_commit_msg() {
+    local repo="$1" scope="${2:-full}" language="${3:-en}" hooks
     hooks="$(dir_hooks "$repo")" || return 1
-    # Los dos van a un reemplazo de sed que escribe el hook. Salen del perfil,
-    # que es otro fichero versionado.
-    [[ "$idioma" =~ ^[a-z]{2}$ ]] || { warn "idioma de commit no valido: '$idioma'"; idioma=en; }
-    [[ "$alcance" =~ ^[a-z]+$ ]] || { warn "alcance de commit no valido: '$alcance'"; alcance=full; }
-    sed -e "s|^SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-full}\"|SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-$alcance}\"|" \
-        -e "s|^IDIOMA=\"\${CRUX_COMMIT_MSG_LANG:-en}\"|IDIOMA=\"\${CRUX_COMMIT_MSG_LANG:-$idioma}\"|" \
+    # Both go into a sed replacement that writes the hook. They come from the
+    # profile, which is another versioned file.
+    [[ "$language" =~ ^[a-z]{2}$ ]] || { warn "invalid commit language: '$language'"; language=en; }
+    [[ "$scope" =~ ^[a-z]+$ ]] || { warn "invalid commit scope: '$scope'"; scope=full; }
+    sed -e "s|^SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-full}\"|SCOPE=\"\${CRUX_COMMIT_MSG_SCOPE:-$scope}\"|" \
+        -e "s|^COMMIT_LANG=\"\${CRUX_COMMIT_MSG_LANG:-en}\"|COMMIT_LANG=\"\${CRUX_COMMIT_MSG_LANG:-$language}\"|" \
       "$COMMIT_MSG" > "$hooks/commit-msg"
     chmod +x "$hooks/commit-msg"
   }
@@ -300,100 +300,100 @@ EOF
   local kernel
   kernel="$(crux_home)"
   if [[ -n "$kernel" ]] && git -C "$kernel" rev-parse --git-dir >/dev/null 2>&1; then
-    instalar_pre_push "$kernel"
-    instalar_commit_msg "$kernel"
-    ok "pre-push y commit-msg en el kernel"
+    install_pre_push "$kernel"
+    install_commit_msg "$kernel"
+    ok "pre-push and commit-msg in the kernel"
   fi
 
   local docs
   if docs="$(find_docs_repo "$PWD" 2>/dev/null)" && git -C "$docs" rev-parse --git-dir >/dev/null 2>&1; then
-    # El docs repo se sube directo, como dice la regla del perfil, y es lo que
-    # se hace: en septiembre, 326 de 336 commits de un docs repo entraron
-    # directos a la principal. El hook contradecía la regla y solo servía para
-    # tener que saltárselo. El que puso antes crux se retira.
+    # The docs repo is pushed directly, as the profile rule says, and that is
+    # what is done: in September, 326 of 336 commits of a docs repo went
+    # straight to the main branch. The hook contradicted the rule and only
+    # served to be skipped. The one crux installed earlier is removed.
     local pre_push_docs; pre_push_docs="$(dir_hooks "$docs")/pre-push"
-    if [[ -f "$pre_push_docs" ]] && grep -q "Instalado por crux hooks install" "$pre_push_docs"; then
+    if [[ -f "$pre_push_docs" ]] && grep -q "Instalado por crux hooks install\|Installed by crux hooks install" "$pre_push_docs"; then
       rm -f "$pre_push_docs"
-      ok "pre-push retirado de $(basename "$docs"): la documentación se sube directa"
+      ok "pre-push removed from $(basename "$docs"): documentation is pushed directly"
     fi
     cat > "$(dir_hooks "$docs")/pre-commit" <<'EOF'
 #!/usr/bin/env bash
-# Instalado por crux hooks install.
-# Verifica la conformidad antes de dejar commitear en el docs repo.
+# Installed by crux hooks install.
+# Checks conformance before allowing a commit in the docs repo.
 command -v crux >/dev/null || exit 0
 if ! crux doctor >/tmp/crux-precommit.$$ 2>&1; then
   echo
-  echo "crux doctor no pasa — el commit se detiene:"
+  echo "crux doctor does not pass — the commit is stopped:"
   echo
   grep -E "^error" /tmp/crux-precommit.$$ | sed 's/^/  /'
   echo
-  echo "Arréglalo, o salta la comprobación con: git commit --no-verify"
+  echo "Fix it, or skip the check with: git commit --no-verify"
   rm -f /tmp/crux-precommit.$$
   exit 1
 fi
 rm -f /tmp/crux-precommit.$$
 EOF
     chmod +x "$(dir_hooks "$docs")/pre-commit"
-    instalar_commit_msg "$docs"
-    ok "pre-commit y commit-msg en $(basename "$docs")"
+    install_commit_msg "$docs"
+    ok "pre-commit and commit-msg in $(basename "$docs")"
 
-    # Los commits de los repos de código son la mayoría, así que ahí es donde
-    # más falta hace. También en los de cliente: `.git/hooks/` no está
-    # versionado, no viaja en ningún push y no es "escribir en su repo". Al
-    # saltárselos, el único sitio donde la firma de la herramienta no puede
-    # aparecer era precisamente el único sin la red que la quita.
-    local raiz repo perfil escribe alcance
-    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo multi-repo)"
-    escribe="$(perfil_get "$perfil" "$docs" pointers.write true)"
-    alcance=full
-    [[ "$escribe" == "false" ]] && alcance=signature
-    local idioma; idioma="$(idioma_commits "$perfil" "$docs")"
-    raiz="$(dirname "$docs")"
+    # Commits in code repos are the majority, so that is where it is needed
+    # most. Client repos too: `.git/hooks/` is not versioned, travels in no
+    # push and is not "writing in their repo". By skipping them, the one place
+    # where the tool's signature must not appear was precisely the one
+    # without the net that removes it.
+    local root repo profile writes scope
+    profile="$(json_get "$docs/crux.json" profile 2>/dev/null || echo multi-repo)"
+    writes="$(profile_get "$profile" "$docs" pointers.write true)"
+    scope=full
+    [[ "$writes" == "false" ]] && scope=signature
+    local language; language="$(commit_language "$profile" "$docs")"
+    root="$(dirname "$docs")"
     while IFS= read -r repo; do
       [[ -n "$repo" ]] || continue
-      nombre_valido "$repo" || { warn "nombre de repo invalido en el contrato: $repo"; continue; }
-      git -C "$raiz/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
-      # Con `cmd && ok` un repo sin hooks accesibles abortaría el install
-      # entero por set -e, y los repos siguientes se quedarían sin enganchar.
-      if instalar_commit_msg "$raiz/$repo" "$alcance" "$idioma"; then
-        ok "commit-msg en $repo${alcance:+ ($alcance)}"
+      valid_name "$repo" || { warn "invalid repo name in the contract: $repo"; continue; }
+      git -C "$root/$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+      # With `cmd && ok` a repo without accessible hooks would abort the whole
+      # install under set -e, and the following repos would be left unhooked.
+      if install_commit_msg "$root/$repo" "$scope" "$language"; then
+        ok "commit-msg in $repo${scope:+ ($scope)}"
       fi
-      # La rama principal se protegía en el kernel y en el docs repo, y no en
-      # los repos de código, que es donde se hace casi todo el trabajo. Como el
-      # commit-msg, es estado local: no toca nada del repo de un cliente.
-      instalar_pre_push "$raiz/$repo" && ok "pre-push en $repo"
+      # The main branch was protected in the kernel and the docs repo, and not
+      # in the code repos, which is where almost all the work happens. Like
+      # commit-msg, it is local state: it touches nothing of a client's repo.
+      install_pre_push "$root/$repo" && ok "pre-push in $repo"
     done < <(json_get "$docs/crux.json" repos 2>/dev/null)
   else
-    info "sin docs repo en el directorio actual: no se instala el pre-commit"
-    info "entra en uno y repite para engancharlo"
+    info "no docs repo in the current directory: the pre-commit is not installed"
+    info "enter one and repeat to hook it"
   fi
 }
 
 cmd_remove() {
-  [[ -f "$SETTINGS" ]] || die "no hay $SETTINGS"
+  [[ -f "$SETTINGS" ]] || die "no $SETTINGS"
   cp "$SETTINGS" "$SETTINGS.bak"
   node -e '
     const fs = require("fs");
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    for (const [evento, grupos] of Object.entries(s.hooks || {})) {
-      s.hooks[evento] = grupos
+    for (const [event, groups] of Object.entries(s.hooks || {})) {
+      s.hooks[event] = groups
         .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
-      if (!s.hooks[evento].length) delete s.hooks[evento];
+      if (!s.hooks[event].length) delete s.hooks[event];
     }
     fs.writeFileSync(process.argv[1], JSON.stringify(s, null, 2) + "\n");
   ' "$SETTINGS"
   plugin_claude remove
   [[ -f "$CODEX_HOOKS" ]] && codex_hooks remove
-  ok "hooks de crux retirados (el resto queda como estaba)"
+  ok "crux hooks removed (the rest is left as it was)"
 
   local docs
   if docs="$(find_docs_repo "$PWD" 2>/dev/null)"; then
     if [[ -f "$(dir_hooks "$docs")/pre-commit" ]]; then
-      grep -q "crux doctor" "$(dir_hooks "$docs")/pre-commit" && rm "$(dir_hooks "$docs")/pre-commit" && ok "pre-commit retirado"
+      grep -q "crux doctor" "$(dir_hooks "$docs")/pre-commit" && rm "$(dir_hooks "$docs")/pre-commit" && ok "pre-commit removed"
     fi
     if [[ -f "$(dir_hooks "$docs")/commit-msg" ]]; then
-      grep -q "crux hooks install" "$(dir_hooks "$docs")/commit-msg" && rm "$(dir_hooks "$docs")/commit-msg" && ok "commit-msg retirado"
+      grep -q "crux hooks install" "$(dir_hooks "$docs")/commit-msg" && rm "$(dir_hooks "$docs")/commit-msg" && ok "commit-msg removed"
     fi
   fi
 }
@@ -402,5 +402,5 @@ case "${1:-status}" in
   status)  cmd_status ;;
   install) cmd_install ;;
   remove)  cmd_remove ;;
-  *) die "uso: crux hooks {status|install|remove}" ;;
+  *) die "usage: crux hooks {status|install|remove}" ;;
 esac

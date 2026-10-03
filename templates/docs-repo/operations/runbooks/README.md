@@ -1,21 +1,21 @@
 # runbooks/
 
-Un fichero por **síntoma**, nombrado por cómo se reporta el problema
-(`login-no-hace-nada-tras-desplegar.md`, `radar-tiles-mal-en-produccion.md`).
-Aquí no hay un `runbook.md` genérico: los runbooks aparecen cuando un incidente
-real se resuelve, no antes.
+One file per **symptom**, named after how the problem is reported
+(`login-does-nothing-after-deploy.md`, `radar-tiles-wrong-in-production.md`).
+There is no generic `runbook.md` here: runbooks appear when a real incident is
+resolved, not before.
 
-Un runbook se ejecuta con el sistema caído, así que **no explica, actúa**. La
-anatomía, en este orden:
+A runbook is run with the system down, so it **does not explain, it acts**. The
+anatomy, in this order:
 
-1. **Síntoma** — el título, tal y como se reporta.
-2. **Confirmar que es esto** — un comando y qué se espera ver; cómo distinguirlo
-   de lo que se le parece.
-3. **Actuar** — los comandos, sin prosa.
-4. **Verificar** — cómo se comprueba que se arregló, y cuánto tarda en propagar
-   si hay caché o CDN de por medio.
-5. **Escalar** — a quién se avisa y qué se apaga si sigue igual.
-6. **Historial** — una línea por vez que pasó.
+1. **Symptom** — the title, as it is reported.
+2. **Confirm it is this** — a command and what you expect to see; how to tell it
+   from what resembles it.
+3. **Act** — the commands, no prose.
+4. **Verify** — how to check that it is fixed, and how long it takes to
+   propagate if there is a cache or CDN in between.
+5. **Escalate** — who is notified and what is switched off if it stays the same.
+6. **History** — one line each time it happened.
 
-Para escribirlo en caliente justo después de resolver un incidente, usa la skill
-`runbook`.
+To write it on the spot right after resolving an incident, use the `runbook`
+skill.

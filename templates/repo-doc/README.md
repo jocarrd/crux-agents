@@ -1,12 +1,12 @@
 # {{REPO}}
 
-> Paths relativos a la raíz de `{{REPO}}/`.
+> Paths relative to the root of `{{REPO}}/`.
 
 {{DESCRIPTION}}
 
-Código en `~/Proyectos/{{PROJECT}}/{{REPO}}/`.
+Code in `~/Proyectos/{{PROJECT}}/{{REPO}}/`.
 
-## Documentación de este repo
+## Documentation of this repo
 
-<!-- Añade aquí los ficheros de esta carpeta a medida que aparezcan:
+<!-- Add the files of this folder here as they appear:
      architecture.md, api.md, design-system.md, decisions.md, notes.md… -->

@@ -1,689 +1,709 @@
-# Decisiones del kernel
+# Kernel decisions
 
 ---
 
-### ADR-001: El remoto es una plantilla declarada, no un supuesto
+### ADR-001: The remote is a declared template, not an assumption
 
 - **Date**: 2026-08-01
 - **Status**: Accepted
-- **Context**: `crux clone` componía las URLs asumiendo GitHub y exigía `gh`
-  para deducir el propietario. Eso ya fallaba con los proyectos existentes: en
-  uno de ellos la documentación vive en una cuenta y el código del cliente en
-  otra, así que una sola forma de componer la URL no bastaba. Además, dentro
-  de un mismo proyecto convivían `https` y `ssh` sin que se notara.
-- **Decision**: el contrato declara `remote` con una **plantilla** que lleva
-  `{repo}`, más un mapa de **overrides por repo**. La plantilla es el formato
-  primario porque es el único que cubre remotos que no siguen la forma
-  `owner/repo`. Se admite un atajo `host`+`owner`+`protocol` por comodidad.
-  `crux adopt` lo deduce del `origin` de lo que ya esté clonado.
+- **Context**: `crux clone` composed URLs assuming GitHub and required `gh` to
+  deduce the owner. That was already failing with existing projects: in one of
+  them the documentation lives in one account and the client's code in another,
+  so a single way of composing the URL was not enough. Also, `https` and `ssh`
+  coexisted within the same project without anyone noticing.
+- **Decision**: the contract declares `remote` with a **template** carrying
+  `{repo}`, plus a map of **per-repo overrides**. The template is the primary
+  format because it is the only one that covers remotes that do not follow the
+  `owner/repo` shape. A `host`+`owner`+`protocol` shortcut is accepted for
+  convenience. `crux adopt` deduces it from the `origin` of whatever is already
+  cloned.
 - **Consequences**:
-  - El kernel deja de saber de proveedores: vale igual para GitHub, GitLab
-    self-hosted, Bitbucket o Azure DevOps.
-  - `gh` deja de ser obligatorio para clonar.
-  - La creación de repos remotos sigue cubriendo solo GitHub, a propósito:
-    adivinar la API de cada proveedor no compensa cuando crear un repo a mano
-    son dos clics.
-- **Reversibility**: alta. Es un campo en un JSON y dos funciones.
+  - The kernel stops knowing about providers: it works the same for GitHub,
+    self-hosted GitLab, Bitbucket or Azure DevOps.
+  - `gh` is no longer mandatory for cloning.
+  - Creating remote repos still covers only GitHub, on purpose: guessing each
+    provider's API does not pay off when creating a repo by hand is two clicks.
+- **Reversibility**: high. It is a field in a JSON and two functions.
 - **Related**: ADR-002
 
 ---
 
-### ADR-002: La visibilidad se declara porque no siempre se puede aplicar
+### ADR-002: Visibility is declared because it cannot always be enforced
 
 - **Date**: 2026-08-01
 - **Status**: Accepted
-- **Context**: el flag `--visibility` de `crux init` solo tenía efecto cuando
-  el repo lo creaba el CLI de GitHub. Con cualquier otro remoto se ignoraba en
-  silencio: creías haber pedido privado y no lo controlaba nadie. Un docs repo
-  público con documentación interna dentro no es un descuido de configuración,
-  es un incidente.
-- **Decision**: la visibilidad prevista se declara en el contrato. `init` la
-  dice en voz alta cuando no puede aplicarla, y `doctor` consulta la real donde
-  hay API para preguntarla. Público con perfil de cliente es error, no aviso.
-- **Consequences**: lo que el kernel no puede garantizar, lo declara y lo
-  verifica. Donde no hay API para consultarlo, se dice que no se ha comprobado
-  en vez de callar.
-- **Reversibility**: alta.
+- **Context**: the `--visibility` flag of `crux init` only had an effect when
+  the repo was created by GitHub's CLI. With any other remote it was silently
+  ignored: you thought you had asked for private and nobody was controlling it.
+  A public docs repo with internal documentation inside is not a configuration
+  slip, it is an incident.
+- **Decision**: the intended visibility is declared in the contract. `init`
+  says out loud when it cannot enforce it, and `doctor` queries the real one
+  where there is an API to ask. Public with a client profile is an error, not a
+  warning.
+- **Consequences**: what the kernel cannot guarantee, it declares and verifies.
+  Where there is no API to query it, it says it has not been checked instead of
+  staying silent.
+- **Reversibility**: high.
 - **Related**: ADR-001
 
 ---
 
-### ADR-003: El idioma es una propiedad del proyecto
+### ADR-003: Language is a property of the project
 
 - **Date**: 2026-08-01
 - **Status**: Accepted
-- **Context**: convivían descripciones de skills en español y en inglés dentro
-  del mismo proyecto. La descripción es lo que decide si una skill se activa, y
-  debe llevar las palabras con las que aparece el problema: si el trabajo se
-  pide en un idioma y la descripción está en otro, la skill existe pero se
-  activa peor justo cuando hace falta.
-- **Decision**: `crux.json` declara `language`. Descripciones y documentación
-  en el idioma del proyecto; nombres, comandos, ramas y commits en inglés;
-  términos técnicos sin traducir. `doctor` avisa de la mezcla.
-- **Consequences**: un proyecto cuyo código o cuyos interlocutores sean de otro
-  idioma lo declara y se escribe entero en ese idioma, en vez de decidirlo
-  fichero a fichero.
-- **Reversibility**: alta para la regla; traducir lo ya escrito, no.
+- **Context**: skill descriptions in Spanish and in English coexisted within the
+  same project. The description is what decides whether a skill activates, and
+  it must carry the words in which the problem shows up: if the work is
+  requested in one language and the description is in another, the skill exists
+  but activates worse exactly when it is needed.
+- **Decision**: `crux.json` declares `language`. Descriptions and documentation
+  in the project's language; names, commands, branches and commits in English;
+  technical terms untranslated. `doctor` warns about the mix.
+- **Consequences**: a project whose code or whose counterparts are in another
+  language declares it and is written entirely in that language, instead of
+  deciding file by file.
+- **Reversibility**: high for the rule; translating what is already written,
+  no.
 
 ---
 
-### ADR-004: Los bloques generados ceden el formato al repo
+### ADR-004: Generated blocks yield formatting to the repo
 
 - **Date**: 2026-08-01
 - **Status**: Accepted
-- **Context**: los punteros de contexto llevan un bloque que genera `crux link`.
-  En un repo con formateador automático, el formateador alineaba las tablas y
-  `link` las devolvía a su forma en la pasada siguiente: los dos se reescribían
-  el fichero indefinidamente, y el ruido aparecía en el `git status` de
-  cualquiera que trabajase ahí.
-- **Decision**: la comparación del bloque ignora espacios y la longitud de los
-  separadores de tabla. El formateador manda en la forma; el kernel, en el
-  contenido.
-- **Consequences**: un bloque generado puede verse distinto en cada repo según
-  su formateador, y da igual. Lo que no puede cambiar es lo que dice.
-- **Reversibility**: alta.
+- **Context**: context pointers carry a block generated by `crux link`. In a
+  repo with an automatic formatter, the formatter aligned the tables and `link`
+  put them back to their form on the next pass: the two rewrote the file
+  endlessly, and the noise showed up in the `git status` of anyone working
+  there.
+- **Decision**: the block comparison ignores whitespace and the length of the
+  table separators. The formatter rules the form; the kernel, the content.
+- **Consequences**: a generated block may look different in each repo depending
+  on its formatter, and it does not matter. What cannot change is what it says.
+- **Reversibility**: high.
 
 ---
 
-### ADR-005: El ciclo de trabajo se declara como una secuencia, no como un catálogo
+### ADR-005: The work cycle is declared as a sequence, not as a catalog
 
 - **Date**: 2026-08-01
 - **Status**: Accepted
-- **Context**: el kernel tenía las piezas del ciclo —planificar, aislar,
-  verificar, cerrar— como skills sueltas, y el contexto de entrada las
-  presentaba como una tabla de "qué invocar en cada momento". La medición de
-  uso mostró que las dos que sostienen el resto, la puerta de calidad y el
-  cierre de sesión, apenas se invocaban. Y en paralelo apareció el problema que
-  eso provoca: dos sesiones trabajando sobre el mismo directorio, mezclando
-  cambios y peleándose por los mismos ficheros.
-- **Decision**: existe una skill `flow` que declara **el ciclo completo y su
-  orden**, con el motivo de cada paso y el coste de saltárselo. Los punteros de
-  contexto la presentan como la entrada por defecto, y la tabla de momentos
-  queda como atajo. `crux workspace finish` cierra el ciclo subiendo la rama y
-  abriendo la propuesta.
+- **Context**: the kernel had the pieces of the cycle —plan, isolate, verify,
+  close— as loose skills, and the entry context presented them as a table of
+  "what to invoke at each moment". Usage measurement showed that the two that
+  hold up the rest, the quality gate and session close, were barely invoked.
+  And in parallel the problem this causes appeared: two sessions working on the
+  same directory, mixing changes and fighting over the same files.
+- **Decision**: a `flow` skill exists that declares **the full cycle and its
+  order**, with the reason for each step and the cost of skipping it. The
+  context pointers present it as the default entry, and the table of moments
+  stays as a shortcut. `crux workspace finish` closes the cycle by pushing the
+  branch and opening the proposal.
 - **Consequences**:
-  - El aislamiento pasa a ser el camino normal y no la excepción, que es lo que
-    evita el conflicto entre sesiones simultáneas.
-  - Un catálogo no dice en qué orden se usan las cosas; una secuencia sí.
-  - Si el uso no sube en las próximas semanas, el problema no era la
-    descubribilidad y habrá que buscar otra causa.
-  - **Corregido por ADR-006**: la medición que motivó este ADR solo contaba
-    invocaciones por nombre, no la ejecución de los scripts de cada skill. El
-    problema existía, pero era menor que el número.
-- **Reversibility**: alta. Es una skill y un bloque de texto en las plantillas.
+  - Isolation becomes the normal path and not the exception, which is what
+    prevents the conflict between simultaneous sessions.
+  - A catalog does not say in what order things are used; a sequence does.
+  - If usage does not rise in the coming weeks, the problem was not
+    discoverability and another cause will have to be sought.
+  - **Corrected by ADR-006**: the measurement that motivated this ADR only
+    counted invocations by name, not the execution of each skill's scripts. The
+    problem existed, but it was smaller than the number.
+- **Reversibility**: high. It is a skill and a block of text in the templates.
 
-### ADR-006: El uso de una skill se mide también por sus scripts
+### ADR-006: A skill's usage is also measured by its scripts
 
 - **Date**: 2026-08-02
 - **Status**: Accepted
-- **Context**: `crux usage` contaba solo las invocaciones formales de una skill
-  por su nombre. Pero quien sigue el procedimiento a mano ejecuta sus scripts
-  sin llamarla, y entonces aparece con cero. Medido sobre una sesión real: la
-  puerta de calidad figuraba con 2 invocaciones mientras se pasaba en cuatro
-  propuestas seguidas, y su clasificador se había ejecutado 28 veces. Cuatro
-  skills del kernel —`code-health`, `skill-audit`, `render-loop`,
-  `visual-diff`— salían como muertas y se estaban usando.
-- **Decision**: el informe cuenta dos señales y **no las suma**: `llamada`, la
-  skill invocada por su nombre, y `script`, el rastro de sus scripts en
-  comandos. Una skill con rastro de script deja de contarse entre las que nadie
-  usa. Se descartan las menciones precedidas de un verbo de lectura, porque
-  abrir un fichero no es ejecutarlo.
+- **Context**: `crux usage` counted only a skill's formal invocations by name.
+  But whoever follows the procedure by hand runs its scripts without calling it,
+  and then it shows up as zero. Measured on a real session: the quality gate
+  appeared with 2 invocations while it was passed on four proposals in a row,
+  and its classifier had been run 28 times. Four kernel skills
+  —`code-health`, `skill-audit`, `render-loop`, `visual-diff`— showed up as
+  dead and were in use.
+- **Decision**: the report counts two signals and **does not add them**:
+  `llamada`, the skill invoked by name, and `script`, the trace of its scripts
+  in commands. A skill with a script trace stops being counted among those
+  nobody uses. Mentions preceded by a reading verb are discarded, because
+  opening a file is not running it.
 - **Consequences**:
-  - Sumarlas habría mentido igual, solo que al alza: no son la misma unidad, y
-    `script` es una cota superior porque incluye las ejecuciones desde tests.
-  - **Invalida parcialmente la premisa de ADR-005.** Aquella lectura de "apenas
-    se invocan" se hizo con un instrumento que solo veía una de las dos
-    señales. La conclusión sobre la descubribilidad sigue siendo razonable, pero
-    la magnitud del problema era menor de lo que el número decía.
-  - Sigue sin medir adherencia al procedimiento: un agente puede ejecutar el
-    script y saltarse la mitad de los pasos. Eso no lo ve ninguna métrica local.
-- **Reversibility**: alta. Es una función en `bin/usage.mjs`.
+  - Adding them would have lied just the same, only upward: they are not the
+    same unit, and `script` is an upper bound because it includes runs from
+    tests.
+  - **Partially invalidates the premise of ADR-005.** That reading of "barely
+    invoked" was made with an instrument that only saw one of the two signals.
+    The conclusion about discoverability remains reasonable, but the magnitude
+    of the problem was smaller than the number said.
+  - It still does not measure adherence to the procedure: an agent can run the
+    script and skip half the steps. No local metric sees that.
+- **Reversibility**: high. It is a function in `bin/usage.mjs`.
 
 ---
 
-### ADR-007: La promoción a documentación se sostiene con una puerta que bloquea, no con un aviso
+### ADR-007: Promotion to documentation is sustained by a gate that blocks, not by a warning
 
 - **Date**: 2026-09-02
 - **Status**: Accepted
-- **Context**: `doc-sync.sh` llevaba desde el principio vigilando la disciplina
-  de §7, y el 2026-09-02 se comprobó que no vigilaba nada en el caso que
-  importa. Una sesión real sobre un proyecto de cliente midió una auditoría de
-  accesibilidad entera, descubrió un despliegue fantasma, identificó la
-  librería del hero y resolvió dos preguntas abiertas del docs repo. Al cerrar,
-  nada de eso estaba en git. El hook se ejecutó y salió con 0 **dos veces**,
-  reproducido después: desde el repo de código salía en la comprobación del
-  árbol limpio —todo estaba commiteado— y desde el docs repo salía porque
-  buscaba `repos/<nombre-del-docs-repo>`, que no existe. Las dos salidas eran
-  correctas según su propio diseño; el diseño era el fallo. Vigilaba **ficheros
-  tocados que la doc menciona por nombre**, y lo que se pierde no es un fichero:
-  es lo que se midió, se decidió o se descubrió y nunca fue un fichero.
-- **Decision**: la disciplina pasa a sostenerse en tres piezas de dureza
-  decreciente. `doc-sync.sh` se convierte en una **puerta que bloquea el cierre
-  con código 2** cuando el proyecto se ha movido, y exige responder qué se
-  queda; bloquea **una sola vez por sesión**, con marca en `~/.crux/state/` y
-  respetando `stop_hook_active`. `crux doctor` gana una comprobación de deriva
-  (`lib/check-doc-drift.mjs`) que compara el último commit de cada repo de
-  código con el último de documentación. Y §7 del estándar pasa a decir
-  explícitamente que "no hay nada que promocionar" es una respuesta válida pero
-  **tiene que ser una respuesta**.
-- **Consequences**: cerrar sesión en un proyecto activo cuesta un turno más.
-  Es el precio, y es deliberado: el aviso silencioso ya se probó y falló. Lo que
-  **no** resuelve: nadie puede medir desde git si lo promocionado es suficiente
-  —se puede responder "nada" y cerrar—, así que la puerta garantiza que se
-  pregunte, no que se acierte. La comprobación de doctor tampoco distingue un
-  refactor invisible de un hallazgo sin documentar; por eso es aviso y no error.
-  Efecto lateral útil: la medida de deriva destapó que `crux init` deja un
-  fichero sin commitear al crear un proyecto.
-- **Reversibility**: alta. Quitar el `exit 2` devuelve el comportamiento de
-  aviso; la comprobación de doctor es un bloque numerado más.
+- **Context**: `doc-sync.sh` had been watching the discipline of §7 from the
+  start, and on 2026-09-02 it was found to watch nothing in the case that
+  matters. A real session on a client project measured an entire accessibility
+  audit, discovered a ghost deployment, identified the hero's library and
+  resolved two open questions of the docs repo. At close, none of that was in
+  git. The hook ran and exited with 0 **twice**, reproduced afterwards: from the
+  code repo it exited at the clean-tree check —everything was committed— and
+  from the docs repo it exited because it looked for
+  `repos/<docs-repo-name>`, which does not exist. Both exits were correct
+  according to their own design; the design was the failure. It watched
+  **touched files that the docs mention by name**, and what gets lost is not a
+  file: it is what was measured, decided or discovered and was never a file.
+- **Decision**: the discipline is now sustained by three pieces of decreasing
+  hardness. `doc-sync.sh` becomes a **gate that blocks the close with code 2**
+  when the project has moved, and demands an answer about what stays; it blocks
+  **only once per session**, with a mark in `~/.crux/state/` and honoring
+  `stop_hook_active`. `crux doctor` gains a drift check
+  (`lib/check-doc-drift.mjs`) that compares the last commit of each code repo
+  with the last documentation one. And §7 of the standard now says explicitly
+  that "there is nothing to promote" is a valid answer but **has to be an
+  answer**.
+- **Consequences**: closing a session in an active project costs one more turn.
+  That is the price, and it is deliberate: the silent warning was already tried
+  and failed. What it does **not** solve: nobody can measure from git whether
+  what was promoted is enough —you can answer "nothing" and close—, so the gate
+  guarantees that the question is asked, not that it is answered right. Doctor's
+  check does not tell an invisible refactor from an undocumented finding either;
+  that is why it is a warning and not an error. Useful side effect: the drift
+  measurement uncovered that `crux init` leaves a file uncommitted when
+  creating a project.
+- **Reversibility**: high. Removing the `exit 2` restores the warning
+  behavior; doctor's check is one more numbered block.
 - **Related**: `STANDARD.md` §7, `ADR-005`
 
 ---
 
-### ADR-008: Un MCP es una capacidad del proyecto y se declara en el contrato
+### ADR-008: An MCP is a capability of the project and is declared in the contract
 
 - **Date**: 2026-09-15
 - **Status**: Accepted
-- **Context**: el kernel no tenía forma de decir que un proyecto usa un servidor
-  MCP. La única vía era `claude mcp add`, que escribe en la configuración local
-  de la máquina: se pierde al cambiar de equipo y no distingue un proyecto de
-  otro, así que lo que hace falta en uno aparece en todos. Antes de decidir se
-  midió un servidor real contra su endpoint. Los números: las definiciones de
-  sus 15 herramientas ocupan ~4.759 tokens si el cliente las carga enteras, pero
-  **~64 si carga solo los nombres**, que es lo que hace por defecto con búsqueda
-  de herramientas. En cambio **una sola respuesta suya ocupó ~15.900 tokens, y
-  una búsqueda ~38.600**. El coste no está donde parecía: está en usarlo, no en
-  tenerlo.
-- **Decision**: `crux.json` gana un campo `mcp` opcional donde el proyecto
-  declara sus servidores, y `crux mcp` los escribe como `.mcp.json` en los repos
-  que correspondan. El fichero va a git por lo mismo que los punteros de
-  contexto: clonas el proyecto y la configuración viene con él. El kernel
-  **no declara ninguno** —ninguno vale para todos los proyectos— y **no gestiona
-  el encendido y apagado**, porque el agente ya lo hace: un `.mcp.json` pide
-  aprobación la primera vez y se desactiva por proyecto sin tocar el contrato.
-  Reimplementarlo habría sido una segunda verdad sobre lo mismo. El alcance lo
-  decide `repos`, y donde el perfil no escribe punteros tampoco se escribe esto.
+- **Context**: the kernel had no way of saying that a project uses an MCP
+  server. The only route was `claude mcp add`, which writes to the machine's
+  local configuration: it is lost when changing machines and does not tell one
+  project from another, so what is needed in one shows up in all. Before
+  deciding, a real server was measured against its endpoint. The numbers: the
+  definitions of its 15 tools take ~4,759 tokens if the client loads them whole,
+  but **~64 if it loads only the names**, which is what it does by default with
+  tool search. In contrast **a single response from it took ~15,900 tokens, and
+  a search ~38,600**. The cost is not where it seemed: it is in using it, not in
+  having it.
+- **Decision**: `crux.json` gains an optional `mcp` field where the project
+  declares its servers, and `crux mcp` writes them as `.mcp.json` in the
+  relevant repos. The file goes to git for the same reason as the context
+  pointers: you clone the project and the configuration comes with it. The
+  kernel **declares none** —none is right for every project— and **does not
+  manage switching on and off**, because the agent already does: a `.mcp.json`
+  asks for approval the first time and is disabled per project without touching
+  the contract. Reimplementing it would have been a second truth about the same
+  thing. The scope is decided by `repos`, and where the profile does not write
+  pointers this is not written either.
 - **Consequences**:
-  - El `.mcp.json` se commitea, así que las credenciales se referencian con
-    `${VARIABLE}` y nunca se escriben. `doctor` lo da como **error**, no aviso, y
-    `check-secrets` pasa a mirar también los `.mcp.json`: solo miraba `*.md`, y
-    un token ahí dentro no lo habría visto nadie.
-  - **Lo que hay que mirar antes de declarar un servidor es cuánto devuelve, no
-    cuántas herramientas tiene.** Es lo contrario de lo que sugiere la intuición
-    y es la parte de esta medición que sobrevive al servidor que la motivó.
-  - `crux mcp remove` retira solo lo que declara el contrato. Lo que haya puesto
-    alguien a mano se queda, igual que en `crux hooks remove`.
-  - **Desviación de lo planeado**: el plan decía que `doctor` comprobaría que los
-    servidores responden. No lo hace. `doctor` no abre conexiones en ningún otro
-    bloque, y uno que tarde distinto y diga distinto según haya wifi deja de ser
-    una verificación. Esa comprobación vive en `crux mcp status`, que se ejecuta
-    cuando uno quiere saberlo; `doctor` se queda con la forma y la deriva.
-  - No se declara ningún servidor en ningún proyecto con este cambio. El
-    mecanismo entra vacío a propósito: se prueba con el primero que haga falta.
-  - Solo hay adaptador para un agente. La forma del contrato es independiente
-    del cliente —`transport` se traduce a lo que cada uno llame—, pero mientras
-    no exista el segundo adaptador eso es una intención, no una demostración.
-  - **Lo que encontró la revisión de la propuesta, antes de integrarla**: la
-    primera versión leía el nombre del servidor concatenándolo dentro de la
-    expresión que `json_get` pasa a `eval`, así que un `crux.json` clonado con un
-    nombre que llevara una comilla doble **ejecutaba código con solo pedir
-    `crux mcp status`**. De ahí salen tres cosas que ahora son parte de la
-    decisión: los nombres se validan con la misma regla que el resto del kernel,
-    ningún nombre se interpola nunca en una expresión —van como argumento, donde
-    no son código— y el docs repo recibe el fichero siempre, que es lo que
-    permite a `doctor` saber dónde *debería* haber uno. La revisión también
-    destapó que el doctor firmaba como conforme un `.mcp.json` inexistente o
-    manipulado a mano, y que las huellas de credencial se habían copiado en dos
-    sitios y ya habían nacido distintas: por ese hueco pasaba una contraseña
-    dentro de una `url`. Ahora viven en `lib/credential-prints.mjs` y la
-    traducción del formato en `lib/mcp-format.mjs`, que es lo que hace imposible
-    que el verificador y el escritor discrepen.
-- **Reversibility**: alta. El campo es aditivo: un `crux.json` sin `mcp` se
-  comporta igual que antes. Los ficheros nuevos se borran y el bloque de doctor
-  es uno numerado más.
-- **Related**: `STANDARD.md` §El contrato, `ADR-001`
+  - The `.mcp.json` is committed, so credentials are referenced with
+    `${VARIABLE}` and never written. `doctor` reports it as an **error**, not a
+    warning, and `check-secrets` now also looks at the `.mcp.json` files: it
+    only looked at `*.md`, and a token in there would have been seen by nobody.
+  - **What to look at before declaring a server is how much it returns, not how
+    many tools it has.** It is the opposite of what intuition suggests and it is
+    the part of this measurement that survives the server that motivated it.
+  - `crux mcp remove` removes only what the contract declares. What someone put
+    in by hand stays, just like in `crux hooks remove`.
+  - **Deviation from the plan**: the plan said `doctor` would check that the
+    servers respond. It does not. `doctor` opens no connections in any other
+    block, and one that takes different times and says different things
+    depending on whether there is wifi stops being a verification. That check
+    lives in `crux mcp status`, which runs when one wants to know; `doctor`
+    keeps the form and the drift.
+  - No server is declared in any project with this change. The mechanism enters
+    empty on purpose: it is tested with the first one that is needed.
+  - There is an adapter for only one agent. The shape of the contract is
+    client-independent —`transport` is translated into whatever each one calls
+    it—, but until the second adapter exists that is an intention, not a
+    demonstration.
+  - **What the review of the proposal found, before integrating it**: the first
+    version read the server's name by concatenating it into the expression that
+    `json_get` passes to `eval`, so a cloned `crux.json` with a name carrying a
+    double quote **executed code just by asking for `crux mcp status`**. Three
+    things come out of that and are now part of the decision: names are
+    validated with the same rule as the rest of the kernel, no name is ever
+    interpolated into an expression —they go as arguments, where they are not
+    code— and the docs repo always receives the file, which is what lets
+    `doctor` know where one *should* exist. The review also uncovered that
+    doctor signed off as conformant a nonexistent or hand-tampered `.mcp.json`,
+    and that the credential fingerprints had been copied in two places and were
+    born different: a password inside a `url` slipped through that gap. They now
+    live in `lib/credential-prints.mjs` and the format translation in
+    `lib/mcp-format.mjs`, which is what makes it impossible for the verifier and
+    the writer to disagree.
+- **Reversibility**: high. The field is additive: a `crux.json` without `mcp`
+  behaves the same as before. The new files are deleted and doctor's block is
+  one more numbered one.
+- **Related**: `STANDARD.md` §The contract, `ADR-001`
 
 ---
 
-### ADR-009: La activación de una skill se verifica, no se confía
+### ADR-009: A skill's activation is verified, not trusted
 
 - **Date**: 2026-09-15
 - **Status**: Accepted
-- **Context**: el sistema verifica todo menos lo que decide si algo llega a
-  usarse. `doctor` verifica la estructura, la puerta verifica el cambio, un hook
-  verifica el idioma del commit, `usage` mide el uso a posteriori. La
-  **activación** —que una descripción gane cuando aparece su problema— era la
-  única pieza que se daba por buena. Y ya había fallado de forma medida: `flow`
-  salía con cero invocaciones en 31 sesiones (ADR-005), y `usage` da tres skills
-  que se siguen a mano sin que nadie las llame.
-  Al medirlo apareció algo que nadie había visto: **los pares que más colisionan
-  son los que crea el propio mecanismo de promoción**. Se sube el procedimiento
-  al kernel y queda un adaptador abajo, pero si el adaptador vuelve a contar el
-  método, los dos pujan por la misma frase. El ejemplo canónico del estándar,
-  `device-loop` y `demo-co-device`, daba un **empate exacto**; `render-loop` y
-  `pdf-visual-iterate` se pisaban 0,49; `oauth-reauthorize` y su adaptador, 0,46.
-  Como el catálogo es global, el adaptador de un proyecto compite en todos los
-  demás, donde no aplica. Eso empeora justo cuando el sistema tiene éxito: cada
-  promoción añade un par, cada proyecto mete sus adaptadores en la puja ajena.
-- **Decision**: `skill-audit` gana la señal que le faltaba —mira la secuela de
-  una promoción, no solo la oportunidad— y un `probe` que contesta qué skill se
-  activaría ante una frase y **por cuánto gana**. Los casos viven en
-  `casos/activacion.tsv`, con una regla: una frase sin nombres propios tiene que
-  activar el procedimiento del kernel, nunca el adaptador de un proyecto. La
-  comprobación de forma de las descripciones sale del bloque 10 de `doctor` a
-  `lib/check-skill-description.mjs`, para que la misma vara pase por los dos
-  catálogos: antes solo alcanzaba a las skills de proyecto y las 36 del kernel
-  no las miraba nadie.
+- **Context**: the system verifies everything except what decides whether
+  something ends up being used. `doctor` verifies the structure, the gate
+  verifies the change, a hook verifies the commit language, `usage` measures use
+  after the fact. **Activation** —a description winning when its problem
+  appears— was the only piece taken for granted. And it had already failed in a
+  measured way: `flow` showed zero invocations in 31 sessions (ADR-005), and
+  `usage` shows three skills that are followed by hand without anyone calling
+  them.
+  Measuring it revealed something nobody had seen: **the pairs that collide most
+  are the ones created by the promotion mechanism itself**. The procedure is
+  moved up to the kernel and an adapter is left below, but if the adapter
+  retells the method, the two bid for the same phrase. The standard's canonical
+  example, `device-loop` and `demo-co-device`, gave an **exact tie**;
+  `render-loop` and `pdf-visual-iterate` overlapped 0.49; `oauth-reauthorize`
+  and its adapter, 0.46. Since the catalog is global, a project's adapter
+  competes in all the others, where it does not apply. That gets worse exactly
+  when the system succeeds: each promotion adds a pair, each project drops its
+  adapters into the others' bidding.
+- **Decision**: `skill-audit` gains the signal it was missing —it looks at the
+  aftermath of a promotion, not only the opportunity— and a `probe` that
+  answers which skill would activate for a phrase and **by how much it wins**.
+  The cases live in `casos/activacion.tsv`, with one rule: a phrase without
+  proper nouns must activate the kernel procedure, never a project's adapter.
+  The shape check of descriptions moves out of `doctor`'s block 10 into
+  `lib/check-skill-description.mjs`, so that the same yardstick applies to both
+  catalogs: before, it only reached project skills and the kernel's 36 were
+  looked at by nobody.
 - **Consequences**:
-  - `probe` **no predice lo que hará el agente** y no debe leerse así. Puntúa
-    solape de vocabulario ponderado. Un empate es señal fiable de que dos
-    descripciones no se distinguen; un ganador no garantiza nada. Sirve para
-    comparar dos redacciones y para ver si un cambio apagó una skill, que es
-    para lo que se escribió.
-  - **Se probó lematizar y se descartó con datos.** Dos stemmers —sufijos
-    verbales y solo plurales— empeoraron la medida sobre los mismos 24 casos, de
-    2 fallos a 3, con `oauth-reauthorize` ganando una frase de cierre de sesión.
-    Queda el precio conocido: «merece» y «merecen» cuentan como distintas.
-  - Tres descripciones del kernel se corrigieron con la medida delante:
-    `crux-doctor` decía «usa antes de cerrar sesión» y le robaba el momento a
-    `end-session`, que ya verifica conformidad; `write-tests` no reconocía
-    «añadir tests», que es como se pide de verdad; y `flow` **enumeraba los pasos
-    de las demás** —«pasar la puerta de calidad, proponer el cambio y cerrar la
-    sesión»— así que competía con sus propias piezas siendo la entrada por
-    defecto. Los casos del kernel pasaron de 2 fallos a 1.
-  - El fallo que queda está anotado a propósito: `end-session` y
-    `promote-to-docs` se solapan porque una contiene a la otra. Ajustarlo habría
-    sido sobreajustar el catálogo a mis propios casos.
-  - Lo que **no** resuelve: que el catálogo global siga creciendo con cada
-    proyecto. Esto mide el daño y permite corregirlo escribiendo mejor, pero no
-    acota el catálogo. Mover las skills de proyecto a sus repos se descartó
-    porque rompe el perfil `client-repo`: en el repo de un cliente no se escribe.
-  - **Lo que encontró la revisión de la propuesta, antes de integrarla.** Cinco
-    cosas que invalidaban partes de esto. La medida tenía un suelo de ruido:
-    `log(1 + N/df)` nunca llega a cero, y `cuando` —que está en 33 de las 36
-    descripciones del kernel— pesaba 0,74, por encima del propio umbral de
-    empate; ahora es `log(N/df)` y `cuando` es palabra vacía. El margen era
-    absoluto sobre una escala que crece con la longitud de la frase, así que
-    juzgaba igual a una de cinco palabras y a una de doce: pasa a ser una
-    fracción del líder. El umbral de colisión, 0,25, **dejaba fuera el ejemplo
-    canónico que abre este ADR** —`device-loop` y su adaptador se pisan 0,1887—;
-    se iguala a 0,18. La señal de adaptadores que no se nombran acertaba 0 de 4
-    sobre el único proyecto real donde disparaba, porque `vcr` tiene tres letras
-    y el filtro de términos exigía cuatro. Y el módulo extraído de `doctor` no lo
-    usaba `doctor`: la duplicación seguía ahí y las dos copias ya habían
-    divergido en el mismo commit que las separaba.
-  - **Y una regresión propia**: al quitarle a `flow` la enumeración de los pasos
-    ajenos se le quitó también el vocabulario con el que se le pide trabajo, y
-    dejó de activarse ante «desarrollar esto siguiendo las convenciones del
-    proyecto». No lo medía nadie porque no había ni un caso para `flow`. La
-    lección vale más que el arreglo: **tocar una descripción sin un caso que la
-    cubra es exactamente lo que este ADR dice que no se debe hacer.**
-  - **Corrección posterior, con los adaptadores reales medidos.** El parecido
-    entre descripciones señalaba seis adaptadores «compitiendo» y el que fallaba
-    era **uno**. Un adaptador habla del mismo trabajo que su procedimiento: que
-    compartan vocabulario es inevitable y no prueba nada. Lo que no puede pasar
-    es que gane las frases **sin nombres propios**, porque entonces gana también
-    en los proyectos donde no aplica. De ahí sale el criterio que faltaba, que es
-    simétrico y se comprueba con dos frases: la genérica la gana el kernel, la
-    propia la gana el adaptador. Si pierde la primera, sobra método en su
-    descripción; si pierde la segunda, faltan nombres propios y no lo encuentra
-    nadie. El parecido queda como indicio —qué pares mirar— y la prueba de las
-    dos frases como veredicto, que es el orden que esta skill ya declaraba: el
-    script señala, el test decide.
-- **Reversibility**: alta. Un script, un fichero de casos y una señal más en un
-  informe. Las tres descripciones corregidas son texto.
+  - `probe` **does not predict what the agent will do** and must not be read
+    that way. It scores weighted vocabulary overlap. A tie is a reliable sign
+    that two descriptions are not distinguishable; a winner guarantees nothing.
+    It serves to compare two wordings and to see whether a change switched a
+    skill off, which is what it was written for.
+  - **Lemmatizing was tried and discarded with data.** Two stemmers —verbal
+    suffixes and plurals only— worsened the measure on the same 24 cases, from
+    2 failures to 3, with `oauth-reauthorize` winning a session-closing phrase.
+    The known price remains: «merece» and «merecen» count as different.
+  - Three kernel descriptions were fixed with the measurement in front:
+    `crux-doctor` said "use before closing the session" and stole the moment
+    from `end-session`, which already verifies conformance; `write-tests` did
+    not recognize "add tests", which is how it is actually requested; and `flow`
+    **enumerated the steps of the others** —"pass the quality gate, propose the
+    change and close the session"— so it competed with its own pieces while
+    being the default entry. The kernel cases went from 2 failures to 1.
+  - The remaining failure is noted on purpose: `end-session` and
+    `promote-to-docs` overlap because one contains the other. Tuning it would
+    have been overfitting the catalog to my own cases.
+  - What it does **not** solve: that the global catalog keeps growing with each
+    project. This measures the damage and lets it be corrected by writing
+    better, but it does not bound the catalog. Moving project skills into their
+    repos was discarded because it breaks the `client-repo` profile: nothing is
+    written in a client's repo.
+  - **What the review of the proposal found, before integrating it.** Five
+    things that invalidated parts of this. The measure had a noise floor:
+    `log(1 + N/df)` never reaches zero, and `cuando` —which is in 33 of the 36
+    kernel descriptions— weighed 0.74, above the tie threshold itself; it is now
+    `log(N/df)` and `cuando` is a stop word. The margin was absolute on a scale
+    that grows with the phrase's length, so it judged a five-word phrase and a
+    twelve-word one alike: it becomes a fraction of the leader. The collision
+    threshold, 0.25, **left out the canonical example that opens this ADR**
+    —`device-loop` and its adapter overlap 0.1887—; it is set to 0.18. The
+    signal for adapters that are not named got 0 of 4 right on the only real
+    project where it fired, because `vcr` has three letters and the term filter
+    required four. And the module extracted from `doctor` was not used by
+    `doctor`: the duplication was still there and the two copies had already
+    diverged in the same commit that split them.
+  - **And a regression of my own**: removing from `flow` the enumeration of the
+    others' steps also removed the vocabulary in which work is asked of it, and
+    it stopped activating for "develop this following the project's
+    conventions". Nobody measured it because there was not a single case for
+    `flow`. The lesson is worth more than the fix: **touching a description
+    without a case that covers it is exactly what this ADR says must not be
+    done.**
+  - **Later correction, with the real adapters measured.** The similarity
+    between descriptions pointed to six adapters "competing" and the one that
+    failed was **one**. An adapter talks about the same work as its procedure:
+    that they share vocabulary is unavoidable and proves nothing. What cannot
+    happen is that it wins the phrases **without proper nouns**, because then it
+    wins also in the projects where it does not apply. That yields the missing
+    criterion, which is symmetric and is checked with two phrases: the generic
+    one is won by the kernel, the specific one by the adapter. If the first is
+    lost, there is too much method in its description; if the second is lost,
+    proper nouns are missing and nobody finds out. Similarity stays as a hint
+    —which pairs to look at— and the two-phrase test as the verdict, which is
+    the order this skill already declared: the script points, the test decides.
+- **Reversibility**: high. A script, a file of cases and one more signal in a
+  report. The three fixed descriptions are text.
 - **Related**: `ADR-003`, `ADR-005`, `ADR-006`, `STANDARD.md` §Skills
 
 ---
 
-### ADR-010: El ciclo sigue después de abrir la propuesta, y los especialistas los decide el diff
+### ADR-010: The cycle continues after opening the proposal, and the diff decides the specialists
 
 - **Date**: 2026-09-16
 - **Status**: Accepted
-- **Context**: el ciclo terminaba en la propuesta revisada y fusionada. Comparado
-  con cómo trabajan equipos que ya desarrollan con agentes a escala —revisión
-  con varios especialistas en paralelo, el agente arreglando el CI hasta verde,
-  despliegue vigilado hasta producción y agentes leyendo las señales de
-  producción—, quedaban cuatro huecos en los que no miraba nadie: el CI después
-  de abrir la propuesta, la revisión en los ejes que un generalista no ve, la
-  producción después de fusionar y los logs cuando algo falla en el servidor.
-  Copiar ese modelo entero no tiene sentido a escala de pocas personas: agentes
-  vigilando producción las 24 horas, despliegues graduales con feature flags y
-  fusión automática según el riesgo presuponen tráfico, equipo e
-  infraestructura que aquí no hay.
-- **Decision**: cuatro piezas, cada una con su coste acotado.
-  1. **Riesgo y especialistas en `/review-pr`.** `review-scope.sh` clasifica el
-     diff en riesgo bajo, medio o alto y nombra los especialistas que merece
-     (seguridad, datos, rendimiento, interfaz), tres como máximo. Se lanzan
-     solo esos, en paralelo y en contextos aislados, con su guía y el diff.
-  2. **`crux checks`.** Espera al CI de la propuesta y, si algo falla, trae
-     solo el final del log del trabajo, con las pilas de llamadas recortadas.
-     `/flow` fija tres intentos de arreglo como máximo.
-  3. **`/deploy-watch`.** Después de fusionar, espera a la versión nueva y
-     comprueba las rutas que el proyecto declara en `deploy`. Si falla, se
-     revierte en git antes de investigar.
-  4. **`/prod-signals`.** Lee las fuentes de solo lectura que el proyecto
-     declara en `observability` y agrupa los errores repetidos. Se lanza cuando
-     hay motivo, no de forma continua.
+- **Context**: the cycle ended at the reviewed and merged proposal. Compared
+  with how teams that already develop with agents at scale work —review with
+  several specialists in parallel, the agent fixing CI until green, deployment
+  watched through to production and agents reading production signals—, four
+  gaps remained where nobody was looking: CI after opening the proposal,
+  review on the axes a generalist does not see, production after merging and
+  the logs when something fails on the server. Copying that whole model makes
+  no sense at the scale of a few people: agents watching production 24 hours a
+  day, gradual rollouts with feature flags and automatic merging by risk
+  presuppose traffic, a team and infrastructure that are not here.
+- **Decision**: four pieces, each with its bounded cost.
+  1. **Risk and specialists in `/review-pr`.** `review-scope.sh` classifies the
+     diff as low, medium or high risk and names the specialists it deserves
+     (security, data, performance, interface), three at most. Only those are
+     launched, in parallel and in isolated contexts, with their guide and the
+     diff.
+  2. **`crux checks`.** Waits for the proposal's CI and, if something fails,
+     fetches only the tail of the job's log, with call stacks trimmed. `/flow`
+     sets three fix attempts at most.
+  3. **`/deploy-watch`.** After merging, it waits for the new version and
+     checks the routes the project declares in `deploy`. If it fails, it is
+     reverted in git before investigating.
+  4. **`/prod-signals`.** Reads the read-only sources the project declares in
+     `observability` and groups repeated errors. It is launched when there is
+     a reason, not continuously.
 
-  La fusión sin preguntar queda limitada a cambios **sin código en proyectos
-  propios**. En un repo de cliente decide siempre una persona.
+  Merging without asking is limited to changes **with no code in own
+  projects**. In a client repo a person always decides.
 - **Consequences**:
-  - **Coste en tokens, medido por pieza.** Un especialista lee el diff, los
-    ficheros que toca y su guía (unas 60 líneas), y razona sobre ello: entre
-    20.000 y 50.000 tokens por especialista según el tamaño del cambio. Lanzar
-    los cuatro en cada propuesta multiplicaba por cinco el coste de revisar, y
-    en la mayoría no habría hallazgos: un cambio de estilos no tiene consultas
-    ni permisos. Con el reparto por diff, lo habitual es cero especialistas en
-    documentación y cambios de 30 líneas o menos (coste igual que antes), uno
-    en una pantalla, y dos o tres en un endpoint con sesión o una migración,
-    que es donde un fallo no se ve en una captura y donde se pagan solos.
-  - `crux checks` no gasta tokens mientras espera: es un bucle de shell. Solo
-    entra en el contexto un log recortado cuando algo falla, y el recorte se
-    calibró contra un fallo real: el mensaje útil («typescript-eslint does not
-    support TS 7.0») quedaba enterrado bajo la pila de llamadas y ahora aparece
-    en 14 líneas. Tres intentos acotan el peor caso.
-  - `/deploy-watch` devuelve una línea por ruta. Lo caro es mirar la interfaz
-    en producción, que es la misma revisión visual que ya se hizo en la vista
-    previa.
-  - `/prod-signals` mete en el contexto un resumen con tope de grupos por
-    fuente —unos pocos miles de tokens—, no el log.
-  - `gh pr checks --json` no existe en versiones de gh que siguen en las
-    distribuciones, y `gh run view --log-failed` sale vacío en ellas: se lee del
-    rollup de la propuesta y el log se pide a la API.
-  - El contrato gana dos bloques opcionales, `deploy` y `observability`. Un
-    proyecto que no los declara sigue conforme; las skills lo dicen y paran.
-  - **Descartado a propósito**: fusión automática de código según el riesgo,
-    feature flags, vigilancia continua de producción y un detector propio de
-    regresiones de rendimiento. Para lo último, un presupuesto de Lighthouse en
-    el `quality.gate` del proyecto da la mayor parte del valor sin tooling nuevo.
-- **Reversibility**: alta. Un comando, dos skills y un script nuevos, y texto en
-  `/flow` y `/review-pr`. Los bloques del contrato son opcionales.
-- **Related**: `ADR-005`, `ADR-009`, `STANDARD.md` §El contrato, §El ciclo de desarrollo
+  - **Token cost, measured per piece.** A specialist reads the diff, the files
+    it touches and its guide (about 60 lines), and reasons about it: between
+    20,000 and 50,000 tokens per specialist depending on the size of the
+    change. Launching all four on every proposal multiplied the cost of
+    reviewing by five, and in most there would be no findings: a style change
+    has no queries or permissions. With the split by diff, the usual is zero
+    specialists on documentation and changes of 30 lines or fewer (same cost as
+    before), one on a screen, and two or three on an endpoint with a session or
+    a migration, which is where a failure is not seen in a screenshot and where
+    they pay for themselves.
+  - `crux checks` spends no tokens while waiting: it is a shell loop. Only a
+    trimmed log enters the context when something fails, and the trimming was
+    calibrated against a real failure: the useful message («typescript-eslint
+    does not support TS 7.0») was buried under the call stack and now appears in
+    14 lines. Three attempts bound the worst case.
+  - `/deploy-watch` returns one line per route. What is expensive is looking at
+    the interface in production, which is the same visual review that was
+    already done on the preview.
+  - `/prod-signals` puts into the context a summary with a cap on groups per
+    source —a few thousand tokens—, not the log.
+  - `gh pr checks --json` does not exist in the gh versions that remain in
+    distributions, and `gh run view --log-failed` comes out empty in them: it is
+    read from the proposal's rollup and the log is requested from the API.
+  - The contract gains two optional blocks, `deploy` and `observability`. A
+    project that does not declare them remains conformant; the skills say so and
+    stop.
+  - **Discarded on purpose**: automatic merging of code by risk, feature flags,
+    continuous production monitoring and a custom performance-regression
+    detector. For the last one, a Lighthouse budget in the project's
+    `quality.gate` gives most of the value without new tooling.
+- **Reversibility**: high. One command, two skills and one new script, and text
+  in `/flow` and `/review-pr`. The contract blocks are optional.
+- **Related**: `ADR-005`, `ADR-009`, `STANDARD.md` §The contract, §The development cycle
 
 ---
 
-### ADR-011: La ceremonia la declara el proyecto; sin contrato, ligera
+### ADR-011: Ceremony is declared by the project; without a contract, light
 
 - **Date**: 2026-09-16
 - **Status**: Accepted
-- **Context**: con ADR-010 el ciclo creció después de la propuesta, y el
-  riesgo se calculaba igual en cualquier repo. Un cambio de 150 líneas en una
-  web personal y en un repo de cliente recibían el mismo trato: un especialista
-  de 20.000 a 50.000 tokens y fusión con permiso. En lo primero es
-  sobreingeniería; en lo segundo, lo justo. El diff no sabe cuánto importa el
-  proyecto: lo sabe quien lo da de alta.
-- **Decision**: campo opcional `rigor` en `crux.json`, con tres valores.
-  `light` reserva los especialistas para el riesgo alto y deja fusionar sin
-  preguntar lo que no lo es. `normal` es el comportamiento de ADR-010 y el
-  valor por defecto de un proyecto con contrato. `strict` quita el atajo por
-  tamaño y no fusiona nunca solo. **Un repo sin `crux.json` es `light`**: si
-  no se ha dado de alta, no se ha decidido que sea importante.
+- **Context**: with ADR-010 the cycle grew after the proposal, and risk was
+  computed the same in any repo. A 150-line change in a personal website and in
+  a client repo got the same treatment: a 20,000 to 50,000 token specialist and
+  merging with permission. For the former it is over-engineering; for the
+  latter, just right. The diff does not know how much the project matters:
+  whoever registers it does.
+- **Decision**: optional `rigor` field in `crux.json`, with three values.
+  `light` reserves specialists for high risk and lets what is not high risk be
+  merged without asking. `normal` is the behavior of ADR-010 and the default for
+  a project with a contract. `strict` removes the size shortcut and never merges
+  on its own. **A repo without `crux.json` is `light`**: if it has not been
+  registered, it has not been decided that it is important.
 - **Consequences**:
-  - El riesgo alto (dependencias, sesión, datos, más de 500 líneas) lanza
-    especialistas en todos los niveles: bajar la ceremonia no apaga lo que
-    rompe en silencio.
-  - El perfil `client-repo` sigue mandando sobre la fusión: con cualquier
-    rigor, decide una persona.
-  - `crux doctor` falla con un valor desconocido, y el clasificador para: una
-    errata no puede caer a un nivel por defecto sin avisar.
-  - Ningún proyecto existente cambia de comportamiento hasta que declare el
-    campo, salvo los repos sin contrato, que pasan a `light`.
-- **Reversibility**: alta. Un campo opcional y tres umbrales en un script.
-- **Related**: `ADR-010`, `STANDARD.md` §El contrato
+  - High risk (dependencies, session, data, more than 500 lines) launches
+    specialists at every level: lowering the ceremony does not switch off what
+    breaks silently.
+  - The `client-repo` profile still rules over merging: with any rigor, a person
+    decides.
+  - `crux doctor` fails on an unknown value, and the classifier stops: a typo
+    cannot fall to a default level without warning.
+  - No existing project changes behavior until it declares the field, except
+    repos without a contract, which become `light`.
+- **Reversibility**: high. One optional field and three thresholds in a script.
+- **Related**: `ADR-010`, `STANDARD.md` §The contract
 
 ---
 
-### ADR-012: El cambio es un objeto con registro, y vive en el estado local
+### ADR-012: A change is an object with a record, and lives in local state
 
 - **Date**: 2026-09-17
 - **Status**: Amended by ADR-016
-- **Context**: crux tenía el conocimiento del proyecto bien resuelto —el docs
-  repo— y el ciclo después de la propuesta, pero no la unidad del medio: la
-  tarea. `/explain-plan` decía que el plan "se queda donde está" sin decir
-  dónde, y en la práctica vivía en la conversación. Una compactación, un
-  reinicio o volver al día siguiente perdían los pasos, lo comprobado y el
-  siguiente paso. Otros sistemas lo resuelven con un documento por cambio
-  (OpenSpec, el ODD de gentle-ai), pero en el repo de código, que en el de un
-  cliente no se puede tocar y que parte en dos una tarea de varios repos. Y la
-  medida de uso dice que las instrucciones en prosa no se siguen: `flow` se
-  invocó una vez en 46 sesiones; lo que funciona son mecanismos.
-- **Decision**: cada espacio de trabajo tiene una tarea, y cada tarea un
-  registro en `~/.crux/tasks/<proyecto>/<tarea>.md`: un markdown con cabecera
-  —estado, repos, espacios— y secciones fijas —objetivo, alcance, plan, pasos,
-  siguiente paso, desviaciones y decisiones, verificación, cierre—. Lo escriben
-  los comandos: `workspace new` lo crea (o se une con `--task` desde otro
-  repo), `crux task` anota pasos con su evidencia, `ship seal` vuelca el recibo
-  y lo marca verificado, `finish` saca de él la descripción de la propuesta y
-  `merge` lo marca fusionado. Un hook trae el estado y el siguiente paso al
-  retomar un espacio, una vez por sesión.
+- **Context**: crux had project knowledge well solved —the docs repo— and the
+  cycle after the proposal, but not the unit in the middle: the task.
+  `/explain-plan` said that the plan "stays where it is" without saying where,
+  and in practice it lived in the conversation. A compaction, a restart or
+  coming back the next day lost the steps, what was verified and the next step.
+  Other systems solve it with one document per change (OpenSpec, gentle-ai's
+  ODD), but in the code repo, which in a client's cannot be touched and which
+  splits a multi-repo task in two. And usage measurement says that instructions
+  in prose are not followed: `flow` was invoked once in 46 sessions; what works
+  are mechanisms.
+- **Decision**: each workspace has a task, and each task a record in
+  `~/.crux/tasks/<project>/<task>.md`: a markdown file with a header —state,
+  repos, workspaces— and fixed sections —goal, scope, plan, steps, next step,
+  deviations and decisions, verification, close—. The commands write it:
+  `workspace new` creates it (or joins with `--task` from another repo),
+  `crux task` notes steps with their evidence, `ship seal` dumps the receipt and
+  marks it verified, `finish` takes the proposal's description from it and
+  `merge` marks it merged. A hook brings the state and the next step when
+  resuming a workspace, once per session.
 - **Consequences**:
-  - Retomar deja de depender de la conversación: el estado está en disco y
-    llega solo.
-  - Nada se escribe en los repos: vale igual en el de un cliente, y la
-    descripción que sale de la tarea no nombra nuestro tooling.
-  - El docs repo sigue siendo lo que dura. Lo que merece sobrevivir a la tarea
-    —una decisión, una medida— se promociona al cerrar, como hasta ahora.
-  - Un registro local no viaja si se cambia de máquina a mitad de tarea. Es la
-    contrapartida aceptada: la alternativa era mezclar estado de trabajo con
-    conocimiento.
-  - Los estados solo avanzan solos; volver atrás es explícito
-    (`crux task status <estado> --force`).
-  - Los registros no se acumulan: al cerrar el último espacio de una tarea
-    fusionada se archiva en `done/`, fechada, y `workspace gc` borra las
-    archivadas de más de 180 días. Una tarea sin terminar nunca se archiva sola.
-- **Descartado**: el docs repo (mezcla trabajo con conocimiento, sin
-  aislamiento entre sesiones paralelas, y los commits de casillas falsean la
-  deriva que mide `doctor`); el repo de código (imposible en un cliente, parte
-  las tareas de varios repos); una base de datos aparte (dos fuentes que
-  sincronizar); la propuesta como documento vivo (no existe hasta el final).
-- **Reversibility**: alta. Un subcomando, un hook y ficheros locales legibles a
-  mano; retirarlo no toca ningún repo.
-- **Related**: `ADR-010`, `ADR-011`, `STANDARD.md` §La tarea
+  - Resuming stops depending on the conversation: the state is on disk and
+    arrives on its own.
+  - Nothing is written in the repos: it works the same in a client's, and the
+    description that comes out of the task does not name our tooling.
+  - The docs repo is still what lasts. What deserves to outlive the task —a
+    decision, a measurement— is promoted on close, as until now.
+  - A local record does not travel if the machine changes mid-task. It is the
+    accepted trade-off: the alternative was mixing working state with
+    knowledge.
+  - States only advance on their own; going back is explicit
+    (`crux task status <state> --force`).
+  - Records do not pile up: when the last workspace of a merged task closes it
+    is archived in `done/`, dated, and `workspace gc` deletes the archived ones
+    older than 180 days. An unfinished task is never archived on its own.
+- **Discarded**: the docs repo (it mixes work with knowledge, no isolation
+  between parallel sessions, and the commits of checkboxes distort the drift
+  that `doctor` measures); the code repo (impossible in a client's, it splits
+  multi-repo tasks); a separate database (two sources to synchronize); the
+  proposal as a living document (it does not exist until the end).
+- **Reversibility**: high. One subcommand, one hook and local files readable by
+  hand; removing it touches no repo.
+- **Related**: `ADR-010`, `ADR-011`, `STANDARD.md` §The task
 
 ---
 
-### ADR-013: El registro de espacios se mantiene verdadero sin depender de nadie
+### ADR-013: The workspace registry stays truthful without depending on anyone
 
 - **Date**: 2026-09-17
 - **Status**: Accepted
-- **Context**: el registro llegó a tener 41 entradas apuntando a carpetas que ya
-  no existían, y dos espacios fusionados llevaban más de una semana abiertos.
-  Las sesiones liberaban disco con `git worktree remove --force` y
-  `git branch -D`, que borran la carpeta y la rama pero no la entrada; `merge`
-  dejaba el espacio vivo por defecto; y `gc`, que lo detectaba, solo corría si
-  alguien lo pedía. Además, un worktree creado a mano con trabajo pendiente de
-  revisión era invisible para crux, y `gc --con-disco` lo habría borrado. La
-  regla de cerrar con `crux workspace rm` estaba escrita y no se cumplía.
-- **Decision**: mecanismos en lugar de instrucciones.
-  - `workspace new`, `list` y `crux status` reparan el registro: retiran las
-    entradas sin carpeta **y** sin rama local. Con la rama viva se avisa y no
-    se toca.
-  - `merge --yes` cierra el espacio al fusionar (`CRUX_MERGE_CLOSE_WORKSPACE`
-    pasa a `true`); `rm` sigue negándose si queda algo sin commitear.
-  - `crux status` avisa de espacios cuya rama ya no está en el remoto y de
-    worktrees que el registro no conoce, con el comando para arreglarlo.
-  - `crux workspace adopt <ruta>` registra un worktree hecho a mano, con tarea.
-  - Un hook del agente para `git worktree remove` y `rm -r` sobre un espacio
-    registrado y propone `crux workspace rm`.
+- **Context**: the registry came to have 41 entries pointing to folders that no
+  longer existed, and two merged workspaces had been open for over a week.
+  Sessions freed disk with `git worktree remove --force` and `git branch -D`,
+  which delete the folder and the branch but not the entry; `merge` left the
+  workspace alive by default; and `gc`, which detected it, only ran if someone
+  asked for it. In addition, a worktree created by hand with work pending
+  review was invisible to crux, and `gc --con-disco` would have deleted it. The
+  rule of closing with `crux workspace rm` was written down and not followed.
+- **Decision**: mechanisms instead of instructions.
+  - `workspace new`, `list` and `crux status` repair the registry: they remove
+    the entries with no folder **and** no local branch. With the branch alive
+    they warn and do not touch.
+  - `merge --yes` closes the workspace when merging
+    (`CRUX_MERGE_CLOSE_WORKSPACE` becomes `true`); `rm` still refuses if
+    anything is uncommitted.
+  - `crux status` warns about workspaces whose branch is no longer on the
+    remote and about worktrees the registry does not know, with the command to
+    fix it.
+  - `crux workspace adopt <path>` registers a hand-made worktree, with a task.
+  - An agent hook stops `git worktree remove` and `rm -r` on a registered
+    workspace and proposes `crux workspace rm`.
 - **Consequences**:
-  - Borrar a mano ya no deja basura, y el atajo más habitual se para antes.
-  - Una entrada solo se retira sola cuando no queda nada que proteger; si la
-    rama existe, decide una persona.
-  - `status` mira lo que git ya sabe del remoto, sin red: una rama borrada en
-    el remoto se ve cuando alguien hizo `fetch --prune`.
-- **Reversibility**: alta. `CRUX_MERGE_CLOSE_WORKSPACE=false` recupera el
-  comportamiento de antes; el hook se retira con `crux hooks remove`.
+  - Deleting by hand no longer leaves garbage, and the most common shortcut is
+    stopped beforehand.
+  - An entry is only removed on its own when there is nothing left to protect;
+    if the branch exists, a person decides.
+  - `status` looks at what git already knows about the remote, without network:
+    a branch deleted on the remote is seen once someone ran `fetch --prune`.
+- **Reversibility**: high. `CRUX_MERGE_CLOSE_WORKSPACE=false` restores the
+  earlier behavior; the hook is removed with `crux hooks remove`.
 - **Related**: `ADR-012`
 
 ---
 
-### ADR-014: Un repo es del sistema por dónde vive, no por tener contrato
+### ADR-014: A repo belongs to the system by where it lives, not by having a contract
 
 - **Date**: 2026-09-18
 - **Status**: Accepted
-- **Context**: el guarda del ciclo solo avisaba en el kernel, en un docs repo o
-  en un repo que colgara de `<raíz>/<proyecto>/<repo>` con su docs repo al
-  lado. Eso dejaba fuera a los repos sueltos de la raíz, que en la máquina
-  donde se midió son cinco. El 17-09-2026 uno de ellos, `personal-site`,
-  recibió dos commits directos a la principal mientras otra sesión fusionaba
-  dos propuestas sobre el mismo repo: el push salió rechazado y hubo que
-  rebasar. El guarda estaba instalado y funcionando; ejecutado a mano en
-  `acme/app` daba el aviso y en ese repo salía vacío.
-  Con ADR-011 el estándar ya decía qué hacer sin contrato —tratarlo como
-  `light`—, y `review-pr` lo cumplía. El guarda no: para él, ausencia de
-  contrato era ausencia de repo.
-- **Decision**: separar las dos preguntas que estaban mezcladas. **Si el ciclo
-  aplica** se responde por ubicación: cualquier repo bajo la raíz de proyectos
-  es del sistema, tenga contrato o no. **Qué ceremonia merece** lo sigue
-  respondiendo el contrato, y su ausencia sigue significando `light`.
-  `CRUX_UNMANAGED` en la configuración admite rutas o patrones separados por
-  `:` para lo que viva bajo la raíz sin ser tuyo, como un clon ajeno.
+- **Context**: the cycle guard only warned in the kernel, in a docs repo or in
+  a repo hanging from `<root>/<project>/<repo>` with its docs repo beside it.
+  That left out the loose repos at the root, which on the machine where it was
+  measured are five. On 2026-09-17 one of them, `personal-site`, received
+  two direct commits to the main branch while another session merged two
+  proposals on the same repo: the push was rejected and a rebase was needed.
+  The guard was installed and working; run by hand in `acme/app` it gave the
+  warning and in that repo it came out empty.
+  With ADR-011 the standard already said what to do without a contract —treat
+  it as `light`—, and `review-pr` complied. The guard did not: for it, absence
+  of a contract was absence of a repo.
+- **Decision**: separate the two questions that were mixed up. **Whether the
+  cycle applies** is answered by location: any repo under the projects root
+  belongs to the system, with or without a contract. **What ceremony it
+  deserves** is still answered by the contract, and its absence still means
+  `light`. `CRUX_UNMANAGED` in the configuration accepts paths or patterns
+  separated by `:` for whatever lives under the root without being yours, such
+  as someone else's clone.
 - **Consequences**:
-  - Los repos sueltos reciben el aviso desde el primer prompt, sin darlos de
-    alta ni moverlos de sitio.
-  - La regla del layout `<raíz>/<proyecto>/<repo>` desaparece del guarda por
-    redundante: lo que cubría ya está cubierto por la raíz.
-  - Un clon ajeno bajo la raíz recibirá el aviso hasta que se excluya. Es ruido
-    en un caso que hoy no se da: los 30 remotos de la raíz son propios.
-  - El aviso manda a `/ship`, y `crux ship gate` muere sin `crux.json`. Queda
-    pendiente decidir si degrada o si la puerta es solo para proyectos dados de
-    alta.
-- **Reversibility**: alta. Es una condición en un hook.
-- **Related**: `ADR-011`, `ADR-005`, `STANDARD.md` §El rigor
+  - Loose repos get the warning from the first prompt, without being registered
+    or moved.
+  - The `<root>/<project>/<repo>` layout rule disappears from the guard as
+    redundant: what it covered is already covered by the root.
+  - Someone else's clone under the root will get the warning until it is
+    excluded. It is noise in a case that does not occur today: the 30 remotes at
+    the root are all own.
+  - The warning sends to `/ship`, and `crux ship gate` dies without
+    `crux.json`. It remains to be decided whether it degrades or whether the
+    gate is only for registered projects.
+- **Reversibility**: high. It is a condition in a hook.
+- **Related**: `ADR-011`, `ADR-005`, `STANDARD.md` §Rigor
 
 ---
 
-### ADR-015: Alternar de máquina es un caso propio, y al llegar no se decide nada
+### ADR-015: Switching machines is a case of its own, and on arrival nothing is decided
 
 - **Date**: 2026-09-30
 - **Status**: Accepted
-- **Context**: `bootstrap` monta una máquina vacía y `clone` trae un proyecto
-  que no está. Ninguno actualiza lo que ya hay: con el repo en disco dicen "ya
-  está" y siguen. Al volver a una torre que llevaba un mes sin usarse, los
-  proyectos se habrían quedado con el código de hace un mes y el kernel en la
-  0.27, con la 0.59 publicada. En el portátil, a la vez, había trabajo que no
-  estaba en ningún remoto: cuatro commits en una principal, dos ramas nunca
-  subidas y cambios sin commitear en cuatro repos. Nada lo avisaba al cerrar.
-- **Decision**: `crux sync` con dos sentidos.
-  - **Al llegar** trae todos los remotos y avanza solo lo que no pide decidir:
-    una rama limpia que va por detrás. Si hay cambios sin commitear o las
-    ramas se han separado, avisa y no toca. Solo recorre lo que ya está en la
-    máquina: los proyectos que no están no se traen, porque cada máquina
-    tiene los suyos (`crux clone` para eso). Sí clona un repo que un proyecto
-    de aquí declara y falta, y el kernel si hay una versión publicada más
-    nueva. La primera versión (0.60.0) traía también los proyectos del remoto
-    que no estaban; se quitó en 0.60.1.
-  - **Al irse** (`--leave`) falla si algo se quedaría solo en la máquina.
-    `end-session` lo ejecuta.
-  - Un hook de inicio de sesión hace lo de llegar, como mucho cada diez
-    minutos, y solo habla si algo cambió.
-  - No viajan las credenciales, que tienen `carry-env`, ni las memorias
-    personales del agente (`user` y `feedback`). Se valoró un repo privado
-    para ellas y se descartó: son de cada máquina. Las de proyecto ya van al
-    docs repo.
+- **Context**: `bootstrap` sets up an empty machine and `clone` brings in a
+  project that is not there. Neither updates what is already there: with the
+  repo on disk they say "already there" and move on. Coming back to a desktop
+  that had gone a month unused, the projects would have stayed with a month-old
+  code and the kernel at 0.27, with 0.59 published. On the laptop, at the same
+  time, there was work that was on no remote: four commits on a main branch,
+  two branches never pushed and uncommitted changes in four repos. Nothing
+  warned about it on closing.
+- **Decision**: `crux sync` with two directions.
+  - **On arrival** it fetches all remotes and advances only what does not ask
+    to be decided: a clean branch that is behind. If there are uncommitted
+    changes or the branches have diverged, it warns and does not touch. It only
+    walks what is already on the machine: projects that are not there are not
+    brought in, because each machine has its own (`crux clone` for that). It
+    does clone a repo that a project here declares and is missing, and the
+    kernel if a newer version is published. The first version (0.60.0) also
+    brought in the projects from the remote that were not there; it was removed
+    in 0.60.1.
+  - **On leaving** (`--leave`) it fails if something would stay only on the
+    machine. `end-session` runs it.
+  - A session-start hook does the arrival part, at most every ten minutes, and
+    only speaks if something changed.
+  - Credentials do not travel, which have `carry-env`, nor do the agent's
+    personal memories (`user` and `feedback`). A private repo for them was
+    considered and discarded: they belong to each machine. The project ones
+    already go to the docs repo.
 - **Consequences**:
-  - Abrir sesión en la otra máquina basta para trabajar sobre lo último.
-  - El hook cuesta un `fetch` de cada repo en paralelo al abrir sesión. Sin
-    red no bloquea: dice qué repos no respondieron.
-  - Solo se avanza la rama en la que está cada repo. Las demás ramas locales se
-    quedan donde estaban, con su remoto ya traído.
-  - La primera vez en una máquina con un kernel anterior hay que instalarlo a
-    mano, porque el comando todavía no existe allí.
-- **Reversibility**: alta. El hook se retira con `crux hooks remove` y el
-  comando no cambia nada que `git` no deje deshacer.
+  - Opening a session on the other machine is enough to work on the latest.
+  - The hook costs one `fetch` of each repo in parallel when opening a session.
+    Without network it does not block: it says which repos did not respond.
+  - Only the branch each repo is on is advanced. The other local branches stay
+    where they were, with their remote already fetched.
+  - The first time on a machine with an older kernel it has to be installed by
+    hand, because the command does not exist there yet.
+- **Reversibility**: high. The hook is removed with `crux hooks remove` and the
+  command changes nothing that `git` does not let you undo.
 - **Related**: `ADR-013`, skill `carry-env`
 
 ---
 
-### ADR-016: Las tareas viajan en una rama aparte del docs repo
+### ADR-016: Tasks travel on a separate branch of the docs repo
 
 - **Date**: 2026-09-30
 - **Status**: Accepted
-- **Context**: enmienda la consecuencia de ADR-012 que dejaba el registro solo
-  en local. ADR-012 separó bien el estado de trabajo del conocimiento, pero
-  de ahí sacó que el registro tenía que ser local, y eso mezclaba dos preguntas:
-  dónde tiene sentido una cosa y por dónde viaja. Con varias máquinas, una
-  tarea empezada en una no existía en la otra. El sistema acabó empujando a lo
-  que quería evitar: el estado de trabajo se copiaba a mano en el docs repo
-  (una sección "ABIERTO" en unas notas) porque era lo único que viajaba. Al
-  medirlo, además, 8 de 14 registros locales seguían en `proposed` con la
-  propuesta ya fusionada fuera de `crux merge`.
-  Se estudiaron otros sistemas. Gentle AI guardaba la tarea en el árbol del
-  producto y la está sacando por árboles sucios y commits accidentales, con
-  Engram como transporte; su modo híbrido derivaba porque el agente elegía en
-  cada momento qué almacén mandaba. Beads replicó con una rama gestionada por
-  worktrees y acumuló fallos (JSONL divergente, hooks que rompían el push, un
-  daemon que no traía) hasta pasar a un ref propio. Las tareas de Claude Code
-  no salen de la máquina.
+- **Context**: it amends the consequence of ADR-012 that left the record only
+  local. ADR-012 rightly separated working state from knowledge, but concluded
+  from that that the record had to be local, and that mixed up two questions:
+  where a thing makes sense and how it travels. With several machines, a task
+  started on one did not exist on the other. The system ended up pushing toward
+  what it wanted to avoid: working state was copied by hand into the docs repo
+  (an "OPEN" section in some notes) because it was the only thing that
+  traveled. On measuring it, besides, 8 of 14 local records were still in
+  `proposed` with the proposal already merged outside `crux merge`.
+  Other systems were studied. Gentle AI kept the task in the product tree and
+  is taking it out because of dirty trees and accidental commits, with Engram as
+  transport; its hybrid mode drifted because the agent chose at each moment
+  which store ruled. Beads replicated with a branch managed through worktrees
+  and accumulated failures (diverging JSONL, hooks that broke the push, a
+  daemon that did not fetch) until moving to a ref of its own. Claude Code's
+  tasks do not leave the machine.
 - **Decision**:
-  - El fichero local sigue siendo la fuente de verdad. Su réplica vive en la
-    rama `crux/tasks` del docs repo del proyecto, o del repo suelto sin docs
-    repo. La escribe `lib/task-sync.mjs` con plumbing de git —sin worktree,
-    checkout ni daemon—, sin firma y sin hooks, con `[skip ci]`.
-  - Fusión en tres vías contra lo último sincronizado. Si cambió en las dos
-    máquinas, gana el `updated` más reciente y la otra se guarda como
-    `.conflicto-`. Los borrados viajan en `.removed`, con la fecha de creación
-    para que reutilizar un nombre no borre la tarea nueva.
-  - Se publica en segundo plano tras cada escritura, con una marca de
-    pendiente previa. `crux sync` trae y reintenta; `--leave` falla si algo
-    sigue sin publicar.
-  - Al abrir, retomar o volver tras horas a una sesión, las tareas abiertas se
-    enseñan a la persona como recordatorio, y al agente se le dice que no las
-    empuje. `crux workspace resume` las abre en otra máquina.
-  - Las que tienen la propuesta fusionada se marcan y, sin espacio vivo, se
-    archivan: al medirlo, 8 de 14 registros seguían en `proposed` con la
-    propuesta ya fusionada.
-  - En un repo público de GitHub no se publica —un registro lleva decisiones a
-    medio pensar—, salvo con `"tasks": { "sync": true }`. Si no se puede
-    comprobar la visibilidad, tampoco, y queda pendiente.
+  - The local file remains the source of truth. Its replica lives on the
+    `crux/tasks` branch of the project's docs repo, or of the loose repo with no
+    docs repo. It is written by `lib/task-sync.mjs` with git plumbing —no
+    worktree, checkout or daemon—, unsigned and without hooks, with `[skip ci]`.
+  - Three-way merge against the last synchronized state. If it changed on both
+    machines, the most recent `updated` wins and the other is saved as
+    `.conflicto-`. Deletions travel in `.removed`, with the creation date so
+    that reusing a name does not delete the new task.
+  - It is published in the background after each write, with a prior pending
+    mark. `crux sync` fetches and retries; `--leave` fails if something is
+    still unpublished.
+  - When opening, resuming or returning to a session after hours, the open tasks
+    are shown to the person as a reminder, and the agent is told not to push
+    them. `crux workspace resume` opens them on another machine.
+  - Those whose proposal is merged are marked and, with no live workspace,
+    archived: on measuring it, 8 of 14 records were still in `proposed` with
+    the proposal already merged.
+  - In a public GitHub repo it is not published —a record carries half-thought
+    decisions—, except with `"tasks": { "sync": true }`. If visibility cannot be
+    checked, neither, and it stays pending.
 - **Consequences**:
-  - Cerrar en una máquina y abrir en otra deja la tarea donde estaba, sin que
-    nadie haga nada.
-  - `main` del docs repo sigue siendo solo conocimiento, y `doctor` no ve la
-    rama.
-  - Quien tenga acceso al docs repo ve las tareas en esa rama. En un proyecto
-    compartido es transparencia; si no se quiere, `tasks.sync: false`.
-  - Las fechas del registro pasan a llevar segundos: la de creación identifica
-    una tarea archivada, y una nueva con el mismo nombre en el mismo minuto se
-    borraba.
-  - La primera ronda en una máquina con historia tarda más (9 s con 8
-    propuestas que consultar); las siguientes, alrededor de un segundo.
-  - El espacio de trabajo en sí —puertos, ruta del worktree— sigue siendo de
-    cada máquina: `resume` lo crea de nuevo.
-- **Reversibility**: alta. Con `tasks.sync: false` o `CRUX_TASK_SYNC=0` todo
-  vuelve a ser local, y la rama se borra sin tocar nada más.
-- **Related**: `ADR-012`, `ADR-015`, `STANDARD.md` §La tarea
+  - Closing on one machine and opening on another leaves the task where it was,
+    without anyone doing anything.
+  - The docs repo's `main` remains only knowledge, and `doctor` does not see the
+    branch.
+  - Whoever has access to the docs repo sees the tasks on that branch. In a
+    shared project it is transparency; if not wanted, `tasks.sync: false`.
+  - The record's dates now carry seconds: the creation one identifies an
+    archived task, and a new one with the same name in the same minute was being
+    deleted.
+  - The first round on a machine with history takes longer (9 s with 8
+    proposals to query); the following ones, around a second.
+  - The workspace itself —ports, worktree path— remains per machine: `resume`
+    creates it anew.
+- **Reversibility**: high. With `tasks.sync: false` or `CRUX_TASK_SYNC=0`
+  everything is local again, and the branch is deleted without touching
+  anything else.
+- **Related**: `ADR-012`, `ADR-015`, `STANDARD.md` §The task
 
-### ADR-017: Esperar a otra persona es un dato de la tarea, no un estado
+### ADR-017: Waiting for another person is a datum of the task, not a state
 
 - **Date**: 2026-10-03
 - **Status**: Accepted
-- **Context**: el ciclo de una tarea (`open` → … → `closed`) describe trabajo
-  propio y solo avanza. No tenía forma de decir «el código ya está, falta que
-  conteste alguien». Medido el 03-10-2026 en una máquina con 4 proyectos: dos
-  tareas abiertas esperaban a un cliente (una con un espacio y una rama vacíos
-  que nadie iba a tocar), tres ya fusionadas seguían sin archivar y otro espacio
-  tenía su rama borrada del remoto. El recordatorio las mezclaba con el trabajo
-  pendiente, y cerrar dependía de que el agente se acordase.
+- **Context**: a task's cycle (`open` → … → `closed`) describes own work and
+  only advances. It had no way of saying «the code is done, someone has to
+  reply». Measured on 03-10-2026 on a machine with 4 projects: two open tasks
+  were waiting on a client (one with an empty workspace and branch that nobody
+  was going to touch), three already merged were still unarchived and another
+  workspace had its branch deleted from the remote. The reminder mixed them
+  with pending work, and closing depended on the agent remembering.
 - **Decision**:
-  - La espera va en campos propios de la cabecera (`waiting_on`,
-    `waiting_ask`, `waiting_since`, `waiting_ref`) y no en `ESTADOS`: una tarea
-    `merged` puede estar esperando, y meterlo en la secuencia habría obligado a
-    retroceder estados.
-  - `crux task wait` retira los espacios limpios y borra las ramas sin commits
-    propios o con la propuesta fusionada, y las apunta en `retired` para que
-    `workspace resume` abra una rama nueva desde la principal en vez de acusar
-    que falta. Lo que tiene trabajo sin publicar no se toca.
-  - Una tarea en espera no se archiva al cerrar su último espacio, sigue en el
-    recordatorio aunque esté fusionada y va en un bloque aparte, después del
-    trabajo propio. Pasado el plazo (7 días, `CRUX_WAIT_NUDGE_DAYS`) se sugiere
-    insistir, una vez.
-  - Retomarla con `resume` es la señal de que llegó la respuesta: quita la
-    espera. `crux task unwait` la quita sin abrir espacio.
-- **Consequences**: la lista de tareas distingue lo que depende de nosotros de
-  lo que depende de otro, y una espera no deja espacios ni ramas colgando. El
-  plazo de insistir es uno para todas; si hiciera falta por tarea, iría en un
-  campo más. La espera no avisa a la otra persona: eso sigue siendo cosa de quien
-  pregunta.
-- **Related**: `ADR-012`, `ADR-016`, `STANDARD.md` §La tarea
+  - The wait goes in fields of its own in the header (`waiting_on`,
+    `waiting_ask`, `waiting_since`, `waiting_ref`) and not in `ESTADOS`: a
+    `merged` task can be waiting, and putting it in the sequence would have
+    forced going back through states.
+  - `crux task wait` removes the clean workspaces and deletes the branches with
+    no commits of their own or with the proposal merged, and records them in
+    `retired` so that `workspace resume` opens a new branch from the main one
+    instead of complaining that it is missing. What has unpublished work is not
+    touched.
+  - A task that is waiting is not archived when its last workspace closes, it
+    stays in the reminder even if merged and goes in a separate block, after
+    own work. Once the period passes (7 days, `CRUX_WAIT_NUDGE_DAYS`) following
+    up is suggested, once.
+  - Resuming it with `resume` is the signal that the reply arrived: it removes
+    the wait. `crux task unwait` removes it without opening a workspace.
+- **Consequences**: the task list tells what depends on us from what depends on
+  someone else, and a wait leaves no workspaces or branches hanging. The
+  follow-up period is one for all; if it were needed per task, it would go in
+  one more field. The wait does not notify the other person: that remains up to
+  whoever asks.
+- **Related**: `ADR-012`, `ADR-016`, `STANDARD.md` §The task

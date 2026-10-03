@@ -1,176 +1,176 @@
-# Guía de crux, de principio a fin
+# The crux guide, from start to finish
 
-Esta guía explica el sistema completo, de lo más sencillo a lo más profundo.
-No hace falta leerla entera: cada nivel se entiende solo.
+This guide explains the whole system, from the simplest to the deepest.
+You do not need to read it all: each level stands on its own.
 
-Sirve igual a una persona que a un agente. Si eres un agente y vas a **trabajar
-en este repo** —añadir una skill, tocar un comando—, lee antes `AGENTS.md`: ahí
-están las cuatro reglas que sostienen el kernel y que hay tests vigilando.
+It serves a person and an agent equally. If you are an agent and are going to
+**work on this repo** —add a skill, touch a command—, read `AGENTS.md` first:
+it holds the five rules that hold the kernel up and that tests keep watch over.
 
-- **Nivel 1** — qué es y qué problema resuelve
-- **Nivel 2** — instalarlo y el día a día
-- **Nivel 3** — crear la documentación de un proyecto nuevo
-- **Nivel 4** — adoptar un proyecto que ya existe
-- **Nivel 5** — cómo funciona por dentro
-- **Nivel 6** — el ciclo de desarrollo
-- **Nivel 7** — extenderlo
-- **Nivel 8** — mantenerlo
-
----
-
-## Nivel 1 — Qué es y qué problema resuelve
-
-### El problema
-
-Una persona, varios proyectos, varios repos por proyecto, varias máquinas y
-muchas sesiones con agentes distintos. Sin disciplina explícita, el
-conocimiento se evapora: queda en la cabeza de alguien, en una conversación
-cerrada, en una memoria local que no sobrevive al cambio de portátil, o en un
-commit que nadie relee.
-
-Y hay un segundo problema, más sutil: **cada proyecto tiende a inventarse su
-propia forma de organizarse**. A los dos proyectos ya no sabes dónde está cada
-cosa, y el agente tampoco.
-
-### La solución en una frase
-
-Un repo llamado `crux` que contiene **el estándar, los procedimientos y las
-herramientas**, y desde el que se fabrican y mantienen los repos de
-documentación de cada proyecto.
-
-### Las tres capas
-
-```
-        crux  (kernel: reglas, plantillas, skills, tooling)
-          ↑            ↑
-    acme-docs    client-docs        ← proyectos, consumidores
-          ↑            ↑
-     repos código  repo cliente       ← reciben punteros generados
-```
-
-Las flechas apuntan **hacia arriba y solo hacia arriba**. El kernel no sabe qué
-proyectos existen: hay un test que falla si algún día menciona uno.
-
-| Capa | Qué contiene | Quién la edita |
-| ---- | ------------ | -------------- |
-| **Kernel** | Estándar, skills transversales, plantillas, comandos | Una vez, para todos |
-| **Proyecto** | Documentación del proyecto y sus skills propias | Por proyecto |
-| **Repo** | Punteros de contexto | Generados, no se editan |
-
-La regla que sostiene el reparto: **si algo cambia cuando cambias de proyecto,
-no es del kernel**.
+- **Level 1** — what it is and what problem it solves
+- **Level 2** — installing it and the day to day
+- **Level 3** — creating the documentation of a new project
+- **Level 4** — adopting a project that already exists
+- **Level 5** — how it works inside
+- **Level 6** — the development cycle
+- **Level 7** — extending it
+- **Level 8** — maintaining it
 
 ---
 
-## Nivel 2 — Instalarlo y el día a día
+## Level 1 — What it is and what problem it solves
 
-### Instalación, una vez por máquina
+### The problem
+
+One person, several projects, several repos per project, several machines and
+many sessions with different agents. Without explicit discipline, knowledge
+evaporates: it stays in someone's head, in a closed conversation, in a local
+memory that does not survive a laptop change, or in a commit nobody rereads.
+
+And there is a second, subtler problem: **each project tends to invent its own
+way of organizing itself**. By the second project you no longer know where
+anything is, and neither does the agent.
+
+### The solution in one sentence
+
+A repo called `crux` that contains **the standard, the procedures and the
+tools**, and from which each project's documentation repos are built and
+maintained.
+
+### The three layers
+
+```
+        crux  (kernel: rules, templates, skills, tooling)
+          ↑            ↑
+    acme-docs    client-docs        ← projects, consumers
+          ↑            ↑
+     code repos    client repo        ← receive generated pointers
+```
+
+The arrows point **up and only up**. The kernel does not know which projects
+exist: a test fails if it ever mentions one.
+
+| Layer | What it contains | Who edits it |
+| ----- | ---------------- | ------------ |
+| **Kernel** | Standard, cross-cutting skills, templates, commands | Once, for everyone |
+| **Project** | The project's documentation and its own skills | Per project |
+| **Repo** | Context pointers | Generated, not edited |
+
+The rule behind the split: **if something changes when you change project, it
+does not belong to the kernel**.
+
+---
+
+## Level 2 — Installing it and the day to day
+
+### Installation, once per machine
 
 ```bash
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh --remote 'git@github.com:<tu-usuario>/{repo}.git'
+~/Proyectos/crux/install.sh --remote 'git@github.com:<your-user>/{repo}.git'
 ```
 
-`--remote` es opcional y fija el remoto habitual de esta máquina, para no
-repetirlo en cada proyecto nuevo. Eso hace cuatro cosas:
+`--remote` is optional and sets this machine's usual remote, so you do not have
+to repeat it in every new project. This does four things:
 
-1. Registra dónde vive el kernel y **cuál es la raíz de proyectos** en
-   `~/.crux/config`. La raíz es, por defecto, el directorio donde clonaste el
-   kernel: si lo pones en `/opt/dev/crux`, tus proyectos van en `/opt/dev`. El
-   instalador lo dice en voz alta, y se cambia con `--projects-dir`.
-2. Pone el comando `crux` en `~/.local/bin`.
-3. Enlaza las skills para Claude Code y genera los prompts para Codex.
-4. Escribe el contexto global de Codex en `~/.codex/AGENTS.md`.
+1. Records where the kernel lives and **what the projects root is** in
+   `~/.crux/config`. By default the root is the directory where you cloned the
+   kernel: if you put it in `/opt/dev/crux`, your projects go in `/opt/dev`.
+   The installer says so out loud, and it is changed with `--projects-dir`.
+2. Puts the `crux` command in `~/.local/bin`.
+3. Links the skills for Claude Code and generates the prompts for Codex.
+4. Writes the global Codex context to `~/.codex/AGENTS.md`.
 
-Es idempotente: se puede ejecutar mil veces. Y admite `--dry-run` para ver qué
-haría sin tocar nada.
+It is idempotent: it can be run a thousand times. And it accepts `--dry-run` to
+see what it would do without touching anything.
 
-### Los comandos
+### The commands
 
-| Comando | Qué hace |
-| ------- | -------- |
-| `crux init <proyecto>` | Crea el repo de documentación de un proyecto nuevo |
-| `crux clone <proyecto>` | Trae un proyecto entero a una máquina nueva |
-| `crux adopt` | Registra un repo de documentación que ya existe |
-| `crux add-repo <repo>` | Añade un repo al proyecto |
-| `crux link` | Genera y verifica los punteros de los repos de código |
-| `crux workspace` | Espacios aislados para trabajar en paralelo |
-| `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
-| `crux usage` | Mide qué skills se usan de verdad |
-| `crux doctor` | Verifica que el proyecto cumple el estándar |
-| `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
-| `crux upgrade` | Alinea el proyecto con la versión actual del kernel |
+| Command | What it does |
+| ------- | ------------ |
+| `crux init <project>` | Creates the documentation repo of a new project |
+| `crux clone <project>` | Brings a whole project onto a new machine |
+| `crux adopt` | Registers a documentation repo that already exists |
+| `crux add-repo <repo>` | Adds a repo to the project |
+| `crux link` | Generates and verifies the pointers of the code repos |
+| `crux workspace` | Isolated spaces for working in parallel |
+| `crux hooks` | Hooks the standard into the cycle, the session close and the commit |
+| `crux usage` | Measures which skills are actually used |
+| `crux doctor` | Verifies that the project meets the standard |
+| `crux doctor --machine` | Verifies that the machine has what the skills need |
+| `crux upgrade` | Aligns the project with the current kernel version |
 
-Todos funcionan desde cualquier subdirectorio del proyecto: suben por el árbol
-buscando el `crux.json`, igual que hace git con `.git`.
+They all work from any subdirectory of the project: they walk up the tree
+looking for `crux.json`, just as git does with `.git`.
 
-### El día a día, en cinco momentos
+### The day to day, in five moments
 
-**Antes de empezar**, si vas a lanzar varias tareas en paralelo sobre el mismo
-repo: `/workspace`.
+**Before starting**, if you are going to launch several tasks in parallel on
+the same repo: `/workspace`.
 
-**Antes de commitear**: `/ship`.
+**Before committing**: `/ship`.
 
-**Si el cambio se ve, antes de subirlo**: `/before-after`. El antes y el después
-a quien decide, y nada sale hasta su sí.
+**If the change is visible, before pushing it**: `/before-after`. The before
+and after go to whoever decides, and nothing goes out until their yes.
 
-**Con la propuesta abierta**: `/review-pr`, desde un contexto que no sea el que
-escribió el cambio.
+**With the proposal open**: `/review-pr`, from a context other than the one
+that wrote the change.
 
-**Antes de cerrar**: `/end-session`.
+**Before closing**: `/end-session`.
 
 ---
 
-## Nivel 3 — Crear la documentación de un proyecto nuevo
+## Level 3 — Creating the documentation of a new project
 
-### El comando
+### The command
 
 ```bash
 crux init cocina-sencilla \
-  --description "Recetas de casa, bien explicadas." \
+  --description "Home recipes, well explained." \
   --repos "web,api" \
   --profile multi-repo
 ```
 
-O, en conversación con el agente, `/crux-init`, que pregunta lo que falte.
+Or, in conversation with the agent, `/crux-init`, which asks for whatever is
+missing.
 
-### Qué ocurre exactamente, paso a paso
+### What exactly happens, step by step
 
-**1. Crea la carpeta del proyecto y el repo remoto.**
+**1. It creates the project folder and the remote repo.**
 
 ```
 ~/Proyectos/cocina-sencilla/
-└── cocina-sencilla-docs/     ← creado en GitHub y clonado
+└── cocina-sencilla-docs/     ← created on GitHub and cloned
 ```
 
-El repo se llama siempre `<proyecto>-docs`. No es un capricho: media convención
-depende de que ese nombre sea predecible.
+The repo is always called `<project>-docs`. It is not a whim: half the
+convention depends on that name being predictable.
 
-**2. Materializa la estructura desde las plantillas.**
+**2. It materializes the structure from the templates.**
 
 ```
 cocina-sencilla-docs/
-├── README.md              qué es el proyecto y qué repos lo componen
-├── AGENTS.md              el índice canónico para cualquier agente
-├── CLAUDE.md              → symlink a AGENTS.md
-├── crux.json              el contrato con el kernel
+├── README.md              what the project is and which repos make it up
+├── AGENTS.md              the canonical index for any agent
+├── CLAUDE.md              → symlink to AGENTS.md
+├── crux.json              the contract with the kernel
 ├── .gitignore
 ├── decisions/
-│   ├── README.md          cómo se escribe un ADR
-│   └── index.md           el registro de decisiones que cruzan repos
+│   ├── README.md          how an ADR is written
+│   └── index.md           the register of decisions that cross repos
 ├── repos/
-│   ├── README.md          la tabla repo → carpeta
+│   ├── README.md          the repo → folder table
 │   ├── web/README.md
 │   └── api/README.md
-└── .claude/skills/project/   vacío, para las skills propias
+└── .claude/skills/project/   empty, for the project's own skills
 ```
 
-Sale de `templates/`, con los `{{PLACEHOLDERS}}` sustituidos. **Es
-determinista**: dos ejecuciones producen el mismo árbol, y hay un test que lo
-comprueba. Antes esto era prosa dentro de una skill que un agente reproducía a
-mano, y cada bootstrap salía un poco distinto.
+It comes from `templates/`, with the `{{PLACEHOLDERS}}` substituted. **It is
+deterministic**: two runs produce the same tree, and a test checks it. This
+used to be prose inside a skill that an agent reproduced by hand, and every
+bootstrap came out a little different.
 
-**3. Escribe el contrato.**
+**3. It writes the contract.**
 
 ```json
 {
@@ -182,45 +182,46 @@ mano, y cada bootstrap salía un poco distinto.
 }
 ```
 
-**4. Hace el commit inicial y lo sube.**
+**4. It makes the initial commit and pushes it.**
 
-**5. Genera los punteros** de los repos de código que ya estén en disco.
+**5. It generates the pointers** of the code repos that are already on disk.
 
-**6. Te dice qué hacer después.**
+**6. It tells you what to do next.**
 
-### Lo que NO crea, y por qué
+### What it does NOT create, and why
 
-No crea `architecture/`, `conventions/`, `operations/` ni `topics/`. Esas
-carpetas **aparecen cuando el proyecto las necesita**. Un scaffold lleno de
-carpetas vacías enseña a ignorarlas; el suelo mínimo obliga a que cada carpeta
-que exista signifique algo.
+It does not create `architecture/`, `conventions/`, `operations/` or
+`topics/`. Those folders **appear when the project needs them**. A scaffold
+full of empty folders teaches people to ignore them; the minimum floor forces
+every folder that exists to mean something.
 
-### Dónde va cada documento
+### Where each document goes
 
-Tres preguntas, en este orden:
+Three questions, in this order:
 
-1. ¿Aplica a **cualquier** proyecto multi-repo? → `architecture/`,
+1. Does it apply to **any** multi-repo project? → `architecture/`,
    `conventions/`, `operations/`
-2. ¿Solo a este proyecto, pero cruza varios repos suyos? → `topics/<tema>/`
-3. ¿Solo a un repo? → `repos/<repo>/`
+2. Only to this project, but it crosses several of its repos? → `topics/<topic>/`
+3. Only to one repo? → `repos/<repo>/`
 
-Así nunca aparece una carpeta suelta en la raíz que parece estándar y no lo es.
+That way a loose folder never appears at the root that looks standard and is
+not.
 
-### Añadir un repo después
+### Adding a repo afterwards
 
 ```bash
-crux add-repo worker --description "Procesa la cola de imágenes."
+crux add-repo worker --description "Processes the image queue."
 ```
 
-En un paso: crea `repos/worker/README.md`, lo declara en `crux.json`, añade su
-fila a la tabla del índice y genera sus punteros. Antes esto incluía editar a
-mano una lista dentro de un script.
+In one step: it creates `repos/worker/README.md`, declares it in `crux.json`,
+adds its row to the index table and generates its pointers. This used to
+involve hand-editing a list inside a script.
 
 ---
 
-## Nivel 3b — Cambiar de ordenador
+## Level 3b — Changing computers
 
-Tres comandos:
+Three commands:
 
 ```bash
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
@@ -228,62 +229,62 @@ git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 crux clone acme
 ```
 
-`crux clone` trae el docs repo, **lee su contrato** y clona los repos que
-declara. Dos cosas salen de ahí y no de un supuesto: la lista de repos —que en
-una guía escrita a mano se queda desfasada en cuanto añades uno— y **de dónde
-se clona cada uno**.
+`crux clone` brings the docs repo, **reads its contract** and clones the repos
+it declares. Two things come from there and not from an assumption: the list of
+repos —which in a hand-written guide goes stale as soon as you add one— and
+**where each one is cloned from**.
 
-Después, `crux doctor --machine` dice qué falta en la máquina: herramientas,
-autenticaciones, enlaces rotos. Lo que salga como aviso limita qué skills
-puedes usar; lo que salga como error, rompe algo.
+After that, `crux doctor --machine` tells you what is missing on the machine:
+tools, authentications, broken links. What comes out as a warning limits which
+skills you can use; what comes out as an error breaks something.
 
-Las credenciales y secretos de cada proyecto siguen siendo trabajo manual, y
-viven en su propia documentación de onboarding.
+Each project's credentials and secrets remain manual work, and live in its own
+onboarding documentation.
 
-## Nivel 4 — Adoptar un proyecto que ya existe
+## Level 4 — Adopting a project that already exists
 
-Si el proyecto ya tiene documentación, `crux init` no es lo tuyo: es
-`crux adopt`, que **no reescribe nada**.
+If the project already has documentation, `crux init` is not for you: it is
+`crux adopt`, which **rewrites nothing**.
 
 ```bash
 cd ~/Proyectos/mi-proyecto/mi-proyecto-docs
 crux adopt --profile multi-repo
 ```
 
-Qué hace:
+What it does:
 
-1. Deduce el nombre del proyecto del nombre de la carpeta.
-2. Detecta los repos que ya tienen carpeta de documentación.
-3. Detecta las secciones opcionales activas.
-4. Escribe el `crux.json` que falta.
-5. Avisa de los hermanos en disco que aún no están declarados.
-6. Lanza `crux doctor` para decirte qué queda por alinear.
+1. Deduces the project name from the folder name.
+2. Detects the repos that already have a documentation folder.
+3. Detects the active optional sections.
+4. Writes the missing `crux.json`.
+5. Warns about sibling folders on disk that are not yet declared.
+6. Runs `crux doctor` to tell you what is left to align.
 
-Es la puerta de entrada de los proyectos anteriores al kernel.
+It is the entry door for projects that predate the kernel.
 
 ---
 
-## Nivel 5 — Cómo funciona por dentro
+## Level 5 — How it works inside
 
-### El contrato: `crux.json`
+### The contract: `crux.json`
 
-Es la pieza central. Antes, el script de bootstrap tenía esto escrito dentro:
+It is the central piece. Before, the bootstrap script had this written inside:
 
 ```bash
 REPOS=(Acme acme-engine acme-cms acme-radar demo-co ...)
 ```
 
-Un script del framework conociendo por su nombre los repos de un proyecto. Por
-eso no era reutilizable: para otro proyecto había que editarlo.
+A framework script knowing a project's repos by name. That is why it was not
+reusable: for another project you had to edit it.
 
-Ahora cada proyecto **se declara a sí mismo** y el kernel solo lee. Es el patrón
-de un `package.json`: código genérico, datos en el manifiesto. Y el campo
-`crux` cumple la función de un lockfile — responde a "¿con qué versión del
-estándar se materializó esto?", pregunta que antes no tenía respuesta.
+Now each project **declares itself** and the kernel only reads. It is the
+`package.json` pattern: generic code, data in the manifest. And the `crux`
+field plays the role of a lockfile — it answers "which version of the standard
+was this materialized with?", a question that previously had no answer.
 
-### El remoto: el kernel no sabe de proveedores
+### The remote: the kernel knows nothing about providers
 
-El contrato declara **cómo se componen las URLs** de los repos del proyecto:
+The contract declares **how the URLs** of the project's repos are composed:
 
 ```json
 "remote": {
@@ -293,162 +294,164 @@ El contrato declara **cómo se componen las URLs** de los repos del proyecto:
 }
 ```
 
-La plantilla con `{repo}` es el formato primario porque es el único que cubre
-remotos que no siguen la forma `owner/repo`. El override por repo no es un caso
-raro: **un proyecto puede tener la documentación en tu remoto y el código en el
-de otra persona**, que es justo lo que pasa con el perfil de cliente.
+The template with `{repo}` is the primary format because it is the only one
+that covers remotes that do not follow the `owner/repo` shape. The per-repo
+override is not a rare case: **a project can have its documentation on your
+remote and its code on someone else's**, which is exactly what happens with the
+client profile.
 
-`crux adopt` lo deduce del `origin` de lo que ya esté clonado, así que no se
-escribe a mano. Y `crux doctor` avisa cuando lo declarado deja de coincidir con
-la realidad: esa deriva no molesta en tu máquina y hace fallar el clonado en la
-siguiente.
+`crux adopt` deduces it from the `origin` of whatever is already cloned, so it
+is not written by hand. And `crux doctor` warns when what is declared stops
+matching reality: that drift does not bother you on your machine and makes the
+clone fail on the next one.
 
-**La visibilidad importa por un motivo concreto**: solo se puede aplicar donde
-hay API para crear el repo. En el resto de proveedores lo crea una persona, y
-un docs repo público con documentación interna dentro no es un descuido de
-configuración, es un incidente. Por eso se declara, `init` la dice en voz alta
-cuando no puede aplicarla, y `doctor` comprueba la real donde puede.
+**Visibility matters for a concrete reason**: it can only be applied where
+there is an API to create the repo. With the other providers a person creates
+it, and a public docs repo with internal documentation inside is not a
+configuration slip, it is an incident. That is why it is declared, `init` says
+so out loud when it cannot apply it, and `doctor` checks the real one where it
+can.
 
-### El idioma
+### The language
 
-También es una propiedad declarada, no una costumbre. La regla: descripciones y
-documentación en el idioma del proyecto, nombres e identificadores en inglés,
-términos técnicos sin traducir.
+It is also a declared property, not a habit. The rule: descriptions and
+documentation in the project's language, names and identifiers in English,
+technical terms left untranslated.
 
-Importa porque **la descripción de una skill decide si se activa**, y debe
-llevar las palabras con las que aparece el problema. Si el trabajo se pide en un
-idioma y la descripción está en otro, la skill existe pero se activa peor justo
-cuando hace falta.
+It matters because **a skill's description decides whether it activates**, and
+it must carry the words in which the problem shows up. If the work is requested
+in one language and the description is in another, the skill exists but
+activates worse exactly when it is needed.
 
-### Cómo se encuentra el kernel a sí mismo
+### How the kernel finds itself
 
-En cascada, tres vías:
+In cascade, three ways:
 
-1. La variable `CRUX_HOME`, si está.
-2. `~/.crux/config`, que escribió el instalador.
-3. Su propia ruta real, resuelta desde el script en ejecución.
+1. The `CRUX_HOME` variable, if set.
+2. `~/.crux/config`, which the installer wrote.
+3. Its own real path, resolved from the running script.
 
-Por eso funciona igual invocado como `crux`, como `bash bin/doctor.sh`, o desde
-un test con el `$HOME` redirigido. Cero rutas absolutas escritas a mano.
+That is why it works the same invoked as `crux`, as `bash bin/doctor.sh`, or
+from a test with `$HOME` redirected. Zero hand-written absolute paths.
 
-### Los perfiles: política como dato, no como prosa
+### Profiles: policy as data, not as prose
 
-Este es el salto conceptual más importante del diseño.
+This is the most important conceptual leap in the design.
 
-Las reglas de un proyecto de cliente —no tocar su repo, exigir evidencia, no
-diagnosticar sin validación— vivían como **párrafos en un README**. Un agente
-las lee si las lee, y ningún programa puede comprobarlas.
+The rules of a client project —do not touch their repo, demand evidence, do not
+diagnose without validation— used to live as **paragraphs in a README**. An
+agent reads them if it reads them, and no program can check them.
 
-Ahora son un fichero:
+Now they are a file:
 
 ```json
 { "name": "client-repo", "pointers": { "write": false }, "rules": [...] }
 ```
 
-Y ese `write: false` lo consumen dos programas distintos:
+And that `write: false` is consumed by two different programs:
 
-- **`crux link`** lo lee y **no escribe** los punteros: el repo del cliente
-  queda literalmente con cero ficheros creados.
-- **`crux doctor`** lo lee y **verifica que nadie escribió**: si aparece un
-  `AGENTS.md` en el repo ajeno, es error con código de salida 1.
+- **`crux link`** reads it and **does not write** the pointers: the client's
+  repo is left literally with zero files created.
+- **`crux doctor`** reads it and **verifies that nobody wrote**: if an
+  `AGENTS.md` appears in the foreign repo, it is an error with exit code 1.
 
-Prevención y detección desde el mismo dato. Eso es convertir una norma en una
-garantía.
+Prevention and detection from the same piece of data. That is turning a norm
+into a guarantee.
 
-Perfiles actuales: `multi-repo` (código propio) y `client-repo` (código ajeno).
+Current profiles: `multi-repo` (own code) and `client-repo` (someone else's
+code).
 
-### Los adaptadores: una fuente, dos agentes
+### The adapters: one source, two agents
 
-Arquitectura hexagonal, literal. El núcleo es markdown neutro; los adaptadores
-traducen a cada agente:
+Hexagonal architecture, literally. The core is neutral markdown; the adapters
+translate to each agent:
 
 ```
-skills/<nombre>/SKILL.md          ← la ÚNICA fuente
+skills/<name>/SKILL.md            ← the ONLY source
         │
-        ├─ adapters/claude/  → symlink en ~/.claude/skills/<nombre>
-        └─ adapters/codex/   → stub en ~/.codex/prompts/<nombre>.md
+        ├─ adapters/claude/  → symlink in ~/.claude/skills/<name>
+        └─ adapters/codex/   → stub in ~/.codex/prompts/<name>.md
 ```
 
-La clave: **el stub de Codex no copia el contenido, apunta al fichero**. Si
-copiara, tendrías dos versiones divergiendo — el mismo problema del `cp` que
-todo esto viene a eliminar. Editas el `SKILL.md` una vez y los dos agentes ven
-el cambio al instante.
+The key: **the Codex stub does not copy the content, it points to the file**.
+If it copied, you would have two versions diverging — the very `cp` problem all
+this exists to eliminate. You edit the `SKILL.md` once and both agents see the
+change instantly.
 
-De ahí sale una regla dura: **ninguna skill del kernel puede nombrar
-herramientas de un agente concreto**. Se describe *la acción*, no *quién la
-ejecuta*. Y hay un test que lo vigila.
+A hard rule follows: **no kernel skill may name the tools of a specific
+agent**. It describes *the action*, not *who runs it*. And a test enforces it.
 
-### Los hooks en los dos agentes
+### The hooks in both agents
 
-Codex lee hooks de `~/.codex/hooks.json` con el mismo formato que Claude Code,
-así que `crux hooks install` registra allí los mismos scripts de shell: el
-recordatorio y la sincronización al abrir sesión, la tarea y el ciclo al
-escribir, los guardianes antes de cada comando y la puerta de documentación al
-cerrar. Tres diferencias:
+Codex reads hooks from `~/.codex/hooks.json` with the same format as Claude
+Code, so `crux hooks install` registers the same shell scripts there: the
+reminder and the sync when a session opens, the task and the cycle on write,
+the guards before each command and the documentation gate at close. Three
+differences:
 
-- Codex no tiene herramientas de ficheros propias (edita con `apply_patch`),
-  así que los guardianes miran solo `Bash`.
-- Los hooks que dan contexto en texto pasan por
-  `adapters/codex/hooks/contexto.sh`, que lo envuelve en
-  `additionalContext`: Codex solo lo garantiza en JSON.
-- El guardián de memorias no va, porque revisa las memorias de Claude.
+- Codex has no file tools of its own (it edits with `apply_patch`), so the
+  guards look only at `Bash`.
+- Hooks that give context as text go through
+  `adapters/codex/hooks/contexto.sh`, which wraps it in `additionalContext`:
+  Codex only guarantees it in JSON.
+- The memory guard is not installed, because it reviews Claude's memories.
 
-Codex pide aprobar cada hook la primera vez que lo ve; hasta entonces no corre.
-Si Codex no está en la máquina, no se escribe nada.
+Codex asks for approval of each hook the first time it sees it; until then it
+does not run. If Codex is not on the machine, nothing is written.
 
-### Lo que solo existe en Claude: el plugin con mods
+### What exists only in Claude: the plugin with mods
 
-Desde la 2.1.287, Claude Code admite *mods*: módulos de TypeScript que viajan
-dentro de un plugin, reciben los eventos de la sesión y pueden dibujar en la
-interfaz. `adapters/claude/plugin` trae uno, y es una capa encima de lo común,
-no un sustituto:
+Since 2.1.287, Claude Code supports *mods*: TypeScript modules that ship inside
+a plugin, receive the session's events and can draw in the interface.
+`adapters/claude/plugin` brings one, and it is a layer on top of the common
+part, not a substitute:
 
-- **El recordatorio de tareas como panel** encima del prompt, con un número
-  para retomar cada una. Los datos salen de `lib/task-sync.mjs`, igual que el
-  texto del hook `session-sync`. El mod pone `CRUX_REMINDER_UI=panel` antes de
-  que corra el hook, y el hook deja entonces su texto solo para el modelo.
-- **La tarea del espacio de trabajo en el pie del prompt**, entre las etiquetas
-  de modo, al día al acabar cada turno.
+- **The task reminder as a panel** above the prompt, with a number to resume
+  each one. The data comes from `lib/task-sync.mjs`, just like the text of the
+  `session-sync` hook. The mod sets `CRUX_REMINDER_UI=panel` before the hook
+  runs, and the hook then leaves its text for the model alone.
+- **The workspace's task in the prompt footer**, among the mode labels, updated
+  at the end of each turn.
 
-`crux hooks install` lo carga con `CLAUDE_CODE_PLUGIN_DIRS` en el
-`settings.json` de Claude, que ningún otro agente lee: en Codex, la web o el
-móvil todo sigue llegando como texto. Los tests del mod los corre
-`claude plugin test`, y la suite del kernel los lanza cuando hay `claude`.
+`crux hooks install` loads it with `CLAUDE_CODE_PLUGIN_DIRS` in Claude's
+`settings.json`, which no other agent reads: in Codex, the web or mobile
+everything keeps arriving as text. The mod's tests are run by
+`claude plugin test`, and the kernel suite launches them when `claude` is
+present.
 
-### Qué pasa cuando ejecutas `crux doctor`
+### What happens when you run `crux doctor`
 
 ```
 bin/crux (dispatcher)
-  └─ resuelve CRUX_HOME desde su ruta real
+  └─ resolves CRUX_HOME from its real path
   └─ exec bin/doctor.sh
-       └─ carga lib/common.sh
-       └─ find_docs_repo()        sube el árbol buscando crux.json
-       └─ lee el contrato
-       └─ carga profiles/<perfil>.json
-       └─ siete bloques de comprobación
+       └─ loads lib/common.sh
+       └─ find_docs_repo()        walks up the tree looking for crux.json
+       └─ reads the contract
+       └─ loads profiles/<profile>.json
+       └─ seven check blocks
        └─ exit 0 | 1
 ```
 
-Los siete bloques: contrato, estructura obligatoria, repos declarados frente a
-la realidad, reglas del perfil, secciones declaradas, enlaces markdown y
-formato de las skills.
+The seven blocks: contract, mandatory structure, declared repos versus
+reality, profile rules, declared sections, markdown links and skill format.
 
-**Errores** rompen el estándar. **Avisos** señalan desalineación que merece una
-decisión, no necesariamente una acción.
+**Errors** break the standard. **Warnings** point to a misalignment that
+deserves a decision, not necessarily an action.
 
 ---
 
-## Nivel 6 — El ciclo de desarrollo
+## Level 6 — The development cycle
 
-Tres skills sostienen el día a día.
+Three skills hold up the day to day.
 
-### `/workspace` — antes de empezar
+### `/workspace` — before starting
 
-Un worktree de git aísla los ficheros. **El runtime no.** Es la parte que se
-olvida y la que hace daño: dos tareas en paralelo sobre el mismo repo siguen
-peleándose por el puerto, la base de datos y el `.env`. El conflicto que creías
-haber eliminado reaparece como datos corrompidos — peor que un conflicto de
-merge, porque es silencioso.
+A git worktree isolates the files. **The runtime it does not.** That is the
+part that gets forgotten and the one that does damage: two parallel tasks on
+the same repo still fight over the port, the database and the `.env`. The
+conflict you thought you had eliminated reappears as corrupted data — worse
+than a merge conflict, because it is silent.
 
 ```bash
 crux workspace new fix-login
@@ -456,8 +459,8 @@ crux workspace list
 crux workspace rm fix-login
 ```
 
-Cada espacio recibe un **slot**: un rango de puertos, una base de datos y un
-fichero de entorno derivados. Se configura en el `crux.json` del proyecto:
+Each space receives a **slot**: a derived port range, database and environment
+file. It is configured in the project's `crux.json`:
 
 ```json
 "workspace": {
@@ -473,372 +476,371 @@ fichero de entorno derivados. Se configura en el `crux.json` del proyecto:
 }
 ```
 
-Un registro compartido garantiza que dos espacios no cojan el mismo hueco, y
-los slots liberados se reutilizan.
+A shared registry guarantees that two spaces do not take the same slot, and
+released slots are reused.
 
-**Detalle de diseño**: el worktree se crea como **hermano** del repo
-(`<repo>-ws-<nombre>`), no en un directorio aparte. Es deliberado: los punteros
-de contexto son rutas relativas (`../<proyecto>-docs/`), y desde fuera del
-proyecto dejarían de resolver. El agente que trabajara ahí se quedaría sin
-contexto.
+**Design detail**: the worktree is created as a **sibling** of the repo
+(`<repo>-ws-<name>`), not in a separate directory. This is deliberate: the
+context pointers are relative paths (`../<project>-docs/`), and from outside
+the project they would stop resolving. The agent working there would be left
+without context.
 
-Qué aislar, por orden de daño: puertos (falla al arrancar), base de datos (se
-corrompe en silencio), fichero de entorno (invalida lo anterior), volúmenes con
-estado, recursos externos compartidos (aquí normalmente no puedes: no lances en
-paralelo tareas que los toquen).
+What to isolate, in order of damage: ports (fails on startup), database
+(corrupts silently), environment file (invalidates the above), stateful
+volumes, shared external resources (here you usually cannot: do not launch in
+parallel tasks that touch them).
 
-### `/ship` — antes de commitear
+### `/ship` — before committing
 
-Cadena de puertas donde cualquiera aborta:
+A chain of gates where any one aborts:
 
 ```
-1. Sanidad      tests en verde ANTES de mirar nada
-                (si ya estaban rojos, no es tu diff: dilo y para)
-2. Diff         leerlo entero: ¿hace exactamente lo que pretendías?
-3. Correctitud  bugs, casos límite, errores no gestionados
-4. Calidad      ¿hay forma más simple? — después de 3, nunca antes
-5. Regresión    tests otra vez, porque los arreglos rompen cosas
-6. Realidad     levantar el entorno, solo si el diff toca superficie observable
-7. Doc drift    ¿esto invalida alguna documentación?
-8. Commit       conventional commit que explique el porqué
+1. Sanity       tests green BEFORE looking at anything
+                (if they were already red, it is not your diff: say so and stop)
+2. Diff         read it whole: does it do exactly what you intended?
+3. Correctness  bugs, edge cases, unhandled errors
+4. Quality      is there a simpler way? — after 3, never before
+5. Regression   tests again, because fixes break things
+6. Reality      bring up the environment, only if the diff touches observable surface
+7. Doc drift    does this invalidate any documentation?
+8. Commit       conventional commit that explains the why
 ```
 
-La puerta 6 es la cara. Un script clasifica el diff y decide:
+Gate 6 is the expensive one. A script classifies the diff and decides:
 
 ```bash
 bash ~/.claude/skills/ship/scripts/diff-scope.sh
 ```
 
-| Lo que toca | Qué validar |
-| ----------- | ----------- |
-| Interfaz | Verlo, en los viewports que importen |
-| API | Llamar a los endpoints, no solo sus tests |
-| Datos | Que la migración aplique **y revierta** |
-| Dependencias | Que arranque desde cero, no desde tu caché |
+| What it touches | What to validate |
+| --------------- | ---------------- |
+| Interface | See it, in the viewports that matter |
+| API | Call the endpoints, not just their tests |
+| Data | That the migration applies **and reverts** |
+| Dependencies | That it starts from scratch, not from your cache |
 
-Dos decisiones de diseño que deciden si esto se usa o se abandona: **la puerta
-6 es condicional** y **hay modo rápido y modo completo**. Si tarda doce minutos
-siempre, dejas de invocarlo en dos semanas y la puerta ha fracasado.
+Two design decisions that decide whether this gets used or abandoned: **gate 6
+is conditional** and **there is a quick mode and a full mode**. If it takes twelve minutes
+always, you stop invoking it within two weeks and the gate has failed.
 
-El orden 3 antes que 4 tampoco es casual: **simplificar código incorrecto es
-tirar el trabajo**.
+Putting 3 before 4 is not casual either: **simplifying incorrect code is
+throwing the work away**.
 
-### Las demás del ciclo
+### The rest of the cycle
 
-`/write-tests` y `/root-cause` cubren lo que antes no tenía procedimiento:
-elegir qué merece un test y depurar sin proponer el arreglo antes de entender
-el fallo. `/e2e` pone el criterio por delante de la herramienta —un flujo lo
-merece si su rotura te la cuenta un usuario y no un test—. `/code-health` mide
-el conjunto, no el diff, que es lo que se erosiona despacio cuando se genera
-mucho código. Y `/explain-plan` presenta una propuesta para poder pararla a
-tiempo.
+`/write-tests` and `/root-cause` cover what previously had no procedure:
+choosing what deserves a test and debugging without proposing the fix before
+understanding the failure. `/e2e` puts the criterion ahead of the tool —a flow
+deserves one if its breakage is reported to you by a user and not by a test—.
+`/code-health` measures the whole, not the diff, which is what erodes slowly
+when a lot of code is generated. And `/explain-plan` presents a proposal so it
+can be stopped in time.
 
-### Después de proponer: el CI, el riesgo y producción
+### After proposing: CI, risk and production
 
-Abrir la propuesta no termina el trabajo. Quedan tres huecos en los que, sin
-un paso explícito, no mira nadie.
+Opening the proposal does not finish the work. Three gaps remain where, without
+an explicit step, nobody is looking.
 
-**El CI.** `crux checks --wait` espera a las comprobaciones y, si algo falla,
-trae solo el final del log del trabajo que falló, con las pilas de llamadas
-recortadas. Se arregla en la rama y se vuelve a subir, tres intentos como
-máximo.
+**CI.** `crux checks --wait` waits for the checks and, if something fails,
+brings only the end of the log of the job that failed, with call stacks
+trimmed. It is fixed on the branch and pushed again, three attempts at most.
 
-**El riesgo.** `crux review` clasifica la propuesta en riesgo bajo, medio o
-alto y dice qué revisores especialistas merece: seguridad, datos, rendimiento
-o interfaz. Se lanzan solo esos, en paralelo y cada uno en su contexto. Cuesta
-entre 20.000 y 50.000 tokens por especialista, y por eso un cambio pequeño o
-sin código no lanza ninguno. La misma clasificación dice quién fusiona: sin
-código y en proyecto propio puede ir solo; lo demás lo decide una persona.
+**Risk.** `crux review` classifies the proposal as low, medium or high risk and
+says which specialist reviewers it deserves: security, data, performance or
+interface. Only those are launched, in parallel and each in its own context.
+It costs between 20,000 and 50,000 tokens per specialist, and that is why a
+small change or one without code launches none. The same classification says
+who merges: with no code and in an own project it can go on its own; the rest
+is decided by a person.
 
-**Producción.** `/deploy-watch` espera a que la versión nueva llegue y
-comprueba las rutas que el proyecto declara en `deploy`. Si algo falla, se
-revierte primero. `/prod-signals` lee los logs que el proyecto declara en
-`observability` y los resume agrupando los errores repetidos, que es por donde
-empieza `/root-cause` cuando el fallo solo ocurre en el servidor.
+**Production.** `/deploy-watch` waits for the new version to arrive and checks
+the routes the project declares in `deploy`. If something fails, revert first.
+`/prod-signals` reads the logs the project declares in `observability` and
+summarizes them by grouping repeated errors, which is where `/root-cause`
+starts when the failure only happens on the server.
 
-### `/end-session` — antes de cerrar
+### `/end-session` — before closing
 
-Cuatro preguntas sobre la sesión —decisiones, gotchas, convenciones,
-preferencias—, cada una con su destino. Luego: higiene de la memoria del
-agente, `crux doctor`, revisión de la frontera de las skills, confirmación del
-usuario elemento a elemento, commits por categoría y reporte final.
+Four questions about the session —decisions, gotchas, conventions,
+preferences—, each with its destination. Then: agent memory hygiene, `crux
+doctor`, review of the skills boundary, per-item confirmation from the user,
+commits by category and a final report.
 
-Regla que atraviesa todo: **las memorias de tipo `project` y `reference` van a
-git; solo `user` y `feedback` se quedan locales**. Lo primero es del proyecto y
-tiene que sobrevivir al cambio de máquina; lo segundo es sobre la persona.
+A rule that runs through it all: **memories of type `project` and `reference`
+go to git; only `user` and `feedback` stay local**. The former belongs to the
+project and has to survive a change of machine; the latter is about the person.
 
-Esa parte ya no depende de que se invoque el ritual. `crux memory` lista lo que
-sigue solo en local, y un hook lo recuerda al cerrar sesión. Se midió: el
-ritual se invocaba en 2 de 46 sesiones, y mientras tanto había análisis de
-proyecto que solo existía en un portátil. Lo que no se dispara solo no se
-dispara.
+That part no longer depends on the ritual being invoked. `crux memory` lists
+what is still only local, and a hook reminds you at session close. It was
+measured: the ritual was invoked in 2 of 46 sessions, and meanwhile there was
+project analysis that only existed on one laptop. What does not fire by itself
+does not fire.
 
 ---
 
-## Nivel 7 — Extenderlo
+## Level 7 — Extending it
 
-### La frontera entre kernel y proyecto
+### The boundary between kernel and project
 
-La regla vieja era "¿le serviría a otro proyecto?", que se responde con
-imaginación. La nueva se puede aplicar:
+The old rule was "would it serve another project?", which is answered with
+imagination. The new one can be applied:
 
-> **Tapa todos los nombres propios de la skill. Si el procedimiento sigue
-> teniendo sentido y valor, hay un patrón dentro.**
+> **Cover all the proper names in the skill. If the procedure still makes sense
+> and has value, there is a pattern inside.**
 
-Se promueve el procedimiento; en el proyecto queda un **adaptador** corto con
-rutas, credenciales y nombres propios.
+The procedure is promoted; in the project a short **adapter** stays, with
+paths, credentials and proper names.
 
-Ejemplo real: `mobile-native-test` describía cómo probar una app en un Android
-físico. Tapando los nombres propios quedaba el procedimiento entero —adb,
-permisos udev, `screencap`, Fast Refresh, el gotcha de que en algunas capas de
-fabricante los toques no llegan a la app—. Eso subió como `device-loop`. Abajo
-quedó `demo-co-device`: package, deep-link y dispositivo de referencia.
+A real example: `mobile-native-test` described how to test an app on a
+physical Android. With the proper names covered, the whole procedure remained
+—adb, udev permissions, `screencap`, Fast Refresh, the gotcha that on some
+manufacturer layers taps do not reach the app—. That went up as `device-loop`.
+Below it stayed `demo-co-device`: package, deep-link and reference device.
 
-Dos guardas:
+Two guards:
 
-- **Regla de las dos ocurrencias.** Se promueve cuando dos proyectos lo
-  necesitan de verdad. Excepción admisible: valor alto demostrado y
-  acoplamiento casi nulo.
-- **Existe el camino inverso.** Si una skill del kernel acumula condicionales
-  por proyecto, no era un patrón: se degrada.
+- **The two-occurrences rule.** It is promoted when two projects genuinely need
+  it. Admissible exception: high demonstrated value and near-zero coupling.
+- **The reverse path exists.** If a kernel skill accumulates per-project
+  conditionals, it was not a pattern: it is demoted.
 
 ### `/skill-audit`
 
-Automatiza la vigilancia de esa frontera:
+It automates watching that boundary:
 
 ```bash
 node ~/.claude/skills/skill-audit/scripts/audit.mjs
 ```
 
-Recorre todos los proyectos adoptados y reporta tres cosas:
+It walks all the adopted projects and reports three things:
 
-- **Baja densidad de nombres propios.** Los términos se derivan del `crux.json`
-  de cada proyecto —su nombre y el de sus repos—, así que no hay lista que
-  mantener.
-- **Pares de proyectos distintos que describen lo mismo.** La promoción más
-  obvia y la más invisible: nadie ve las dos skills a la vez.
-- **Las que ya son adaptadores**, excluidas de las candidatas.
+- **Low density of proper names.** The terms are derived from each project's
+  `crux.json` —its name and its repos'—, so there is no list to maintain.
+- **Pairs of different projects that describe the same thing.** The most
+  obvious promotion and the most invisible: nobody sees both skills at once.
+- **Those that are already adapters**, excluded from the candidates.
 
-- **Adaptadores que compiten con el procedimiento que adaptan.** La secuela de
-  una promoción. Las tres señales anteriores miran hacia delante —qué merece
-  subir—; esta mira lo que la promoción deja atrás.
+- **Adapters that compete with the procedure they adapt.** The sequel to a
+  promotion. The three previous signals look forward —what deserves to go up—;
+  this one looks at what the promotion leaves behind.
 
-Son señales, no veredictos. El script señala, el test decide, la regla de las
-dos ocurrencias frena.
+They are signals, not verdicts. The script points, the test decides, the
+two-occurrences rule brakes.
 
-Dos disparadores: **en caliente** al crear una skill —es cuando de verdad se
-sabe— y **en frío** enganchado al cierre de sesión.
+Two triggers: **hot**, when creating a skill —that is when it is really
+known— and **cold**, hooked to the session close.
 
-### Verificar que una descripción se activa
+### Verifying that a description activates
 
 ```bash
-node ~/.claude/skills/skill-audit/scripts/probe.mjs "la frase con la que lo pedirías"
+node ~/.claude/skills/skill-audit/scripts/probe.mjs "the phrase you would use to ask for it"
 node ~/.claude/skills/skill-audit/scripts/probe.mjs --casos
 ```
 
-Todo lo demás del sistema se verifica. La activación era lo único que se
-confiaba, y es lo que decide si el resto llega a usarse.
+Everything else in the system is verified. Activation was the only thing taken
+on trust, and it is what decides whether the rest ever gets used.
 
-`probe` dice qué skill ganaría una frase y **por cuánto**. Un margen por debajo
-de 0,5 significa que dos descripciones no se distinguen: cuál gane depende del
-azar de una palabra. `--casos` pasa un fichero de frases reales con la skill que
-debería activarse, y sirve para lo que hace falta de verdad — comparar dos
-redacciones y ver si un cambio ha apagado algo que antes se activaba.
+`probe` says which skill would win a phrase and **by how much**. A margin below
+0.5 means two descriptions cannot be told apart: which one wins depends on the
+luck of a word. `--casos` runs a file of real phrases with the skill that
+should activate, and serves what is really needed — comparing two wordings and
+seeing whether a change has switched off something that used to activate.
 
-Lo que encontró la primera vez que se pasó: el ejemplo canónico de promoción de
-esta misma guía, `device-loop` y `demo-co-device`, daba **empate exacto**. Y
-`flow`, que es la entrada por defecto, enumeraba en su descripción los pasos de
-las demás —«pasar la puerta de calidad, proponer el cambio y cerrar la sesión»—
-y por eso competía con sus propias piezas.
+What it found the first time it was run: the canonical promotion example of
+this very guide, `device-loop` and `demo-co-device`, gave an **exact tie**. And
+`flow`, which is the default entry point, listed in its description the steps
+of the others —"pass the quality gate, propose the change and close the
+session"— and so competed with its own pieces.
 
-No predice lo que hará el agente: puntúa solape de vocabulario. Un empate es
-señal fiable; un ganador, no.
+It does not predict what the agent will do: it scores vocabulary overlap. A tie
+is a reliable signal; a winner is not.
 
-### Cómo se promueve una skill, en cinco pasos
+### How a skill is promoted, in five steps
 
-1. Separa el procedimiento de los datos: lo que queda al tapar los nombres
-   propios es lo que sube.
-2. Escribe la skill del kernel sin mencionar proyectos ni herramientas de un
-   agente concreto.
-3. Reduce la del proyecto a un adaptador que remita el método al kernel.
-4. **Verifica que la extracción no perdió nada**: ejecútala contra el caso real
-   del proyecto de origen y comprueba que da el mismo resultado. Una skill
-   genérica que ya no resuelve el caso concreto es peor que la específica.
-5. Reinstala el kernel.
+1. Separate the procedure from the data: what remains when the proper names are
+   covered is what goes up.
+2. Write the kernel skill without mentioning projects or the tools of a
+   specific agent.
+3. Reduce the project's one to an adapter that refers the method to the kernel.
+4. **Verify that the extraction lost nothing**: run it against the real case of
+   the originating project and check that it gives the same result. A generic
+   skill that no longer solves the concrete case is worse than the specific
+   one.
+5. Reinstall the kernel.
 
-### Versionar el estándar
+### Versioning the standard
 
-`VERSION` sigue semver:
+`VERSION` follows semver:
 
-- **patch** — redacción, arreglos de scripts sin cambio de contrato
-- **minor** — plantillas, skills o comprobaciones nuevas; los proyectos siguen
-  siendo válidos
-- **major** — cambia la estructura obligatoria o el formato de `crux.json`
+- **patch** — wording, script fixes with no change of contract
+- **minor** — new templates, skills or checks; projects remain valid
+- **major** — the mandatory structure or the `crux.json` format changes
 
-Cuando el estándar evoluciona se cambia **aquí primero**, y los proyectos se
-alinean con `crux upgrade`. Ningún proyecto inventa su variante.
+When the standard evolves it is changed **here first**, and projects align with
+`crux upgrade`. No project invents its own variant.
 
-`crux upgrade` materializa las piezas que falten y actualiza la versión
-declarada. **No sobrescribe contenido existente** salvo `--force`: la
-documentación es del proyecto, las plantillas solo cubren huecos.
+`crux upgrade` materializes the missing pieces and updates the declared
+version. It **does not overwrite existing content** except with `--force`: the
+documentation belongs to the project, the templates only fill gaps.
 
 ---
 
-## Nivel 8 — Mantenerlo
+## Level 8 — Maintaining it
 
-### La suite del propio kernel
+### The kernel's own suite
 
 ```bash
-./test/run.sh            # todos los casos
-./test/run.sh doctor     # los que casan con el patrón
+./test/run.sh            # all the cases
+./test/run.sh doctor     # those matching the pattern
 ```
 
-Cada caso corre en un sandbox aislado con los directorios de agentes
-redirigidos: la suite **no toca** `~/.claude`, `~/.codex` ni `~/Proyectos`.
+Each case runs in an isolated sandbox with the agent directories redirected:
+the suite **does not touch** `~/.claude`, `~/.codex` or `~/Proyectos`.
 
-Tres tipos de caso, y el tercero es el interesante:
+Three kinds of case, and the third is the interesting one:
 
-1. **Funcionales** — init crea la estructura, link es idempotente, upgrade
-   actualiza, workspace reparte slots.
-2. **De detección** — que `doctor` **falle** cuando debe: contrato ausente,
-   enlaces rotos, skill sin frontmatter, escritura en el repo de un cliente.
-3. **Estructurales** — que ninguna skill del kernel nombre un proyecto ni se
-   ate a un agente.
+1. **Functional** — init creates the structure, link is idempotent, upgrade
+   updates, workspace hands out slots.
+2. **Detection** — that `doctor` **fails** when it should: missing contract,
+   broken links, skill without frontmatter, a write into a client's repo.
+3. **Structural** — that no kernel skill names a project or ties itself to an
+   agent.
 
-Los del tercer tipo no prueban comportamiento: **protegen la propiedad
-arquitectónica que justifica que este repo exista**. Si dentro de seis meses
-alguien mete una skill con rutas de un proyecto concreto, el test se pone rojo.
-Es lo que impide que crux vuelva a acoplarse a lo que documenta, que es
-exactamente cómo nació el problema la primera vez.
+The third kind do not test behavior: **they protect the architectural property
+that justifies this repo's existence**. If six months from now someone adds a
+skill with the paths of a specific project, the test goes red. It is what stops
+crux from coupling itself again to what it documents, which is exactly how the
+problem was born the first time.
 
-Ese test ya encontró suciedad real tres veces mientras se construía el kernel.
+That test already found real dirt three times while the kernel was being built.
 
-### Que el estándar se cumpla solo
+### Making the standard enforce itself
 
 ```bash
-crux hooks install    # desde el docs repo del proyecto
+crux hooks install    # from the project's docs repo
 crux hooks status
 ```
 
-Instala cinco cosas: un aviso de deriva de documentación al cerrar sesión, un
-aviso de las memorias de proyecto que siguen solo en local, un `pre-commit` que
-**bloquea el commit si `doctor` no pasa**, un `commit-msg` que rechaza los
-mensajes en español, un recordatorio del ciclo al empezar a trabajar sobre la
-rama principal y un guardia que para los comandos que destruyen trabajo
-(`reset --hard`, `push --force`, `pkill`…) y la lectura de claves privadas, y
-otro que para `gh pr create` a mano: la propuesta la abre `finish`, que es
-quien exige el recibo. Con
-los permisos del agente saltados, ese guardia es el único freno que queda. Un estándar que hay que acordarse de comprobar se comprueba a
-veces.
+It installs five things: a documentation-drift warning at session close, a
+warning about project memories that are still only local, a `pre-commit` that
+**blocks the commit if `doctor` does not pass**, a `commit-msg` that rejects
+messages in Spanish, a reminder of the cycle when starting work on the main
+branch, and a guard that stops commands that destroy work (`reset --hard`,
+`push --force`, `pkill`…) and the reading of private keys, and another that
+stops a hand-run `gh pr create`: the proposal is opened by `finish`, which is
+what demands the receipt. With the agent's permissions skipped, that guard is
+the only brake left. A standard you have to remember to check gets checked
+sometimes.
 
-Para probar un hook antes de un release, instálalo desde el espacio de trabajo
-del kernel donde lo estás cambiando: los ajustes apuntan a ese espacio. Al
-cerrarlo con `crux workspace rm`, los hooks vuelven solos al checkout principal
-y se retiran los que solo existían en el espacio.
+To test a hook before a release, install it from the kernel workspace where you
+are changing it: the settings point at that workspace. When you close it with
+`crux workspace rm`, the hooks return on their own to the main checkout and the
+ones that only existed in the workspace are removed.
 
-El del idioma es el ejemplo más claro de por qué hace falta un hook y no una
-línea en un documento: la regla estaba escrita desde el primer commit y **los
-27 mensajes del historial del kernel estaban en español**. El `commit-msg` va a
-los repos de código además del docs repo, porque ahí es donde se commitea más
-— salvo con perfil `client-repo`, donde no se toca nada del cliente, tampoco
-sus hooks.
+The language one is the clearest example of why a hook is needed and not a line
+in a document: the rule had been written since the first commit and **all 27
+messages in the kernel's history were in Spanish**. The `commit-msg` goes into
+the code repos as well as the docs repo, because that is where most commits
+happen — except with the `client-repo` profile, where nothing of the client's
+is touched, not even its hooks.
 
-El del ciclo existe por una medición incómoda: la skill que lo describe estaba
-escrita, instalada y con su descripción, y `crux usage` la daba con **cero
-invocaciones en 31 sesiones**. Una descripción compite por atención con otras
-cuarenta; un hook llega solo. Se dispara por **estado** —dónde estás y en qué
-rama—, nunca por lo que diga el prompt: adivinar la intención por palabras
-acaba avisando cuando no toca y callando cuando sí. Y habla una vez por sesión,
-porque el ruido se aprende a ignorar antes que a obedecer.
+The cycle one exists because of an uncomfortable measurement: the skill that
+describes it was written, installed and had its description, and `crux usage`
+showed it with **zero invocations in 31 sessions**. A description competes for
+attention with forty others; a hook arrives on its own. It fires on **state**
+—where you are and on which branch—, never on what the prompt says: guessing
+intent from words ends up warning when it should not and staying silent when it
+should. And it speaks once per session, because noise is learned to be ignored
+before it is learned to be obeyed.
 
-Avisa en **cualquier repo que viva bajo tu raíz de proyectos**, esté dado de
-alta o no (ADR-014). Antes pedía además el layout de proyecto con su docs repo
-al lado, y los repos sueltos de la raíz quedaban fuera justo cuando nadie los
-vigilaba. Lo que viva ahí sin ser tuyo se excluye con `CRUX_UNMANAGED`.
+It warns in **any repo that lives under your projects root**, registered or not
+(ADR-014). Before, it also required the project layout with its docs repo next
+to it, and the loose repos at the root were left out exactly when nobody was
+watching them. What lives there without being yours is excluded with
+`CRUX_UNMANAGED`.
 
-Un hook que apunta a un fichero inexistente no falla: no hace nada. Y eso es
-peor, porque el sistema parece vigilado y no lo está. Por eso `doctor --machine`
-lo trata como error.
+A hook that points at a nonexistent file does not fail: it does nothing. And
+that is worse, because the system looks watched and is not. That is why
+`doctor --machine` treats it as an error.
 
-### Saber si esto sirve
+### Knowing whether this is useful
 
 ```bash
 crux usage --days=90
 ```
 
-Mide qué skills se usan de verdad contra el catálogo instalado, y separa las
-que nunca se usan. No es una lista de borrado: una skill de incidencias sin usar
-es una buena noticia. Lo que hay que mirar es la que existe hace meses, cubre
-algo frecuente y aun así nadie invoca — casi siempre es que su descripción no se
-activa cuando debería.
+It measures which skills are actually used against the installed catalog, and
+separates those never used. It is not a deletion list: an incident skill that
+is unused is good news. What to look at is the one that has existed for months,
+covers something frequent and still nobody invokes — almost always its
+description does not activate when it should.
 
-Cuenta **dos señales, y no las suma**:
+It counts **two signals, and does not add them**:
 
-| Columna | Qué es |
-| ------- | ------ |
-| `llamada` | La skill invocada por su nombre |
-| `script` | Rastro de sus scripts en comandos: el procedimiento seguido a mano |
+| Column | What it is |
+| ------ | ---------- |
+| `call` | The skill invoked by name |
+| `script` | Trace of its scripts in commands: the procedure followed by hand |
 
-La segunda existe porque la primera mentía. Quien sigue el procedimiento sin
-llamar a la skill aparecía con cero: la puerta de calidad figuraba con 2
-invocaciones mientras se pasaba en cuatro propuestas seguidas, y **cuatro skills
-del kernel salían como muertas estando en uso**. Y no se suman porque no son la
-misma unidad — `script` es una cota superior, ya que incluye lo que ejecutan los
-tests.
+The second exists because the first lied. Whoever followed the procedure
+without calling the skill showed up as zero: the quality gate was listed with 2
+invocations while it was being passed in four proposals in a row, and **four
+kernel skills came out as dead while in use**. And they are not added because
+they are not the same unit — `script` is an upper bound, since it includes what
+the tests execute.
 
-Lo que sigue sin medir: **si el procedimiento se siguió entero**. Ejecutar el
-script de la puerta no dice que se pasaran sus ocho puertas. Eso no lo ve
-ninguna métrica local, y conviene recordarlo antes de sacar conclusiones.
+What remains unmeasured: **whether the procedure was followed in full**.
+Running the gate's script does not say that its eight gates were passed. No
+local metric sees that, and it is worth remembering before drawing conclusions.
 
-Distingue **no tener datos** de **no tener uso**, que es la forma fácil de
-mentir con esta métrica.
+It distinguishes **having no data** from **having no use**, which is the easy
+way to lie with this metric.
 
-### Qué hacer cuando algo falla
+### What to do when something fails
 
-| Síntoma | Causa probable | Arreglo |
-| ------- | -------------- | ------- |
-| `falta crux.json` | El proyecto no está adoptado | `crux adopt` |
-| `materializado con crux X, el kernel es Y` | Estándar desfasado | `crux upgrade` |
-| `<repo>/ sin AGENTS.md` | Repo nuevo sin punteros | `crux link` |
-| `repos/<x>/ no está declarado` | Carpeta huérfana | `crux add-repo`, o bórrala |
-| `enlaces markdown rotos` | Documentación movida | Arreglar, o pasar a backticks |
-| `perfil client-repo: ... no debería existir` | Se escribió en código ajeno | Borrar el fichero |
-| Una skill no aparece en el agente | Instalación desfasada | `~/Proyectos/crux/install.sh` |
-| `crux clone` no sabe de dónde traer algo | Sin `remote` en el contrato | Declararlo, o `crux adopt` para deducirlo |
-| Un hook no hace nada, o «failed with non-blocking status» en cada turno | Apunta a un fichero que ya no existe | `crux hooks status` para verlo, `crux hooks install` desde el repo principal |
-| Falta una herramienta para una skill | — | `crux doctor --machine` |
+| Symptom | Probable cause | Fix |
+| ------- | -------------- | --- |
+| `crux.json is missing` | The project is not adopted | `crux adopt` |
+| `materialized with crux X, the kernel is Y` | Outdated standard | `crux upgrade` |
+| `<repo>/ has no AGENTS.md` | New repo without pointers | `crux link` |
+| `repos/<x>/ is not declared` | Orphan folder | `crux add-repo`, or delete it |
+| `broken markdown links` | Documentation moved | Fix, or switch to backticks |
+| `profile client-repo: ... should not exist` | Something was written in foreign code | Delete the file |
+| A skill does not appear in the agent | Outdated installation | `~/Proyectos/crux/install.sh` |
+| `crux clone` does not know where to fetch something from | No `remote` in the contract | Declare it, or `crux adopt` to deduce it |
+| A hook does nothing, or "failed with non-blocking status" on every turn | It points at a file that no longer exists | `crux hooks status` to see it, `crux hooks install` from the main repo |
+| A tool is missing for a skill | — | `crux doctor --machine` |
 
-### La regla de los enlaces, que sorprende a todo el mundo
+### The link rule, which surprises everyone
 
-Dentro de la documentación **solo se enlazan ficheros del propio repo de
-documentación**. Las referencias a código de un repo hermano van en backticks,
-como texto, sin enlazar.
+Inside the documentation **only files of the documentation repo itself are
+linked**. References to the code of a sibling repo go in backticks, as text,
+unlinked.
 
-Por qué: los enlaces se rompen al mover ficheros y, sin un build que los valide,
-terminan mintiendo. Un path en backticks el agente lo resuelve igual y nunca se
-rompe. `crux doctor` verifica los que quedan.
+Why: links break when files move and, without a build to validate them, they
+end up lying. A path in backticks the agent resolves just the same and never
+breaks. `crux doctor` verifies the ones that remain.
 
 ---
 
-## Resumen de una página
+## One-page summary
 
-- **Instalar**: clonar `crux` y ejecutar `install.sh`. Una vez por máquina.
-- **Ordenador nuevo**: `install.sh --remote '...'` y `crux clone <proyecto>`.
-- **Proyecto nuevo**: `crux init <nombre>`. Determinista, sale de plantillas.
-- **Proyecto existente**: `crux adopt`. No reescribe nada.
-- **Repo nuevo**: `crux add-repo <nombre>`. Declara, documenta y enlaza.
-- **Trabajo en paralelo**: `crux workspace new <tarea>`. Aísla ficheros y
-  runtime.
-- **Antes de commitear**: `/ship`. Ocho puertas, la cara es condicional.
-- **Si se ve, antes de subir**: `/before-after` y `crux visual approve`. Lo que
-  aprobó una persona va a la propuesta.
-- **Con la propuesta abierta**: `crux checks --wait` y `/review-pr`. Revisar no
-  es confirmar, y los especialistas los decide el diff.
-- **Después de fusionar**: `/deploy-watch`. Fusionado no es publicado.
-- **Antes de cerrar**: `/end-session`. Lo que deba sobrevivir, a git.
-- **Cuando dudes si algo cumple**: `crux doctor`. El estándar se verifica, no se
-  confía.
-- **Que se cumpla solo**: `crux hooks install` en cada docs repo.
-- **Saber si sirve**: `crux usage`.
-- **Cuando el estándar mejore**: cambiarlo aquí, y `crux upgrade` en cada
-  proyecto.
+- **Install**: clone `crux` and run `install.sh`. Once per machine.
+- **New computer**: `install.sh --remote '...'` and `crux clone <project>`.
+- **New project**: `crux init <name>`. Deterministic, comes from templates.
+- **Existing project**: `crux adopt`. Rewrites nothing.
+- **New repo**: `crux add-repo <name>`. Declares, documents and links.
+- **Parallel work**: `crux workspace new <task>`. Isolates files and runtime.
+- **Before committing**: `/ship`. Eight gates, the expensive one is conditional.
+- **If it is visible, before pushing**: `/before-after` and `crux visual approve`.
+  What a person approved goes to the proposal.
+- **With the proposal open**: `crux checks --wait` and `/review-pr`. Reviewing
+  is not confirming, and the diff decides the specialists.
+- **After merging**: `/deploy-watch`. Merged is not published.
+- **Before closing**: `/end-session`. What must survive goes to git.
+- **When you doubt whether something complies**: `crux doctor`. The standard is
+  verified, not trusted.
+- **Make it enforce itself**: `crux hooks install` in each docs repo.
+- **Know whether it is useful**: `crux usage`.
+- **When the standard improves**: change it here, and `crux upgrade` in each
+  project.

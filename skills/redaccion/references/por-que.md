@@ -1,58 +1,59 @@
-# Los marcadores, con más ejemplos
+# The markers, with more examples
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`. The examples are Spanish on purpose: they are
+the data the skill looks for.
 
-## Paralelismo negativo
+## Negative parallelism
 
-Es la figura que más aparece y la que menos se justifica. Casi siempre se puede
-decir la parte afirmativa sola, que además es la que lleva la información.
+It is the figure that appears most and is justified least. Almost always the
+affirmative part can be said on its own, and it is also the one that carries the
+information.
 
 > Un plan no se escribe para documentar. Se escribe para que alguien lo pare.
 > Un tono no es un color: es un papel.
 > Se mide, no se estima.
 
-## Regla de tres
+## Rule of three
 
-Sirve para que un análisis superficial parezca completo.
+It serves to make a superficial analysis look complete.
 
 > Radios, trazos y una sola sombra.
 > Se admite el movimiento que orienta, sitúa o explica.
 
-Si los tres elementos son necesarios, no es un tic.
+If all three elements are necessary, it is not a tic.
 
-## Epigrama como titular
+## Epigram as headline
 
-En un documento de referencia, el titular sirve para encontrar la página, no
-para lucirse. Casi todos los sectores tienen su vocabulario fijado, y usar otro
-llama la atención sobre el autor en lugar de sobre el contenido.
+In a reference document, the headline serves to find the page, not to show off.
+Almost every field has its vocabulary fixed, and using another draws attention to
+the author instead of the content.
 
-> «Cómo se llaman las cosas» en vez de «Terminología».
-> «El logo y su aire» en vez de «Área de protección».
+> «Cómo se llaman las cosas» instead of «Terminología».
+> «El logo y su aire» instead of «Área de protección».
 
-## Raya larga
+## Em dash
 
-Aparece sobre todo para dar énfasis a una aposición. Coma si el inciso es breve,
-paréntesis si es una aclaración.
+It appears mainly to emphasise an apposition. A comma if the aside is short, a
+parenthesis if it is a clarification.
 
-## Dos puntos aforísticos
+## Aphoristic colons
 
-Es la misma pulsión que el epigrama, a escala de oración.
+It is the same urge as the epigram, at sentence scale.
 
 > Y ahí está el problema: nadie lo mide.
 
-## Grandilocuencia
+## Grandiloquence
 
 > Lo que hace consistente a una marca no es que las pantallas se parezcan.
 
-Si la frase no añade un hecho, una cifra o una instrucción, no está haciendo
-nada.
+If the sentence adds no fact, figure or instruction, it is doing nothing.
 
-## Por qué solo cinco puntúan
+## Why only five score
 
-«No vale para una salida generada: dos ejecuciones no dan lo mismo» es un uso
-correcto de los dos puntos, y el script no puede distinguirlo de un remate.
+«No vale para una salida generada: dos ejecuciones no dan lo mismo» is a correct
+use of the colon, and the script cannot tell it apart from a punchline.
 
-## Por qué no llevarlo al extremo
+## Why not take it to the extreme
 
-Perseguir estos marcadores hasta el final produce prosa plana. El objetivo es
-que la figura aparezca cuando el contenido la pide, no como relleno rítmico.
+Chasing these markers all the way produces flat prose. The aim is for the figure
+to appear when the content calls for it, not as rhythmic filler.

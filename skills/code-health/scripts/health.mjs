@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Mide la salud estructural de un repo y su tendencia.
+// Measures a repo's structural health and its trend.
 //
-//   health.mjs [ruta] [--save] [--json] [--top N]
+//   health.mjs [path] [--save] [--json] [--top N]
 //
-// No revisa el diff: eso ya lo hace la revisión de código. Mide **el conjunto**,
-// que es lo que nadie mira y lo que se erosiona despacio. Sin dependencias: lo
-// que necesita son ficheros y git.
+// It does not review the diff: code review already does that. It measures **the
+// whole**, which is what nobody looks at and what erodes slowly. No
+// dependencies: all it needs are files and git.
 //
-// Con --save guarda la línea base. A partir de ahí la pregunta deja de ser
-// "¿está bien esto?" y pasa a ser "¿está peor que la última vez?", que es la
-// única que se puede responder sin discutir umbrales.
+// With --save it stores the baseline. From then on the question stops being
+// "is this fine?" and becomes "is it worse than last time?", the only one that
+// can be answered without arguing over thresholds.
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, extname } from 'node:path'
@@ -20,149 +20,149 @@ const ROOT = args.find(a => !a.startsWith('--')) || process.cwd()
 const SAVE = args.includes('--save')
 const JSON_OUT = args.includes('--json')
 const TOP = Number((args.find(a => a.startsWith('--top')) || '').split('=')[1] || 8)
-const CON_TESTS = args.includes('--tests')
-const MASA_MIN = Number((args.find(a => a.startsWith('--masa')) || '').split('=')[1] || 200)
+const WITH_TESTS = args.includes('--tests')
+const MIN_MASS = Number((args.find(a => a.startsWith('--masa') || a.startsWith('--mass')) || '').split('=')[1] || 200)
 const BASELINE = join(ROOT, '.crux-health.json')
 
-const CODIGO = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go', '.rs', '.java', '.rb'])
-const IGNORAR = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage',
+const CODE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go', '.rs', '.java', '.rb'])
+const IGNORE = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage',
   'vendor', '__pycache__', '.venv', 'target', 'out', '.turbo', 'migrations'])
 
-function ficheros(dir, acc = []) {
-  let entradas
-  try { entradas = readdirSync(dir, { withFileTypes: true }) } catch { return acc }
-  for (const e of entradas) {
+function listFiles(dir, acc = []) {
+  let entries
+  try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return acc }
+  for (const e of entries) {
     if (e.name.startsWith('.') && e.name !== '.claude') continue
-    if (IGNORAR.has(e.name)) continue
+    if (IGNORE.has(e.name)) continue
     const full = join(dir, e.name)
-    const esTest = /(^|\/)(__tests__|tests?|spec)(\/|$)/.test(full) || /\.(test|spec)\.[a-z]+$/.test(e.name)
-    if (esTest && !CON_TESTS) continue
-    if (e.isDirectory()) ficheros(full, acc)
-    else if (CODIGO.has(extname(e.name))) acc.push(full)
+    const isTest = /(^|\/)(__tests__|tests?|spec)(\/|$)/.test(full) || /\.(test|spec)\.[a-z]+$/.test(e.name)
+    if (isTest && !WITH_TESTS) continue
+    if (e.isDirectory()) listFiles(full, acc)
+    else if (CODE.has(extname(e.name))) acc.push(full)
   }
   return acc
 }
 
-// Normaliza para que la duplicación no dependa del formateo ni de los nombres
-// de variable locales, que es lo que hace inútil un diff textual.
-const normaliza = (l) => l.trim().replace(/\s+/g, ' ')
-// Una línea cuenta si aporta lógica propia. Descartamos lo que se repite por
-// fuerza del lenguaje —llaves, imports, comentarios— porque si no, el informe
-// se llena de falsos positivos y deja de leerse.
-const estructural = (l) =>
+// Normalize so that duplication does not depend on formatting or on local
+// variable names, which is what makes a textual diff useless.
+const normalize = (l) => l.trim().replace(/\s+/g, ' ')
+// A line counts if it carries logic of its own. We discard what repeats by
+// force of the language (braces, imports, comments) because otherwise the
+// report fills with false positives and stops being read.
+const structural = (l) =>
   /^[)\]}{;,]+$/.test(l) ||
   /^(import|from|export|package|use|#include)\b/.test(l) ||
   l.startsWith('//') || l.startsWith('#') || /^[*]|^\/\*/.test(l)
 
-const sustantiva = (l) => l.length >= 15 && !estructural(l)
+const substantive = (l) => l.length >= 15 && !structural(l)
 
-// Y con lógica de verdad: sin esto, un objeto literal o una lista de campos
-// repetida cuenta como código duplicado.
-const conLogica = (l) =>
-  !estructural(l) &&
+// And with real logic: without this, an object literal or a repeated list of
+// fields counts as duplicated code.
+const withLogic = (l) =>
+  !structural(l) &&
   /\b(if|for|while|return|await|throw|catch|switch|case|function|def|const|let|var)\b|=>|[=<>!+\-*/%&|?]/.test(l)
 
-function duplicacion(files, ventana = 6) {
-  const bloques = new Map()
+function duplication(files, window = 6) {
+  const blocks = new Map()
   for (const f of files) {
-    const lineas = readFileSync(f, 'utf8').split('\n').map(normaliza)
-    for (let i = 0; i + ventana <= lineas.length; i++) {
-      const trozo = lineas.slice(i, i + ventana)
-      // Masa mínima de contenido propio: un bloque de manejo de errores
-      // genérico tiene pocas líneas sustantivas y cortas, y sin este umbral
-      // satura el informe con el mismo patrón repetido en cada fichero.
-      const masa = trozo.filter(sustantiva).reduce((n, l) => n + l.length, 0)
-      if (masa < MASA_MIN) continue
-      if (trozo.filter(conLogica).length < 3) continue
-      const clave = trozo.join('\u0001')
-      if (!bloques.has(clave)) bloques.set(clave, [])
-      bloques.get(clave).push({ file: f, line: i + 1 })
+    const lines = readFileSync(f, 'utf8').split('\n').map(normalize)
+    for (let i = 0; i + window <= lines.length; i++) {
+      const chunk = lines.slice(i, i + window)
+      // Minimum mass of own content: a generic error-handling block has few,
+      // short substantive lines, and without this threshold it floods the
+      // report with the same pattern repeated in every file.
+      const mass = chunk.filter(substantive).reduce((n, l) => n + l.length, 0)
+      if (mass < MIN_MASS) continue
+      if (chunk.filter(withLogic).length < 3) continue
+      const key = chunk.join('\u0001')
+      if (!blocks.has(key)) blocks.set(key, [])
+      blocks.get(key).push({ file: f, line: i + 1 })
     }
   }
-  const grupos = []
-  for (const [clave, sitios] of bloques) {
-    if (sitios.length < 2) continue
-    // Solapados dentro del mismo fichero cuentan una vez: si no, un bloque
-    // repetido de 20 líneas aparece 15 veces y el informe deja de servir.
-    const vistos = []
-    for (const s of sitios) {
-      if (vistos.some(v => v.file === s.file && Math.abs(v.line - s.line) < ventana)) continue
-      vistos.push(s)
+  const groups = []
+  for (const [key, sites] of blocks) {
+    if (sites.length < 2) continue
+    // Overlaps inside the same file count once: otherwise a repeated 20-line
+    // block appears 15 times and the report stops being useful.
+    const seenSet = []
+    for (const s of sites) {
+      if (seenSet.some(v => v.file === s.file && Math.abs(v.line - s.line) < window)) continue
+      seenSet.push(s)
     }
-    if (vistos.length >= 2) grupos.push({ lineas: ventana, sitios: vistos, muestra: clave.split('\u0001')[0] })
+    if (seenSet.length >= 2) groups.push({ lines: window, sites: seenSet, sample: key.split('\u0001')[0] })
   }
-  // Un bloque duplicado de 12 líneas aparece aquí como 7 ventanas contiguas.
-  // Sin fusionarlas, el informe repite el mismo hallazgo siete veces y el
-  // tamaño real del bloque —que es lo que dice cuánto duele— se pierde.
-  const porFirma = new Map()
-  for (const g of grupos) {
-    const firma = g.sitios.map(s => s.file).sort().join('|')
-    if (!porFirma.has(firma)) porFirma.set(firma, [])
-    porFirma.get(firma).push(g)
+  // A duplicated 12-line block shows up here as 7 contiguous windows.
+  // Without merging them, the report repeats the same finding seven times and
+  // the block's real size, which says how much it hurts, is lost.
+  const bySignature = new Map()
+  for (const g of groups) {
+    const signature = g.sites.map(s => s.file).sort().join('|')
+    if (!bySignature.has(signature)) bySignature.set(signature, [])
+    bySignature.get(signature).push(g)
   }
 
-  const fusionados = []
-  for (const lista of porFirma.values()) {
-    lista.sort((a, b) => a.sitios[0].line - b.sitios[0].line)
-    let actual = null
-    for (const g of lista) {
-      const contiguo = actual && g.sitios.every((s, i) => {
-        const prev = actual.sitios.find(p => p.file === s.file)
-        return prev && s.line - prev.line === actual.lineas - ventana + 1
+  const merged = []
+  for (const list of bySignature.values()) {
+    list.sort((a, b) => a.sites[0].line - b.sites[0].line)
+    let current = null
+    for (const g of list) {
+      const contiguous = current && g.sites.every((s, i) => {
+        const prev = current.sites.find(p => p.file === s.file)
+        return prev && s.line - prev.line === current.lines - window + 1
       })
-      if (contiguo) actual.lineas++
-      else { if (actual) fusionados.push(actual); actual = { ...g, sitios: [...g.sitios] } }
+      if (contiguous) current.lines++
+      else { if (current) merged.push(current); current = { ...g, sites: [...g.sites] } }
     }
-    if (actual) fusionados.push(actual)
+    if (current) merged.push(current)
   }
 
-  return fusionados.sort((a, b) =>
-    (b.sitios.length * b.lineas) - (a.sitios.length * a.lineas))
+  return merged.sort((a, b) =>
+    (b.sites.length * b.lines) - (a.sites.length * a.lines))
 }
 
-function complejidad(files) {
-  const largas = []
-  const anidadas = []
+function complexity(files) {
+  const long = []
+  const nested = []
   const decl = /^\s*(export\s+)?(async\s+)?(function|def|func|fn|public|private|protected)?\s*[\w.]*\s*[({]/
   for (const f of files) {
-    const lineas = readFileSync(f, 'utf8').split('\n')
-    let inicio = null, base = 0, maxProf = 0
-    lineas.forEach((l, i) => {
+    const lines = readFileSync(f, 'utf8').split('\n')
+    let start = null, base = 0, maxDepth = 0
+    lines.forEach((l, i) => {
       if (!l.trim()) return
-      const prof = Math.floor((l.match(/^[ \t]*/)[0].replace(/\t/g, '  ').length) / 2)
-      maxProf = Math.max(maxProf, prof)
-      if (inicio === null && decl.test(l) && prof <= 2) { inicio = i; base = prof }
-      else if (inicio !== null && prof <= base && l.trim() && i > inicio + 2) {
-        const largo = i - inicio
-        const cuerpo = lineas.slice(inicio, i)
-        const ramas = cuerpo.filter(x => /\b(if|for|while|switch|catch|\?\.|&&|\|\|)\b/.test(x)).length
-        // Un bloque largo sin ramas es un catálogo de datos: largo no es complejo.
-        if (largo > 60 && ramas >= 5) largas.push({ file: f, line: inicio + 1, lineas: largo, ramas })
-        inicio = null
+      const depth = Math.floor((l.match(/^[ \t]*/)[0].replace(/\t/g, '  ').length) / 2)
+      maxDepth = Math.max(maxDepth, depth)
+      if (start === null && decl.test(l) && depth <= 2) { start = i; base = depth }
+      else if (start !== null && depth <= base && l.trim() && i > start + 2) {
+        const length = i - start
+        const body = lines.slice(start, i)
+        const branches = body.filter(x => /\b(if|for|while|switch|catch|\?\.|&&|\|\|)\b/.test(x)).length
+        // A long block without branches is a data catalog: long is not complex.
+        if (length > 60 && branches >= 5) long.push({ file: f, line: start + 1, lines: length, branches })
+        start = null
       }
     })
-    if (maxProf >= 7) anidadas.push({ file: f, profundidad: maxProf })
+    if (maxDepth >= 7) nested.push({ file: f, depth: maxDepth })
   }
-  return { largas: largas.sort((a, b) => b.lineas - a.lineas), anidadas: anidadas.sort((a, b) => b.profundidad - a.profundidad) }
+  return { long: long.sort((a, b) => b.lines - a.lines), nested: nested.sort((a, b) => b.depth - a.depth) }
 }
 
-function exportsHuerfanos(files) {
-  const exportados = new Map()
-  const importados = new Set()
+function orphanExports(files) {
+  const exported = new Map()
+  const imported = new Set()
   for (const f of files) {
     const src = readFileSync(f, 'utf8')
     for (const m of src.matchAll(/^export\s+(?:async\s+)?(?:const|function|class|type|interface|enum)\s+(\w+)/gm)) {
-      exportados.set(m[1], f)
+      exported.set(m[1], f)
     }
     for (const m of src.matchAll(/import\s+(?:type\s+)?\{([^}]+)\}/g)) {
-      for (const n of m[1].split(',')) importados.add(n.trim().split(/\s+as\s+/)[0].trim())
+      for (const n of m[1].split(',')) imported.add(n.trim().split(/\s+as\s+/)[0].trim())
     }
-    for (const m of src.matchAll(/import\s+(\w+)\s+from/g)) importados.add(m[1])
+    for (const m of src.matchAll(/import\s+(\w+)\s+from/g)) imported.add(m[1])
   }
-  return [...exportados].filter(([n]) => !importados.has(n)).map(([n, f]) => ({ nombre: n, file: f }))
+  return [...exported].filter(([n]) => !imported.has(n)).map(([n, f]) => ({ name: n, file: f }))
 }
 
-function depsSinUsar(root, files) {
+function unusedDeps(root, files) {
   const pkg = join(root, 'package.json')
   if (!existsSync(pkg)) return []
   let deps
@@ -171,101 +171,116 @@ function depsSinUsar(root, files) {
   return deps.filter(d => !new RegExp(`['"\`]${d.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}(/|['"\`])`).test(src))
 }
 
-function churn(root, dias = 90) {
+function churn(root, days = 90) {
   try {
-    const out = execSync(`git -C "${root}" log --since="${dias} days ago" --numstat --format=""`,
+    const out = execSync(`git -C "${root}" log --since="${days} days ago" --numstat --format=""`,
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    const cuenta = new Map()
+    const count = new Map()
     for (const l of out.split('\n')) {
       const [a, b, f] = l.split('\t')
-      if (!f || !CODIGO.has(extname(f))) continue
-      cuenta.set(f, (cuenta.get(f) || 0) + (Number(a) || 0) + (Number(b) || 0))
+      if (!f || !CODE.has(extname(f))) continue
+      count.set(f, (count.get(f) || 0) + (Number(a) || 0) + (Number(b) || 0))
     }
-    return [...cuenta].sort((a, b) => b[1] - a[1]).map(([file, lineas]) => ({ file, lineas }))
+    return [...count].sort((a, b) => b[1] - a[1]).map(([file, lines]) => ({ file, lines }))
   } catch { return [] }
 }
 
-// --- Medición ----------------------------------------------------------------
+// --- Measurement -------------------------------------------------------------
 
-const files = ficheros(ROOT)
+const files = listFiles(ROOT)
 if (!files.length) {
-  console.log(`sin ficheros de código bajo ${ROOT}`)
+  console.log(`no code files under ${ROOT}`)
   process.exit(0)
 }
 
 const rel = (f) => relative(ROOT, f)
-const dup = duplicacion(files)
-const { largas, anidadas } = complejidad(files)
-const huerfanos = exportsHuerfanos(files)
-const deps = depsSinUsar(ROOT, files)
-const cambios = churn(ROOT)
-const totalLineas = files.reduce((n, f) => n + readFileSync(f, 'utf8').split('\n').length, 0)
+const dup = duplication(files)
+const { long, nested } = complexity(files)
+const orphans = orphanExports(files)
+const deps = unusedDeps(ROOT, files)
+const changes = churn(ROOT)
+const totalLines = files.reduce((n, f) => n + readFileSync(f, 'utf8').split('\n').length, 0)
 
-const metricas = {
-  ficheros: files.length,
-  lineas: totalLineas,
-  bloquesDuplicados: dup.length,
-  lineasDuplicadas: dup.reduce((n, g) => n + g.lineas * (g.sitios.length - 1), 0),
-  funcionesLargas: largas.length,
-  ficherosMuyAnidados: anidadas.length,
-  exportsSinImportar: huerfanos.length,
-  depsSinUsar: deps.length,
+const metrics = {
+  files: files.length,
+  lines: totalLines,
+  duplicateBlocks: dup.length,
+  duplicatedLines: dup.reduce((n, g) => n + g.lines * (g.sites.length - 1), 0),
+  longFunctions: long.length,
+  deeplyNestedFiles: nested.length,
+  unimportedExports: orphans.length,
+  unusedDeps: deps.length,
+}
+
+// Baselines saved by earlier versions carry Spanish keys; they are still read.
+const OLD_METRIC_KEYS = {
+  ficheros: 'files', lineas: 'lines', bloquesDuplicados: 'duplicateBlocks',
+  lineasDuplicadas: 'duplicatedLines', funcionesLargas: 'longFunctions',
+  ficherosMuyAnidados: 'deeplyNestedFiles', exportsSinImportar: 'unimportedExports',
+  depsSinUsar: 'unusedDeps',
+}
+function readBaseline(file) {
+  const raw = JSON.parse(readFileSync(file, 'utf8'))
+  const stored = raw.metrics || raw.metricas || {}
+  const metrics = {}
+  for (const [k, v] of Object.entries(stored)) metrics[OLD_METRIC_KEYS[k] || k] = v
+  return { date: raw.date || raw.fecha, metrics }
 }
 
 if (JSON_OUT) {
-  console.log(JSON.stringify({ metricas, dup, largas, anidadas, huerfanos, deps }, null, 2))
+  console.log(JSON.stringify({ metrics, dup, long, nested, orphans, deps }, null, 2))
   process.exit(0)
 }
 
-// --- Informe -----------------------------------------------------------------
+// --- Report ------------------------------------------------------------------
 
-const previo = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null
+const previous = existsSync(BASELINE) ? readBaseline(BASELINE) : null
 
-console.log(`salud de ${relative(process.cwd(), ROOT) || '.'} — ${metricas.ficheros} ficheros, ${metricas.lineas} líneas${CON_TESTS ? '' : ' (tests excluidos, --tests para incluirlos)'}\n`)
+console.log(`health of ${relative(process.cwd(), ROOT) || '.'} — ${metrics.files} files, ${metrics.lines} lines${WITH_TESTS ? '' : ' (tests excluded, --tests to include them)'}\n`)
 
-if (previo) {
-  console.log(`Comparado con la línea base (${previo.fecha}):\n`)
-  const filas = Object.entries(metricas).filter(([k]) => !['ficheros', 'lineas'].includes(k))
-  for (const [k, v] of filas) {
-    const antes = previo.metricas[k] ?? 0
-    const d = v - antes
-    const señal = d > 0 ? `+${d}` : d < 0 ? String(d) : '='
-    console.log(`  ${String(v).padStart(5)}  ${señal.padStart(5)}   ${k}`)
+if (previous) {
+  console.log(`Compared with the baseline (${previous.date}):\n`)
+  const rows = Object.entries(metrics).filter(([k]) => !['files', 'lines'].includes(k))
+  for (const [k, v] of rows) {
+    const before = previous.metrics[k] ?? 0
+    const d = v - before
+    const signal = d > 0 ? `+${d}` : d < 0 ? String(d) : '='
+    console.log(`  ${String(v).padStart(5)}  ${signal.padStart(5)}   ${k}`)
   }
-  const peor = filas.filter(([k, v]) => v > (previo.metricas[k] ?? 0))
-  console.log(peor.length
-    ? `\n  Empeora en ${peor.length} de ${filas.length}. Lo que sube sin motivo es deuda.\n`
-    : '\n  Nada empeora respecto a la línea base.\n')
+  const worst = rows.filter(([k, v]) => v > (previous.metrics[k] ?? 0))
+  console.log(worst.length
+    ? `\n  Worse in ${worst.length} of ${rows.length}. What rises for no reason is debt.\n`
+    : '\n  Nothing is worse than the baseline.\n')
 } else {
-  console.log('Sin línea base. Ejecuta con --save para fijarla y poder ver la tendencia.\n')
+  console.log('No baseline. Run with --save to set it and be able to see the trend.\n')
 }
 
-const muestra = (titulo, lista, fmt) => {
-  if (!lista.length) return
-  console.log(`${titulo} (${lista.length}):\n`)
-  for (const x of lista.slice(0, TOP)) console.log('  ' + fmt(x))
-  if (lista.length > TOP) console.log(`  … y ${lista.length - TOP} más`)
+const sample = (title, list, fmt) => {
+  if (!list.length) return
+  console.log(`${title} (${list.length}):\n`)
+  for (const x of list.slice(0, TOP)) console.log('  ' + fmt(x))
+  if (list.length > TOP) console.log(`  ... and ${list.length - TOP} more`)
   console.log()
 }
 
-muestra('Bloques duplicados', dup, g =>
-  `${g.sitios.length}x ${g.lineas} líneas · ${g.sitios.map(s => `${rel(s.file)}:${s.line}`).join('  ')}\n       ${g.muestra.slice(0, 68)}`)
-muestra('Funciones largas y con ramas', largas, x =>
-  `${String(x.lineas).padStart(4)} líneas · ${String(x.ramas).padStart(3)} ramas  ${rel(x.file)}:${x.line}`)
-muestra('Ficheros muy anidados', anidadas, x => `profundidad ${x.profundidad}  ${rel(x.file)}`)
-muestra('Exports que nadie importa', huerfanos, x => `${x.nombre.padEnd(28)} ${rel(x.file)}`)
-muestra('Dependencias declaradas y sin usar', deps.map(d => ({ d })), x => x.d)
-muestra('Ficheros más removidos (90 días)', cambios, x => `${String(x.lineas).padStart(6)} líneas  ${x.file}`)
+sample('Duplicated blocks', dup, g =>
+  `${g.sites.length}x ${g.lines} lines · ${g.sites.map(s => `${rel(s.file)}:${s.line}`).join('  ')}\n       ${g.sample.slice(0, 68)}`)
+sample('Long functions with branches', long, x =>
+  `${String(x.lines).padStart(4)} lines · ${String(x.branches).padStart(3)} branches  ${rel(x.file)}:${x.line}`)
+sample('Deeply nested files', nested, x => `depth ${x.depth}  ${rel(x.file)}`)
+sample('Exports nobody imports', orphans, x => `${x.name.padEnd(28)} ${rel(x.file)}`)
+sample('Declared but unused dependencies', deps.map(d => ({ d })), x => x.d)
+sample('Most churned files (90 days)', changes, x => `${String(x.lines).padStart(6)} lines  ${x.file}`)
 
-console.log('Cómo leerlo:\n')
-console.log('  La duplicación es la métrica que más sube trabajando con agentes: el')
-console.log('  modelo repite patrones en vez de reutilizar lo que ya existe. Un bloque')
-console.log('  en dos sitios puede ser casualidad; en cuatro, es una función que falta.')
-console.log('  Los exports huérfanos pueden ser API pública: comprueba antes de borrar.')
-console.log('  Y un fichero muy removido y muy anidado a la vez es el que más caro te')
-console.log('  va a salir: ahí es donde merece la pena el refactor.\n')
+console.log('How to read it:\n')
+console.log('  Duplication is the metric that rises most when working with agents: the')
+console.log('  model repeats patterns instead of reusing what already exists. A block')
+console.log('  in two places may be chance; in four, it is a missing function.')
+console.log('  Orphan exports may be public API: check before deleting.')
+console.log('  And a file that is both heavily churned and deeply nested is the one that')
+console.log('  will cost you most: that is where a refactor is worth it.\n')
 
 if (SAVE) {
-  writeFileSync(BASELINE, JSON.stringify({ fecha: new Date().toISOString().slice(0, 10), metricas }, null, 2) + '\n')
-  console.log(`línea base guardada en ${relative(process.cwd(), BASELINE)}`)
+  writeFileSync(BASELINE, JSON.stringify({ date: new Date().toISOString().slice(0, 10), metrics }, null, 2) + '\n')
+  console.log(`baseline saved to ${relative(process.cwd(), BASELINE)}`)
 }

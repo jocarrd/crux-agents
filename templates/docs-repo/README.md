@@ -2,28 +2,28 @@
 
 {{DESCRIPTION}}
 
-## Repos del proyecto
+## The project's repos
 
-Ver `repos/README.md` para el mapeo completo repo → carpeta de documentación.
+See `repos/README.md` for the complete repo → documentation folder mapping.
 
-Layout en filesystem:
+Filesystem layout:
 
 ```
 ~/Proyectos/{{PROJECT}}/
 ├── <repo-1>/
 ├── <repo-2>/
-└── {{PROJECT}}-docs/        ← este repo
+└── {{PROJECT}}-docs/        ← this repo
 ```
 
-## Cómo se usa
+## How it is used
 
-Este repo es la documentación transversal del proyecto y el contexto canónico
-para cualquier agente. El punto de entrada es `AGENTS.md`.
+This repo is the project's cross-cutting documentation and the canonical
+context for any agent. The entry point is `AGENTS.md`.
 
-Sigue el estándar definido en `crux` (ver `crux.json` para la versión y el
-perfil aplicados). Comandos útiles desde aquí:
+It follows the standard defined in `crux` (see `crux.json` for the version and
+profile applied). Useful commands from here:
 
 ```bash
-crux doctor    # verifica que la documentación cumple el estándar
-crux link      # regenera los punteros de los repos de código
+crux doctor    # verifies that the documentation meets the standard
+crux link      # regenerates the code repos' pointers
 ```

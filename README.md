@@ -1,339 +1,351 @@
 <p align="center">
-  <img src="assets/banner.webp" alt="crux — kernel del sistema de trabajo con agentes" width="820">
+  <img src="assets/banner.webp" alt="crux — kernel of the agent workflow system" width="820">
 </p>
 
 # crux
 
-El *crux* es el paso clave de una vía: el punto del que depende todo lo demás.
+The *crux* is the key move of a climbing route: the point on which everything
+else depends.
 
-Este repo es el **kernel del sistema de trabajo con agentes**. Contiene el
-estándar de documentación, las skills transversales, las plantillas y el
-tooling que usan todos los proyectos. Se instala una vez por máquina y desde
-él se lanzan y se mantienen los repos de documentación de cada proyecto.
+This repo is the **kernel of the agent workflow system**. It contains the
+documentation standard, the cross-cutting skills, the templates and the
+tooling that every project uses. It is installed once per machine and from it
+each project's documentation repos are launched and maintained.
 
-No es un repo de documentación de un proyecto. Es lo que los fabrica.
+It is not a project's documentation repo. It is what produces them.
 
 ---
 
-## Instalación
+## Installation
 
-Hacen falta `bash`, `git` y `node`, y nada más. El código se mantiene dentro de
-lo que entiende bash 3.2, que es el que trae macOS de serie.
+You need `bash`, `git` and `node`, and nothing else. The code stays within what
+bash 3.2 understands, which is what macOS ships with.
 
-### 1. Clonar y ejecutar el instalador
+### 1. Clone and run the installer
 
 ```bash
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh
 ```
 
-El sitio donde lo clones decide dónde van a vivir tus proyectos: la raíz es el
-directorio padre del kernel. Si lo pones en `/opt/dev/crux`, tus proyectos van
-en `/opt/dev`. Puedes cambiarlo con `--projects-dir <ruta>`, aunque conviene
-que el kernel viva junto a ellos.
+Where you clone it decides where your projects will live: the root is the
+kernel's parent directory. If you put it in `/opt/dev/crux`, your projects go
+in `/opt/dev`. You can change it with `--projects-dir <path>`, although it is
+better for the kernel to live next to them.
 
-### 2. Qué deja instalado
+### 2. What it leaves installed
 
-| Qué | Dónde | Para qué |
-| --- | ----- | -------- |
-| La versión del kernel | `~/.crux/kernel/<version>/` | Es la copia que ejecutan tus proyectos |
-| El comando | `~/.local/bin/crux` → esa copia | Usar `crux` desde cualquier directorio |
-| Las skills | `~/.claude/skills/` y `~/.codex/prompts/` | Invocarlas con `/<nombre>` |
-| Config de máquina | `~/.crux/config` | Dónde vive el kernel, la raíz de proyectos y tus preferencias |
+| What | Where | What for |
+| ---- | ----- | -------- |
+| The kernel version | `~/.crux/kernel/<version>/` | It is the copy your projects run |
+| The command | `~/.local/bin/crux` → that copy | Use `crux` from any directory |
+| The skills | `~/.claude/skills/` and `~/.codex/prompts/` | Invoke them with `/<name>` |
+| Machine config | `~/.crux/config` | Where the kernel lives, the projects root and your preferences |
 
-Asegúrate de tener `~/.local/bin` en el `PATH`. Para comprobar si a la máquina
-le falta algo de lo que las skills necesitan:
+Make sure `~/.local/bin` is in your `PATH`. To check whether the machine is
+missing anything the skills need:
 
 ```bash
 crux doctor --machine
 ```
 
-### 3. Los dos modos
+### 3. The two modes
 
-**Release**, que es el de por defecto. El instalador copia la versión y todo
-apunta a esa copia, así que puedes trastear en el kernel o dejarte una rama a
-medias sin que cambie el comportamiento de ningún proyecto. Para pasar a una
-versión nueva, vuelve a ejecutar `install.sh`. Las anteriores se quedan en
-`~/.crux/kernel/` por si hay que volver atrás.
+**Release**, which is the default. The installer copies the version and
+everything points to that copy, so you can tinker with the kernel or leave a
+branch half done without changing the behavior of any project. To move to a new
+version, run `install.sh` again. The previous ones stay in `~/.crux/kernel/` in
+case you need to go back.
 
-**Dev**, con `install.sh --dev`. Enlaza directamente al working copy, de modo
-que cualquier cambio en el kernel es inmediato en todos los proyectos. Sirve
-para la máquina donde desarrollas crux. Se niega a ejecutarse desde un
-worktree, porque al cerrarlo la máquina se quedaría sin skills.
-
-```bash
-grep CRUX_MODE ~/.crux/config    # en cuál estás
-```
-
-### 4. Traer un proyecto que ya existe
+**Dev**, with `install.sh --dev`. It links directly to the working copy, so any
+change in the kernel is immediate in every project. It is meant for the machine
+where you develop crux. It refuses to run from a worktree, because closing it
+would leave the machine without skills.
 
 ```bash
-crux clone <project>     # docs repo + repos de código + punteros
+grep CRUX_MODE ~/.crux/config    # which one you are in
 ```
 
-### 5. Empezar en una máquina donde no hay nada
+### 4. Bringing a project that already exists
 
 ```bash
-crux bootstrap           # verifica la máquina, descubre los proyectos y los trae
-crux bootstrap --dry-run # qué traería, sin tocar el disco
+crux clone <project>     # docs repo + code repos + pointers
 ```
 
-La lista de proyectos sale del remoto —los repos `*-docs` que llevan contrato— y
-no de un inventario en un fichero, que se desactualiza en cuanto creas un
-proyecto y se consulta justamente el día en que no te acuerdas de cuáles tenías.
-
-No mueve credenciales: las claves SSH, los tokens y los secretos no se copian de
-una máquina a otra por una herramienta. Al terminar dice qué necesita cada
-proyecto y en qué documento está.
-
-Si el proyecto ya está en disco pero todavía no sigue el estándar, ejecuta
-`crux adopt` en su docs repo y después `crux upgrade`, que materializa las
-piezas que falten.
-
-### 6. Alternar entre dos máquinas
+### 5. Starting on a machine with nothing on it
 
 ```bash
-crux sync                # al llegar: lo que hay en esta máquina, al día, y el kernel
-crux sync --leave        # al irte: falla si algo se quedaría solo aquí
+crux bootstrap           # verifies the machine, discovers the projects and brings them
+crux bootstrap --dry-run # what it would bring, without touching the disk
 ```
 
-`bootstrap` y `clone` traen lo que no está, pero no actualizan lo que ya hay.
-Al volver a un ordenador después de un tiempo, decían "ya está" y dejaban el
-código tal como lo dejaste la última vez que lo usaste. `sync` cubre ese caso.
+The list of projects comes from the remote —the `*-docs` repos that carry a
+contract— and not from an inventory in a file, which goes stale as soon as you
+create a project and is consulted precisely on the day you do not remember
+which ones you had.
 
-Al llegar recorre lo que ya hay en la raíz de proyectos —docs repos, repos de
-código y repos sueltos—, trae sus remotos y avanza cada rama limpia que va por
-detrás, también las que no están en uso, como `main` mientras trabajas en otra.
-Dos sincronizaciones no corren a la vez: la segunda espera, o se retira si es
-la del hook. No trae proyectos que esta máquina no tenga: cada una tiene los suyos, y
-para traer uno está `crux clone`. Si un proyecto de aquí declara un repo que se
-añadió desde la otra máquina, ese sí lo clona, porque es del mismo proyecto.
-También instala la última versión publicada del kernel con sus hooks. Si una rama tiene
-cambios sin commitear o se ha separado de su remoto, lo dice y no la toca:
-juntarlas es una decisión y no la toma un script.
+It moves no credentials: SSH keys, tokens and secrets are not copied from one
+machine to another by a tool. When it finishes it says what each project needs
+and in which document it is described.
 
-`crux hooks install` engancha lo mismo al inicio de sesión del agente. Como
-mucho una vez cada diez minutos, para que varias sesiones abiertas a la vez no
-repitan la ronda. Solo habla si algo cambió o hay algo que decidir.
+If the project is already on disk but does not yet follow the standard, run
+`crux adopt` in its docs repo and then `crux upgrade`, which materializes the
+missing pieces.
 
-`--leave` enumera lo que no llegaría a la otra máquina: cambios sin commitear,
-commits sin subir, ramas que no están en ningún remoto, commits hechos con HEAD
-separado y repos cuyo remoto ya no existe. Esto último es lo único que necesita
-red: con el remoto borrado, git sigue creyendo que todo está subido. Los
-stashes salen como aviso, porque no viajan. Las ramas que seguían a una rama ya borrada del
-remoto, que casi siempre son propuestas fusionadas con squash, no bloquean.
+### 6. Alternating between two machines
 
-La primera vez en una máquina con un kernel anterior a este comando, `sync` no
-existe todavía: actualiza el clon del kernel (`git -C ~/Proyectos/crux pull`),
-ejecuta su `install.sh` y `crux hooks install`, y lanza `crux sync`. A partir de
-ahí lo hace el hook.
+```bash
+crux sync                # on arrival: what is on this machine, up to date, and the kernel
+crux sync --leave        # on leaving: fails if something would be left only here
+```
 
-Las tareas también viajan: `sync` trae las de la otra máquina y publica lo que
-aquí quedó pendiente, y `--leave` falla si alguna no se ha podido publicar. Al
-abrir o retomar una sesión, el hook enseña las tareas abiertas como
-recordatorio, sin empujar a retomarlas; también al volver a una sesión que
-llevaba más de tres horas parada (`CRUX_TASKS_IDLE_HOURS`). Las que tienen su
-propuesta fusionada fuera de `crux merge` se cierran solas en vez de aparecer
-en cada recordatorio.
+`bootstrap` and `clone` bring what is missing, but do not update what is
+already there. On returning to a computer after a while, they said "done" and
+left the code as you left it the last time you used it. `sync` covers that
+case.
 
-No sincroniza credenciales, que se llevan con `carry-env`, ni las memorias
-personales del agente, que son de cada máquina.
+On arrival it walks what is already in the projects root —docs repos, code
+repos and loose repos—, fetches their remotes and fast-forwards every clean
+branch that is behind, including those not in use, such as `main` while you
+work on another. Two syncs do not run at once: the second waits, or backs off
+if it is the hook's. It does not bring projects this machine does not have:
+each one has its own, and `crux clone` exists to bring one. If a project here
+declares a repo that was added from the other machine, that one it does clone,
+because it belongs to the same project. It also installs the latest published
+version of the kernel with its hooks. If a branch has uncommitted changes or has
+diverged from its remote, it says so and does not touch it: joining them is a
+decision and a script does not make it.
 
-### Cuando algo no sale como esperabas
+`crux hooks install` hooks the same thing into the agent's session start. At
+most once every ten minutes, so that several sessions open at once do not
+repeat the round. It only speaks if something changed or there is something to
+decide.
 
-| Síntoma | Qué pasa y qué hacer |
-| ------- | -------------------- |
-| **El código de un proyecto no se clonó** | Perfil `client-repo`: el código vive en el remoto del cliente y `crux clone` no lo trae. Clónalo tú como hermano del docs repo (`git clone` en `~/Proyectos/<project>/`). |
-| **Un repo está en otra cuenta u organización** | Declara el override en `crux.json` → `remote.repos["<repo>"]` con su URL. Sin eso, `clone` no sabe de dónde traerlo y `doctor` lo avisa. |
-| **`crux init` no sabe dónde subir** | Falta la plantilla del remoto. Pásala con `--remote 'git@github.com:<org>/{repo}.git'`, fíjala en `~/.crux/config` (`CRUX_REMOTE`), o crea solo en local con `--no-remote`. |
-| **Quieres el docs repo en una organización** | Declara la org en la plantilla del remoto (`…:<org>/{repo}.git`): `crux init` crea el repo ahí, no en tu cuenta personal. Necesitas permiso de escritura en la org. |
-| **`bootstrap` no encuentra proyectos** | La lista sale de los repos `*-docs` con `crux.json`. Si falta `gh` o no estás autenticado, no puede descubrirlos: `gh auth login` y repite. |
+`--leave` lists what would not reach the other machine: uncommitted changes,
+unpushed commits, branches that are on no remote, commits made on a detached
+HEAD and repos whose remote no longer exists. That last one is the only thing
+that needs the network: with the remote deleted, git still believes everything
+is pushed. Stashes show up as a warning, because they do not travel. Branches
+that tracked a branch since deleted from the remote, which are almost always
+squash-merged proposals, do not block.
 
-### Preferencias
+The first time on a machine with a kernel older than this command, `sync` does
+not exist yet: update the kernel clone (`git -C ~/Proyectos/crux pull`), run
+its `install.sh` and `crux hooks install`, and launch `crux sync`. From then on
+the hook does it.
 
-Van en `~/.crux/config`. Son de la máquina y no del proyecto, así que cada uno
-puede cerrar su ciclo a su manera sin cambiar el contrato que comparten los
-demás.
+Tasks travel too: `sync` brings those from the other machine and publishes
+what was left pending here, and `--leave` fails if any could not be published.
+When opening or resuming a session, the hook shows the open tasks as a
+reminder, without pushing you to resume them; also on returning to a session
+that had been idle for more than three hours (`CRUX_TASKS_IDLE_HOURS`). Those
+whose proposal was merged outside `crux merge` close themselves instead of
+showing up in every reminder.
 
-| Clave | Por defecto | Qué hace |
-| ----- | ----------- | -------- |
-| `CRUX_REMOTE` | — | Plantilla del remoto para los proyectos que crees |
-| `CRUX_PROJECTS_DIR` | el padre del clon del kernel | Dónde viven los proyectos |
-| `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Cierra el espacio al fusionar; `false` lo deja vivo |
-| `CRUX_RM_DELETE_BRANCH` | `false` | Borra también la rama local al cerrar el espacio, siempre que ya esté integrada |
-| `CRUX_UNMANAGED` | — | Rutas o patrones separados por `:` que viven bajo la raíz sin ser tuyos, como un clon ajeno: el recordatorio del ciclo los ignora |
+It does not sync credentials, which are carried with `carry-env`, nor the
+agent's personal memories, which belong to each machine.
 
-### Desinstalar
+### When something does not go as expected
+
+| Symptom | What is happening and what to do |
+| ------- | -------------------------------- |
+| **A project's code was not cloned** | `client-repo` profile: the code lives on the client's remote and `crux clone` does not bring it. Clone it yourself as a sibling of the docs repo (`git clone` in `~/Proyectos/<project>/`). |
+| **A repo is in another account or organization** | Declare the override in `crux.json` → `remote.repos["<repo>"]` with its URL. Without that, `clone` does not know where to fetch it from and `doctor` warns about it. |
+| **`crux init` does not know where to push** | The remote template is missing. Pass it with `--remote 'git@github.com:<org>/{repo}.git'`, set it in `~/.crux/config` (`CRUX_REMOTE`), or create only locally with `--no-remote`. |
+| **You want the docs repo in an organization** | Declare the org in the remote template (`…:<org>/{repo}.git`): `crux init` creates the repo there, not in your personal account. You need write permission in the org. |
+| **`bootstrap` finds no projects** | The list comes from the `*-docs` repos with `crux.json`. If `gh` is missing or you are not authenticated, it cannot discover them: `gh auth login` and repeat. |
+
+### Preferences
+
+They go in `~/.crux/config`. They belong to the machine and not to the project,
+so each person can close their cycle their own way without changing the
+contract the others share.
+
+| Key | Default | What it does |
+| --- | ------- | ------------ |
+| `CRUX_REMOTE` | — | Remote template for the projects you create |
+| `CRUX_PROJECTS_DIR` | the parent of the kernel clone | Where the projects live |
+| `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Closes the space on merge; `false` leaves it alive |
+| `CRUX_RM_DELETE_BRANCH` | `false` | Also deletes the local branch when closing the space, as long as it is already integrated |
+| `CRUX_UNMANAGED` | — | Paths or patterns separated by `:` that live under the root without being yours, such as someone else's clone: the cycle reminder ignores them |
+
+### Uninstalling
 
 ```bash
 rm -rf ~/.crux ~/.local/bin/crux
 find ~/.claude/skills ~/.codex/prompts -maxdepth 1 -type l ! -exec test -e {} \; -delete
 ```
 
-Los docs repos y los repos de código no se tocan.
+The docs repos and the code repos are not touched.
 
-## El ciclo de trabajo
+## The work cycle
 
-Una tarea de desarrollo entra por un espacio aislado y sale como propuesta
-revisada. `/flow` es la entrada por defecto: encadena las skills en este orden
-y explica por qué es ese y no otro.
+A development task enters through an isolated space and leaves as a reviewed
+proposal. `/flow` is the default entry point: it chains the skills in this
+order and explains why it is that one and not another.
 
 ```mermaid
 flowchart TD
-    A["crux workspace new &lt;tarea&gt;<br/>rama, worktree, runtime y registro de la tarea"] --> B["desarrollar<br/>anotando pasos y evidencias con crux task"]
-    B --> C{"/ship<br/>la puerta del autor"}
-    C -- "alguna puerta en rojo" --> B
-    C -- "verde: commit" --> D["crux workspace finish &lt;tarea&gt;<br/>sube la rama y abre la propuesta<br/>con la descripción sacada de la tarea"]
-    D --> CI{"crux checks --wait<br/>el CI, con el log de lo que falla"}
-    CI -- "rojo: hasta tres intentos" --> B
-    CI -- "verde" --> E{"/review-pr<br/>riesgo y especialistas que pide el diff"}
-    E -- "hallazgos confirmados" --> B
-    E -- "limpio" --> F["crux workspace merge &lt;tarea&gt; --yes<br/>la decisión sigue siendo de una persona"]
-    F --> W{"/deploy-watch<br/>la versión nueva, vista en producción"}
-    W -- "falla: se revierte" --> B
-    W -- "responde" --> G["/end-session<br/>lo que deba sobrevivir, a git"]
+    A["crux workspace new &lt;task&gt;<br/>branch, worktree, runtime and task record"] --> B["develop<br/>noting steps and evidence with crux task"]
+    B --> C{"/ship<br/>the author's gate"}
+    C -- "some gate red" --> B
+    C -- "green: commit" --> D["crux workspace finish &lt;task&gt;<br/>pushes the branch and opens the proposal<br/>with the description taken from the task"]
+    D --> CI{"crux checks --wait<br/>the CI, with the log of what fails"}
+    CI -- "red: up to three attempts" --> B
+    CI -- "green" --> E{"/review-pr<br/>risk and specialists the diff calls for"}
+    E -- "confirmed findings" --> B
+    E -- "clean" --> F["crux workspace merge &lt;task&gt; --yes<br/>the decision is still a person's"]
+    F --> W{"/deploy-watch<br/>the new version, seen in production"}
+    W -- "fails: revert" --> B
+    W -- "responds" --> G["/end-session<br/>what must survive goes to git"]
 ```
 
-Los dos pasos de revisión responden preguntas distintas, y por eso no se
-solapan. `/ship` pregunta si está listo lo que hiciste: tests, diff leído,
-correctitud, regresión. La pasa quien escribió el cambio, antes de commitear.
+The two review steps answer different questions, which is why they do not
+overlap. `/ship` asks whether what you did is ready: tests, diff read,
+correctness, regression. It is passed by whoever wrote the change, before
+committing.
 
-`/review-pr` pregunta si es correcto y completo lo que se propone, y se hace
-desde un contexto independiente. Quien acaba de defender cada decisión no está
-en posición de refutarlas, y hay un hueco que solo se ve desde fuera: arreglar
-un problema por la puerta por la que se encontró y dejarlo abierto por otra.
+`/review-pr` asks whether what is proposed is correct and complete, and it is
+done from an independent context. Whoever has just defended each decision is
+not in a position to refute them, and there is a gap that is only visible from
+outside: fixing a problem through the door where it was found and leaving it
+open through another.
 
-### La tarea: retomar sin reconstruir
+### The task: resuming without reconstructing
 
-Cada espacio de trabajo tiene una tarea con su registro en
-`~/.crux/tasks/<proyecto>/<tarea>.md`: objetivo, alcance, plan, pasos con su
-evidencia, siguiente paso, decisiones tomadas por el camino y lo comprobado.
+Each workspace has a task with its record in
+`~/.crux/tasks/<project>/<task>.md`: goal, scope, plan, steps with their
+evidence, next step, decisions taken along the way and what was verified.
 
 ```bash
-crux workspace new passkeys --goal "Entrar con passkey, sin contraseña"
-crux task add "registro de la passkey" "login" "recuperación de cuenta"
-crux task done T1 "test e2e del registro en verde, captura del diálogo"
-crux task note "La recuperación sigue por correo" --why "el proveedor no admite passkeys de respaldo" \
-  --where "src/auth/recovery.ts" --learned "Safari pide el gesto del usuario para crear la passkey"
-crux task next "probar el login en Safari"
-crux task                          # estado, pasos y siguiente paso
+crux workspace new passkeys --goal "Sign in with a passkey, no password"
+crux task add "passkey registration" "login" "account recovery"
+crux task done T1 "green e2e test of the registration, screenshot of the dialog"
+crux task note "Recovery still goes by email" --why "the provider does not support backup passkeys" \
+  --where "src/auth/recovery.ts" --learned "Safari requires a user gesture to create the passkey"
+crux task next "try the login in Safari"
+crux task                          # state, steps and next step
 ```
 
-Una nota con `--why` es una **decisión**: al archivar la tarea, crux la pasa a
-`repos/<repo>/notes.md` del docs repo y la commitea, porque el registro de la
-tarea es local y la siguiente sesión no lo lee. Las notas sin porqué son
-desviaciones del plan y se quedan en la tarea. Se anotan en el momento, no al
-cerrar.
+A note with `--why` is a **decision**: when the task is archived, crux moves it
+to `repos/<repo>/notes.md` in the docs repo and commits it, because the task
+record is local and the next session does not read it. Notes without a why are
+deviations from the plan and stay in the task. They are noted at the time, not
+at close.
 
-Lo escriben los comandos, no hay que editarlo a mano:
+The commands write it, you do not have to edit it by hand:
 
-| Momento | Qué pasa en el registro | Estado |
-| ------- | ----------------------- | ------ |
-| `crux workspace new` | Se crea; con `--task` otro repo se une a la misma tarea | `open` |
-| `crux task plan <fichero>` | El plan aprobado queda escrito | `planned` |
-| `crux task done` | El paso se marca con lo que lo prueba | `in-progress` |
-| `crux ship seal` | Se vuelca el recibo de la puerta como evidencia | `verified` |
-| `crux workspace finish` | La descripción de la propuesta sale de aquí | `proposed` |
-| `crux workspace merge --yes` | Se anota la fusión | `merged` |
-| `crux workspace rm` | Al cerrar su último espacio, si está fusionada, se archiva en `done/` | `closed` |
+| Moment | What happens in the record | State |
+| ------ | ----------------------------------- | ----- |
+| `crux workspace new` | It is created; with `--task` another repo joins the same task | `open` |
+| `crux task plan <file>` | The approved plan is written down | `planned` |
+| `crux task done` | The step is marked with what proves it | `in-progress` |
+| `crux ship seal` | The gate's receipt is dumped as evidence | `verified` |
+| `crux workspace finish` | The proposal's description comes from here | `proposed` |
+| `crux workspace merge --yes` | The merge is noted | `merged` |
+| `crux workspace rm` | When its last space closes, if merged, it is archived in `done/` | `closed` |
 
-Cuando falta la respuesta de otra persona, la tarea **espera** sin ocupar sitio:
+When another person's answer is missing, the task **waits** without taking up
+space:
 
 ```bash
-crux task wait --on "Alex" --ask "¿apuntamos el dominio al servidor nuevo?" --ref "correo del 3-10"
+crux task wait --on "Alex" --ask "shall we point the domain at the new server?" --ref "email of 3 Oct"
 ```
 
-Apunta a quién, qué y desde cuándo; retira el espacio y la rama si no tienen
-nada propio, y el recordatorio la enseña aparte («esperando a Alex, hace 4
-días»), con aviso de insistir a los 7. `crux workspace resume` la retoma.
+It notes who, what and since when; it removes the space and the branch if they
+hold nothing of their own, and the reminder shows it separately ("waiting on
+Alex, 4 days ago"), with a nudge to follow up at 7. `crux workspace resume`
+picks it up again.
 
-**No se acumula.** Las archivadas salen de las listas y caducan a los 180 días
-con `crux workspace gc --yes` (`CRUX_TASKS_RETENTION_DAYS` para cambiarlo).
+**It does not pile up.** Archived tasks drop out of the lists and expire after
+180 days with `crux workspace gc --yes` (`CRUX_TASKS_RETENTION_DAYS` to change
+it).
 
-Al retomar un espacio —otra sesión, tras un reinicio o al día siguiente— un
-hook trae el estado y el siguiente paso en dos líneas. `crux workspace list`
-enseña lo mismo por cada espacio.
+When resuming a space —another session, after a restart or the next day— a
+hook brings the state and the next step in two lines. `crux workspace list`
+shows the same for each space.
 
-**Vive fuera de los repos de código a propósito.** En el de un cliente no se
-puede escribir, y una tarea de varios repos se partiría. Tampoco va en `main`
-del docs repo, que es lo que se lee como verdad: un plan a medias se leería como
-una decisión. Lo que merece sobrevivir a la tarea se promociona allí al cerrar.
+**It lives outside the code repos on purpose.** A client's repo cannot be
+written to, and a multi-repo task would be split. Nor does it go on `main` of
+the docs repo, which is what is read as truth: a half-finished plan would be
+read as a decision. What deserves to outlive the task is promoted there on
+close.
 
-**Y aun así viaja.** Se replica en la rama `crux/tasks` del docs repo, que
-`main` no ve: se publica sola tras cada escritura y `crux sync` la trae al
-llegar a otra máquina. Allí, `crux workspace resume <tarea>` abre el espacio
-desde la rama remota y lo une a la tarea con su plan y su siguiente paso. Ver
-ADR-016.
+**And yet it travels.** It is replicated on the docs repo's `crux/tasks`
+branch, which `main` does not see: it publishes itself after each write and
+`crux sync` brings it on arriving at another machine. There,
+`crux workspace resume <task>` opens the space from the remote branch and
+joins it to the task with its plan and its next step. See ADR-016.
 
-**Cuesta poco.** Un ciclo completo con registro tarda 0,9 s de máquina frente a
-0,35 s sin él; abrir la tarea con su objetivo y su plan son dos llamadas, y el
-hook añade unos 60 tokens una vez por sesión.
+**It costs little.** A full cycle with the record takes 0.9 s of machine time
+against 0.35 s without it; opening the task with its goal and its plan are two
+calls, and the hook adds about 60 tokens once per session.
 
-### Qué lo sostiene cuando nadie se acuerda
+### What holds it up when nobody remembers
 
-Estas guardas hacen cumplir el ciclo sin depender de la memoria de nadie. Las
-instala `crux hooks install`:
+These guards enforce the cycle without depending on anyone's memory. They are
+installed by `crux hooks install`:
 
-| Guarda | Qué impide |
-| ------ | ---------- |
-| `pre-push` en la rama principal | Empujar a la principal de un repo de código o del kernel sin pasar por propuesta. El repo de docs se sube directo, como dice su regla |
-| `commit-msg` | Mensajes de commit fuera del idioma del estándar |
-| `.crux-ship` | Abrir propuesta de un commit que no ha pasado `/ship` |
-| `.crux-visual` | Publicar en la propuesta capturas aprobadas sobre otro commit |
-| Hook de la tarea al retomar | Seguir una tarea a medias sin saber en qué punto quedó |
-| Guardia de worktrees | Borrar a mano un espacio registrado (`git worktree remove`, `rm -rf`) y dejar el registro mintiendo |
-| Guardia destructivo | `git reset --hard`, `push --force`, `clean -fd`, descartar el árbol, `rm -r` sobre `/`, `~`, `.` o `*`, `pkill`/`killall`, y leer claves privadas o credenciales. Quien lo quiera de verdad lo ejecuta con `! <comando>` |
-| Guardia de propuestas | Abrir a mano con `gh pr create` una propuesta en un proyecto de crux, saltándose el recibo que exige `crux workspace finish` |
-| Aviso de plan en `finish` | Nada: avisa cuando una propuesta pasa de 100 líneas escritas y su tarea no tiene plan guardado (`crux task plan`) |
-| Registro que se repara solo | Entradas de espacios cuya carpeta y rama ya no existen; `new`, `list` y `status` las retiran |
-| `crux doctor` en el cierre | Cerrar sesión con el proyecto fuera del estándar |
-| `crux memory` en el cierre | Cerrar sesión con conocimiento del proyecto solo en esta máquina |
+| Guard | What it prevents |
+| ----- | ---------------- |
+| `pre-push` on the main branch | Pushing to the main branch of a code repo or of the kernel without going through a proposal. The docs repo is pushed directly, as its rule says |
+| `commit-msg` | Commit messages outside the standard's language |
+| `.crux-ship` | Opening a proposal from a commit that has not passed `/ship` |
+| `.crux-visual` | Publishing in the proposal screenshots approved on another commit |
+| Task hook on resume | Continuing a half-done task without knowing where it was left |
+| Worktree guard | Deleting a registered space by hand (`git worktree remove`, `rm -rf`) and leaving the registry lying |
+| Destructive guard | `git reset --hard`, `push --force`, `clean -fd`, discarding the tree, `rm -r` on `/`, `~`, `.` or `*`, `pkill`/`killall`, and reading private keys or credentials. Whoever really wants it runs it with `! <command>` |
+| Proposal guard | Hand-opening with `gh pr create` a proposal in a crux project, skipping the receipt that `crux workspace finish` demands |
+| Plan warning in `finish` | Nothing: it warns when a proposal goes past 100 written lines and its task has no saved plan (`crux task plan`) |
+| Self-repairing registry | Entries of spaces whose folder and branch no longer exist; `new`, `list` and `status` remove them |
+| `crux doctor` at close | Closing the session with the project outside the standard |
+| `crux memory` at close | Closing the session with project knowledge only on this machine |
 
-## Comandos
+## Commands
 
-| Comando | Qué hace |
-| ------- | -------- |
-| `crux init <project>` | Crea `~/Proyectos/<project>/<project>-docs` desde las plantillas |
-| `crux clone <project>` | Trae un proyecto entero a una máquina nueva |
-| `crux bootstrap` | Deja una máquina nueva lista: verifica, descubre todos los proyectos y los trae |
-| `crux adopt` | Registra un docs repo que ya existe bajo el estándar |
-| `crux add-repo <repo>` | Registra un repo nuevo en un proyecto adoptado |
-| `crux link` | Crea y verifica los punteros de los repos de código del proyecto |
-| `crux workspace` | Espacios aislados con worktree, puertos y base de datos, con propuesta, fusión y recogida |
-| `crux task` | El registro de la tarea de cada espacio: pasos con evidencia, siguiente paso y estado, fuera de los repos |
-| `crux ship` | La puerta de calidad: ejecuta las comprobaciones y deja un recibo de lo que se ejecutó y con qué resultado. `workspace finish` lo exige. |
-| `crux visual` | La revisión visual aprobada: anota el sí de quien decide sobre el commit y `workspace finish` pone el antes y el después en la propuesta. |
-| `crux review` | Reúne el material para revisar una propuesta: commits, diff, checks, señales, riesgo y especialistas |
-| `crux checks [n]` | Espera al CI de una propuesta y trae solo el final del log de lo que falla |
-| `crux merge <n>` | Mergea una propuesta tras decir cuál es y de qué repositorio |
-| `crux doctor` | Verifica la conformidad de un docs repo con el estándar |
-| `crux doctor --machine` | Verifica que la máquina tiene lo que las skills necesitan |
-| `crux hooks` | Engancha el estándar al ciclo, al cierre de sesión y al commit |
-| `crux mcp` | Escribe en cada repo los servidores MCP que el proyecto declara, y dice si responden |
-| `crux stg` | Publica una carpeta construida en un staging con clave, para enseñar trabajo sin publicarlo |
-| `crux usage` | Qué skills se usan de verdad |
-| `crux skill test <skill> [--against <ref>]` | Pasa los escenarios de una skill y marca lo que cambia respecto a otra versión |
-| `crux memory` | Memorias del agente que son del proyecto y siguen solo en local |
-| `crux status` | Qué hay abierto ahora mismo en todos los proyectos |
-| `crux sync` | Al día con el remoto al llegar a una máquina; `--leave` comprueba que no dejas nada atrapado al irte |
-| `crux upgrade` | Re-materializa el kernel en un proyecto a la versión actual |
-| `crux release <ver>` | Publica una versión, comprobando antes que los proyectos siguen conformes |
+| Command | What it does |
+| ------- | ------------ |
+| `crux init <project>` | Creates `~/Proyectos/<project>/<project>-docs` from the templates |
+| `crux clone <project>` | Brings a whole project onto a new machine |
+| `crux bootstrap` | Gets a new machine ready: verifies, discovers all the projects and brings them |
+| `crux adopt` | Registers a docs repo that already exists under the standard |
+| `crux add-repo <repo>` | Registers a new repo in an adopted project |
+| `crux link` | Creates and verifies the pointers of the project's code repos |
+| `crux workspace` | Isolated spaces with worktree, ports and database, with proposal, merge and pickup |
+| `crux task` | Each space's task record: steps with evidence, next step and state, outside the repos |
+| `crux ship` | The quality gate: runs the checks and leaves a receipt of what was run and with what result. `workspace finish` demands it. |
+| `crux visual` | The approved visual review: notes the decision-maker's yes on the commit and `workspace finish` puts the before and after in the proposal. |
+| `crux review` | Gathers the material to review a proposal: commits, diff, checks, signals, risk and specialists |
+| `crux checks [n]` | Waits for a proposal's CI and brings only the end of the log of what fails |
+| `crux merge <n>` | Merges a proposal after saying which one it is and from which repository |
+| `crux doctor` | Verifies a docs repo's conformance with the standard |
+| `crux doctor --machine` | Verifies that the machine has what the skills need |
+| `crux hooks` | Hooks the standard into the cycle, the session close and the commit |
+| `crux mcp` | Writes into each repo the MCP servers the project declares, and says whether they respond |
+| `crux stg` | Publishes a built folder to a keyed staging, to show work without publishing it |
+| `crux usage` | Which skills are actually used |
+| `crux skill test <skill> [--against <ref>]` | Runs a skill's scenarios and flags what changes compared with another version |
+| `crux memory` | Agent memories that belong to the project and are still only local |
+| `crux status` | What is open right now across all projects |
+| `crux sync` | Up to date with the remote on arriving at a machine; `--leave` checks that you leave nothing trapped when you go |
+| `crux upgrade` | Re-materializes the kernel in a project at the current version |
+| `crux release <ver>` | Publishes a version, first checking that the projects remain conformant |
 
-Cualquiera acepta `--help`, y todos existen también como skills: `/crux-init`,
-`/crux-doctor`, etc.
+Any of them accepts `--help`, and all of them also exist as skills:
+`/crux-init`, `/crux-doctor`, etc.
 
-Guía completa, de lo sencillo a lo profundo: `GUIA.md`. Si vas a trabajar en
-este repo, empieza por `AGENTS.md`.
+Complete guide, from simple to deep: `GUIA.md`. If you are going to work on
+this repo, start with `AGENTS.md`.
 
-## Las tres capas
+## The three layers
 
-| Capa | Qué es | Dónde vive |
-| ---- | ------ | ---------- |
-| **Kernel** | Estándar, skills transversales, plantillas, tooling | este repo |
-| **Proyecto** | Documentación del proyecto y sus skills propias | `<project>-docs/` |
-| **Repo** | Punteros de contexto, generados | cada repo de código |
+| Layer | What it is | Where it lives |
+| ----- | ---------- | -------------- |
+| **Kernel** | Standard, cross-cutting skills, templates, tooling | this repo |
+| **Project** | The project's documentation and its own skills | `<project>-docs/` |
+| **Repo** | Context pointers, generated | each code repo |
 
-Cada docs repo declara su contrato con el kernel en un `crux.json`:
+Each docs repo declares its contract with the kernel in a `crux.json`:
 
 ```json
 {
@@ -346,76 +358,77 @@ Cada docs repo declara su contrato con el kernel en un `crux.json`:
 }
 ```
 
-`crux doctor` avisa cuando la versión declarada y la instalada dejan de
-coincidir.
+`crux doctor` warns when the declared version and the installed one stop
+matching.
 
-## Agentes soportados
+## Supported agents
 
-El conocimiento se escribe una vez en markdown neutro y el instalador lo
-materializa para cada agente:
+Knowledge is written once in neutral markdown and the installer materializes it
+for each agent:
 
-| Pieza | Claude Code | Codex |
+| Piece | Claude Code | Codex |
 | ----- | ----------- | ----- |
-| Skill | symlink en `~/.claude/skills/` | stub en `~/.codex/prompts/` |
-| Contexto global | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
-| Contexto de proyecto | `CLAUDE.md` (symlink) | `AGENTS.md` (canónico) |
-| Puntero de repo | `CLAUDE.md` con `@-import` | `AGENTS.md` con ruta |
+| Skill | symlink in `~/.claude/skills/` | stub in `~/.codex/prompts/` |
+| Global context | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
+| Project context | `CLAUDE.md` (symlink) | `AGENTS.md` (canonical) |
+| Repo pointer | `CLAUDE.md` with `@-import` | `AGENTS.md` with path |
 
-De ahí viene la regla de que ninguna skill mencione herramientas propias de un
-agente concreto: describen la acción, no quién la ejecuta.
+That is where the rule comes from that no skill mention the tools of a specific
+agent: they describe the action, not who runs it.
 
-## Estructura
+## Structure
 
 ```
 crux/
-├── AGENTS.md        contexto para trabajar en el kernel (CLAUDE.md → symlink)
-├── STANDARD.md      el estándar completo, y el catálogo de skills
-├── GUIA.md          cómo funciona todo, de principio a fin
+├── AGENTS.md        context for working on the kernel (CLAUDE.md → symlink)
+├── STANDARD.md      the complete standard, and the skill catalog
+├── GUIA.md          how everything works, from start to finish
 ├── VERSION
-├── install.sh       una vez por máquina
-├── bin/             un fichero por comando
-├── lib/             verificadores de paths y utilidades comunes
-├── templates/       docs-repo/ y code-repo/
+├── install.sh       once per machine
+├── bin/             one file per command
+├── lib/             path verifiers and common utilities
+├── templates/       docs-repo/ and code-repo/
 ├── profiles/        multi-repo, client-repo
 ├── adapters/        claude/, codex/
-├── skills/          las skills transversales
-└── test/            suite y batería de extremo a extremo
+├── skills/          the cross-cutting skills
+└── test/            suite and end-to-end battery
 ```
 
 ## Tests
 
 ```bash
-./test/run.sh            # todos los casos
-./test/run.sh doctor     # solo los que casan con el patrón
-./test/e2e.sh            # el ciclo entero contra un remoto local
+./test/run.sh            # all the cases
+./test/run.sh doctor     # only those matching the pattern
+./test/e2e.sh            # the whole cycle against a local remote
 ```
 
-Cada caso corre en un sandbox aislado con los directorios de agentes
-redirigidos, así que la suite no toca `~/.claude`, `~/.codex` ni `~/Proyectos`.
+Each case runs in an isolated sandbox with the agent directories redirected, so
+the suite does not touch `~/.claude`, `~/.codex` or `~/Proyectos`.
 
-La suite prueba piezas sueltas y `e2e.sh` prueba el recorrido completo: crear
-el proyecto, registrar un repo, instalar las guardas, comprobar que el push
-directo se bloquea, abrir un espacio, pasar la puerta, proponer y recuperar el
-proyecto en otra máquina. Los fallos que más han costado aparecieron ahí y no
-en la suite, porque solo se ven cuando las piezas se usan seguidas.
+The suite tests individual pieces and `e2e.sh` tests the complete journey:
+creating the project, registering a repo, installing the guards, checking that
+a direct push is blocked, opening a space, passing the gate, proposing and
+recovering the project on another machine. The failures that have cost the most
+showed up there and not in the suite, because they only appear when the pieces
+are used in sequence.
 
-Dos casos vigilan el propio kernel: que ninguna skill se ate a un agente
-concreto y que no aparezca el nombre de ningún proyecto. Son los que evitan que
-crux vuelva a acoplarse a lo que documenta.
+Two cases watch over the kernel itself: that no skill ties itself to a specific
+agent and that the name of no project appears. They are what stop crux from
+coupling itself again to what it documents.
 
-## Gobernanza
+## Governance
 
-En cada push y cada propuesta, el CI pasa análisis estático, la suite, la
-batería de extremo a extremo y una instalación en limpio.
+On every push and every proposal, the CI runs static analysis, the suite, the
+end-to-end battery and a clean installation.
 
-`crux hooks install` cierra la rama principal para que el trabajo entre por
-propuesta, y recuerda el ciclo al empezar sobre ella. Lo segundo está ahí
-porque medimos que describirlo en una skill no bastaba.
+`crux hooks install` closes the main branch so that work enters through a
+proposal, and reminds you of the cycle when starting on it. The latter is there
+because we measured that describing it in a skill was not enough.
 
-`crux release <ver>` publica una versión y antes comprueba que los proyectos
-que consumen el kernel siguen conformes. Es la diferencia con un `git tag`:
-cambiar el estándar y romper a quien lo usa sin enterarse es justo lo que un
-release debe impedir. El número se sube en `VERSION` por propuesta, como
-cualquier otro cambio; el comando solo etiqueta.
+`crux release <ver>` publishes a version and first checks that the projects
+that consume the kernel remain conformant. That is the difference from a
+`git tag`: changing the standard and breaking whoever uses it without noticing
+is exactly what a release must prevent. The number is bumped in `VERSION` per
+proposal, like any other change; the command only tags.
 
-Proyectos que lo consumen hoy: `acme-docs`, `client-docs`.
+Projects that consume it today: `acme-docs`, `client-docs`.

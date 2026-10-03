@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Hook de Claude Code (PreToolUse, Bash y herramientas de ficheros).
+# Claude Code hook (PreToolUse, Bash and file tools).
 #
-# Para los comandos que destruyen trabajo sin vuelta atrás y la lectura de
-# claves privadas y credenciales. Con los permisos del agente saltados, es el
-# único freno que queda entre una deducción equivocada y un `reset --hard`.
+# Stops commands that destroy work irreversibly and the reading of private keys
+# and credentials. With the agent permissions skipped, it is the only brake left
+# between a wrong deduction and a `reset --hard`.
 #
-# No sustituye a una persona: si alguien de verdad lo quiere, lo ejecuta él
-# con `! <comando>` en la conversación, y entonces es una decisión. Adaptado de
-# la política de guardias de Gentle Shell.
+# It does not replace a person: if someone really wants it, they run it
+# themselves with `! <command>` in the conversation, and then it is a decision.
+# Adapted from the Gentle Shell guard policy.
 
 set -u
 
@@ -23,8 +23,8 @@ verdict="$(printf '%s' "$input" | node -e '
     const tool = String(event.tool_name || "");
     const params = event.tool_input || {};
 
-    // Claves privadas y credenciales. Las publicas (.pub) y los .env quedan
-    // fuera: los primeros no son secretos y los segundos los mueve carry-env.
+    // Private keys and credentials. Public ones (.pub) and .env files are left
+    // out: the former are not secrets and the latter are moved by carry-env.
     const SECRET = [
       /(^|\/)\.ssh\/(?!.*\.pub$)(id_[^\/]*|[^\/]*_key|identity)$/,
       /\.(pem|p12|pfx)$/,
@@ -42,9 +42,9 @@ verdict="$(printf '%s' "$input" | node -e '
     }
 
     const command = String(params.command || "");
-    // Lo que no se ejecuta no cuenta: comentarios, cuerpos de heredoc (los
-    // mensajes de commit van ahi) y el texto entre comillas, salvo el que se
-    // pasa a otra shell para que lo ejecute.
+    // What is not executed does not count: comments, heredoc bodies (commit
+    // messages go there) and quoted text, except what is passed to another
+    // shell to execute.
     const runnable = command
       .replace(/<<-?\s*([\x27"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2(?=\s|$)/g, " ")
       .replace(/\b(bash|sh|zsh|eval)\s+(-c\s+)?(["\x27])([\s\S]*?)\3/g, " $4 ")
@@ -52,22 +52,22 @@ verdict="$(printf '%s' "$input" | node -e '
       .replace(/(^|\s)#[^\n]*/g, " ");
 
     const RULES = [
-      [/\bgit\b[^;&|\n]*\breset\b[^;&|\n]*--hard\b/, "git reset --hard", "tira los cambios sin commitear", "git stash push -u -m \"<motivo>\", o un commit temporal"],
-      [/\bgit\b[^;&|\n]*\bpush\b(?=[^;&|\n]*(\s--force(?!-with-lease)\b|\s-[A-Za-z]*f))/, "git push --force", "reescribe la historia remota sin comprobar lo que hay", "git push --force-with-lease"],
-      [/\bgit\b[^;&|\n]*\bclean\b(?=[^;&|\n]*\s-[A-Za-z]*f)(?=[^;&|\n]*\s-[A-Za-z]*[dxX])/, "git clean -fd", "borra ficheros sin seguimiento, que git no puede recuperar", "git clean -n para ver antes qué borraría"],
-      [/\bgit\b[^;&|\n]*\b(checkout\s+--|restore)\s+(\.|:\/)(?=\s|$)/, "descartar el árbol entero", "tira todos los cambios sin commitear del repo", "descarta fichero a fichero, después de mirar el diff"],
-      [/\bgit\b[^;&|\n]*\bstash\s+clear\b/, "git stash clear", "la pila de stash es compartida entre worktrees y sesiones", "git stash drop <sha> del tuyo"],
-      [/\brm\b(?=(?:\s+-{1,2}[A-Za-z-]+)*\s+-{0,2}[A-Za-z-]*[rR])[^;&|\n]*\s(\/|~|~\/|\$HOME|\$\{HOME\}|\$HOME\/|\.|\.\.|\*|\.\/\*)(?=[\s;&|]|$)/, "rm -r sobre /, ~, . o *", "se lleva por delante un directorio entero", "nombra la ruta exacta que quieres borrar"],
-      [/\bchmod\s+-R\s+0?777\b/, "chmod -R 777", "abre todos los permisos de un árbol entero", "da solo el permiso que falta, al fichero que lo necesita"],
-      [/\bchown\s+-R\b/, "chown -R", "cambia el dueño de un árbol entero", "cámbialo en la ruta concreta"],
-      [/(^|[\s;&|(])(pkill|killall)\b/, "pkill / killall", "mata por nombre y se lleva procesos que no son tuyos", "busca el PID (pgrep -a <nombre>) y usa kill <PID>"],
+      [/\bgit\b[^;&|\n]*\breset\b[^;&|\n]*--hard\b/, "git reset --hard", "throws away uncommitted changes", "git stash push -u -m \"<reason>\", or a temporary commit"],
+      [/\bgit\b[^;&|\n]*\bpush\b(?=[^;&|\n]*(\s--force(?!-with-lease)\b|\s-[A-Za-z]*f))/, "git push --force", "rewrites the remote history without checking what is there", "git push --force-with-lease"],
+      [/\bgit\b[^;&|\n]*\bclean\b(?=[^;&|\n]*\s-[A-Za-z]*f)(?=[^;&|\n]*\s-[A-Za-z]*[dxX])/, "git clean -fd", "deletes untracked files, which git cannot recover", "git clean -n to see first what it would delete"],
+      [/\bgit\b[^;&|\n]*\b(checkout\s+--|restore)\s+(\.|:\/)(?=\s|$)/, "discarding the whole tree", "throws away all uncommitted changes in the repo", "discard file by file, after looking at the diff"],
+      [/\bgit\b[^;&|\n]*\bstash\s+clear\b/, "git stash clear", "the stash stack is shared between worktrees and sessions", "git stash drop <sha> of your own"],
+      [/\brm\b(?=(?:\s+-{1,2}[A-Za-z-]+)*\s+-{0,2}[A-Za-z-]*[rR])[^;&|\n]*\s(\/|~|~\/|\$HOME|\$\{HOME\}|\$HOME\/|\.|\.\.|\*|\.\/\*)(?=[\s;&|]|$)/, "rm -r on /, ~, . or *", "takes a whole directory with it", "name the exact path you want to delete"],
+      [/\bchmod\s+-R\s+0?777\b/, "chmod -R 777", "opens all permissions on a whole tree", "grant only the missing permission, to the file that needs it"],
+      [/\bchown\s+-R\b/, "chown -R", "changes the owner of a whole tree", "change it on the specific path"],
+      [/(^|[\s;&|(])(pkill|killall)\b/, "pkill / killall", "kills by name and takes processes that are not yours", "find the PID (pgrep -a <name>) and use kill <PID>"],
     ];
     for (const [rx, name, why, instead] of RULES) {
       if (rx.test(runnable)) out("command", name, why, instead);
     }
 
-    // Leer una clave privada desde la shell. Usarla (ssh -i, sshCommand) no
-    // la vuelca en la conversacion, asi que eso se deja.
+    // Reading a private key from the shell. Using it (ssh -i, sshCommand) does
+    // not dump it into the conversation, so that is allowed.
     const READERS = /\b(cat|less|more|head|tail|base64|xxd|od|strings|bat|cp|scp|rsync)\b([^;&|\n]*)/g;
     for (const m of runnable.matchAll(READERS)) {
       const hit = m[2].split(/\s+/).find((t) => t && isSecret(t));
@@ -88,20 +88,20 @@ IFS=$'\t' read -r kind name why instead <<<"$verdict"
 
 if [[ "$kind" == "secret" ]]; then
   cat >&2 <<MSG
-'$name' es una clave privada o una credencial. Leerla la deja en la
-conversación y en su registro.
+'$name' is a private key or a credential. Reading it leaves it in the
+conversation and in its log.
 
-Si hace falta usarla, úsala sin volcarla (ssh -i, gh auth). Si de verdad hay
-que verla, que la abra una persona.
+If it must be used, use it without dumping it (ssh -i, gh auth). If it really
+has to be seen, a person should open it.
 MSG
 else
   cat >&2 <<MSG
-Parado: $name $why.
+Stopped: $name $why.
 
-En su lugar: $instead
+Instead: $instead
 
-Si una persona lo quiere tal cual, lo ejecuta ella con '! <comando>' en la
-conversación.
+If a person wants it as is, they run it themselves with '! <command>' in the
+conversation.
 MSG
 fi
 exit 2

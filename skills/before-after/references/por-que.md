@@ -1,38 +1,39 @@
-# Por qué se enseña así
+# Why it is shown this way
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## Por qué una persona
+## Why a person
 
-Los tests no ven la pantalla, y la puerta 7 de `/ship` la pasa el agente. Aquí
-aprueba una persona, y lo hace desde el móvil: por eso tres anchos, montajes
-pegados y tramos que se descargan bien en un teléfono.
+Tests do not see the screen, and gate 7 of `/ship` is passed by the agent. Here
+a person approves, and does so from their phone: hence three widths, side-by-side
+montages and sections that download well on a phone.
 
-## Los mismos datos y el mismo script
+## The same data and the same script
 
-Si el antes y el después se capturan de forma distinta, se comparan dos maneras
-de capturar, no dos versiones.
+If the before and the after are captured differently, two ways of capturing are
+being compared, not two versions.
 
-## Por qué no se sube nada antes del sí
+## Why nothing is pushed before the yes
 
-La propuesta es para lo aprobado. Proponer ya es enseñar el trabajo a otros, y
-lo que se enseña para aprobar va antes. Si entra otro commit después del sí,
-las capturas ya no enseñan lo que se propone.
+The proposal is for what has been approved. Proposing already means showing the
+work to others, and what is shown for approval goes before. If another commit
+goes in after the yes, the screenshots no longer show what is being proposed.
 
-## Los gotchas
+## The gotchas
 
-- La captura de página completa agranda la ventana; la gráfica se redibuja desde
-  cero y la foto sale con los ejes y sin datos. El script agranda, espera y
-  después dispara.
-- Con un servidor de desarrollo, una transición de vista que no termina deja al
-  Chrome del sistema sin pintar nunca; el script prueba primero el navegador que
-  trae Playwright.
-- Una cookie de mentira no siempre basta para quitar el aviso de
-  consentimiento, porque no es universal.
-- La barra de navegación inferior de móvil aparece abajo del todo en la captura
-  completa.
+- The full-page capture enlarges the window; the chart is redrawn from scratch
+  and the photo comes out with the axes and no data. The script enlarges, waits
+  and then fires.
+- With a development server, a view transition that never ends leaves the system
+  Chrome never painting; the script tries the browser that ships with Playwright
+  first.
+- A fake cookie is not always enough to remove the consent notice, because it is
+  not universal.
+- The mobile bottom navigation bar appears at the very bottom in the full
+  capture.
 
-## Los anti-patrones
+## The anti-patterns
 
-La mitad del tráfico es móvil y es donde se rompe. Sin el antes, la persona
-tiene que recordar cómo era, y entonces no decide: opina.
+Half the traffic is mobile and it is where things break. Without the before, the
+person has to remember what it was like, and then they do not decide: they
+opine.

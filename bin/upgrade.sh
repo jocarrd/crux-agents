@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# crux upgrade — alinea un docs repo con la versión actual del kernel.
+# crux upgrade — aligns a docs repo with the current kernel version.
 #
-# Materializa las piezas del estándar que falten (las que una versión nueva
-# haya añadido) y actualiza la versión declarada en crux.json. No sobrescribe
-# contenido existente salvo --force: la documentación es del proyecto, las
-# plantillas solo cubren huecos.
+# Materializes the pieces of the standard that are missing (those a new version
+# has added) and updates the version declared in crux.json. It does not
+# overwrite existing content unless --force: the documentation belongs to the
+# project, the templates only fill gaps.
 #
 #   crux upgrade [dir] [--force] [--dry-run]
 
@@ -23,43 +23,44 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-DOCS="$(find_docs_repo "$TARGET")" || die "no encuentro un docs repo desde $TARGET"
+DOCS="$(find_docs_repo "$TARGET")" || die "cannot find a docs repo from $TARGET"
 CONFIG="$DOCS/crux.json"
-[[ -f "$CONFIG" ]] || die "falta crux.json — ejecuta 'crux adopt' primero"
+[[ -f "$CONFIG" ]] || die "crux.json is missing — run 'crux adopt' first"
 
 PROJECT="$(json_get "$CONFIG" project)"
 FROM="$(json_get "$CONFIG" crux)"
 TO="$(crux_version)"
 
 echo "$PROJECT: crux $FROM → $TO"
-[[ $DRY -eq 1 ]] && warn "dry-run: no se escribe nada"
+[[ $DRY -eq 1 ]] && warn "dry-run: nothing is written"
 echo
 
-# Degradar el contrato en la máquina que lleva el kernel viejo deja al proyecto
-# declarando menos de lo que ya tiene materializado, y sin avisar a nadie.
+# Downgrading the contract on the machine that has the old kernel leaves the
+# project declaring less than what it already has materialized, without telling
+# anyone.
 #
-# version_mayor_que devuelve 1 tanto para "no es mayor" como para "no se
-# comparar esto", y tratarlas igual abria la guarda sola: un kernel sin VERSION
-# escribia "crux": "unknown" en el contrato, y a partir de ahi ninguna
-# comparacion volvia a funcionar.
-if ! es_semver "$TO"; then
-  err "este kernel no declara una versión válida: '$TO'"
-  info "reinstálalo desde el repo del kernel: bash install.sh"
+# version_greater_than returns 1 both for "is not greater" and for "cannot
+# compare this", and treating them the same opened the guard on its own: a
+# kernel without VERSION wrote "crux": "unknown" into the contract, and from
+# then on no comparison worked again.
+if ! is_semver "$TO"; then
+  err "this kernel does not declare a valid version: '$TO'"
+  info "reinstall it from the kernel repo: bash install.sh"
   exit 1
 fi
-if ! es_semver "$FROM"; then
-  err "el proyecto declara una versión que no se puede comparar: '$FROM'"
-  info "corrige \"crux\" en el crux.json antes de actualizar"
+if ! is_semver "$FROM"; then
+  err "the project declares a version that cannot be compared: '$FROM'"
+  info "fix \"crux\" in crux.json before upgrading"
   [[ $FORCE -eq 0 ]] && exit 1
 fi
-if version_mayor_que "$FROM" "$TO"; then
-  err "el proyecto declara crux $FROM y este kernel es $TO"
-  info "actualiza el kernel ('git pull' en $CRUX_HOME) en vez de degradar el contrato"
-  info "si de verdad quieres bajarlo: crux upgrade --force"
+if version_greater_than "$FROM" "$TO"; then
+  err "the project declares crux $FROM and this kernel is $TO"
+  info "update the kernel ('git pull' in $CRUX_HOME) instead of downgrading the contract"
+  info "if you really want to lower it: crux upgrade --force"
   [[ $FORCE -eq 0 ]] && exit 1
 fi
 
-# --- Materializar lo que falte ----------------------------------------------
+# --- Materialize what is missing ----------------------------------------------
 
 added=0
 while IFS= read -r src; do
@@ -72,28 +73,29 @@ while IFS= read -r src; do
   fi
 
   if [[ $DRY -eq 1 ]]; then
-    echo "      [dry-run] materializaría $rel"
+    echo "      [dry-run] would materialize $rel"
   else
-    DESCRIPTION="$(json_get "$CONFIG" description 2>/dev/null || echo "Documentación transversal de $PROJECT.")"
+    DESCRIPTION="$(json_get "$CONFIG" description 2>/dev/null || echo "Cross-cutting documentation for $PROJECT.")"
     render_template "$src" "$dst" "PROJECT=$PROJECT" "DESCRIPTION=$DESCRIPTION"
-    ok "materializado $rel"
+    ok "materialized $rel"
   fi
   added=$((added + 1))
 done < <(find "$CRUX_HOME/templates/docs-repo" -type f | sort)
 
-# La versión que coincide no garantiza que estén todas las piezas: 'crux adopt'
-# escribe la versión actual sobre un repo que aún no tiene la estructura, y si
-# se sale antes de mirar, el comando que debía completarla no completa nada.
-[[ $added -eq 0 ]] && ok "no falta ninguna pieza del estándar"
+# A matching version does not guarantee that all pieces are there: 'crux adopt'
+# writes the current version over a repo that does not have the structure yet,
+# and if it exits before looking, the command meant to complete it completes
+# nothing.
+[[ $added -eq 0 ]] && ok "no piece of the standard is missing"
 
-# CLAUDE.md es un symlink, no una plantilla: sin esto, un proyecto adoptado se
-# queda sin él y doctor lo reporta como pieza que falta para siempre.
+# CLAUDE.md is a symlink, not a template: without this, an adopted project goes
+# without it and doctor reports it as a missing piece forever.
 if [[ $DRY -eq 0 && -f "$DOCS/AGENTS.md" && ! -e "$DOCS/CLAUDE.md" ]]; then
   ( cd "$DOCS" && ln -s AGENTS.md CLAUDE.md )
-  ok "materializado CLAUDE.md"
+  ok "materialized CLAUDE.md"
 fi
 
-# --- Actualizar la versión declarada ----------------------------------------
+# --- Update the declared version ----------------------------------------
 
 if [[ $DRY -eq 0 ]]; then
   node -e '
@@ -103,7 +105,7 @@ if [[ $DRY -eq 0 ]]; then
     o.crux = version;
     fs.writeFileSync(file, JSON.stringify(o, null, 2) + "\n");
   ' "$CONFIG" "$TO"
-  ok "crux.json actualizado a $TO"
+  ok "crux.json updated to $TO"
 fi
 
 echo

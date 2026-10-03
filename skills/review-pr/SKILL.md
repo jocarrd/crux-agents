@@ -1,132 +1,136 @@
 ---
 name: review-pr
-description: Revisar el código de una propuesta ya abierta con criterio de revisor y no de autor: si el diff hace lo que dice, si el arreglo está completo, si los tests prueban comportamiento, si encaja con lo que el repo ya hace, y qué deuda deja. Clasifica el riesgo y lanza en paralelo solo los revisores especialistas que el diff pide (seguridad, datos, rendimiento, interfaz). Usa justo después de abrir una propuesta de cambio, antes de pedir revisión humana, cuando heredes la propuesta de otra sesión, o cuando el cambio lo haya escrito un agente.
+description: Review the code of an already-open proposal (PR) with a reviewer's judgement, not the author's: does the diff do what it says, is the fix complete, do the tests prove behaviour, does it fit what the repo already does, and what debt does it leave. Classifies the risk and launches in parallel only the specialist reviewers the diff calls for (security, data, performance, UI). Use right after opening a change proposal, before asking for human review, when you inherit another session's proposal, or when an agent wrote the change.
 ---
 
 # review-pr
 
-La revisión entre abrir la propuesta y que alguien la mire. `/ship` pregunta si
-está listo lo que hiciste; esto pregunta si es correcto y completo lo que se
-propone. El porqué de cada regla está en
-`<directorio-de-esta-skill>/references/por-que.md`.
+The review between opening the proposal and someone looking at it. `/ship` asks
+whether what you did is ready; this asks whether what is being proposed is
+correct and complete. The reason behind each rule is in
+`<this-skill-directory>/references/por-que.md`.
 
-## Desde un contexto independiente
+## From an independent context
 
-Se revisa desde un contexto distinto del que escribió el cambio: una revisión
-aislada si el entorno la permite, o una sesión nueva con **solo el diff y la
-descripción de la propuesta**, sin el historial.
+The review is done from a context different from the one that wrote the change:
+an isolated review if the environment allows it, or a fresh session with **only
+the diff and the proposal description**, without the history.
 
-## Qué se pone delante
+## What gets put in front of you
 
 ```bash
 crux review
 ```
 
-Reúne commits, diff contra la base, la propuesta con sus comprobaciones y
-señales objetivas (código sin tests, trabajo a medias, credenciales aparentes,
-dependencias, ficheros que crecen). Además, lee **las convenciones del repo** en
-su documentación.
+It gathers commits, the diff against the base, the proposal with its checks and
+objective signals (code without tests, half-finished work, apparent
+credentials, dependencies, files that grow). It also reads **the repo's
+conventions** in its documentation.
 
-## Riesgo y especialistas
+## Risk and specialists
 
-`crux review` termina con el riesgo y los especialistas que merece
+`crux review` ends with the risk and the specialists it deserves
 (`scripts/review-scope.sh`):
 
-| Riesgo | Cuándo | Qué se lanza |
-| ------ | ------ | ------------ |
-| bajo | sin código, o 30 líneas de código o menos sin nada sensible | solo la revisión general |
-| medio | código normal | la general + los especialistas que toque |
-| alto | seguridad, datos, o más de 500 líneas | la general + los especialistas que toque |
+| Risk | When | What is launched |
+| ---- | ---- | ---------------- |
+| low | no code, or 30 lines of code or fewer with nothing sensitive | only the general review |
+| medium | ordinary code | the general one + the relevant specialists |
+| high | security, data, or more than 500 lines | the general one + the relevant specialists |
 
-Especialistas: **seguridad**, **datos**, **rendimiento** e **interfaz**, cada
-uno con su guía en `specialists/`. Se lanzan **solo los que el script nombra**,
-tres como máximo, **en paralelo y cada uno en un contexto aislado**, con el
-diff, la descripción y su guía, nada más. No sustituyen la revisión general. Si
-el script no nombra a ninguno y ves algo que lo pide, se lanza ese uno y se dice
-por qué.
+Specialists: **security**, **data**, **performance** and **UI**, each with its
+guide in `specialists/`. Launch **only the ones the script names**, three at
+most, **in parallel and each in an isolated context**, with the diff, the
+description and its guide, nothing else. They do not replace the general
+review. If the script names none and you see something that calls for one,
+launch that one and say why.
 
-**Rigor** (`rigor` en `crux.json`):
+**Rigor** (`rigor` in `crux.json`):
 
-- `light` (y repos sin `crux.json`): especialistas solo con riesgo alto; se
-  fusiona sin preguntar lo que no sea riesgo alto.
-- `normal` (por defecto): lo de arriba.
-- `strict`: sin el atajo de las 30 líneas, y nunca se fusiona solo.
+- `light` (and repos without `crux.json`): specialists only on high risk;
+  anything that is not high risk is merged without asking.
+- `normal` (default): the above.
+- `strict`: no 30-line shortcut, and it is never merged automatically.
 
-**Quién fusiona** lo dice la línea `fusión:`, y manda sobre tu criterio. Solo se
-fusiona sin preguntar un cambio que sea **solo texto** (`.md`, `.txt`, licencias,
-`.gitignore`) en un proyecto propio. CSS, estilos, plantillas y tests cuentan
-como código: un cambio de CSS, por pequeño que sea, lo fusiona una persona. En un
-repo de cliente, siempre una persona.
+**Who merges** is stated by the `merge:` line, and it overrides your judgement.
+Only a change that is **text only** (`.md`, `.txt`, licences, `.gitignore`) in
+an own project is merged without asking. CSS, styles, templates and tests count
+as code: a CSS change, however small, is merged by a person. In a client repo,
+always a person.
 
-## El recorrido
+## The walkthrough
 
-En este orden:
+In this order:
 
-1. **Fidelidad.** ¿El diff hace lo que dice la propuesta, y solo eso? Ficheros
-   que no vienen a cuento, formato mezclado con lógica, restos de depuración.
-2. **Completitud del arreglo.** ¿Por dónde más entra esto? Otro comando que
-   acepte la misma entrada sin validar, otro sitio que haga el mismo cálculo.
-3. **Correctitud.** Casos límite, vacíos, errores no gestionados, condiciones
-   invertidas, orden de operaciones. Cada sospecha se reproduce antes de
-   escribirla.
-4. **Tests.** ¿Existen? ¿**Fallan sin el arreglo**? (revierte el código, corre,
-   restaura). ¿Prueban comportamiento o fijan la implementación? ¿Cubren el
-   camino de fallo?
-5. **Consistencia.** Utilidades reinventadas, dos formas de lo mismo, nombres
-   fuera de la convención, dependencias nuevas para algo resuelto.
-6. **Legibilidad.** Se entiende a la primera qué hace y por qué. Sobran los
-   comentarios que narran; faltan los que explican un porqué que no se deduce.
-7. **Deuda y ruido.** Duplicación, abstracciones de más, ficheros que crecen.
-8. **Superficie sensible.** Secretos, entradas sin validar hacia rutas o
-   consultas, permisos, dependencias nuevas.
+1. **Fidelity.** Does the diff do what the proposal says, and only that? Files
+   that are beside the point, formatting mixed with logic, debugging leftovers.
+2. **Completeness of the fix.** Where else does this get in? Another command
+   that accepts the same input without validating, another place that does the
+   same calculation.
+3. **Correctness.** Edge cases, empty values, unhandled errors, inverted
+   conditions, order of operations. Every suspicion is reproduced before it is
+   written down.
+4. **Tests.** Do they exist? Do they **fail without the fix**? (revert the code,
+   run, restore). Do they test behaviour or pin the implementation? Do they
+   cover the failure path?
+5. **Consistency.** Reinvented utilities, two ways of doing the same thing,
+   names outside the convention, new dependencies for something already solved.
+6. **Readability.** It is clear at first read what it does and why. Comments
+   that narrate are surplus; comments that explain a why that cannot be deduced
+   are missing.
+7. **Debt and noise.** Duplication, needless abstractions, files that grow.
+8. **Sensitive surface.** Secrets, unvalidated inputs reaching paths or queries,
+   permissions, new dependencies.
 
-## Cómo se escribe un hallazgo
+## How a finding is written
 
 ```
-fichero:línea — qué ocurre
-por qué importa: la consecuencia concreta
-qué lo arregla: la línea, no el sermón
+file:line — what happens
+why it matters: the concrete consequence
+what fixes it: the line, not the sermon
 ```
 
-Cada hallazgo se confirma (reproducido, o citando la línea que lo demuestra)
-antes de salir. **Los que no se confirman se caen.**
+Every finding is confirmed (reproduced, or citing the line that proves it)
+before it goes out. **Those that are not confirmed are dropped.**
 
-## Qué se hace con ellos
+## What is done with them
 
-- **Confirmado y claro:** se arregla en la misma rama, con su test, y `/ship`
-  otra vez.
-- **Confirmado y discutible** (diseño o alcance): se publica en la propuesta y
-  decide quien revisa.
-- **Dudoso:** no se publica; se comprueba primero.
+- **Confirmed and clear:** fixed on the same branch, with its test, and `/ship`
+  again.
+- **Confirmed and debatable** (design or scope): posted on the proposal and the
+  reviewer decides.
+- **Doubtful:** not posted; checked first.
 
-**Dos rondas de arreglo como mucho.** Cada ronda revisa solo lo que el arreglo
-toca. Si tras la segunda queda un hallazgo grave, se para y se cuenta qué queda
-abierto y qué se intentó.
+**Two rounds of fixes at most.** Each round reviews only what the fix touches.
+If a serious finding remains after the second, stop and report what remains
+open and what was tried.
 
-## Contárselo a quien decide
+## Telling whoever decides
 
-La revisión termina contada, no solo en la propuesta. Por hallazgo, en este
-orden: **qué está mal** (una frase), **qué cambiarías** (fichero, línea,
-arreglo; o que ya está hecho) y **por qué importa** (la consecuencia real).
+The review ends by being told, not only left on the proposal. Per finding, in
+this order: **what is wrong** (one sentence), **what you would change** (file,
+line, fix; or that it is already done) and **why it matters** (the real
+consequence).
 
-- Ordenado por lo que costaría si pasa.
-- Separando lo arreglado de lo que necesita decisión.
-- Diciendo qué se revisó sin encontrar nada, y qué no se revisó.
-- Sin hallazgos, se cuenta igual: qué se miró y con qué criterio.
+- Ordered by what it would cost if it goes through.
+- Separating what was fixed from what needs a decision.
+- Saying what was reviewed without finding anything, and what was not reviewed.
+- With no findings, it is still reported: what was looked at and by what
+  criterion.
 
 ## Anti-patterns
 
-- Revisar en el mismo hilo que escribió el código.
-- Resumir el diff y llamarlo revisión.
-- Publicar sospechas sin reproducir.
-- Mirar solo lo que el diff toca.
-- Aprobar porque los tests pasan.
-- Dejarlo para después de fusionar.
-- Dejar los hallazgos solo en la propuesta.
+- Reviewing in the same thread that wrote the code.
+- Summarising the diff and calling it a review.
+- Posting suspicions without reproducing them.
+- Looking only at what the diff touches.
+- Approving because the tests pass.
+- Leaving it until after merging.
+- Leaving the findings only on the proposal.
 
-## Relacionado
+## Related
 
-- `/ship` — la puerta del autor, aguas arriba
-- `/flow` — el ciclo completo; esto es su paso 6a
-- `/root-cause` — cuando un hallazgo necesita depurarse
-- `/write-tests` — el test que falta cuando el hallazgo es real
+- `/ship` — the author's gate, upstream
+- `/flow` — the full cycle; this is its step 6a
+- `/root-cause` — when a finding needs debugging
+- `/write-tests` — the missing test when the finding is real

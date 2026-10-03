@@ -1,55 +1,56 @@
 #!/usr/bin/env bash
-# Hook de Claude Code (UserPromptSubmit).
+# Claude Code hook (UserPromptSubmit).
 #
-# Una sesión que se deja abierta y se retoma horas después no pasa por
-# SessionStart: para Claude Code no ha empezado nada. Aquí se mide el hueco
-# desde el último mensaje y, si pasa de CRUX_TASKS_IDLE_HOURS (3 por defecto),
-# se hace lo mismo que al abrir: poner la máquina al día y enseñar las tareas
-# abiertas, como recordatorio y sin empujar a retomarlas.
+# A session left open and resumed hours later does not go through
+# SessionStart: as far as Claude Code is concerned nothing has started. Here
+# the gap since the last message is measured and, if it exceeds
+# CRUX_TASKS_IDLE_HOURS (3 by default), the same is done as on opening: bring
+# the machine up to date and show the open tasks, as a reminder and without
+# pushing to resume them.
 
 set -u
 
 kernel="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)"
 [[ -f "$kernel/lib/task-sync.mjs" ]] || exit 0
 
-entrada="$(cat 2>/dev/null || true)"
-datos="$(printf '%s' "$entrada" | node -e '
+entry="$(cat 2>/dev/null || true)"
+data="$(printf '%s' "$entry" | node -e '
   let s = "";
   process.stdin.on("data", (d) => (s += d));
   process.stdin.on("end", () => {
     try { const j = JSON.parse(s); process.stdout.write(`${j.session_id || ""}\t${j.cwd || ""}`); } catch {}
   });' 2>/dev/null)"
-IFS=$'\t' read -r sesion cwd <<< "$datos"
-[[ -n "$sesion" ]] || exit 0
+IFS=$'\t' read -r session cwd <<< "$data"
+[[ -n "$session" ]] || exit 0
 
-estado="${CRUX_STATE_DIR:-$HOME/.crux/state}/sesiones"
-( umask 077 && mkdir -p "$estado" ) 2>/dev/null || exit 0
-marca="$estado/$(printf '%s' "$sesion" | tr -c 'A-Za-z0-9-' '_')"
-find "$estado" -type f -mtime +30 -delete 2>/dev/null || true
+status="${CRUX_STATE_DIR:-$HOME/.crux/state}/sessions"
+( umask 077 && mkdir -p "$status" ) 2>/dev/null || exit 0
+marker="$status/$(printf '%s' "$session" | tr -c 'A-Za-z0-9-' '_')"
+find "$status" -type f -mtime +30 -delete 2>/dev/null || true
 
-horas="${CRUX_TASKS_IDLE_HOURS:-3}"
-[[ "$horas" =~ ^[0-9]+$ ]] || horas=3
-parada=0
-# Sin marca es el primer mensaje: de eso ya se ocupó el inicio de sesión.
-if [[ -f "$marca" && -n "$(find "$marca" -mmin +"$((horas * 60))" 2>/dev/null)" ]]; then
-  parada=1
+hours="${CRUX_TASKS_IDLE_HOURS:-3}"
+[[ "$hours" =~ ^[0-9]+$ ]] || hours=3
+stopped=0
+# No marker means the first message: session start already took care of it.
+if [[ -f "$marker" && -n "$(find "$marker" -mmin +"$((hours * 60))" 2>/dev/null)" ]]; then
+  stopped=1
 fi
-: > "$marca"
-[[ $parada -eq 1 ]] || exit 0
+: > "$marker"
+[[ $stopped -eq 1 ]] || exit 0
 
-sincronizado="$(bash "$kernel/bin/sync.sh" --hook < /dev/null 2>/dev/null || true)"
-recordatorio="$(node "$kernel/lib/task-sync.mjs" remind --cwd "${cwd:-$PWD}" 2>/dev/null || true)"
-[[ -z "$sincronizado" && -z "$recordatorio" ]] && exit 0
+synced="$(bash "$kernel/bin/sync.sh" --hook < /dev/null 2>/dev/null || true)"
+reminder="$(node "$kernel/lib/task-sync.mjs" remind --cwd "${cwd:-$PWD}" 2>/dev/null || true)"
+[[ -z "$synced" && -z "$reminder" ]] && exit 0
 
 node -e '
-  const [sinc, rec, horas] = process.argv.slice(1);
+  const [synced, rec, hours] = process.argv.slice(1);
   const r = rec ? JSON.parse(rec) : null;
-  const intro = `Vuelves a esta sesión después de más de ${horas} h.`;
-  const usuario = [intro, r?.usuario, sinc].filter(Boolean).join("\n\n");
-  const agente = [intro, sinc, r?.agente].filter(Boolean).join("\n\n");
+  const intro = `You are back in this session after more than ${hours} h.`;
+  const user = [intro, r?.user, synced].filter(Boolean).join("\n\n");
+  const agent = [intro, synced, r?.agent].filter(Boolean).join("\n\n");
   process.stdout.write(JSON.stringify({
-    systemMessage: usuario,
-    hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: agente },
+    systemMessage: user,
+    hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: agent },
   }));
-' "$sincronizado" "$recordatorio" "$horas"
+' "$synced" "$reminder" "$hours"
 exit 0

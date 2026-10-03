@@ -1,26 +1,26 @@
-# Decisiones del kernel
+# Kernel decisions
 
-Aquí se registra **por qué** el kernel es como es. Las reglas están en
-`STANDARD.md`; el motivo por el que se eligieron, aquí.
+This is where **why** the kernel is the way it is gets recorded. The rules live
+in `STANDARD.md`; the reason they were chosen lives here.
 
-No es lo mismo que las decisiones de un proyecto: estas afectan a todos los
-proyectos que consumen el kernel, así que cambiarlas tiene un coste que
-conviene tener escrito antes de reabrir el debate.
+These are not the same as a project's decisions: they affect every project that
+consumes the kernel, so changing them has a cost that is worth having written
+down before reopening the debate.
 
-## Formato
+## Format
 
-El mismo que el estándar impone a los proyectos, para no tener dos:
+The same one the standard imposes on projects, so there are not two:
 
 ```markdown
-### ADR-NNN: Título
+### ADR-NNN: Title
 
 - **Date**: YYYY-MM-DD
 - **Status**: Proposed | Accepted | Superseded
-- **Context**: qué problema o situación lo motiva
-- **Decision**: qué decidimos
-- **Consequences**: cómo cambia el kernel y los proyectos que lo consumen
-- **Reversibility**: cómo de caro sería deshacerlo
-- **Related**: refs a otros ADRs
+- **Context**: what problem or situation motivates it
+- **Decision**: what we decided
+- **Consequences**: how the kernel and the projects that consume it change
+- **Reversibility**: how expensive it would be to undo
+- **Related**: refs to other ADRs
 ```
 
-Numeración correlativa. Al superseder, se marca el viejo y no se borra.
+Sequential numbering. When superseding, the old one is marked, not deleted.

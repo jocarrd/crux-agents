@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# crux release — publicar una versión del kernel.
+# crux release — publish a kernel version.
 #
-#   crux release <version>          enseña qué haría y verifica, sin tocar nada
-#   crux release <version> --yes    etiqueta y publica
+#   crux release <version>          shows what it would do and verifies, touching nothing
+#   crux release <version> --yes    tags and publishes
 #
-# El número de versión se sube en VERSION **por propuesta**, como cualquier otro
-# cambio: este comando no commitea en la rama principal, solo comprueba que la
-# versión ya está ahí y crea la etiqueta.
+# The version number is bumped in VERSION **by proposal**, like any other
+# change: this command does not commit to the main branch, it only checks that
+# the version is already there and creates the tag.
 #
-# Lo que distingue esto de un `git tag` es la tercera comprobación: **antes de
-# publicar se verifica que los proyectos que consumen el kernel siguen
-# conformes**. Cambiar el estándar y romper a quien lo usa sin enterarse es el
-# fallo que un release debe impedir.
+# What sets this apart from a `git tag` is the third check: **before
+# publishing, it verifies that the projects consuming the kernel are still
+# conformant**. Changing the standard and breaking whoever uses it without
+# noticing is the failure a release must prevent.
 
 set -uo pipefail
 
@@ -19,159 +19,160 @@ CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/..
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
-# Publicar es una operación sobre el repositorio del kernel, no sobre la copia
-# instalada: desde ella no hay ni git ni suite que ejecutar.
+# Publishing is an operation on the kernel repository, not on the installed
+# copy: from there there is neither git nor a suite to run.
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$REPO" || ! -f "$REPO/test/run.sh" || ! -f "$REPO/STANDARD.md" ]]; then
-  err "crux release se ejecuta desde el repositorio del kernel"
-  info "estás en: $PWD"
+  err "crux release runs from the kernel repository"
+  info "you are in: $PWD"
   exit 1
 fi
 
-NUEVA="${1:-}"
-[[ -n "$NUEVA" ]] || die "uso: crux release <version> [--yes]"
+NEW="${1:-}"
+[[ -n "$NEW" ]] || die "usage: crux release <version> [--yes]"
 shift
 
-CONFIRMADO=0
+CONFIRMED=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --yes) CONFIRMADO=1; shift ;;
-    *) die "opción desconocida: $1" ;;
+    --yes) CONFIRMED=1; shift ;;
+    *) die "unknown option: $1" ;;
   esac
 done
 
-[[ "$NUEVA" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "la versión debe ser semver: 1.2.3"
+[[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "the version must be semver: 1.2.3"
 
-ACTUAL="$(tr -d '[:space:]' < "$REPO/VERSION")"
-ultimo_tag="$(git -C "$REPO" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")"
-version_mayor_que "$NUEVA" "${ultimo_tag:-0.0.0}" || die "$NUEVA no es posterior a la última publicada ($ultimo_tag)"
+CURRENT="$(tr -d '[:space:]' < "$REPO/VERSION")"
+last_tag="$(git -C "$REPO" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")"
+version_greater_than "$NEW" "${last_tag:-0.0.0}" || die "$NEW is not later than the last published ($last_tag)"
 
-echo "release $ACTUAL → $NUEVA"
+echo "release $CURRENT → $NEW"
 echo
 
-FALLOS=0
-fallo() { err "$*"; FALLOS=$((FALLOS + 1)); }
+FAILURES=0
+failure() { err "$*"; FAILURES=$((FAILURES + 1)); }
 
-# --- 1. El repo del kernel ---------------------------------------------------
+# --- 1. The kernel repo ---------------------------------------------------
 
-rama="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
-[[ "$rama" == "main" ]] || fallo "estás en la rama $rama, no en main"
-[[ -z "$(git -C "$REPO" status --porcelain)" ]] || fallo "hay cambios sin commitear"
-[[ -z "$(git -C "$REPO" log --oneline '@{u}..' 2>/dev/null)" ]] || fallo "hay commits sin pushear"
-git -C "$REPO" rev-parse "v$NUEVA" >/dev/null 2>&1 && fallo "la etiqueta v$NUEVA ya existe"
-[[ "$ACTUAL" == "$NUEVA" ]] || fallo "VERSION dice $ACTUAL: súbelo a $NUEVA por propuesta antes de etiquetar"
+branch="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
+[[ "$branch" == "main" ]] || failure "you are on branch $branch, not main"
+[[ -z "$(git -C "$REPO" status --porcelain)" ]] || failure "there are uncommitted changes"
+[[ -z "$(git -C "$REPO" log --oneline '@{u}..' 2>/dev/null)" ]] || failure "there are unpushed commits"
+git -C "$REPO" rev-parse "v$NEW" >/dev/null 2>&1 && failure "tag v$NEW already exists"
+[[ "$CURRENT" == "$NEW" ]] || failure "VERSION says $CURRENT: bump it to $NEW by proposal before tagging"
 
-# `crux release` corre el código de la copia instalada, no el del repo: publicar
-# con una copia vieja publica con el publicador viejo, y las mejoras de este
-# comando se pierden justo en su estreno.
-instalada=""
+# `crux release` runs the installed copy's code, not the repo's: publishing
+# with an old copy publishes with the old publisher, and this command's
+# improvements are lost right on their debut.
+installed=""
 if [[ -f "$HOME/.crux/config" ]]; then
-  home_instalado="$(grep -E '^CRUX_HOME=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
-  [[ -n "$home_instalado" && -f "$home_instalado/VERSION" ]] &&
-    instalada="$(tr -d '[:space:]' < "$home_instalado/VERSION")"
+  installed_home="$(grep -E '^CRUX_HOME=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+  [[ -n "$installed_home" && -f "$installed_home/VERSION" ]] &&
+    installed="$(tr -d '[:space:]' < "$installed_home/VERSION")"
 fi
-[[ -z "$instalada" || "$instalada" == "$NUEVA" ]] ||
-  fallo "el kernel instalado es $instalada: reinstálalo antes de publicar $NUEVA ('bash install.sh')"
-[[ $FALLOS -eq 0 ]] && ok "repo listo: main, limpio, al día y con VERSION en $NUEVA"
+[[ -z "$installed" || "$installed" == "$NEW" ]] ||
+  failure "the installed kernel is $installed: reinstall it before publishing $NEW ('bash install.sh')"
+[[ $FAILURES -eq 0 ]] && ok "repo ready: main, clean, up to date and with VERSION at $NEW"
 
-# --- 2. La suite -------------------------------------------------------------
+# --- 2. The suite -------------------------------------------------------------
 
-# La suite prueba también este comando, así que sin esta guarda se llamarían
-# el uno al otro sin fin.
+# The suite also tests this command, so without this guard they would call
+# each other endlessly.
 if [[ -n "${CRUX_IN_TESTS:-}" ]]; then
-  info "suite omitida: se está ejecutando desde la propia suite"
+  info "suite skipped: running from the suite itself"
 elif ( cd "$REPO" && ./test/run.sh >/tmp/crux-release-tests.$$ 2>&1 ); then
-  ok "suite en verde ($(grep -oE '[0-9]+ aserciones' /tmp/crux-release-tests.$$ | tail -1))"
+  ok "suite green ($(grep -oE '[0-9]+ (aserciones|assertions)' /tmp/crux-release-tests.$$ | tail -1))"
 else
-  fallo "la suite no pasa:"
+  failure "the suite does not pass:"
   tail -5 /tmp/crux-release-tests.$$ | sed 's/^/      /'
 fi
 rm -f /tmp/crux-release-tests.$$
 
-# --- 3. Los proyectos que consumen el kernel ---------------------------------
+# --- 3. The projects that consume the kernel ---------------------------------
 #
-# Es la comprobación que justifica que esto sea un comando y no un `git tag`.
+# It is the check that justifies this being a command and not a `git tag`.
 
-raiz="$(projects_root)"
-consumidores=0
-for docs in "$raiz"/*/*-docs; do
+root="$(projects_root)"
+consumers=0
+for docs in "$root"/*/*-docs; do
   [[ -f "$docs/crux.json" ]] || continue
-  consumidores=$((consumidores + 1))
-  nombre="$(basename "$docs")"
+  consumers=$((consumers + 1))
+  name="$(basename "$docs")"
   if bash "$CRUX_HOME/bin/doctor.sh" "$docs" >/tmp/crux-release-doctor.$$ 2>&1; then
-    ok "$nombre conforme"
+    ok "$name conformant"
   else
-    fallo "$nombre deja de cumplir el estándar con esta versión:"
+    failure "$name stops meeting the standard with this version:"
     grep -E "^error" /tmp/crux-release-doctor.$$ | head -5 | sed 's/^/      /'
   fi
   rm -f /tmp/crux-release-doctor.$$
 done
-[[ $consumidores -eq 0 ]] && warn "ningún proyecto consume el kernel en $raiz: nada que verificar"
+[[ $consumers -eq 0 ]] && warn "no project consumes the kernel in $root: nothing to verify"
 
-# --- Notas -------------------------------------------------------------------
+# --- Notes -------------------------------------------------------------------
 
-ultimo="$(git -C "$REPO" describe --tags --abbrev=0 2>/dev/null || echo "")"
-rango="${ultimo:+$ultimo..}HEAD"
+last_one="$(git -C "$REPO" describe --tags --abbrev=0 2>/dev/null || echo "")"
+range="${last_one:+$last_one..}HEAD"
 
-notas="$(git -C "$REPO" log --format='%s' "$rango" | node -e '
-  const tipos = { feat: "Novedades", fix: "Arreglos", refactor: "Refactor",
-                  docs: "Documentación", test: "Tests", chore: "Mantenimiento" };
+notes="$(git -C "$REPO" log --format='%s' "$range" | node -e '
+  const types = { feat: "Features", fix: "Fixes", refactor: "Refactor",
+                  docs: "Documentation", test: "Tests", chore: "Maintenance" };
   let d = "";
   process.stdin.on("data", (c) => (d += c)).on("end", () => {
-    const grupos = new Map();
-    for (const linea of d.split("\n").filter(Boolean)) {
-      const m = linea.match(/^(\w+)(?:\([^)]*\))?!?:\s*(.+)$/);
-      const tipo = m && tipos[m[1]] ? tipos[m[1]] : "Otros";
-      const texto = m ? m[2] : linea;
-      grupos.set(tipo, [...(grupos.get(tipo) || []), texto]);
+    const groups = new Map();
+    for (const line of d.split("\n").filter(Boolean)) {
+      const m = line.match(/^(\w+)(?:\([^)]*\))?!?:\s*(.+)$/);
+      const type = m && types[m[1]] ? types[m[1]] : "Other";
+      const text = m ? m[2] : line;
+      groups.set(type, [...(groups.get(type) || []), text]);
     }
-    // Orden fijo: lo que más le importa a quien actualiza va primero.
-    const orden = ["Novedades", "Arreglos", "Refactor", "Documentación", "Tests", "Mantenimiento", "Otros"];
+    // Fixed order: what matters most to whoever updates goes first.
+    const order = ["Features", "Fixes", "Refactor", "Documentation", "Tests", "Maintenance", "Other"];
     const out = [];
-    for (const t of orden) {
-      if (!grupos.has(t)) continue;
-      out.push(`### ${t}`, "", ...grupos.get(t).map((x) => `- ${x}`), "");
+    for (const t of order) {
+      if (!groups.has(t)) continue;
+      out.push(`### ${t}`, "", ...groups.get(t).map((x) => `- ${x}`), "");
     }
     process.stdout.write(out.join("\n"));
   });
 ')"
 
 echo
-echo "Notas de la versión${ultimo:+ (desde $ultimo)}:"
+echo "Release notes${last_one:+ (since $last_one)}:"
 echo
-echo "$notas" | sed 's/^/  /'
+echo "$notes" | sed 's/^/  /'
 
-# --- Publicar ----------------------------------------------------------------
+# --- Publish ----------------------------------------------------------------
 
 echo
-if [[ $FALLOS -gt 0 ]]; then
-  err "$FALLOS comprobaciones fallan: no se publica"
+if [[ $FAILURES -gt 0 ]]; then
+  err "$FAILURES checks fail: not publishing"
   exit 1
 fi
 
-if [[ $CONFIRMADO -eq 0 ]]; then
-  ok "todo listo para publicar $NUEVA"
-  info "para hacerlo: crux release $NUEVA --yes"
+if [[ $CONFIRMED -eq 0 ]]; then
+  ok "all ready to publish $NEW"
+  info "to do it: crux release $NEW --yes"
   exit 0
 fi
 
-git -C "$REPO" tag -a "v$NUEVA" -m "$NUEVA
+git -C "$REPO" tag -a "v$NEW" -m "$NEW
 
-$notas"
-git -C "$REPO" push -q origin "v$NUEVA"
-ok "v$NUEVA publicada"
+$notes"
+git -C "$REPO" push -q origin "v$NEW"
+ok "v$NEW published"
 
-# Sin esto las notas solo existen en el mensaje de la etiqueta, que nadie mira:
-# quien llega al repo no tiene forma de ver qué cambió entre dos versiones.
+# Without this the notes only exist in the tag message, which nobody reads:
+# whoever arrives at the repo has no way to see what changed between two
+# versions.
 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-  if ( cd "$REPO" && gh release create "v$NUEVA" --title "$NUEVA" --notes "$notas" >/dev/null 2>&1 ); then
-    ok "notas publicadas en la release v$NUEVA"
+  if ( cd "$REPO" && gh release create "v$NEW" --title "$NEW" --notes "$notes" >/dev/null 2>&1 ); then
+    ok "notes published in release v$NEW"
   else
-    warn "no pude publicar las notas: 'gh release create v$NUEVA --notes ...' a mano"
+    warn "could not publish the notes: 'gh release create v$NEW --notes ...' by hand"
   fi
 else
-  info "sin gh autenticado: las notas se quedan en la etiqueta"
+  info "gh not authenticated: the notes stay in the tag"
 fi
 
 echo
-info "los proyectos se alinean con 'crux upgrade' cuando les toque"
+info "projects align with 'crux upgrade' when their turn comes"

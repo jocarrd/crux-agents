@@ -1,18 +1,18 @@
 declare module 'claude-code' {
   interface PluginState {
     crux: {
-      titulo: string
-      tareas: {
-        tarea: string
-        nombre: string
-        estado: string
-        cuando: string
-        siguiente: string
-        aqui: boolean
+      title: string
+      tasks: {
+        task: string
+        name: string
+        status: string
+        when: string
+        next: string
+        here: boolean
       }[]
-      mas: number
-      oculto: boolean
-      enCurso: string
+      more: number
+      hidden: boolean
+      currentTask: string
     }
   }
 }

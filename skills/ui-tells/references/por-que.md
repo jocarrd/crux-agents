@@ -1,34 +1,34 @@
-# Los falsos positivos y de dónde sale
+# The false positives and where this comes from
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## Los falsos positivos que costó quitar
+## The false positives that were hard to remove
 
-Los tres falsos positivos que costó quitar, para no reintroducirlos:
+The three false positives that were hard to remove, so they are not
+reintroduced:
 
-**Etiqueta partida.** Comparar la altura del botón con la de su línea marca
-todos los enlaces de la navegación, porque el relleno vertical los hace más
-altos. Lo único que distingue un texto partido es contar los rectángulos de un
-`Range` sobre el nodo de texto.
+**Split label.** Comparing the button's height with that of its line flags every
+navigation link, because the vertical padding makes them taller. The only thing
+that distinguishes a split text is counting the rectangles of a `Range` over the
+text node.
 
-**Ventana falsa.** Tres círculos en fila es el cromo de una ventana, pero un
-marco alrededor de **una captura de verdad** es legítimo y muy común. Solo
-cuenta si no hay `img`, `canvas`, `video` ni `picture` dentro.
+**Fake window.** Three circles in a row is a window's chrome, but a frame around
+**a real screenshot** is legitimate and very common. It only counts if there is
+no `img`, `canvas`, `video` or `picture` inside.
 
-**Navegación en dos filas.** Agrupar por la coordenada vertical exacta separa
-enlaces que están alineados con dos píxeles de diferencia. Dos enlaces están en
-filas distintas solo si los separa más de media altura de enlace.
+**Two-row navigation.** Grouping by the exact vertical coordinate separates links
+that are aligned within two pixels of each other. Two links are on different rows
+only if they are separated by more than half a link's height.
 
-Y una limitación: las hojas de estilo de otro dominio no se pueden leer desde la
-página por CORS, así que la comprobación de `100vh` solo ve el CSS propio.
+And a limitation: stylesheets from another domain cannot be read from the page
+because of CORS, so the `100vh` check only sees its own CSS.
 
 
-## De dónde sale
+## Where it comes from
 
-Los marcadores están sacados de [taste-skill](https://github.com/Leonxlnx/taste-skill)
-(MIT), en concreto de su sección de AI Tells y de su Pre-Flight Check. De su
-lista se han cogido solo los que son neutros respecto al estilo: las
-prescripciones estéticas de esa skill (tipografías concretas, asimetría por
-defecto, prohibir el negro puro) se han dejado fuera a propósito, porque cada
-proyecto tiene su lenguaje y el kernel no debe imponer uno.
-
+The markers are taken from [taste-skill](https://github.com/Leonxlnx/taste-skill)
+(MIT), specifically from its AI Tells section and its Pre-Flight Check. From its
+list only those that are neutral with respect to style were taken: that skill's
+aesthetic prescriptions (specific typefaces, asymmetry by default, banning pure
+black) were deliberately left out, because each project has its own language and
+the kernel must not impose one.

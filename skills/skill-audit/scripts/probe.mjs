@@ -1,191 +1,195 @@
 #!/usr/bin/env node
-// Qué skill se activaría ante una frase, y por cuánto gana.
+// Which skill would activate for a sentence, and by how much it wins.
 //
-//   probe.mjs "la frase con la que pedirías el trabajo"
-//   probe.mjs --casos [fichero]        pasa un fichero de casos y reporta fallos
-//   probe.mjs --adaptador <skill> <kernel> "frase genérica" "frase propia"
-//                                      comprueba que un adaptador reparte con lo que adapta
+//   probe.mjs "the sentence you would use to ask for the job"
+//   probe.mjs --cases [file]           runs a file of cases and reports failures
+//                                      (--casos also works)
+//   probe.mjs --adaptador <skill> <kernel> "generic sentence" "own sentence"
+//                                      checks that an adapter splits with what it adapts
+//                                      (--adapter also works)
 //
-// El resto del sistema se verifica: la estructura con doctor, el cambio con la
-// puerta, el idioma del commit con un hook. La activación era lo único que se
-// confiaba, y es lo que decide si todo lo demás llega a usarse.
+// The rest of the system is verified: structure with doctor, the change with
+// the gate, the commit language with a hook. Activation was the only thing
+// taken on trust, and it decides whether everything else gets used at all.
 //
-// Esto NO predice lo que hará el agente. Puntúa el solape de vocabulario entre
-// la frase y cada descripción, ponderando las palabras raras del catálogo. Sirve
-// para lo que hace falta: comparar dos redacciones y ver si una regresión ha
-// apagado una skill. Un empate aquí es una señal fiable de que dos
-// descripciones no se distinguen; un ganador no garantiza que gane de verdad.
+// This does NOT predict what the agent will do. It scores the vocabulary
+// overlap between the sentence and each description, weighting the catalog's
+// rare words. It serves what is needed: comparing two wordings and seeing
+// whether a regression has switched a skill off. A tie here is a reliable
+// signal that two descriptions cannot be told apart; a winner does not
+// guarantee it wins for real.
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const VACIAS = new Set(`de la el en y a los las del un una para con por que se su al lo como más o pero sus
+const EMPTY = new Set(`de la el en y a los las del un una para con por que se su al lo como más o pero sus
 le ya esto si porque esta entre muy sin sobre también me hasta hay donde quien desde todo nos durante todos
 uno les ni contra otros ese eso ante ellos esa the and for with when this that from your usa use usar invoca
 cuando`.split(/\s+/))
 
-// Las palabras se comparan tal cual, sin recortar terminaciones. Se probaron
-// dos stemmers —uno de sufijos verbales y otro solo de plurales— y los dos
-// EMPEORARON la medida sobre los mismos 24 casos: de 2 fallos a 3, con
-// `oauth-reauthorize` ganando una frase de cierre de sesión. Fusionan raíces que
-// no son la misma y crean colisiones falsas, que es peor que el problema que
-// resolvían. Si se reintenta, mídase contra `casos/activacion.tsv` antes.
+// Words are compared as they are, without trimming endings. Two stemmers were
+// tried (one for verb suffixes, one for plurals only) and both WORSENED the
+// measure over the same 24 cases: from 2 failures to 3, with
+// `oauth-reauthorize` winning a session-closing sentence. They merge roots that
+// are not the same and create false collisions, which is worse than the problem
+// they solved. If retried, measure against `casos/activacion.tsv` first.
 //
-// El precio conocido: «merece» y «merecen» cuentan como palabras distintas.
+// The known price: "merece" and "merecen" count as different words.
 
-function palabras(s) {
+function words(s) {
   return (s || '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .split(/\s+/)
-    .filter(w => w.length > 3 && !VACIAS.has(w))
+    .filter(w => w.length > 3 && !EMPTY.has(w))
 }
 
-function descripcion(texto) {
-  const m = texto.match(/^description:\s*([\s\S]*?)(?=\n[a-z_-]+:|\n---)/m)
+function description(text) {
+  const m = text.match(/^description:\s*([\s\S]*?)(?=\n[a-z_-]+:|\n---)/m)
   return m ? m[1].replace(/\s+/g, ' ').trim() : ''
 }
 
-// El catálogo que ve el agente, no el que hay en los repos: lo que importa es
-// contra qué compite de verdad.
-function catalogo() {
+// The catalog the agent sees, not the one in the repos: what matters is what
+// it really competes against.
+function catalog() {
   const dir = process.env.CLAUDE_SKILLS_DIR || join(process.env.HOME, '.claude', 'skills')
-  const salida = new Map()
-  if (!existsSync(dir)) return salida
+  const output = new Map()
+  if (!existsSync(dir)) return output
   for (const n of readdirSync(dir)) {
     const f = join(dir, n, 'SKILL.md')
     try {
-      if (statSync(f).isFile()) salida.set(n, new Set(palabras(descripcion(readFileSync(f, 'utf8')))))
+      if (statSync(f).isFile()) output.set(n, new Set(words(description(readFileSync(f, 'utf8')))))
     } catch {
-      // enlace roto: lo reporta `crux doctor --machine`
+      // broken link: reported by `crux doctor --machine`
     }
   }
-  return salida
+  return output
 }
 
-const SKILLS = catalogo()
+const SKILLS = catalog()
 if (!SKILLS.size) {
-  console.error('no hay skills instaladas que consultar')
+  console.error('no installed skills to consult')
   process.exit(1)
 }
 
-// Una palabra que sale en cuarenta descripciones no distingue nada; una que sale
-// en una, lo distingue todo. Con `log(1 + N/df)` eso no se cumplía: lo que está
-// en todas seguía pesando, y el listado se llenaba de skills que solo
-// compartían una palabra de plantilla. `log(N/df)` lleva ese caso a cero.
-const enCuantas = new Map()
-for (const ws of SKILLS.values()) for (const w of ws) enCuantas.set(w, (enCuantas.get(w) || 0) + 1)
+// A word that appears in forty descriptions distinguishes nothing; one that
+// appears in one distinguishes everything. With `log(1 + N/df)` that did not
+// hold: what is in all of them still weighed, and the listing filled with
+// skills sharing only a template word. `log(N/df)` takes that case to zero.
+const inHowMany = new Map()
+for (const ws of SKILLS.values()) for (const w of ws) inHowMany.set(w, (inHowMany.get(w) || 0) + 1)
 const N = SKILLS.size
 
-function puntuar(frase) {
-  const q = new Set(palabras(frase))
+function score(sentence) {
+  const q = new Set(words(sentence))
   const r = []
-  for (const [nombre, ws] of SKILLS) {
+  for (const [name, ws] of SKILLS) {
     let s = 0
-    for (const w of q) if (ws.has(w)) s += Math.log(N / enCuantas.get(w))
-    if (s > 0) r.push({ nombre, punto: +s.toFixed(2) })
+    for (const w of q) if (ws.has(w)) s += Math.log(N / inHowMany.get(w))
+    if (s > 0) r.push({ name, point: +s.toFixed(2) })
   }
-  return r.sort((a, b) => b.punto - a.punto)
+  return r.sort((a, b) => b.point - a.point)
 }
 
-// Por debajo de esto dos descripciones no se distinguen: cuál gane depende del
-// azar de una palabra, no de lo que dicen. Es una fracción del líder y no un
-// valor absoluto, porque la puntuación crece con el número de palabras de la
-// frase: 0,5 era mucho en «revisar la propuesta» y casi nada en una frase de
-// doce palabras, y los casos del fichero tienen las dos longitudes.
-const MARGEN_MINIMO = 0.15
+// Below this two descriptions cannot be told apart: which one wins depends on
+// the luck of one word, not on what they say. It is a fraction of the leader
+// and not an absolute value, because the score grows with the number of words
+// in the sentence: 0.5 was a lot for "revisar la propuesta" and almost nothing
+// for a twelve-word sentence, and the cases in the file have both lengths.
+const MIN_MARGIN = 0.15
 
-function margenRelativo(r) {
-  if (r.length < 2 || !r[0].punto) return 1
-  return (r[0].punto - r[1].punto) / r[0].punto
+function relativeMargin(r) {
+  if (r.length < 2 || !r[0].point) return 1
+  return (r[0].point - r[1].point) / r[0].point
 }
 
-function informe(frase) {
-  const r = puntuar(frase)
-  console.log(`\n"${frase}"\n`)
+function report(sentence) {
+  const r = score(sentence)
+  console.log(`\n"${sentence}"\n`)
   if (!r.length) {
-    console.log('  ninguna skill comparte vocabulario con esa frase')
+    console.log('  no skill shares vocabulary with that sentence')
     return
   }
-  for (const { nombre, punto } of r.slice(0, 5)) console.log(`  ${String(punto).padStart(6)}  ${nombre}`)
+  for (const { name, point } of r.slice(0, 5)) console.log(`  ${String(point).padStart(6)}  ${name}`)
   if (r.length > 1) {
-    const m = margenRelativo(r)
-    console.log(`\n  margen entre la 1ª y la 2ª: ${(m * 100).toFixed(0)}%${m < MARGEN_MINIMO ? '  — no se distinguen' : ''}`)
+    const m = relativeMargin(r)
+    console.log(`\n  margin between 1st and 2nd: ${(m * 100).toFixed(0)}%${m < MIN_MARGIN ? '  — not distinguishable' : ''}`)
   }
 }
 
 const args = process.argv.slice(2)
 
-// Un adaptador bien escrito reparte: cede la frase genérica al procedimiento que
-// adapta y gana la suya. Comprobarlo con una sola frase no vale — un adaptador
-// mudo pasaría la mitad buena de la prueba y seguiría siendo inútil.
-if (args[0] === '--adaptador') {
-  const [, adaptador, kernel, generica, propia] = args
-  if (!adaptador || !kernel || !generica || !propia) {
-    console.error('uso: probe.mjs --adaptador <skill> <skill-del-kernel> "frase genérica" "frase con nombres propios"')
+// A well-written adapter splits: it yields the generic sentence to the
+// procedure it adapts and wins its own. Checking with a single sentence is not
+// enough: a mute adapter would pass the good half of the test and still be
+// useless.
+if (args[0] === '--adaptador' || args[0] === '--adapter') {
+  const [, adapter, kernel, generic, own] = args
+  if (!adapter || !kernel || !generic || !own) {
+    console.error('usage: probe.mjs --adaptador <skill> <kernel-skill> "generic sentence" "sentence with proper names"')
     process.exit(2)
   }
-  const gana = (frase) => puntuar(frase)[0]?.nombre || '(ninguna)'
-  const g = gana(generica)
-  const pr = gana(propia)
-  const bien = g === kernel && pr === adaptador
+  const wins = (sentence) => score(sentence)[0]?.name || '(none)'
+  const g = wins(generic)
+  const pr = wins(own)
+  const good = g === kernel && pr === adapter
 
-  console.log(`\n  genérica  "${generica}"`)
-  console.log(`            gana ${g}${g === kernel ? '' : `  — debería ganar ${kernel}`}`)
-  console.log(`\n  propia    "${propia}"`)
-  console.log(`            gana ${pr}${pr === adaptador ? '' : `  — debería ganar ${adaptador}`}`)
-  console.log(bien
-    ? `\n  ${adaptador} reparte bien con ${kernel}\n`
-    : `\n  ${adaptador} NO reparte con ${kernel}: fuera de su proyecto gana el que no toca\n`)
-  process.exit(bien ? 0 : 1)
+  console.log(`\n  generic   "${generic}"`)
+  console.log(`            wins ${g}${g === kernel ? '' : `  — should win ${kernel}`}`)
+  console.log(`\n  own       "${own}"`)
+  console.log(`            wins ${pr}${pr === adapter ? '' : `  — should win ${adapter}`}`)
+  console.log(good
+    ? `\n  ${adapter} splits well with ${kernel}\n`
+    : `\n  ${adapter} does NOT split with ${kernel}: outside its project the wrong one wins\n`)
+  process.exit(good ? 0 : 1)
 }
 
-if (args[0] === '--casos') {
-  const fichero = args[1] || join(dirname(fileURLToPath(import.meta.url)), '..', 'casos', 'activacion.tsv')
-  if (!existsSync(fichero)) {
-    console.error(`no existe el fichero de casos: ${fichero}`)
+if (args[0] === '--casos' || args[0] === '--cases') {
+  const file = args[1] || join(dirname(fileURLToPath(import.meta.url)), '..', 'casos', 'activacion.tsv')
+  if (!existsSync(file)) {
+    console.error(`the cases file does not exist: ${file}`)
     process.exit(2)
   }
-  let total = 0, fallos = 0, estrechos = 0
-  const lineas = readFileSync(fichero, 'utf8').split('\n')
-  for (const [i, linea] of lineas.entries()) {
-    if (!linea.trim() || linea.startsWith('#')) continue
-    const [esperada, ...resto] = linea.split('\t')
-    const frase = resto.join(' ').trim()
-    // Un tabulador convertido en espacios es el error natural al editar esto a
-    // mano, y saltárselo en silencio deja un fichero de casos que no prueba
-    // nada y sigue saliendo en verde.
-    if (!frase) {
-      console.error(`${fichero}:${i + 1} sin tabulador entre la skill y la frase`)
+  let total = 0, failures = 0, narrow = 0
+  const lines = readFileSync(file, 'utf8').split('\n')
+  for (const [i, line] of lines.entries()) {
+    if (!line.trim() || line.startsWith('#')) continue
+    const [expected, ...rest] = line.split('\t')
+    const sentence = rest.join(' ').trim()
+    // A tab turned into spaces is the natural mistake when editing this by
+    // hand, and skipping it silently leaves a cases file that tests nothing
+    // and still comes out green.
+    if (!sentence) {
+      console.error(`${file}:${i + 1} no tab between the skill and the sentence`)
       process.exit(2)
     }
     total++
-    const r = puntuar(frase)
-    const puesto = r.findIndex(x => x.nombre === esperada) + 1
-    const margen = margenRelativo(r)
+    const r = score(sentence)
+    const rank = r.findIndex(x => x.name === expected) + 1
+    const margin = relativeMargin(r)
 
-    if (puesto !== 1) {
-      fallos++
-      console.log(`FALLA  esperaba ${esperada}, gana ${r[0]?.nombre || '(ninguna)'}${puesto ? ` — ${esperada} va en el puesto ${puesto}` : ` — ${esperada} no puntúa`}`)
-      console.log(`       "${frase}"`)
-    } else if (margen < MARGEN_MINIMO) {
-      estrechos++
-      console.log(`JUSTA  ${esperada} gana por ${(margen * 100).toFixed(0)}% a ${r[1].nombre} — no se distinguen`)
-      console.log(`       "${frase}"`)
+    if (rank !== 1) {
+      failures++
+      console.log(`FAIL   expected ${expected}, ${r[0]?.name || '(none)'} wins${rank ? ` — ${expected} is in position ${rank}` : ` — ${expected} does not score`}`)
+      console.log(`       "${sentence}"`)
+    } else if (margin < MIN_MARGIN) {
+      narrow++
+      console.log(`CLOSE  ${expected} wins by ${(margin * 100).toFixed(0)}% over ${r[1].name} — not distinguishable`)
+      console.log(`       "${sentence}"`)
     }
   }
   if (!total) {
-    console.error(`${fichero} no tiene ni un caso`)
+    console.error(`${file} has not a single case`)
     process.exit(2)
   }
-  console.log(`\n${total} casos · ${fallos} fallan · ${estrechos} ganan sin distinguirse`)
-  process.exit(fallos ? 1 : 0)
+  console.log(`\n${total} cases · ${failures} fail · ${narrow} win without being distinguishable`)
+  process.exit(failures ? 1 : 0)
 }
 
 if (!args.length) {
-  console.error('uso: probe.mjs "frase"   |   probe.mjs --casos [fichero]')
+  console.error('usage: probe.mjs "sentence"   |   probe.mjs --cases [file]')
   process.exit(2)
 }
 
-informe(args.join(' '))
+report(args.join(' '))

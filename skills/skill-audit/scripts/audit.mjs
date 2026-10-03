@@ -1,22 +1,23 @@
 #!/usr/bin/env node
-// Inventaría las skills de todos los proyectos y señala cuáles podrían ser
-// patrones disfrazados de adaptadores.
+// Inventories the skills of every project and flags which ones could be
+// patterns disguised as adapters.
 //
-//   audit.mjs [dir-de-proyectos]
+//   audit.mjs [projects-dir]
 //
-// Dos señales:
-//   1. Densidad de nombres propios. Los términos se derivan del crux.json de
-//      cada proyecto, no de una lista escrita a mano.
-//   2. Pares de skills de proyectos distintos que describen lo mismo. Es la
-//      promoción más obvia y la más invisible: nadie ve las dos a la vez.
+// Two signals:
+//   1. Density of proper names. The terms are derived from each project's
+//      crux.json, not from a hand-written list.
+//   2. Pairs of skills from different projects that describe the same thing.
+//      It is the most obvious promotion and the most invisible: nobody sees
+//      both at once.
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 
-// La raíz de proyectos no se asume: sale de la config de la máquina o del sitio
-// donde está instalado el kernel, que siempre vive dentro de ella.
-function raizProyectos() {
+// The projects root is not assumed: it comes from the machine config or from
+// where the kernel is installed, which always lives inside it.
+function projectsRoot() {
   if (process.env.CRUX_PROJECTS_DIR) return process.env.CRUX_PROJECTS_DIR
   try {
     const cfg = readFileSync(join(homedir(), '.crux', 'config'), 'utf8')
@@ -29,7 +30,7 @@ function raizProyectos() {
   return join(homedir(), 'Proyectos')
 }
 
-const ROOT = process.argv[2] || raizProyectos()
+const ROOT = process.argv[2] || projectsRoot()
 
 const STOP = new Set(`de la el en y a los las del un una para con por que se su al lo como más o
 usa cuando the of and to in for when a is it this that use uses using skill
@@ -64,21 +65,22 @@ function walkSkills(dir) {
   return out
 }
 
-// Un valor puede continuar en las líneas siguientes. Sin esto, una descripción
-// de dos líneas se cortaba en la primera y este informe medía un texto distinto
-// del que mide `probe.mjs`, que es con el que la SKILL.md manda contrastarlo.
+// A value can continue on the following lines. Without this, a two-line
+// description was cut at the first and this report measured a different text
+// from the one `probe.mjs` measures, which is what SKILL.md says to check it
+// against.
 function frontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---/)
   if (!m) return {}
   const out = {}
-  let clave = null
+  let key = null
   for (const line of m[1].split('\n')) {
     const kv = line.match(/^([\w-]+):\s*(.*)$/)
     if (kv) {
-      clave = kv[1]
-      out[clave] = kv[2]
-    } else if (clave && line.trim()) {
-      out[clave] = `${out[clave]} ${line.trim()}`.trim()
+      key = kv[1]
+      out[key] = kv[2]
+    } else if (key && line.trim()) {
+      out[key] = `${out[key]} ${line.trim()}`.trim()
     }
   }
   return out
@@ -99,20 +101,20 @@ function jaccard(a, b) {
 
 const projects = findProjects(ROOT)
 if (!projects.length) {
-  console.log(`sin proyectos adoptados bajo ${ROOT}`)
+  console.log(`no adopted projects under ${ROOT}`)
   process.exit(0)
 }
 
-// Un adaptador de una skill del kernel también tiene baja densidad, porque su
-// contenido técnico ya está depurado de nombres propios. Sin esto, el informe
-// propone una y otra vez promover lo que ya está promovido.
+// An adapter of a kernel skill also has low density, because its technical
+// content is already stripped of proper names. Without this, the report keeps
+// proposing to promote what is already promoted.
 const kernelDir = join(process.env.CRUX_HOME || join(ROOT, 'crux'), 'skills')
 const kernelSkills = existsSync(kernelDir)
   ? readdirSync(kernelDir).filter(n => statSync(join(kernelDir, n)).isDirectory())
   : []
 
-// La descripción del procedimiento, no solo su nombre: sin ella no se puede
-// medir si el adaptador que quedó abajo compite con lo que se promovió.
+// The procedure's description, not just its name: without it there is no way
+// to measure whether the adapter left below competes with what was promoted.
 const kernelDesc = new Map(
   kernelSkills.map(n => {
     const f = join(kernelDir, n, 'SKILL.md')
@@ -124,13 +126,13 @@ const all = []
 
 for (const p of projects) {
   const cfg = JSON.parse(readFileSync(p.cfg, 'utf8'))
-  // Los nombres propios de un proyecto son su nombre y los de sus repos: eso
-  // ya está declarado en el contrato, no hace falta mantenerlo aparte.
-  const enteros = [cfg.project, ...(cfg.repos || [])].map(t => String(t).toLowerCase())
-  const fragmentos = enteros
+  // A project's proper names are its name and its repos' names: that is
+  // already declared in the contract, no need to maintain it separately.
+  const whole = [cfg.project, ...(cfg.repos || [])].map(t => String(t).toLowerCase())
+  const fragments = whole
     .flatMap(t => t.split(/[-_]/))
     .filter(t => t.length > 2)
-  const terms = [...enteros, ...fragmentos]
+  const terms = [...whole, ...fragments]
   const re = new RegExp(`\\b(${[...new Set(terms)].join('|')})\\b`, 'gi')
 
   for (const file of walkSkills(join(p.path, '.claude', 'skills'))) {
@@ -139,9 +141,9 @@ for (const p of projects) {
     const lines = text.split('\n').length
     const hits = (text.match(re) || []).length
     const adapts = kernelSkills.filter(k => new RegExp(`(?<![\\w-])${k}(?![\\w-]|\\.\\w)`).test(text))
-    // La densidad mira el fichero entero, pero al agente solo se le enseña la
-    // descripción: un adaptador con veinte nombres propios en el cuerpo y
-    // ninguno arriba es indistinguible del procedimiento que adapta.
+    // Density looks at the whole file, but the agent is only shown the
+    // description: an adapter with twenty proper names in the body and none
+    // above is indistinguishable from the procedure it adapts.
     const hitsDesc = ((fm.description || '').match(re) || []).length
     all.push({
       project: cfg.project,
@@ -153,100 +155,100 @@ for (const p of projects) {
   }
 }
 
-console.log(`skills inventariadas: ${all.length} en ${projects.length} proyectos\n`)
+console.log(`skills inventoried: ${all.length} in ${projects.length} projects\n`)
 
 const adapters = all.filter(s => s.adapts.length)
 const candidates = all
   .filter(s => s.density < 0.05 && !s.adapts.length)
   .sort((a, b) => a.density - b.density)
 if (candidates.length) {
-  console.log('Baja densidad de nombres propios — posibles patrones:\n')
-  console.log('  dens.  hits/líneas  proyecto      skill')
+  console.log('Low density of proper names — possible patterns:\n')
+  console.log('  dens.  hits/lines   project       skill')
   for (const s of candidates) {
     console.log(`  ${String(s.density).padEnd(6)} ${String(s.hits + '/' + s.lines).padEnd(12)} ${s.project.padEnd(13)} ${s.name}`)
   }
-  console.log('\n  Aplica el test: tapa los nombres propios. Si el procedimiento sigue')
-  console.log('  teniendo sentido y valor, hay un patrón dentro.\n')
+  console.log('\n  Apply the test: cover the proper names. If the procedure still')
+  console.log('  makes sense and has value, there is a pattern inside.\n')
 } else {
-  console.log('Ninguna skill con densidad sospechosamente baja.\n')
+  console.log('No skill with suspiciously low density.\n')
 }
 
-const UMBRAL_PARECIDO = 0.18
+const SIMILARITY_THRESHOLD = 0.18
 
 const pairs = []
 for (let i = 0; i < all.length; i++) {
   for (let j = i + 1; j < all.length; j++) {
     if (all[i].project === all[j].project) continue
-    const sim = jaccard(tokens(all[i].description), tokens(all[j].description))
-    if (sim >= UMBRAL_PARECIDO) pairs.push({ a: all[i], b: all[j], sim: +sim.toFixed(2) })
+    const similarity = jaccard(tokens(all[i].description), tokens(all[j].description))
+    if (similarity >= SIMILARITY_THRESHOLD) pairs.push({ a: all[i], b: all[j], sim: +similarity.toFixed(2) })
   }
 }
 
 if (pairs.length) {
-  console.log('Skills de proyectos distintos que describen lo mismo:\n')
+  console.log('Skills from different projects that describe the same thing:\n')
   for (const p of pairs.sort((x, y) => y.sim - x.sim)) {
     console.log(`  ${p.sim}  ${p.a.project}/${p.a.name}  vs  ${p.b.project}/${p.b.name}`)
   }
-  console.log('\n  Dos proyectos resolviendo el mismo problema por separado es la')
-  console.log('  promoción más clara que existe: cumple la regla de las dos ocurrencias.\n')
+  console.log('\n  Two projects solving the same problem separately is the clearest')
+  console.log('  promotion there is: it meets the two-occurrences rule.\n')
 } else {
-  console.log('Sin duplicados semánticos entre proyectos.\n')
+  console.log('No semantic duplicates between projects.\n')
 }
 
-// La secuela de una promoción. Hasta aquí el informe miraba hacia delante —qué
-// merece subir—, y el par que la propia promoción deja atrás no lo veía nadie:
-// el procedimiento arriba y su adaptador abajo, compitiendo por el mismo
-// enunciado. Se descubrió midiendo el ejemplo canónico del estándar,
-// device-loop y su adaptador, que daban un empate exacto.
+// The aftermath of a promotion. Until here the report looked forward (what
+// deserves promoting), and nobody saw the pair the promotion itself leaves
+// behind: the procedure above and its adapter below, competing for the same
+// statement. It was discovered by measuring the standard's canonical example,
+// device-loop and its adapter, which gave an exact tie.
 //
-// Dos señales, porque una sola no basta: se pisan mucho, o no se distinguen en
-// lo único que el agente compara.
+// Two signals, because one is not enough: they overlap a lot, or they cannot
+// be told apart on the only thing the agent compares.
 //
-// `adapts` se deduce de mencionar el nombre de una skill del kernel en el
-// texto, y nombres como `flow` o `workspace` son también palabras corrientes.
-// Por eso el solape se reporta por par —donde el falso positivo se ve y da
-// 0—, y la falta de nombres propios una sola vez por adaptador: es una
-// propiedad suya, no de la pareja.
-const colisiones = []
+// `adapts` is deduced from mentioning a kernel skill's name in the text, and
+// names like `flow` or `workspace` are also ordinary words. That is why the
+// overlap is reported per pair (where the false positive is visible and gives
+// 0), and the lack of proper names once per adapter: it is a property of the
+// adapter, not of the pair.
+const collisions = []
 for (const a of adapters) {
   for (const k of a.adapts) {
-    const sim = jaccard(tokens(a.description), tokens(kernelDesc.get(k) || ''))
-    if (sim >= UMBRAL_PARECIDO) colisiones.push({ a, k, sim: +sim.toFixed(2) })
+    const similarity = jaccard(tokens(a.description), tokens(kernelDesc.get(k) || ''))
+    if (similarity >= SIMILARITY_THRESHOLD) collisions.push({ a, k, sim: +similarity.toFixed(2) })
   }
 }
-const mudos = adapters.filter(a => !a.hitsDesc)
+const silent = adapters.filter(a => !a.hitsDesc)
 
-if (colisiones.length) {
-  console.log('\nAdaptadores parecidos a su procedimiento — comprueba cómo reparten:\n')
-  for (const c of colisiones.sort((x, y) => y.sim - x.sim)) {
+if (collisions.length) {
+  console.log('\nAdapters similar to their procedure — check how they split:\n')
+  for (const c of collisions.sort((x, y) => y.sim - x.sim)) {
     console.log(`  ${c.sim}  ${c.a.project}/${c.a.name}  vs  kernel/${c.k}`)
   }
-  // Parecerse no es competir, y medido sobre los adaptadores reales este número
-  // señaló seis cuando el que fallaba era uno. Dos skills que hablan de
-  // desplegar sin CI comparten vocabulario por fuerza; lo que decide es quién
-  // gana cada frase, y eso necesita las dos frases, que este informe no tiene.
-  console.log('\n  Compartir vocabulario es inevitable: el adaptador habla del mismo')
-  console.log('  trabajo. Lo que no puede pasar es que gane una frase sin nombres')
-  console.log('  propios, porque entonces gana también en los proyectos donde no')
-  console.log('  aplica. El veredicto lo da la prueba de las dos frases:\n')
-  for (const c of colisiones.sort((x, y) => y.sim - x.sim)) {
-    console.log(`    probe.mjs --adaptador ${c.a.name} ${c.k} "<frase genérica>" "<frase con nombres propios>"`)
+  // Resembling is not competing, and measured on the real adapters this number
+  // flagged six when only one failed. Two skills that talk about deploying
+  // without CI share vocabulary by necessity; what decides is who wins each
+  // sentence, and that needs the two sentences, which this report lacks.
+  console.log('\n  Sharing vocabulary is inevitable: the adapter talks about the same')
+  console.log('  work. What cannot happen is that it wins a sentence without proper')
+  console.log('  names, because then it also wins in the projects where it does not')
+  console.log('  apply. The verdict comes from the two-sentence test:\n')
+  for (const c of collisions.sort((x, y) => y.sim - x.sim)) {
+    console.log(`    probe.mjs --adaptador ${c.a.name} ${c.k} "<generic sentence>" "<sentence with proper names>"`)
   }
   console.log()
 } else if (adapters.length) {
-  console.log('\nNingún adaptador se parece a su procedimiento.\n')
+  console.log('\nNo adapter resembles its procedure.\n')
 }
 
-if (mudos.length) {
-  console.log('Adaptadores que no nombran su proyecto en la descripción:\n')
-  for (const a of mudos) console.log(`  ${a.project}/${a.name}`)
-  console.log('\n  La densidad de arriba mira el fichero entero, pero al agente solo se')
-  console.log('  le enseña la descripción. Un adaptador que no se nombra ahí no se')
-  console.log('  distingue del procedimiento, y puja en los demás proyectos.\n')
+if (silent.length) {
+  console.log('Adapters that do not name their project in the description:\n')
+  for (const a of silent) console.log(`  ${a.project}/${a.name}`)
+  console.log('\n  The density above looks at the whole file, but the agent is only')
+  console.log('  shown the description. An adapter that does not name itself there')
+  console.log('  is indistinguishable from the procedure, and bids in other projects.\n')
 }
 
 if (adapters.length) {
-  console.log('Ya son adaptadores de una skill del kernel:\n')
+  console.log('Already adapters of a kernel skill:\n')
   for (const s of adapters) {
     console.log(`  ${s.project}/${s.name}  ->  ${s.adapts.join(', ')}`)
   }

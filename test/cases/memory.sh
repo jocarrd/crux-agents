@@ -1,158 +1,158 @@
 #!/usr/bin/env bash
 
-# Escribe una memoria del agente en el sandbox y devuelve su ruta.
-#   memoria <ámbito> <nombre> [tipo]   — sin tipo, la deja sin declarar
-memoria() {
-  local ambito="$1" nombre="$2" tipo="${3:-}" dir
-  dir="$CLAUDE_CONFIG_DIR/projects/$ambito/memory"
+# Writes an agent memory in the sandbox and prints its path.
+#   memory <scope> <name> [type]   — with no type, leaves it undeclared
+memory() {
+  local scope_name="$1" name="$2" kind="${3:-}" dir
+  dir="$CLAUDE_CONFIG_DIR/projects/$scope_name/memory"
   mkdir -p "$dir"
   {
     echo "---"
-    echo "name: $nombre"
-    echo "description: memoria de prueba"
-    if [[ -n "$tipo" ]]; then
+    echo "name: $name"
+    echo "description: test memory"
+    if [[ -n "$kind" ]]; then
       echo "metadata:"
-      echo "  type: $tipo"
+      echo "  type: $kind"
     fi
     echo "---"
     echo
-    echo "cuerpo"
-  } > "$dir/$nombre.md"
-  echo "$dir/$nombre.md"
+    echo "body"
+  } > "$dir/$name.md"
+  echo "$dir/$name.md"
 }
 
-# El ámbito con el que un agente nombra un directorio de trabajo.
-ambito_de() { printf '%s' "$1" | tr '/.' '-'; }
+# The scope an agent names a working directory with.
+scope_of() { printf '%s' "$1" | tr '/.' '-'; }
 
-test_memory_detecta_las_de_proyecto_sin_promover() {
+test_memory_detects_unpromoted_project_ones() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  memoria "$(ambito_de "$CRUX_PROJECTS_DIR/alfa")" lead-comercial project >/dev/null
+  new_project alpha >/dev/null
+  memory "$(scope_of "$CRUX_PROJECTS_DIR/alpha")" sales-lead project >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "lead-comercial" "nombra la memoria que falta en git"
-  assert_contains "$out" "alfa-docs" "dice a qué docs repo pertenece"
-  assert_exit 1 "--check falla mientras quede alguna" \
+  assert_contains "$out" "sales-lead" "names the memory that is missing in git"
+  assert_contains "$out" "alpha-docs" "says which docs repo it belongs to"
+  assert_exit 1 "--check fails while any remain" \
     bash "$CRUX_HOME/bin/memory.sh" --check
 }
 
-test_memory_deja_en_local_lo_que_es_de_la_persona() {
+test_memory_leaves_local_what_belongs_to_the_person() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  local ambito; ambito="$(ambito_de "$CRUX_PROJECTS_DIR/alfa")"
-  memoria "$ambito" prefiere-espanol user >/dev/null
-  memoria "$ambito" sin-comentarios-narrativos feedback >/dev/null
+  new_project alpha >/dev/null
+  local scope_name; scope_name="$(scope_of "$CRUX_PROJECTS_DIR/alpha")"
+  memory "$scope_name" prefers-spanish user >/dev/null
+  memory "$scope_name" no-narrative-comments feedback >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "nada sin promover" "user y feedback no son fugas"
-  assert_contains "$out" "1 user" "las cuenta como locales por diseño"
-  assert_exit 0 "--check pasa" bash "$CRUX_HOME/bin/memory.sh" --check
+  assert_contains "$out" "nothing unpromoted" "user and feedback are not leaks"
+  assert_contains "$out" "1 user" "counts them as local by design"
+  assert_exit 0 "--check passes" bash "$CRUX_HOME/bin/memory.sh" --check
 }
 
-test_memory_no_asume_el_tipo_que_falta() {
+test_memory_does_not_assume_missing_type() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  memoria "$(ambito_de "$CRUX_PROJECTS_DIR/alfa")" sin-declarar >/dev/null
+  new_project alpha >/dev/null
+  memory "$(scope_of "$CRUX_PROJECTS_DIR/alpha")" undeclared >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "sin tipo declarado" "reporta la que no declara tipo"
-  assert_contains "$out" "sin-declarar" "y la nombra"
-  assert_exit 0 "no la cuenta como fuga: no se sabe si lo es" \
+  assert_contains "$out" "no declared type" "reports the one that declares no type"
+  assert_contains "$out" "undeclared" "and names it"
+  assert_exit 0 "does not count it as a leak: it is not known whether it is one" \
     bash "$CRUX_HOME/bin/memory.sh" --check
 }
 
-test_memory_para_si_una_memoria_no_se_puede_leer() {
-  # Root lee cualquier fichero, así que ahí la comprobación no prueba nada.
+test_memory_stops_if_a_memory_cannot_be_read() {
+  # Root reads any file, so there the check proves nothing.
   [[ "${EUID:-$(id -u)}" -eq 0 ]] && return 0
 
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  local f; f="$(memoria "$(ambito_de "$CRUX_PROJECTS_DIR/alfa")" opaca project)"
+  new_project alpha >/dev/null
+  local f; f="$(memory "$(scope_of "$CRUX_PROJECTS_DIR/alpha")" opaque project)"
   chmod 000 "$f"
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "no se pueden leer" "lo dice en vez de contarla como cero"
-  assert_contains "$out" "opaca" "y señala cuál"
-  assert_exit 1 "--check tampoco da por buena una lectura que falló" \
+  assert_contains "$out" "cannot be read" "says so instead of counting it as zero"
+  assert_contains "$out" "opaque" "and points at which one"
+  assert_exit 1 "--check does not accept a read that failed either" \
     bash "$CRUX_HOME/bin/memory.sh" --check
 
   chmod 644 "$f"
 }
 
-test_memory_asigna_al_proyecto_mas_especifico() {
+test_memory_assigns_to_most_specific_project() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  new_project alfa-beta >/dev/null
-  memoria "$(ambito_de "$CRUX_PROJECTS_DIR/alfa-beta/api")" nota-de-api project >/dev/null
+  new_project alpha >/dev/null
+  new_project alpha-beta >/dev/null
+  memory "$(scope_of "$CRUX_PROJECTS_DIR/alpha-beta/api")" api-note project >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "alfa-beta-docs" "gana el nombre de proyecto más largo"
-  assert_not_contains "$out" " alfa-docs" "y no se la lleva el que empieza igual"
+  assert_contains "$out" "alpha-beta-docs" "the longest project name wins"
+  assert_not_contains "$out" " alpha-docs" "and the one that starts the same does not take it"
 }
 
-test_memory_sin_proyecto_dice_de_donde_sale() {
+test_memory_without_project_says_where_it_comes_from() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  memoria "$(ambito_de "$SB/otro-sitio")" apunte-suelto reference >/dev/null
+  new_project alpha >/dev/null
+  memory "$(scope_of "$SB/elsewhere")" loose-note reference >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "apunte-suelto" "la reporta igual"
-  assert_contains "$out" "ámbito" "y dice de qué directorio salió"
-  assert_not_contains "$out" "alfa-docs" "no la coloca en un proyecto a ojo"
+  assert_contains "$out" "loose-note" "reports it all the same"
+  assert_contains "$out" "scope" "and says which directory it came from"
+  assert_not_contains "$out" "alpha-docs" "does not place it in a project by eye"
 }
 
-test_memory_brief_ocupa_dos_lineas_por_muchas_que_haya() {
+test_memory_brief_takes_two_lines_however_many() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  local ambito; ambito="$(ambito_de "$CRUX_PROJECTS_DIR/alfa")"
-  local i; for i in 1 2 3 4 5; do memoria "$ambito" "nota-$i" project >/dev/null; done
+  new_project alpha >/dev/null
+  local scope_name; scope_name="$(scope_of "$CRUX_PROJECTS_DIR/alpha")"
+  local i; for i in 1 2 3 4 5; do memory "$scope_name" "nota-$i" project >/dev/null; done
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" --brief 2>&1)"
-  assert_eq "2" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "el aviso del hook no crece"
-  assert_contains "$out" "+2" "dice cuántas se dejó por nombrar"
+  assert_eq "2" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "the hook warning does not grow"
+  assert_contains "$out" "+2" "says how many were left unnamed"
 }
 
-test_hooks_engancha_y_retira_el_guardian_de_memoria() {
+test_hooks_install_and_remove_memory_guard() {
   sandbox >/dev/null
-  local docs; docs="$(new_project alfa)"
+  local docs; docs="$(new_project alpha)"
   echo '{}' > "$CLAUDE_SETTINGS"
 
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
   assert_contains "$(cat "$CLAUDE_SETTINGS")" "memory-guard" \
-    "install engancha el guardián al cierre de sesión"
+    "install hooks the guard at session close"
 
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1 )
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "memory-guard" \
-    "remove lo retira"
+    "remove removes it"
 }
 
-test_el_guardian_calla_cuando_no_hay_nada_que_promover() {
+test_guard_stays_silent_when_nothing_to_promote() {
   sandbox >/dev/null
-  new_project alfa >/dev/null
-  memoria "$(ambito_de "$CRUX_PROJECTS_DIR/alfa")" prefiere-espanol user >/dev/null
+  new_project alpha >/dev/null
+  memory "$(scope_of "$CRUX_PROJECTS_DIR/alpha")" prefers-spanish user >/dev/null
 
-  # CRUX_HOME ya viene exportado por el runner, que es como lo ve el hook real.
+  # CRUX_HOME is already exported by the runner, which is how the real hook sees it.
   local out
   out="$(bash "$CRUX_HOME/adapters/claude/hooks/memory-guard.sh" 2>&1)"
-  assert_eq "" "$out" "silencioso mientras no haya fugas"
+  assert_eq "" "$out" "silent while there are no leaks"
 }
 
-test_memory_avisa_si_no_hay_raiz_de_proyectos() {
+test_memory_warns_if_no_projects_root() {
   sandbox >/dev/null
-  memoria "$(ambito_de "$CRUX_PROJECTS_DIR/alfa")" nota project >/dev/null
+  memory "$(scope_of "$CRUX_PROJECTS_DIR/alpha")" note project >/dev/null
   rm -rf "$CRUX_PROJECTS_DIR"
 
   local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
-  assert_contains "$out" "raíz de proyectos no existe" "no da el destino por perdido en silencio"
-  assert_contains "$out" "nota" "y sigue reportando la fuga, que no depende de eso"
+  assert_contains "$out" "projects root does not exist" "does not silently write the destination off"
+  assert_contains "$out" "note" "and keeps reporting the leak, which does not depend on that"
 }
 
-test_el_sandbox_aisla_los_ajustes_del_agente() {
+test_sandbox_isolates_agent_settings() {
   sandbox >/dev/null
-  local docs; docs="$(new_project alfa)"
+  local docs; docs="$(new_project alpha)"
   ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
 
-  assert_file "$CLAUDE_SETTINGS" "los hooks se instalan dentro del sandbox"
+  assert_file "$CLAUDE_SETTINGS" "the hooks are installed inside the sandbox"
   assert_not_contains "$CLAUDE_SETTINGS" "$HOME/.claude" \
-    "y no en los ajustes reales de quien ejecuta la suite"
+    "and not in the real settings of whoever runs the suite"
 }

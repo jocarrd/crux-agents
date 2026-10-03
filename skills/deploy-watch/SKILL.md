@@ -1,126 +1,127 @@
 ---
 name: deploy-watch
-description: Vigilar un despliegue después de fusionar hasta confirmar que la versión nueva está en producción y funciona: esperar a que llegue, comprobar que las rutas responden sin errores, mirar lo que el cambio tocaba y decir cómo revertir si algo falla. Usa justo después de fusionar una propuesta que se despliega sola, cuando alguien pregunte si ya está en producción, o cuando un despliegue haya terminado en verde y nadie haya mirado la web de verdad.
+description: Watch a deployment after merging until confirming the new version is in production and working: wait for it to arrive, check that routes respond without errors, look at what the change touched and say how to roll back if something fails. Use right after merging a proposal that deploys itself, when someone asks whether it is already in production, or when a deployment finished green and nobody has actually looked at the site.
 ---
 
 # deploy-watch
 
-Fusionar no es desplegar, y desplegar en verde no es funcionar. Entre las dos
-cosas hay un hueco en el que nadie mira: el CI dice que construyó, la
-plataforma dice que publicó, y el primero que abre la web es un usuario.
+Merging is not deploying, and a green deployment is not working. Between the two
+there is a gap where nobody looks: CI says it built, the platform says it
+published, and the first one to open the site is a user.
 
-Esto cierra ese hueco. Es el último paso del ciclo antes de cerrar la sesión.
+This closes that gap. It is the last step of the cycle before closing the
+session.
 
-## Cuándo aplica
+## When it applies
 
-- Después de fusionar una propuesta cuyo despliegue arranca solo.
-- Después de un despliegue manual (`/deploy-fallback`).
+- After merging a proposal whose deployment starts on its own.
+- After a manual deployment (`/deploy-fallback`).
 
-## Cuándo no
+## When it doesn't
 
-- Cambios que no se despliegan: documentación interna, el propio repo de docs.
-- Librerías que se publican con versión: ahí la comprobación es instalar la
-  versión publicada en un proyecto limpio, no abrir una URL.
+- Changes that aren't deployed: internal documentation, the docs repo itself.
+- Libraries published with a version: there the check is installing the published
+  version in a clean project, not opening a URL.
 
-## Qué declara el proyecto
+## What the project declares
 
-El kernel no sabe dónde vive cada proyecto. Lo declara su `crux.json`:
+The kernel doesn't know where each project lives. Its `crux.json` declares it:
 
 ```json
 "deploy": {
-  "url": "https://<dominio>",
-  "paths": ["/", "/<ruta-importante>"]
+  "url": "https://<domain>",
+  "paths": ["/", "/<important-route>"]
 }
 ```
 
-Con varios repos desplegables, uno por repo:
+With several deployable repos, one per repo:
 
 ```json
 "deploy": {
   "repos": {
-    "<repo>": { "url": "https://<dominio>", "paths": ["/"] }
+    "<repo>": { "url": "https://<domain>", "paths": ["/"] }
   }
 }
 ```
 
-`paths` son las pocas rutas que, si fallan, se nota: la portada y lo que más
-se usa. No el sitemap entero.
+`paths` are the few routes that are noticed if they fail: the home page and
+whatever is used most. Not the whole sitemap.
 
-## El recorrido
+## The walkthrough
 
-### 1. Esperar a que llegue la versión nueva
+### 1. Wait for the new version to arrive
 
-**Esta espera va en segundo plano.** Un despliegue tarda minutos y la sesión no
-se queda delante: se lanza el vigía ahí, se dice que está corriendo y se sigue
-con lo siguiente. Se vuelve cuando avise.
+**This wait runs in the background.** A deployment takes minutes and the session
+doesn't sit in front of it: the watcher is launched there, you say it is running
+and move on to the next thing. You come back when it reports.
 
-Un 200 justo después de fusionar suele ser **la versión anterior** respondiendo
-mientras la nueva se construye. Hay que esperar a algo que solo tenga la nueva:
-un texto que el cambio añade, o el identificador del commit si la aplicación lo
-expone.
+A 200 right after merging is usually **the previous version** answering while the
+new one builds. You have to wait for something only the new one has: text the
+change adds, or the commit identifier if the application exposes it.
 
 ```bash
-bash <directorio-de-esta-skill>/scripts/smoke.sh --expect "<texto que solo tiene la versión nueva>"
+bash <this-skill-directory>/scripts/smoke.sh --expect "<text only the new version has>"
 ```
 
-Si el cambio no añade nada visible que buscar, se espera a que la plataforma
-dé el despliegue por terminado y se dice que no se pudo confirmar la versión.
+If the change adds nothing visible to look for, wait for the platform to report
+the deployment as finished and say that the version could not be confirmed.
 
-### 2. Las rutas responden
+### 2. Routes respond
 
-El mismo script comprueba cada ruta declarada: código, tiempo y si el cuerpo es
-en realidad una página de error servida con 200, que algunos frameworks hacen.
+The same script checks each declared route: status code, time and whether the
+body is actually an error page served with a 200, which some frameworks do.
 
-Salida: `0` todo responde, `1` alguna ruta falla, `3` la versión nueva no llegó.
+Output: `0` everything responds, `1` some route fails, `3` the new version did
+not arrive.
 
-### 3. Lo que el cambio tocaba
+### 3. What the change touched
 
-Las rutas genéricas no ven un cambio concreto. Se abre **lo que tocó el diff**
-en producción:
+Generic routes don't see a specific change. Open **what the diff touched** in
+production:
 
-- **Interfaz**: se mira renderizado en móvil y escritorio, con `/visual-test`.
-  Se compara con lo que se vio en la vista previa de la propuesta.
-- **API**: se llama al endpoint afectado con una petición real que no escriba
-  datos.
-- **Datos**: la migración está aplicada y la aplicación arranca contra ella.
+- **Interface**: look at it rendered on mobile and desktop, with `/visual-test`.
+  Compare it with what was seen in the proposal's preview.
+- **API**: call the affected endpoint with a real request that doesn't write
+  data.
+- **Data**: the migration is applied and the application starts against it.
 
-### 4. Si algo falla
+### 4. If something fails
 
-No se arregla a ciegas en producción. Por orden:
+Don't fix blindly in production. In order:
 
-1. **Revertir**: se abre una propuesta con `git revert` del merge y se
-   fusiona. Lo que vuelve es algo que ya funcionaba; el arreglo se hace
-   después, con calma y con su ciclo.
-2. Si la plataforma permite volver al despliegue anterior con un clic, eso es
-   más rápido que el revert, pero **se hace también el revert**: si no, el
-   siguiente despliegue vuelve a publicar el fallo.
-3. Se investiga con `/root-cause`, empezando por las señales de producción
+1. **Roll back**: open a proposal with `git revert` of the merge and merge it.
+   What comes back is something that already worked; the fix is done later,
+   calmly and with its own cycle.
+2. If the platform allows going back to the previous deployment with one click,
+   that is faster than the revert, but **do the revert too**: otherwise the next
+   deployment publishes the failure again.
+3. Investigate with `/root-cause`, starting from the production signals
    (`/prod-signals`).
 
-### 5. Contarlo
+### 5. Report it
 
-Una línea basta si todo está bien: qué versión, qué rutas, cuánto tardaron.
-Si algo falló: qué, desde cuándo, qué se hizo y qué queda.
+One line is enough if everything is fine: which version, which routes, how long
+they took. If something failed: what, since when, what was done and what remains.
 
-## Lo que cuesta
+## What it costs
 
-Casi nada. El script no lee páginas enteras en el contexto: devuelve una línea
-por ruta. La parte cara es el paso 3 cuando hay interfaz, y es la misma
-revisión visual que ya se hizo en la vista previa, ahora contra producción.
+Almost nothing. The script doesn't read whole pages into the context: it returns
+one line per route. The expensive part is step 3 when there is an interface, and
+it is the same visual review already done in the preview, now against production.
 
 ## Anti-patterns
 
-- **Dar por desplegado lo fusionado.** La plataforma puede haber fallado, o
-  seguir construyendo.
-- **Comprobar solo la portada.** El cambio casi nunca está en la portada.
-- **Arreglar en caliente sobre producción.** Primero se vuelve a lo que
-  funcionaba; el arreglo pasa por el ciclo.
-- **Revertir desde la plataforma y no en git.** El siguiente despliegue
-  resucita el fallo.
+- **Assuming what was merged is deployed.** The platform may have failed, or may
+  still be building.
+- **Checking only the home page.** The change is almost never on the home page.
+- **Hot-fixing on production.** First you go back to what worked; the fix goes
+  through the cycle.
+- **Rolling back from the platform and not in git.** The next deployment
+  resurrects the failure.
 
-## Relacionado
+## Related
 
-- `/flow` — esto es su paso 6c
-- `/visual-test` — para mirar la interfaz en producción
-- `/prod-signals` — cuando algo falla y hay que ver qué dice producción
-- `/deploy-fallback` — cuando el despliegue automático no está disponible
+- `/flow`: this is its step 6c
+- `/visual-test`: to look at the interface in production
+- `/prod-signals`: when something fails and you need to see what production says
+- `/deploy-fallback`: when automatic deployment is not available

@@ -1,69 +1,69 @@
 ---
 name: explain-plan
-description: Presentar una propuesta técnica para que se pueda decidir sobre ella: qué cambia, qué se comprobó para llegar ahí, qué se rompe si es un error, qué alternativas se descartaron y qué queda sin resolver. Incluye cuándo usar tabla, cuándo diagrama y cuándo prosa. Usa antes de implementar algo que no es trivial, cuando haya varias formas razonables de hacerlo, o cuando quien decide no es quien va a escribir el código.
+description: Present a technical proposal so that it can be decided on: what changes, what was checked to get there, what breaks if it is a mistake, which alternatives were discarded and what remains unresolved. Includes when to use a table, when a diagram and when prose. Use before implementing something non-trivial, when there are several reasonable ways to do it, or when whoever decides is not the one who will write the code.
 ---
 
 # explain-plan
 
-Un plan se escribe **para que alguien pueda pararlo a tiempo**: se mide por lo
-que tarda quien lo lee en ver que está mal. El porqué de cada sección:
-`<directorio-de-esta-skill>/references/por-que.md`.
+A plan is written **so that someone can stop it in time**: it is measured by how
+long it takes the reader to see that it is wrong. The reason behind each
+section: `<this-skill-directory>/references/por-que.md`.
 
-**Usar** antes de implementar algo que toca más de un módulo o que no se
-deshace en cinco minutos, cuando hay varias formas razonables, o cuando decide
-alguien que no escribe el código. **No usar** en cambios acotados y evidentes,
-ni con el trabajo ya hecho (entonces `/adr`).
+**Use** before implementing something that touches more than one module or that
+cannot be undone in five minutes, when there are several reasonable ways, or
+when someone who does not write the code decides. **Do not use** on bounded and
+obvious changes, nor with the work already done (then `/adr`).
 
-## Las cinco secciones
+## The five sections
 
-Ninguna por costumbre: si una no aporta, se quita.
+None out of habit: if one adds nothing, it is dropped.
 
-1. **Qué cambia.** Una frase y el alcance real: qué se toca y qué queda fuera.
-   Va arriba porque es lo primero que se discute.
-2. **Por qué así: la traza.** No la conclusión, sino **qué comprobaste para
-   llegar a ella**: qué miraste, qué encontraste, qué descartó el camino obvio.
-   Escribe "comprobé X y resultó Y".
-3. **Qué se rompe si me equivoco.** El reverso y su coste. Si se deshace con un
-   `git revert`, dilo; si implica migrar datos, dilo más alto.
-4. **Alternativas descartadas, con el motivo.** "Se descartó X" no sirve; "se
-   descartó X porque obliga a mantener dos formatos en paralelo" sí.
-5. **Lo que no sé.** Las preguntas abiertas, explícitas.
+1. **What changes.** One sentence and the real scope: what is touched and what
+   stays out. It goes on top because it is the first thing discussed.
+2. **Why this way: the trace.** Not the conclusion, but **what you checked to
+   get to it**: what you looked at, what you found, what ruled out the obvious
+   path. Write "I checked X and it turned out Y".
+3. **What breaks if I am wrong.** The reverse and its cost. If it is undone with
+   a `git revert`, say so; if it involves migrating data, say it louder.
+4. **Discarded alternatives, with the reason.** "X was discarded" is no use; "X
+   was discarded because it forces maintaining two formats in parallel" is.
+5. **What I do not know.** The open questions, explicit.
 
-## La forma
+## The form
 
-| Contenido | Forma |
-| --------- | ----- |
-| Comparar opciones | Tabla |
-| Flujo con varios actores o pasos | Diagrama de secuencia |
-| Dependencias entre piezas | Grafo |
-| Estados y transiciones | Diagrama de estados |
-| El porqué, los tradeoffs, los riesgos | Prosa |
-| Cifras y medidas | En el texto |
+| Content | Form |
+| ------- | ---- |
+| Comparing options | Table |
+| Flow with several actors or steps | Sequence diagram |
+| Dependencies between pieces | Graph |
+| States and transitions | State diagram |
+| The why, the tradeoffs, the risks | Prose |
+| Figures and measurements | In the text |
 
-Dibuja solo lo que no se ve leyendo.
+Draw only what is not seen by reading.
 
-## Dónde se queda
+## Where it stays
 
-Aprobado, va al registro de la tarea: `crux task plan <fichero>` lo guarda y la
-marca como planificada; los pasos que salgan, con `crux task add`.
+Once approved, it goes to the task log: `crux task plan <file>` saves it and
+marks the task as planned; the steps that come out of it, with `crux task add`.
 
-## Se cierra cuando se ejecuta
+## It closes when it is executed
 
-Al terminar, el plan recibe una cabecera de estado: qué está hecho, con qué
-commit y, sobre todo, **qué salió distinto de lo planeado y por qué**. Un plan
-que sigue describiendo como pendiente algo hecho miente como una documentación
-desactualizada. Cerrar no es archivar: se queda como el porqué.
+When finished, the plan receives a status header: what is done, with which
+commit and, above all, **what turned out different from what was planned and
+why**. A plan that keeps describing as pending something already done lies like
+outdated documentation. Closing is not archiving: it stays as the why.
 
 ## Anti-patterns
 
-- El diagrama decorativo de cuatro cajas obvias.
-- El plan que es una lista de pasos sin porqué: no se puede rechazar.
-- La plantilla completa por costumbre.
-- Detalle de implementación: nombres de variable y firmas van en el código.
-- Presentar solo la conclusión, sin la traza.
-- El plan huérfano, que nadie cierra.
+- The decorative diagram of four obvious boxes.
+- The plan that is a list of steps without a why: it cannot be rejected.
+- The full template out of habit.
+- Implementation detail: variable names and signatures go in the code.
+- Presenting only the conclusion, without the trace.
+- The orphan plan, which nobody closes.
 
-## Relacionado
+## Related
 
-- `/adr` — registrar lo ya decidido
-- `/ship` — la puerta que revisa la implementación del plan
+- `/adr` — record what is already decided
+- `/ship` — the gate that reviews the plan's implementation

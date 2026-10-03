@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 
-# `crux bootstrap` es lo que se ejecuta en una máquina donde no hay nada. Aquí se
-# le pone delante un `gh` de mentira, porque lo que hay que comprobar no es que
-# GitHub responda: es qué considera un proyecto y qué hace con la lista.
+# `crux bootstrap` is what runs on a machine where there is nothing. Here a
+# fake `gh` is put in front of it, because what has to be checked is not that
+# GitHub answers: it is what it considers a project and what it does with the
+# list.
 
-_maquina_lista() {
-  # Las prendas mínimas que exige el doctor de máquina, dentro del sandbox.
+_ready_machine() {
+  # The minimum the machine doctor demands, inside the sandbox.
   export CRUX_CONFIG="$SB/crux-config"
   cat > "$CRUX_CONFIG" <<EOF
 CRUX_REMOTE="git@github.com:jocarrd/{repo}.git"
 EOF
-  mkdir -p "$CLAUDE_SKILLS_DIR/una-skill"
+  mkdir -p "$CLAUDE_SKILLS_DIR/some-skill"
 }
 
-_gh_falso() {
-  # $1 = lista de repos separada por espacios
-  # $2 = los que tienen contrato, separados por espacios
+_fake_gh() {
+  # $1 = list of repos separated by spaces
+  # $2 = those that have a contract, separated by spaces
   mkdir -p "$SB/bin"
   cat > "$SB/bin/gh" <<EOF
 #!/usr/bin/env bash
@@ -38,71 +39,73 @@ EOF
   export PATH="$SB/bin:$PATH"
 }
 
-test_bootstrap_solo_toma_por_proyecto_lo_que_lleva_contrato() {
+test_bootstrap_takes_as_project_only_what_carries_a_contract() {
   sandbox >/dev/null
-  _maquina_lista
-  # tres repos acaban en -docs, pero solo dos llevan crux.json. El tercero es
-  # documentación de algo que no es un proyecto del estándar.
-  _gh_falso "alfa-docs beta-docs apuntes-docs otro-repo" "alfa beta"
+  _ready_machine
+  # three repos end in -docs, but only two carry crux.json. The third is
+  # documentation of something that is not a project of the standard.
+  _fake_gh "alpha-docs beta-docs notes-docs otro-repo" "alpha beta"
 
   local out
   out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --dry-run 2>&1)"
 
-  assert_contains "$out" "alfa" "toma el que lleva contrato"
-  assert_contains "$out" "beta" "toma el otro que lleva contrato"
-  assert_contains "$out" "apuntes-docs sin contrato" "descarta el que no lo lleva y dice por qué"
-  assert_not_contains "$out" "otro-repo" "un repo que no acaba en -docs ni se mira"
+  assert_contains "$out" "alpha" "takes the one that carries a contract"
+  assert_contains "$out" "beta" "takes the other one that carries a contract"
+  assert_contains "$out" "notes-docs has no contract" "drops the one that does not carry it and says why"
+  assert_not_contains "$out" "otro-repo" "a repo that does not end in -docs is not even looked at"
   teardown
 }
 
-test_bootstrap_only_filtra() {
+test_bootstrap_only_filters() {
   sandbox >/dev/null
-  _maquina_lista
-  _gh_falso "alfa-docs beta-docs" "alfa beta"
+  _ready_machine
+  _fake_gh "alpha-docs beta-docs" "alpha beta"
 
   local out
   out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --only beta --dry-run 2>&1)"
 
-  assert_contains "$out" "beta" "trae el pedido"
-  assert_not_contains "$out" "traería 2" "y solo ese"
+  assert_contains "$out" "beta" "fetches the one asked for"
+  assert_not_contains "$out" "would fetch 2" "and only that one"
   teardown
 }
 
-test_bootstrap_en_seco_no_clona_nada() {
+test_bootstrap_dry_run_clones_nothing() {
   sandbox >/dev/null
-  _maquina_lista
-  _gh_falso "alfa-docs" "alfa"
+  _ready_machine
+  _fake_gh "alpha-docs" "alpha"
 
   crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --dry-run >/dev/null 2>&1
-  assert_no_file "$CRUX_PROJECTS_DIR/alfa" "--dry-run no toca el disco"
+  assert_no_file "$CRUX_PROJECTS_DIR/alpha" "--dry-run does not touch the disk"
   teardown
 }
 
-test_bootstrap_para_si_la_maquina_no_esta_lista() {
+test_bootstrap_stops_if_machine_not_ready() {
   sandbox >/dev/null
-  # Sin config de máquina: clonar veinte repos para descubrir después que falta
-  # algo es la peor forma de enterarse, así que ni empieza.
-  export CRUX_CONFIG="$SB/no-existe"
-  mkdir -p "$CLAUDE_SKILLS_DIR/una-skill"
-  _gh_falso "alfa-docs" "alfa"
+  # Without a machine config: cloning twenty repos to discover afterwards that
+  # something is missing is the worst way to find out, so it does not even
+  # start.
+  export CRUX_CONFIG="$SB/does-not-exist"
+  mkdir -p "$CLAUDE_SKILLS_DIR/some-skill"
+  _fake_gh "alpha-docs" "alpha"
 
-  assert_exit 1 "no sigue con la máquina a medias" \
+  assert_exit 1 "does not go on with a half-ready machine" \
     crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --dry-run
   teardown
 }
 
-test_bootstrap_dice_que_repos_se_quedan_fuera() {
+test_bootstrap_says_which_repos_are_left_out() {
   sandbox >/dev/null
-  _maquina_lista
-  # Dos repos sueltos que no pertenecen a ningún proyecto. No los trae, pero
-  # callárselo sería peor: te vas creyendo que está todo.
-  _gh_falso "alfa-docs suelto-uno suelto-dos" "alfa"
-  mkdir -p "$CRUX_PROJECTS_DIR/alfa/alfa-docs"
+  _ready_machine
+  # Two loose repos that belong to no project. It does not fetch them, but
+  # keeping quiet about it would be worse: you leave believing everything is
+  # there.
+  _fake_gh "alpha-docs loose-one loose-two" "alpha"
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha/alpha-docs"
 
   local out
   out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" 2>&1)"
 
-  assert_contains "$out" "suelto-uno" "nombra el repo que se queda fuera"
-  assert_contains "$out" "suelto-dos" "y el otro"
+  assert_contains "$out" "loose-one" "names the repo that is left out"
+  assert_contains "$out" "loose-two" "and the other one"
   teardown
 }

@@ -1,117 +1,116 @@
 ---
 name: x-posts
-description: Escribir y planificar publicaciones para X (Twitter) que lleguen a gente y construyan marca personal. Cubre cómo reparte alcance el algoritmo, el gancho de la primera línea, qué formato usar para cada objetivo, cuándo y cuánto publicar y qué hacer la primera hora. Usa cuando haya que escribir un tweet, preparar un hilo, anunciar un lanzamiento o un artículo, o decidir qué publicar en X.
+description: Write and plan posts for X (Twitter) that reach people and build a personal brand. Covers how the algorithm distributes reach, the first-line hook, which format to use for each goal, when and how much to post and what to do in the first hour. Use when you need to write a tweet, prepare a thread, announce a launch or an article, or decide what to publish on X.
 ---
 
 # x-posts
 
-La entrega son **borradores**. Nunca se publica sin el OK explícito del autor al
-texto exacto. Cómo reparte alcance X, con los pesos medidos y las fuentes, está
-en `<directorio-de-esta-skill>/references/por-que.md`; antes de una campaña
-importante, comprueba si han cambiado.
+The deliverable is **drafts**. Nothing is ever published without the author's
+explicit OK on the exact text. How X distributes reach, with the measured
+weights and the sources, is in `<this-skill-directory>/references/por-que.md`;
+before an important campaign, check whether they have changed.
 
-**No usar** para la voz o los datos de un proyecto concreto (van en su
-adaptador), para textos largos que no son para X, ni para publicar en nombre de
-alguien sin su aprobación.
+**Do not use** for the voice or data of a specific project (those go in its
+adapter), for long texts that are not for X, or for publishing on someone's
+behalf without their approval.
 
-## Lo que decide el alcance
+## What decides reach
 
-- Una respuesta vale mucho más que un like; compartir o seguir al autor, también.
-- Lo negativo (denunciar, silenciar, "no me interesa") resta muchísimo.
-- Varios posts seguidos del mismo autor rinden menos; los de más de 48 horas ya
-  no se reparten.
-- Un enlace en el cuerpo reduce el alcance: va en la **primera respuesta**, y el
-  post tiene que valer sin hacer clic.
+- A reply is worth much more than a like; sharing or following the author too.
+- Negative signals (reporting, muting, "not interested") subtract enormously.
+- Several posts in a row from the same author perform worse; posts older than
+  48 hours are no longer distributed.
+- A link in the body reduces reach: it goes in the **first reply**, and the post
+  has to be worth it without clicking.
 
-Escribe para provocar respuestas, no likes.
 
-## Un post, un objetivo
+## One post, one goal
 
-| Objetivo | Qué lo consigue | Cierre |
-| -------- | --------------- | ------ |
-| Conversación | Opinión con fundamento, pregunta que tu audiencia sabe responder | Pregunta concreta que se conteste en una línea |
-| Guardar y compartir | Recurso, lista, marco, cifras útiles | Nada, o "el enlace, en la primera respuesta" |
-| Seguidores | Serie reconocible, proceso con continuidad | Qué vendrá después |
-| Clic | Resultado que solo se entiende entero fuera de X | Enlace en la primera respuesta, con por qué |
+| Goal | What achieves it | Closing |
+| ---- | ---------------- | ------- |
+| Conversation | A well-grounded opinion, a question your audience knows how to answer | A concrete question that can be answered in one line |
+| Save and share | Resource, list, framework, useful figures | Nothing, or "link in the first reply" |
+| Followers | A recognisable series, process with continuity | What comes next |
+| Click | A result that only makes full sense outside X | Link in the first reply, with the reason why |
 
-## Marca personal
+## Personal brand
 
-Reparto de la semana: **proceso** (la mayor parte: qué construyes, qué salió
-mal, qué decidiste, con número o captura), **aporte** (lo que le sirve a otro sin
-conocerte) y **promoción** (la mínima). Cada post es un capítulo de algo que
-continúa, la persona va por delante del producto, y se responde a todo el que
-conteste.
+Weekly split: **process** (the bulk: what you build, what went wrong, what you
+decided, with a number or screenshot), **contribution** (what helps someone who
+does not know you) and **promotion** (the minimum). Each post is a chapter of
+something that continues, the person comes ahead of the product, and you reply
+to everyone who replies.
 
-## La primera línea
+## The first line
 
-Se entiende sola, en menos de 10 palabras si se puede, y dice de qué va con
-palabras concretas. Formas que funcionan: resultado con número, capítulo de una
-historia ("Día N de…"), decisión ("Hoy he quitado X. El motivo:"), error con su
-coste, dato útil verificable, recurso gratis, opinión con fundamento, pregunta
-real. Nada de "Esto lo cambia todo", "Nadie habla de" ni "Hilo 🧵👇" solos.
+It stands on its own, in under 10 words if possible, and says what it is about
+with concrete words. Forms that work: a result with a number, a chapter of a
+story ("Día N de…"), a decision ("Hoy he quitado X. El motivo:"), a mistake with
+its cost, a verifiable useful fact, a free resource, a well-grounded opinion, a
+real question. No "Esto lo cambia todo", "Nadie habla de" or "Hilo 🧵👇" on
+their own.
 
-## Formatos
+## Formats
 
-- **Post corto:** una idea, 1 a 4 líneas, línea en blanco entre bloques.
-- **Con imagen o vídeo:** la imagen se entiende sin leer el post.
-- **Hilo:** 5 a 12 posts; el primero promete lo que el hilo cumple, cada uno se
-  entiende solo, enlace y llamada a la acción al final.
-- **Respuesta:** para una cuenta pequeña, la vía más rápida: aportar en cuentas
-  de tu tema de 2 a 10 veces tu tamaño, pronto. Cada una escrita para ese post.
-- **Cita:** solo si añades un dato, un matiz o tu experiencia.
-- **Respuesta propia:** el enlace, una actualización o el siguiente capítulo.
+- **Short post:** one idea, 1 to 4 lines, blank line between blocks.
+- **With image or video:** the image is understood without reading the post.
+- **Thread:** 5 to 12 posts; the first promises what the thread delivers, each
+  one stands on its own, link and call to action at the end.
+- **Reply:** for a small account, the fastest route: contribute on accounts in
+  your topic 2 to 10 times your size, early.
+- **Quote:** only if you add a fact, a nuance or your experience.
+- **Self-reply:** the link, an update or the next chapter.
 
-## Escritura
+## Writing
 
-- Concreto antes que adjetivo ("tardaba 40 minutos, ahora 3").
-- Una idea por post. Frases cortas, línea en blanco entre bloques.
-- Uno o dos emojis como señal al inicio de bloque; como mucho un hashtag;
-  menciones solo con motivo.
-- Pasa el borrador por `/redaccion`.
-- Nada de pedir interacción vacía ("RT si…", "comenta SÍ").
+- Concrete before adjective ("tardaba 40 minutos, ahora 3").
+- Short sentences.
+- One or two emojis as a signal at the start of a block; at most one hashtag;
+  mentions only with a reason.
+- Run the draft through `/redaccion`.
+- No asking for empty engagement ("RT si…", "comenta SÍ").
 
-## Cuándo y cuánto
+## When and how much
 
-| Seguidores | Posts al día | Hilos a la semana | Respuestas al día |
-| ---------- | ------------ | ----------------- | ----------------- |
-| Menos de 1.000 | 1-3 | 1 | 10-20 |
-| 1.000-10.000 | 2-5 | 1-2 | 5-15 |
-| Más de 10.000 | 3-6 | 2-3 | 5-10 |
+| Followers | Posts per day | Threads per week | Replies per day |
+| --------- | ------------- | ---------------- | --------------- |
+| Under 1,000 | 1-3 | 1 | 10-20 |
+| 1,000-10,000 | 2-5 | 1-2 | 5-15 |
+| Over 10,000 | 3-6 | 2-3 | 5-10 |
 
-Al menos 3 o 4 horas entre posts propios. Publica cuando tu audiencia está
-despierta y tú puedes quedarte la primera hora. Constancia antes que volumen.
+At least 3 or 4 hours between your own posts. Post when your audience is awake
+and you can stay for the first hour.
 
-## La primera hora
+## The first hour
 
-1. El enlace, en la primera respuesta, en el minuto uno.
-2. Responde a cada respuesta con algo que continúe la conversación.
-3. No edites en la primera media hora salvo un error de datos.
-4. No publiques otro post tuyo hasta que este haya tenido su recorrido.
-5. A las 48 horas mira impresiones, respuestas, perfiles visitados y seguidores
-   nuevos, y apunta qué gancho y formato rindieron.
+1. The link, in the first reply, in minute one.
+2. Reply to every reply with something that continues the conversation.
+3. Do not edit in the first half hour except for a data error.
+4. Do not publish another post of yours until this one has had its run.
+5. At 48 hours look at impressions, replies, profile visits and new followers,
+   and note which hook and format performed.
 
-## Procedimiento
+## Procedure
 
-1. Mira la cuenta: lo último publicado y lo que rindió. No repitas ángulo ni
-   dato de los últimos 7 días.
-2. Elige el objetivo y dónde encaja en el reparto de la semana.
-3. Reúne la prueba: número, captura o ejemplo real.
-4. Escribe dos o tres ganchos y quédate con el más concreto.
-5. Escribe el cuerpo y decide dónde va el enlace.
-6. Pasa `/redaccion` y la lista de abajo.
-7. Enseña al autor el texto exacto, la imagen, la respuesta con el enlace y la
-   hora. Espera el OK.
-8. Después de publicar, la primera hora.
+1. Look at the account: the latest published and what performed. Do not repeat
+   an angle or a fact from the last 7 days.
+2. Choose the goal and where it fits in the week's split.
+3. Gather the proof: a number, a screenshot or a real example.
+4. Write two or three hooks and keep the most concrete one.
+5. Write the body and decide where the link goes.
+6. Run `/redaccion` and the checklist below.
+7. Show the author the exact text, the image, the reply with the link and the
+   time. Wait for the OK.
+8. After publishing, the first hour.
 
-## Lista de comprobación
+## Checklist
 
-- [ ] La primera línea dice de qué va con palabras concretas.
-- [ ] Hay un número, una captura o un ejemplo real.
-- [ ] Una sola idea y un solo objetivo.
-- [ ] El enlace no está en el cuerpo, o hay un motivo.
-- [ ] El post vale aunque nadie haga clic.
-- [ ] Si busca conversación, cierra con algo que se pueda responder.
-- [ ] Como mucho un hashtag, menciones solo con motivo.
-- [ ] Pasado por `/redaccion`.
-- [ ] Separado al menos 3 horas del post anterior del autor.
-- [ ] Aprobado por el autor, texto exacto.
+- [ ] The first line says what it is about with concrete words.
+- [ ] There is a number, a screenshot or a real example.
+- [ ] A single idea and a single goal.
+- [ ] The link is not in the body, or there is a reason.
+- [ ] The post is worth it even if nobody clicks.
+- [ ] If it seeks conversation, it closes with something that can be answered.
+- [ ] At most one hashtag, mentions only with a reason.
+- [ ] Separated by at least 3 hours from the author's previous post.
+- [ ] Approved by the author, exact text.

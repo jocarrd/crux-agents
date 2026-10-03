@@ -1,105 +1,105 @@
 #!/usr/bin/env bash
-# Hook de git (commit-msg). Lo copia `crux hooks install`.
+# git hook (commit-msg). Copied by `crux hooks install`.
 #
-# Una regla que nadie comprueba es una recomendación. El estándar pedía los
-# mensajes en inglés desde el primer día y el historial de este kernel estaba
-# entero en español; pedía no firmar con la herramienta y la firma acabó en la
-# propuesta de un cliente.
+# A rule nobody checks is a recommendation. The standard asked for messages in
+# English from day one and the history of this kernel was entirely in Spanish;
+# it asked not to sign with the tool and the signature ended up in a client's
+# proposal.
 #
-# Tiene dos alcances, y la diferencia importa:
+# It has two scopes, and the difference matters:
 #
-#   full       repo nuestro: se comprueban nuestras convenciones
-#   signature  repo de cliente: solo se quita la firma de la herramienta
+#   full       our repo: our conventions are checked
+#   signature  client repo: only the tool signature is removed
 #
-# En el repo de un cliente, el idioma y el formato de su historial son suyos.
-# Imponerles nuestras convenciones sería exactamente el mismo error que el
-# perfil client-repo existe para evitar. Lo que no es suyo ni nuestro es la
-# firma del agente: esa no debe aparecer en ningún sitio.
+# In a client's repo, the language and format of their history are theirs.
+# Imposing our conventions on them would be exactly the same mistake the
+# client-repo profile exists to avoid. What is neither theirs nor ours is the
+# agent's signature: that must not appear anywhere.
 SCOPE="${CRUX_COMMIT_MSG_SCOPE:-full}"
-IDIOMA="${CRUX_COMMIT_MSG_LANG:-en}"
+COMMIT_LANG="${CRUX_COMMIT_MSG_LANG:-en}"
 
 set -u
 
 [[ -f "${1:-}" ]] || exit 0
 
-# --- Firma de la herramienta (en todos los repos) ----------------------------
+# --- Tool signature (in all repos) ------------------------------------------
 #
-# Se borra en vez de rechazar el commit: el agente la añade porque su propio
-# entorno se lo pide, así que bloquear obliga a reescribir un mensaje que por lo
-# demás está bien, y el descuido vuelve en el commit siguiente.
-FIRMA='^[[:space:]]*(co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(🤖[[:space:]]*)?(generated|generado) with)'
-if grep -qiE "$FIRMA" "$1"; then
+# It is deleted instead of rejecting the commit: the agent adds it because its
+# own environment asks it to, so blocking forces rewriting a message that is
+# otherwise fine, and the slip returns in the next commit.
+SIGNATURE='^[[:space:]]*(co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(🤖[[:space:]]*)?(generated|generado) with)'
+if grep -qiE "$SIGNATURE" "$1"; then
   tmp="$(mktemp)"
-  grep -viE "$FIRMA" "$1" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$tmp"
+  grep -viE "$SIGNATURE" "$1" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$tmp"
   mv "$tmp" "$1"
-  echo "crux: quitada la firma de la herramienta del mensaje de commit"
+  echo "crux: removed the tool signature from the commit message"
 fi
 
 [[ "$SCOPE" == "full" ]] || exit 0
 
-# Un merge, un revert o un fixup no los redacta nadie: los genera git.
-asunto="$(grep -v '^#' "$1" | grep -m1 . || true)"
-case "$asunto" in
+# A merge, a revert or a fixup is written by nobody: git generates them.
+subject="$(grep -v '^#' "$1" | grep -m1 . || true)"
+case "$subject" in
   Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
 esac
 
-# El detalle llega como un bloque de varias líneas: se indenta entero, no se
-# parte por palabras.
-rechazo() {
+# The detail arrives as a multi-line block: it is indented whole, not split by
+# words.
+rejection() {
   echo; echo "$1"; echo
   [[ -n "${2:-}" ]] && printf '%s\n' "$2" | sed 's/^/  /'
   echo
-  echo "Reescríbelo, o salta con: git commit --no-verify"
+  echo "Rewrite it, or skip with: git commit --no-verify"
   exit 1
 }
 
 # --- Conventional commits ----------------------------------------------------
 #
-# Los 97 commits del kernel lo cumplen salvo los 8 merges, ya exentos arriba.
-TIPOS='feat|fix|chore|docs|refactor|test|style|perf|build|ci|revert'
-if ! printf '%s' "$asunto" | grep -qE "^($TIPOS)(\([^)]+\))?!?: ."; then
-  rechazo "el asunto no sigue conventional commits" \
-    "$(printf '%s\n\ntipos: %s' "$asunto" "$TIPOS")"
+# All 97 commits of the kernel comply except the 8 merges, already exempt above.
+KINDS='feat|fix|chore|docs|refactor|test|style|perf|build|ci|revert'
+if ! printf '%s' "$subject" | grep -qE "^($KINDS)(\([^)]+\))?!?: ."; then
+  rejection "the subject does not follow conventional commits" \
+    "$(printf '%s\n\ntypes: %s' "$subject" "$KINDS")"
 fi
 
-# Ni uno solo del historial empieza en mayúscula tras el prefijo: cuesta cero.
-if printf '%s' "$asunto" | grep -qE "^($TIPOS)(\([^)]+\))?!?: [A-Z]"; then
-  rechazo "el asunto empieza en mayúscula tras el prefijo" "$asunto"
+# Not a single one in the history starts with a capital after the prefix: it costs nothing.
+if printf '%s' "$subject" | grep -qE "^($KINDS)(\([^)]+\))?!?: [A-Z]"; then
+  rejection "the subject starts with a capital letter after the prefix" "$subject"
 fi
 
-# --- Ancho del cuerpo --------------------------------------------------------
+# --- Body width --------------------------------------------------------
 #
-# 100 caracteres. Del historial real solo dos líneas se pasan, y por uno.
-# Una línea sin espacios no se puede partir: una URL larga no es un descuido.
-largas="$(grep -v '^#' "$1" | awk 'length($0)>100 && $0 ~ / / {print NR": "substr($0,1,60)"…"}')"
-if [[ -n "$largas" ]]; then
-  rechazo "hay líneas de más de 100 caracteres en el cuerpo" "$largas"
+# 100 characters. Of the real history only two lines exceed it, and by one.
+# A line without spaces cannot be split: a long URL is not an oversight.
+long_ones="$(grep -v '^#' "$1" | awk 'length($0)>100 && $0 ~ / / {print NR": "substr($0,1,60)"…"}')"
+if [[ -n "$long_ones" ]]; then
+  rejection "there are lines over 100 characters in the body" "$long_ones"
 fi
 
-# --- Idioma ------------------------------------------------------------------
+# --- Language ------------------------------------------------------------------
 #
-# Detecta por palabras funcionales y por los verbos con que empieza un asunto en
-# español (añade, arregla, quita…), que no existen en inglés, y exige dos
-# apariciones. Con una sola, un nombre propio —"Los Angeles", "Los Angeles"— daría
-# falso positivo, y un hook que se equivoca se desactiva a la semana.
+# Detects by function words and by the verbs a Spanish subject starts with
+# (añade, arregla, quita…), which do not exist in English, and requires two
+# occurrences. With only one, a proper name —"Los Angeles", "Los Angeles"— would
+# be a false positive, and a hook that gets it wrong is disabled within a week.
 #
-# Las líneas de comentario son de git, y lo que va en backticks es código: ni
-# una cosa ni la otra dicen en qué idioma está escrito el mensaje.
-[[ "$IDIOMA" == "en" ]] || exit 0
+# Comment lines belong to git, and what is in backticks is code: neither says
+# what language the message is written in.
+[[ "$COMMIT_LANG" == "en" ]] || exit 0
 
 msg="$(sed -e '/^#/d' -e 's/`[^`]*`//g' "$1" | tr '[:upper:]' '[:lower:]')"
 
-pistas="$(printf '%s' "$msg" | grep -owE \
+hints="$(printf '%s' "$msg" | grep -owE \
   'que|para|porque|cuando|esto|esta|este|esa|ese|del|las|los|una|unos|unas|pero|aunque|desde|tambien|segun|asi|muy|cada|donde|hasta|mientras|siempre|nunca|antes|despues|ahora|hace|hacer|tiene|tener|puede|debe|deja|pasa|sigue|vuelve|el|la|al|un|es|son|ser|su|sus|ni|se|de|en|por|añade|anade|arregla|corrige|quita|elimina|actualiza|mejora|cambia|mueve|evita|permite|crea|borra|sube|muestra|comprueba')"
 
-[[ "$(printf '%s' "$pistas" | grep -c .)" -lt 2 ]] && exit 0
-pistas="$(printf '%s' "$pistas" | sort -u)"
+[[ "$(printf '%s' "$hints" | grep -c .)" -lt 2 ]] && exit 0
+hints="$(printf '%s' "$hints" | sort -u)"
 
 echo
-echo "mensaje de commit en español — el estándar los pide en inglés"
+echo "commit message in Spanish — the standard asks for English"
 echo
-echo "  pistas: $(printf '%s' "$pistas" | tr '\n' ' ')"
+echo "  hints: $(printf '%s' "$hints" | tr '\n' ' ')"
 echo
-echo "La documentación va en el idioma del proyecto; los nombres, las ramas y"
-echo "los commits, en inglés. Reescríbelo, o salta con: git commit --no-verify"
+echo "Documentation goes in the project language; names, branches and"
+echo "commits, in English. Rewrite it, or skip with: git commit --no-verify"
 exit 1

@@ -1,113 +1,113 @@
 ---
 name: flow
-description: El ciclo completo de una tarea de desarrollo: en qué orden van sus siete pasos, por qué existe cada uno y qué se paga al saltárselo. No los sustituye, los encadena. Usa al recibir cualquier tarea de desarrollo que no sea trivial —tocar código, desarrollar una funcionalidad, arreglar algo, seguir las convenciones del proyecto— y antes de planificar nada, especialmente si vas a trabajar en paralelo con otra sesión sobre el mismo repo.
+description: The complete cycle of a development task: the order of its seven steps, why each one exists and what you pay for skipping it. It does not replace them, it chains them. Use when receiving any non-trivial development task —touching code, building a feature, fixing something, following the project's conventions— and before planning anything, especially if you are going to work in parallel with another session on the same repo.
 ---
 
 # flow
 
-El orden en que se usan las skills del ciclo. El porqué de cada paso y lo que
-cuesta saltárselo están en `<directorio-de-esta-skill>/references/por-que.md`.
+The order in which the cycle's skills are used. The why of each step and what it
+costs to skip it are in `<this-skill-directory>/references/por-que.md`.
 
-**Aplica** a cualquier tarea que vaya a producir un commit. **No aplica** a
-preguntas o lectura de código, a cambios de una línea evidentes (una errata, un
-valor de configuración) ni a una emergencia en producción, donde manda el
-playbook de incidencias y el orden se recupera después. Si dudas, aplícalo.
+**Applies** to any task that is going to produce a commit. **Does not apply** to
+questions or code reading, to obvious one-line changes (a typo, a config value)
+or to an emergency in production, where the incident playbook rules and the
+order is recovered afterwards. If in doubt, apply it.
 
-## 1. Entender el terreno
+## 1. Understand the terrain
 
-Si no conoces el repo: `/repo-map`. Si el proyecto sigue el estándar, su
-documentación va primero: `repos/<repo>/` del docs repo. No se escribe código
-para averiguar cómo funciona algo.
+If you do not know the repo: `/repo-map`. If the project follows the standard,
+its documentation comes first: `repos/<repo>/` in the docs repo. Code is not
+written to find out how something works.
 
-## 2. Aislar el espacio
-
-```bash
-crux workspace new <nombre-de-la-tarea>
-```
-
-La rama se crea aquí, antes de tocar una línea, con su worktree, sus puertos y
-su base de datos. Abre también el registro de la tarea, que se va anotando
-mientras se trabaja (`crux task`). Sáltalo solo si estás seguro de que nadie más
-trabaja en ese repo; el comando avisa si hay otro espacio abierto.
-
-## 3. Planificar antes de tocar código
-
-- `/grill` si el encargo deja decisiones abiertas.
-- `/explain-plan` para cualquier tarea que no sea evidente.
-
-El plan se aprueba antes de seguir; si no decides tú, se pregunta aquí.
-Aprobado, se guarda: `crux task plan <fichero>`.
-
-## 4. Desarrollar
-
-Con las convenciones del proyecto, que están en su docs repo. Durante el
-desarrollo, no al final:
-
-- Tests de lo que duele si falla: `/write-tests`.
-- Si algo se rompe y no sabes por qué: `/root-cause` antes de arreglar.
-
-## 5. La puerta
-
-`/ship`. Ninguna puerta en rojo se deja "para luego".
-
-### 5a. Enseñar lo que se ve
-
-Solo si el diff toca interfaz, después de `/ship` y antes de subir nada:
-`/before-after` en escritorio, tablet y móvil, y se espera al sí de quien
-decide. Con el sí, `crux visual approve`. Si hay cambios después, se vuelve a
-enseñar.
-
-## 6. Proponer
+## 2. Isolate the space
 
 ```bash
-crux workspace finish <nombre>
-crux checks --wait        # en segundo plano
+crux workspace new <task-name>
 ```
 
-`finish` se niega si queda algo sin commitear o si el commit no ha pasado la
-puerta. La espera del CI va **en segundo plano**: se dice que está corriendo y
-se sigue con otra cosa.
+The branch is created here, before touching a line, with its worktree, its ports
+and its database. It also opens the task log, which is filled in while working
+(`crux task`). Skip it only if you are sure nobody else works on that repo; the
+command warns if another space is open.
 
-Si el CI sale en rojo: se lee solo el final del log, se arregla en la misma
-rama, se pasa `/ship` y se sube. **Tres intentos como máximo**; al tercero, se
-para y se cuenta. Una propuesta sin CI no está verificada, y se dice así.
+## 3. Plan before touching code
 
-### 6a. Revisar la propuesta
+- `/grill` if the request leaves decisions open.
+- `/explain-plan` for any task that is not obvious.
 
-`/review-pr`, desde un contexto distinto del que escribió el cambio. Lanza
-solo los especialistas que `crux review` nombra.
+The plan is approved before continuing; if you are not the one who decides, ask
+here. Once approved, it is saved: `crux task plan <file>`.
 
-### 6b. Fusionar, cuando tú lo autorices
+## 4. Develop
+
+With the project's conventions, which are in its docs repo. During development,
+not at the end:
+
+- Tests for what hurts if it fails: `/write-tests`.
+- If something breaks and you do not know why: `/root-cause` before fixing.
+
+## 5. The gate
+
+`/ship`. No red gate is left "for later".
+
+### 5a. Show what can be seen
+
+Only if the diff touches UI, after `/ship` and before pushing anything:
+`/before-after` on desktop, tablet and mobile, and wait for the yes from whoever
+decides. With the yes, `crux visual approve`. If there are changes afterwards,
+it is shown again.
+
+## 6. Propose
 
 ```bash
-crux workspace merge <nombre>          # enseña el estado
-crux workspace merge <nombre> --yes    # fusiona
+crux workspace finish <name>
+crux checks --wait        # in the background
 ```
 
-Sin `--yes` no fusiona. Solo se fusiona sin preguntar si la línea `fusión:` de
-la revisión lo permite (solo texto, proyecto propio). Con código o en un repo
-de cliente, se pregunta siempre.
+`finish` refuses if anything is left uncommitted or if the commit has not passed
+the gate. The CI wait goes **in the background**: say that it is running and
+carry on with something else.
 
-### 6c. Vigilar el despliegue
+If the CI comes back red: read only the end of the log, fix on the same branch,
+run `/ship` and push. **Three attempts at most**; on the third, stop and report.
+A proposal without CI is not verified, and it is said so.
 
-Si lo fusionado se despliega solo: `/deploy-watch`, también en segundo plano.
-No se da por publicado hasta verlo. Si falla, se revierte primero y se
-investiga después con `/prod-signals` y `/root-cause`.
+### 6a. Review the proposal
 
-## 7. Cerrar
+`/review-pr`, from a context different from the one that wrote the change. It
+launches only the specialists that `crux review` names.
 
-`/end-session`: lo aprendido que no queda en el código se escribe donde
-sobreviva a la sesión, y se cierra la tarea. Las decisiones anotadas con
-`crux task note --why` pasan solas al docs repo al archivarla.
+### 6b. Merge, when you authorise it
+
+```bash
+crux workspace merge <name>          # shows the state
+crux workspace merge <name> --yes    # merges
+```
+
+Without `--yes` it does not merge. It is only merged without asking if the
+`merge:` line of the review allows it (text only, own project). With code or in
+a client repo, always ask.
+
+### 6c. Watch the deployment
+
+If what was merged deploys itself: `/deploy-watch`, also in the background. It
+is not considered published until it is seen. If it fails, revert first and
+investigate afterwards with `/prod-signals` and `/root-cause`.
+
+## 7. Close
+
+`/end-session`: what was learned that does not stay in the code is written
+where it survives the session, and the task is closed. Decisions noted with
+`crux task note --why` move on their own to the docs repo when it is archived.
 
 ## Anti-patterns
 
-- Encadenar los pasos sin pensar: una errata no necesita plan.
-- Anunciar un paso en vez de darlo.
-- Simplificar antes de verificar, o aislar después de empezar.
-- Dejar un espacio abierto semanas.
+- Chaining the steps without thinking: a typo does not need a plan.
+- Announcing a step instead of taking it.
+- Simplifying before verifying, or isolating after starting.
+- Leaving a space open for weeks.
 
-## Relacionado
+## Related
 
 `/repo-map`, `/workspace`, `/grill`, `/explain-plan`, `/write-tests`,
 `/root-cause`, `/ship`, `/before-after`, `/review-pr`, `/merge-conflicts`,

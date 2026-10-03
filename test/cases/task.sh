@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-_proyecto_de_tareas() {
-  # Un proyecto con dos repos de código y su docs repo, cada repo con un commit.
+_tasks_project() {
+  # A project with two code repos and its docs repo, each repo with one commit.
   local root="$CRUX_PROJECTS_DIR/proj"
   mkdir -p "$root/app" "$root/web" "$root/proj-docs"
   local r
@@ -16,108 +16,108 @@ _proyecto_de_tareas() {
   echo "$root"
 }
 
-test_workspace_new_registra_la_tarea() {
+test_workspace_new_registers_the_task() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new mapas --repo "$root/app" 2>&1)"
-  assert_contains "$out" "tarea 'mapas' registrada" "abrir un espacio registra su tarea"
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new maps --repo "$root/app" 2>&1)"
+  assert_contains "$out" "task 'maps' registered" "opening a workspace registers its task"
 
-  local f="$SB/tasks/proj/mapas.md"
-  assert_file "$f" "el registro va en el estado local, por proyecto y tarea"
-  assert_contains "$(cat "$f")" "status: open" "nace abierta"
-  assert_contains "$(cat "$f")" "repos: [app]" "sabe en qué repo se trabaja"
-  assert_no_file "$root/app-ws-mapas/mapas.md" "y no escribe nada dentro del repo"
-  assert_contains "$(cat "$CRUX_REGISTRY")" '"task": "mapas"' "el espacio apunta a su tarea"
+  local f="$SB/tasks/proj/maps.md"
+  assert_file "$f" "the record lives in local state, per project and task"
+  assert_contains "$(cat "$f")" "status: open" "it starts open"
+  assert_contains "$(cat "$f")" "repos: [app]" "it knows which repo is worked on"
+  assert_no_file "$root/app-ws-maps/maps.md" "and writes nothing inside the repo"
+  assert_contains "$(cat "$CRUX_REGISTRY")" '"task": "maps"' "the workspace points to its task"
 }
 
-test_una_tarea_de_varios_repos_comparte_registro() {
+test_a_multi_repo_task_shares_one_record() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new mapas --repo "$root/app" >/dev/null 2>&1
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new mapas-web --repo "$root/web" --task mapas 2>&1)"
-  assert_contains "$out" "se une a la tarea 'mapas'" "el segundo repo se une a la misma tarea"
+  bash "$CRUX_HOME/bin/workspace.sh" new maps --repo "$root/app" >/dev/null 2>&1
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new maps-web --repo "$root/web" --task maps 2>&1)"
+  assert_contains "$out" "joins the already open task 'maps'" "the second repo joins the same task"
 
-  local f="$SB/tasks/proj/mapas.md"
-  assert_contains "$(cat "$f")" "repos: [app, web]" "un registro con los dos repos"
-  assert_contains "$(cat "$f")" "workspaces: [mapas, mapas-web]" "y con los dos espacios"
+  local f="$SB/tasks/proj/maps.md"
+  assert_contains "$(cat "$f")" "repos: [app, web]" "one record with both repos"
+  assert_contains "$(cat "$f")" "workspaces: [maps, maps-web]" "and with both workspaces"
 
-  # Un paso añadido desde un espacio se ve desde el otro.
-  ( cd "$root/app-ws-mapas" && bash "$CRUX_HOME/bin/task.sh" add "corregir el mapa" >/dev/null 2>&1 )
-  local desde_web; desde_web="$(cd "$root/web-ws-mapas-web" && bash "$CRUX_HOME/bin/task.sh" 2>&1)"
-  assert_contains "$desde_web" "T1 corregir el mapa" "lo que se anota en un repo se lee en el otro"
+  # A step added from one workspace is seen from the other.
+  ( cd "$root/app-ws-maps" && bash "$CRUX_HOME/bin/task.sh" add "fix the map" >/dev/null 2>&1 )
+  local from_web; from_web="$(cd "$root/web-ws-maps-web" && bash "$CRUX_HOME/bin/task.sh" 2>&1)"
+  assert_contains "$from_web" "T1 fix the map" "what is noted in one repo is read from the other"
 }
 
-test_task_anota_pasos_evidencia_y_siguiente() {
+test_task_records_steps_evidence_and_next() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-t" f="$SB/tasks/proj/t.md"
 
   ( cd "$ws" || exit 1
-    bash "$CRUX_HOME/bin/task.sh" goal "Que el mapa siga la ONU" >/dev/null
-    bash "$CRUX_HOME/bin/task.sh" add "corregir fronteras" >/dev/null
-    bash "$CRUX_HOME/bin/task.sh" add "regenerar el svg" >/dev/null
-    bash "$CRUX_HOME/bin/task.sh" add "revisar el widget" >/dev/null
-    bash "$CRUX_HOME/bin/task.sh" "done" T1 "capturas antes y después" >/dev/null
-    bash "$CRUX_HOME/bin/task.sh" note "Kosovo dentro de Serbia" >/dev/null ) 2>&1
+    bash "$CRUX_HOME/bin/task.sh" goal "Make the map follow the UN" >/dev/null
+    bash "$CRUX_HOME/bin/task.sh" add "fix borders" >/dev/null
+    bash "$CRUX_HOME/bin/task.sh" add "regenerate the svg" >/dev/null
+    bash "$CRUX_HOME/bin/task.sh" add "review the widget" >/dev/null
+    bash "$CRUX_HOME/bin/task.sh" "done" T1 "before and after screenshots" >/dev/null
+    bash "$CRUX_HOME/bin/task.sh" note "Kosovo inside Serbia" >/dev/null ) 2>&1
 
   local t; t="$(cat "$f")"
-  assert_contains "$t" "- [x] T1 corregir fronteras · evidencia: capturas antes y después" "el paso hecho lleva su evidencia"
-  assert_contains "$t" "- [ ] T2 regenerar el svg
-- [ ] T3 revisar el widget" "los pasos quedan seguidos, sin huecos"
-  assert_contains "$t" "status: in-progress" "completar un paso la pone en marcha"
-  assert_contains "$t" "- Kosovo dentro de Serbia" "la decisión queda anotada"
+  assert_contains "$t" "- [x] T1 fix borders · evidence: before and after screenshots" "the done step carries its evidence"
+  assert_contains "$t" "- [ ] T2 regenerate the svg
+- [ ] T3 review the widget" "the steps stay consecutive, without gaps"
+  assert_contains "$t" "status: in-progress" "completing a step puts it in progress"
+  assert_contains "$t" "- Kosovo inside Serbia" "the decision is noted"
 
   local show; show="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" 2>&1)"
-  assert_contains "$show" "pasos 1/3" "enseña cuánto va hecho"
-  assert_contains "$show" "siguiente: T2 regenerar el svg" "sin siguiente paso escrito, propone el primer pendiente"
+  assert_contains "$show" "steps 1/3" "it shows how much is done"
+  assert_contains "$show" "next: T2 regenerate the svg" "with no next step written, it proposes the first pending one"
 
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" next "probar en staging" >/dev/null 2>&1 )
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" next "test on staging" >/dev/null 2>&1 )
   show="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" 2>&1)"
-  assert_contains "$show" "siguiente: probar en staging" "el siguiente paso escrito manda"
+  assert_contains "$show" "next: test on staging" "the written next step wins"
 
-  local sin; sin="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" "done" T2 2>&1)"
-  assert_contains "$sin" "sin evidencia" "marcar sin evidencia se puede, pero se dice"
-  assert_exit 1 "un paso que no existe no se inventa" \
-    env -C "$ws" bash "$CRUX_HOME/bin/task.sh" "done" T9 "algo"
+  local without; without="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" "done" T2 2>&1)"
+  assert_contains "$without" "no evidence" "marking without evidence is allowed, but it is said"
+  assert_exit 1 "a step that does not exist is not invented" \
+    env -C "$ws" bash "$CRUX_HOME/bin/task.sh" "done" T9 "something"
 }
 
-test_task_fuera_de_un_espacio_dice_que_hacer() {
+test_task_outside_a_workspace_says_what_to_do() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
 
   local out; out="$(cd "$root/app" && bash "$CRUX_HOME/bin/task.sh" 2>&1)"
-  assert_contains "$out" "no estás en un espacio de trabajo" "en el repo principal no hay tarea que adivinar"
-  assert_exit 1 "y sale con error" env -C "$root/app" bash "$CRUX_HOME/bin/task.sh"
+  assert_contains "$out" "you are not in a workspace with a task" "in the main repo there is no task to guess"
+  assert_exit 1 "and it exits with an error" env -C "$root/app" bash "$CRUX_HOME/bin/task.sh"
 }
 
-test_seal_verifica_la_tarea_y_el_estado_no_retrocede() {
+test_seal_verifies_the_task_and_status_never_goes_back() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   bash "$CRUX_HOME/bin/workspace.sh" new v --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-v" f="$SB/tasks/proj/v.md"
 
-  echo cambio > "$ws/g.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: cambio"
+  echo change > "$ws/g.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: change"
   ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
     bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
 
   local t; t="$(cat "$f")"
-  assert_contains "$t" "status: verified" "cerrar la puerta verifica la tarea"
-  assert_contains "$t" "- ok · true" "y vuelca lo que se ejecutó como evidencia"
-  assert_contains "$t" "Sobre $(git -C "$ws" rev-parse --short=8 HEAD)" "sobre el commit que se verificó"
+  assert_contains "$t" "status: verified" "closing the gate verifies the task"
+  assert_contains "$t" "- ok · true" "and dumps what was run as evidence"
+  assert_contains "$t" "On $(git -C "$ws" rev-parse --short=8 HEAD)" "on the commit that was verified"
 
-  # Una tarea ya fusionada no vuelve a "verified" por repetir la puerta.
+  # A task already merged does not go back to "verified" by repeating the gate.
   node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
   ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
     bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  assert_contains "$(cat "$f")" "status: merged" "el estado solo avanza solo"
+  assert_contains "$(cat "$f")" "status: merged" "status only moves forward"
 }
 
-test_la_propuesta_sale_de_la_tarea_sin_ensenar_el_andamiaje() {
+test_the_proposal_comes_from_the_task_without_showing_the_scaffolding() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas client-repo)"
+  local root; root="$(_tasks_project client-repo)"
   bash "$CRUX_HOME/bin/workspace.sh" new c --repo "$root/app" --force >/dev/null 2>&1
   local ws="$root/app-ws-c" f="$SB/tasks/proj/c.md"
 
@@ -130,167 +130,167 @@ test_la_propuesta_sale_de_la_tarea_sin_ensenar_el_andamiaje() {
   local body="$SB/BODY.md"
   node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang en > "$body"
   local b; b="$(cat "$body")"
-  assert_contains "$b" "## What changes" "la descripción dice qué cambia"
-  assert_contains "$b" "fix the world atlas (before and after screenshots)" "lo hecho, con su evidencia entre paréntesis"
-  assert_not_contains "$b" "evidencia:" "sin la etiqueta del registro, que va en otro idioma"
-  assert_contains "$b" "Kosovo inside Serbia" "y lo decidido"
-  assert_not_contains "$b" "T1" "sin los identificadores internos de los pasos"
-  assert_not_contains "$b" ".crux" "sin rutas de nuestro estado local"
+  assert_contains "$b" "## What changes" "the description says what changes"
+  assert_contains "$b" "fix the world atlas (before and after screenshots)" "what was done, with its evidence in parentheses"
+  assert_not_contains "$b" "evidence:" "without the record label"
+  assert_contains "$b" "Kosovo inside Serbia" "and what was decided"
+  assert_not_contains "$b" "T1" "without the internal step ids"
+  assert_not_contains "$b" ".crux" "without paths of our local state"
 
-  # Lo comprobado se ejecutó en esta máquina: sus rutas no se publican.
-  node "$CRUX_HOME/lib/task.mjs" set --file "$f" --section "Verificación" \
+  # What was checked ran on this machine: its paths are not published.
+  node "$CRUX_HOME/lib/task.mjs" set --file "$f" --section "Verification" \
     --text "- ok · $HOME/Proyectos/tool --check (2s)" >/dev/null
   assert_not_contains "$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang en)" "$HOME/" \
-    "sin las rutas de la máquina en lo comprobado"
-  assert_exit 0 "y pasa el filtro de un repo de cliente" \
+    "without the machine paths in what was checked"
+  assert_exit 0 "and it passes the client repo filter" \
     env -C "$ws" bash "$CRUX_HOME/bin/ship.sh" body "$body"
 }
 
-test_el_hook_trae_la_tarea_una_vez_por_sesion() {
+test_the_hook_brings_the_task_once_per_session() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   bash "$CRUX_HOME/bin/workspace.sh" new h --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-h" hook="$CRUX_HOME/adapters/claude/hooks/task-context.sh"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" next "probar el hover" >/dev/null 2>&1 )
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" next "try the hover" >/dev/null 2>&1 )
 
-  local primera segunda fuera
-  primera="$(cd "$ws" && echo '{"session_id":"s-hook"}' | env TMPDIR="$SB" bash "$hook" 2>&1)"
-  segunda="$(cd "$ws" && echo '{"session_id":"s-hook"}' | env TMPDIR="$SB" bash "$hook" 2>&1)"
-  fuera="$(cd "$root/app" && echo '{"session_id":"s-hook"}' | env TMPDIR="$SB" bash "$hook" 2>&1)"
+  local first second outside
+  first="$(cd "$ws" && echo '{"session_id":"s-hook"}' | env TMPDIR="$SB" bash "$hook" 2>&1)"
+  second="$(cd "$ws" && echo '{"session_id":"s-hook"}' | env TMPDIR="$SB" bash "$hook" 2>&1)"
+  outside="$(cd "$root/app" && echo '{"session_id":"s-hook"}' | env TMPDIR="$SB" bash "$hook" 2>&1)"
 
-  assert_contains "$primera" "siguiente: probar el hover" "al retomar dice en qué punto quedó"
-  assert_contains "$primera" "$SB/tasks/proj/h.md" "y dónde está el registro"
-  assert_eq "" "$segunda" "la segunda vez en la misma sesión se calla"
-  assert_eq "" "$fuera" "fuera de un espacio no dice nada"
-  assert_eq 2 "$(printf '%s\n' "$primera" | wc -l | tr -d ' ')" "y cabe en dos líneas"
+  assert_contains "$first" "next: try the hover" "on resuming it says where it was left"
+  assert_contains "$first" "$SB/tasks/proj/h.md" "and where the record is"
+  assert_eq "" "$second" "the second time in the same session it stays quiet"
+  assert_eq "" "$outside" "outside a workspace it says nothing"
+  assert_eq 2 "$(printf '%s\n' "$first" | wc -l | tr -d ' ')" "and it fits in two lines"
 }
 
-test_workspace_list_ensena_en_que_punto_quedo_cada_tarea() {
+test_workspace_list_shows_where_each_task_stands() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   bash "$CRUX_HOME/bin/workspace.sh" new l --repo "$root/app" >/dev/null 2>&1
-  ( cd "$root/app-ws-l" && bash "$CRUX_HOME/bin/task.sh" next "revisar el widget" >/dev/null 2>&1 )
+  ( cd "$root/app-ws-l" && bash "$CRUX_HOME/bin/task.sh" next "review the widget" >/dev/null 2>&1 )
 
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" list --all 2>&1)"
-  assert_contains "$out" "tarea l: open · revisar el widget" "la lista de espacios lleva estado y siguiente paso"
+  assert_contains "$out" "task l: open · review the widget" "the workspace list carries status and next step"
 
   out="$(bash "$CRUX_HOME/bin/task.sh" list --all 2>&1)"
-  assert_contains "$out" "proj/l" "la lista de tareas las agrupa por proyecto"
-  assert_contains "$out" "revisar el widget" "con su siguiente paso"
+  assert_contains "$out" "proj/l" "the task list groups them by project"
+  assert_contains "$out" "review the widget" "with its next step"
 }
 
-test_un_registro_ilegible_se_dice_y_se_para() {
+test_an_unreadable_record_is_reported_and_stops() {
   sandbox >/dev/null
-  local f="$SB/tasks/proj/rota.md"
+  local f="$SB/tasks/proj/broken.md"
   mkdir -p "$(dirname "$f")"
-  echo "esto no tiene cabecera" > "$f"
+  echo "this has no header" > "$f"
 
   local out; out="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$f" 2>&1)"
-  assert_contains "$out" "no tiene cabecera" "un registro corrupto se nombra"
-  assert_exit 1 "y no se lee como una tarea vacía" node "$CRUX_HOME/lib/task.mjs" summary --file "$f"
-  assert_exit 1 "un estado inventado no se acepta" \
-    node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to "casi-listo"
+  assert_contains "$out" "has no header" "a corrupt record is named"
+  assert_exit 1 "and it is not read as an empty task" node "$CRUX_HOME/lib/task.mjs" summary --file "$f"
+  assert_exit 1 "an invented status is not accepted" \
+    node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to "almost-done"
 }
 
-test_hooks_install_engancha_el_contexto_de_la_tarea() {
+test_hooks_install_hooks_the_task_context() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
   bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
-  assert_contains "$(cat "$CLAUDE_SETTINGS")" "task-context.sh" "install engancha el hook de la tarea"
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "task-context.sh" "install hooks the task hook"
   bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
-  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "task-context" "y remove lo retira"
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "task-context" "and remove takes it off"
 }
 
-test_el_ciclo_con_tarea_cabe_en_pocas_llamadas() {
+test_the_task_cycle_fits_in_few_calls() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
 
-  # Objetivo al abrir y el plan de una vez: dos llamadas, no cuatro.
-  bash "$CRUX_HOME/bin/workspace.sh" new p --repo "$root/app" --goal "Que el hover no tape el país" >/dev/null 2>&1
-  ( cd "$root/app-ws-p" && bash "$CRUX_HOME/bin/task.sh" add "levantar el país" "zoom al seleccionar" "capturas" >/dev/null 2>&1 )
+  # Goal on opening and the plan at once: two calls, not four.
+  bash "$CRUX_HOME/bin/workspace.sh" new p --repo "$root/app" --goal "Make the hover not cover the country" >/dev/null 2>&1
+  ( cd "$root/app-ws-p" && bash "$CRUX_HOME/bin/task.sh" add "lift the country" "zoom on select" "screenshots" >/dev/null 2>&1 )
 
   local t; t="$(cat "$SB/tasks/proj/p.md")"
-  assert_contains "$t" "Que el hover no tape el país" "el objetivo entra al abrir el espacio"
-  assert_contains "$t" "- [ ] T3 capturas" "y varios pasos entran en una llamada"
+  assert_contains "$t" "Make the hover not cover the country" "the goal goes in when the workspace opens"
+  assert_contains "$t" "- [ ] T3 screenshots" "and several steps go in one call"
 }
 
-test_workspace_list_desde_dentro_de_un_espacio_ve_los_del_repo() {
+test_workspace_list_from_inside_a_workspace_sees_the_repos_ones() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new uno --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new dos --repo "$root/app" >/dev/null 2>&1
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new one --repo "$root/app" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new two --repo "$root/app" >/dev/null 2>&1
 
-  local out; out="$(cd "$root/app-ws-uno" && bash "$CRUX_HOME/bin/workspace.sh" list 2>&1)"
-  assert_contains "$out" "uno" "desde un espacio se ve a sí mismo"
-  assert_contains "$out" "dos" "y a los demás del mismo repo"
-  assert_not_contains "$out" "sin espacios en este repo" "sin decir que no hay nada"
+  local out; out="$(cd "$root/app-ws-one" && bash "$CRUX_HOME/bin/workspace.sh" list 2>&1)"
+  assert_contains "$out" "one" "from a workspace it sees itself"
+  assert_contains "$out" "two" "and the others of the same repo"
+  assert_not_contains "$out" "no workspaces in this repo" "without saying there is nothing"
 }
 
-test_cerrar_el_ultimo_espacio_de_una_tarea_fusionada_la_archiva() {
+test_closing_the_last_workspace_of_a_merged_task_archives_it() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   bash "$CRUX_HOME/bin/workspace.sh" new a --repo "$root/app" >/dev/null 2>&1
   bash "$CRUX_HOME/bin/workspace.sh" new a-web --repo "$root/web" --task a >/dev/null 2>&1
   local f="$SB/tasks/proj/a.md"
   node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
 
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm a 2>&1)"
-  assert_contains "$out" "sigue en 1 espacio" "con otro espacio vivo, la tarea no se archiva"
-  assert_file "$f" "y sigue en su sitio"
+  assert_contains "$out" "still in 1 more workspace" "with another live workspace, the task is not archived"
+  assert_file "$f" "and stays in place"
 
   out="$(bash "$CRUX_HOME/bin/workspace.sh" rm a-web 2>&1)"
-  assert_contains "$out" "tarea 'a' archivada" "al cerrar el último espacio se archiva"
-  assert_no_file "$f" "sale de la lista de abiertas"
-  local archivada; archivada="$(ls "$SB"/tasks/proj/done/*-a.md 2>/dev/null | head -1)"
-  assert_file "$archivada" "y queda fechada en done/"
-  assert_contains "$(cat "$archivada")" "status: closed" "cerrada"
+  assert_contains "$out" "task 'a' archived" "closing the last workspace archives it"
+  assert_no_file "$f" "it leaves the open list"
+  local archived; archived="$(ls "$SB"/tasks/proj/done/*-a.md 2>/dev/null | head -1)"
+  assert_file "$archived" "and it is dated in done/"
+  assert_contains "$(cat "$archived")" "status: closed" "closed"
 
   out="$(bash "$CRUX_HOME/bin/task.sh" list --all 2>&1)"
-  assert_not_contains "$out" "proj/a " "la lista de abiertas ya no la enseña"
+  assert_not_contains "$out" "proj/a " "the open list no longer shows it"
   out="$(bash "$CRUX_HOME/bin/task.sh" list --done 2>&1)"
-  assert_contains "$out" "-a" "y --done sí"
+  assert_contains "$out" "-a" "and --done does"
 }
 
-test_una_tarea_sin_terminar_no_se_archiva_al_cerrar_su_espacio() {
+test_an_unfinished_task_is_not_archived_when_its_workspace_closes() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$root/app" >/dev/null 2>&1
 
   local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm b 2>&1)"
-  assert_contains "$out" "sigue abierta (open)" "cerrar el espacio no esconde trabajo sin terminar"
-  assert_contains "$out" "crux task archive --task proj/b" "y dice cómo archivarla si ya no sigue"
-  assert_file "$SB/tasks/proj/b.md" "el registro se queda"
+  assert_contains "$out" "is still open (open)" "closing the workspace does not hide unfinished work"
+  assert_contains "$out" "crux task archive --task proj/b" "and says how to archive it if it no longer goes on"
+  assert_file "$SB/tasks/proj/b.md" "the record stays"
 
   out="$(bash "$CRUX_HOME/bin/task.sh" archive --task proj/b 2>&1)"
-  assert_contains "$out" "tarea archivada" "a mano también se archiva"
-  assert_no_file "$SB/tasks/proj/b.md" "y sale de las abiertas"
+  assert_contains "$out" "task archived" "it can also be archived by hand"
+  assert_no_file "$SB/tasks/proj/b.md" "and leaves the open ones"
 }
 
-test_gc_borra_las_tareas_archivadas_que_han_caducado() {
+test_gc_deletes_archived_tasks_that_have_expired() {
   sandbox >/dev/null
   local done_dir="$SB/tasks/proj/done"
   mkdir -p "$done_dir"
-  printf -- '---\ntask: vieja\nstatus: closed\n---\n' > "$done_dir/2020-01-01-vieja.md"
-  local reciente; reciente="$(date +%Y-%m-%d)-reciente.md"
-  printf -- '---\ntask: reciente\nstatus: closed\n---\n' > "$done_dir/$reciente"
+  printf -- '---\ntask: old\nstatus: closed\n---\n' > "$done_dir/2020-01-01-old.md"
+  local recent; recent="$(date +%Y-%m-%d)-recent.md"
+  printf -- '---\ntask: recent\nstatus: closed\n---\n' > "$done_dir/$recent"
 
   local out; out="$(env CRUX_TASKS_RETENTION_DAYS=180 bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
-  assert_contains "$out" "2020-01-01-vieja" "enseña lo caducado"
-  assert_file "$done_dir/2020-01-01-vieja.md" "sin --yes no borra nada"
+  assert_contains "$out" "2020-01-01-old" "it shows what expired"
+  assert_file "$done_dir/2020-01-01-old.md" "without --yes it deletes nothing"
 
   env CRUX_TASKS_RETENTION_DAYS=180 bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
-  assert_no_file "$done_dir/2020-01-01-vieja.md" "con --yes borra lo caducado"
-  assert_file "$done_dir/$reciente" "y deja lo reciente"
+  assert_no_file "$done_dir/2020-01-01-old.md" "with --yes it deletes what expired"
+  assert_file "$done_dir/$recent" "and leaves the recent one"
 
-  assert_exit 1 "una retención que no es un número se dice" \
-    env CRUX_TASKS_RETENTION_DAYS=pronto bash "$CRUX_HOME/bin/workspace.sh" gc
+  assert_exit 1 "a retention that is not a number is reported" \
+    env CRUX_TASKS_RETENTION_DAYS=soon bash "$CRUX_HOME/bin/workspace.sh" gc
 }
 
-test_las_decisiones_de_la_tarea_pasan_al_docs_repo_al_archivar() {
-  # El registro de la tarea es local y se archiva: lo que se decidió por el
-  # camino se quedaba ahí y la siguiente sesión no lo veía.
+test_task_decisions_move_to_the_docs_repo_on_archive() {
+  # The task record is local and gets archived: what was decided along the
+  # way stayed there and the next session did not see it.
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   local docs="$root/proj-docs"
   mkdir -p "$docs/repos/app"; echo "# Notas" > "$docs/repos/app/notes.md"
   git -C "$docs" init -q; git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
@@ -300,142 +300,158 @@ test_las_decisiones_de_la_tarea_pasan_al_docs_repo_al_archivar() {
   out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" note "Cache keys get a version prefix" \
     --why "changing the format broke existing keys" --where "src/cache.ts" \
     --learned "old keys expire in 24h, so no migration is needed" 2>&1)"
-  assert_contains "$out" "decisión anotada" "con porqué, es una decisión"
+  assert_contains "$out" "decision noted" "with a why, it is a decision"
   out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" note "Skipped the retry, not needed yet" 2>&1)"
-  assert_contains "$out" "--why" "sin porqué, sugiere añadirlo"
+  assert_contains "$out" "--why" "without a why, it suggests adding one"
 
   local f="$SB/tasks/proj/dec.md"
   assert_contains "$(cat "$f")" "Cache keys get a version prefix · Why: changing the format broke existing keys · Where: src/cache.ts" \
-    "el registro guarda la decisión en una línea"
+    "the record keeps the decision on one line"
   node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
   out="$(bash "$CRUX_HOME/bin/workspace.sh" rm dec 2>&1)"
-  assert_contains "$out" "decisiones de la tarea en proj-docs/repos/app/notes.md" "al archivar lo dice"
+  assert_contains "$out" "task decisions in proj-docs/repos/app/notes.md" "on archive it says so"
 
   local notes; notes="$(cat "$docs/repos/app/notes.md")"
-  assert_contains "$notes" "## Cache keys get a version prefix," "la decisión llega a las notas del repo"
-  assert_contains "$notes" "- **Why**: changing the format broke existing keys" "con su porqué"
-  assert_contains "$notes" "- **Learned**: old keys expire in 24h" "y lo aprendido"
-  assert_not_contains "$notes" "Skipped the retry" "la desviación sin porqué se queda en la tarea"
-  assert_contains "$(git -C "$docs" log -1 --format=%s)" "decisions from task dec" "y queda commiteada"
-  assert_eq "" "$(git -C "$docs" status --porcelain)" "sin dejar nada suelto"
+  assert_contains "$notes" "## Cache keys get a version prefix," "the decision reaches the repo notes"
+  assert_contains "$notes" "- **Why**: changing the format broke existing keys" "with its why"
+  assert_contains "$notes" "- **Learned**: old keys expire in 24h" "and what was learned"
+  assert_not_contains "$notes" "Skipped the retry" "the deviation without a why stays in the task"
+  assert_contains "$(git -C "$docs" log -1 --format=%s)" "decisions from task dec" "and it is committed"
+  assert_eq "" "$(git -C "$docs" status --porcelain)" "leaving nothing loose"
 }
 
-test_una_tarea_sin_decisiones_no_toca_el_docs_repo() {
+test_a_task_without_decisions_does_not_touch_the_docs_repo() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
+  local root; root="$(_tasks_project)"
   local docs="$root/proj-docs"
   mkdir -p "$docs/repos/app"
   git -C "$docs" init -q; git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
   git -C "$docs" add -A; git -C "$docs" commit -qm init
-  bash "$CRUX_HOME/bin/workspace.sh" new sin --repo "$root/app" >/dev/null 2>&1
-  local f="$SB/tasks/proj/sin.md"
+  bash "$CRUX_HOME/bin/workspace.sh" new none --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/none.md"
   node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
-  bash "$CRUX_HOME/bin/workspace.sh" rm sin >/dev/null 2>&1
-  assert_no_file "$docs/repos/app/notes.md" "no crea notas vacías"
-  assert_eq "init" "$(git -C "$docs" log -1 --format=%s)" "ni commits"
+  bash "$CRUX_HOME/bin/workspace.sh" rm none >/dev/null 2>&1
+  assert_no_file "$docs/repos/app/notes.md" "it does not create empty notes"
+  assert_eq "init" "$(git -C "$docs" log -1 --format=%s)" "nor commits"
 }
 
 test_wait_records_who_and_retires_an_idle_workspace() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new dominio --repo "$root/app" >/dev/null 2>&1
-  local f="$SB/tasks/proj/dominio.md" out rc=0
-  out="$(cd "$root/app-ws-dominio" && bash "$CRUX_HOME/bin/task.sh" wait --on "Alex" --ask "¿Apuntamos el dominio: sí o no?" --ref "correo del 3 de octubre" 2>&1)" || rc=$?
-  assert_eq 0 "$rc" "wait termina bien"
-  assert_contains "$(cat "$f")" "waiting_on: Alex" "apunta a quién se espera"
-  assert_contains "$(cat "$f")" "waiting_ask: ¿Apuntamos el dominio: sí o no?" "y qué se le preguntó, aunque lleve dos puntos"
-  assert_contains "$(cat "$f")" "waiting_ref: correo del 3 de octubre" "y dónde"
-  assert_contains "$(cat "$f")" "waiting_since: " "y desde cuándo"
-  assert_no_file "$root/app-ws-dominio/f.txt" "el espacio sin trabajo se retira"
-  assert_eq "" "$(git -C "$root/app" branch --list ws/dominio)" "y su rama vacía también"
-  assert_contains "$(cat "$f")" "retired: [app=ws/dominio]" "la rama queda apuntada como retirada"
-  assert_file "$f" "la tarea no se archiva por quedarse sin espacios"
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new domain --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/domain.md" out rc=0
+  out="$(cd "$root/app-ws-domain" && bash "$CRUX_HOME/bin/task.sh" wait --on "Alex" --ask "Do we register the domain: yes or no?" --ref "email of October 3rd" 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "wait finishes fine"
+  assert_contains "$(cat "$f")" "waiting_on: Alex" "it notes who is awaited"
+  assert_contains "$(cat "$f")" "waiting_ask: Do we register the domain: yes or no?" "and what was asked, even with a colon"
+  assert_contains "$(cat "$f")" "waiting_ref: email of October 3rd" "and where"
+  assert_contains "$(cat "$f")" "waiting_since: " "and since when"
+  assert_no_file "$root/app-ws-domain/f.txt" "the workspace without work is retired"
+  assert_eq "" "$(git -C "$root/app" branch --list ws/domain)" "and its empty branch too"
+  assert_contains "$(cat "$f")" "retired: [app=ws/domain]" "the branch is noted as retired"
+  assert_file "$f" "the task is not archived for lacking workspaces"
   local list; list="$(bash "$CRUX_HOME/bin/task.sh" list --all 2>&1)"
-  assert_contains "$list" "proj/dominio" "sigue en la lista"
-  assert_contains "$list" "waiting" "como tarea en espera"
-  assert_contains "$list" "a Alex desde" "diciendo a quién espera"
+  assert_contains "$list" "proj/domain" "it stays in the list"
+  assert_contains "$list" "waiting" "as a waiting task"
+  assert_contains "$list" "to Alex since" "saying who it waits for"
 }
 
 test_wait_keeps_a_workspace_with_work_in_it() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new cambios --repo "$root/app" >/dev/null 2>&1
-  local ws="$root/app-ws-cambios" out
-  echo y > "$ws/sin-commit.txt"
-  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "¿vale así?" 2>&1)"
-  assert_contains "$out" "cambios sin commitear: se queda" "dice por qué no lo retira"
-  assert_file "$ws/sin-commit.txt" "y no pierde el trabajo"
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new changes --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-changes" out
+  echo y > "$ws/uncommitted.txt"
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "is this fine?" 2>&1)"
+  assert_contains "$out" "uncommitted changes: it stays" "says why it does not retire it"
+  assert_file "$ws/uncommitted.txt" "and does not lose the work"
 
   bash "$CRUX_HOME/bin/workspace.sh" new commits --repo "$root/app" >/dev/null 2>&1
   ws="$root/app-ws-commits"
   ( cd "$ws" && echo z > z.txt && git add z.txt && git commit -qm z )
-  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "¿vale así?" 2>&1)"
-  assert_contains "$out" "sin fusionar en ws/commits: se queda" "una rama con commits propios no se toca"
-  assert_file "$ws/z.txt" "ni su espacio"
+  out="$(cd "$ws" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "is this fine?" 2>&1)"
+  assert_contains "$out" "unmerged commit(s) in ws/commits: it stays" "a branch with its own commits is not touched"
+  assert_file "$ws/z.txt" "nor its workspace"
 }
 
 test_wait_needs_who_and_what() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new sin --repo "$root/app" >/dev/null 2>&1
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new none --repo "$root/app" >/dev/null 2>&1
   local out rc=0
-  out="$(cd "$root/app-ws-sin" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" 2>&1)" || rc=$?
-  assert_eq 1 "$rc" "sin la pregunta no se pone a esperar"
-  assert_contains "$out" "uso: crux task wait" "y dice cómo se usa"
-  assert_not_contains "$(cat "$SB/tasks/proj/sin.md")" "waiting_on" "ni escribe nada a medias"
+  out="$(cd "$root/app-ws-none" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" 2>&1)" || rc=$?
+  assert_eq 1 "$rc" "without the question it does not start waiting"
+  assert_contains "$out" "usage: crux task wait" "and says how to use it"
+  assert_not_contains "$(cat "$SB/tasks/proj/none.md")" "waiting_on" "nor writes anything halfway"
 }
 
 test_waiting_tasks_get_their_own_block_in_the_reminder() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new curro --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new espera --repo "$root/web" >/dev/null 2>&1
-  ( cd "$root/web-ws-espera" && bash "$CRUX_HOME/bin/task.sh" wait --on "Alex" --ask "¿Datos de la base vieja?" >/dev/null 2>&1 )
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new busy --repo "$root/app" >/dev/null 2>&1
+  bash "$CRUX_HOME/bin/workspace.sh" new idle --repo "$root/web" >/dev/null 2>&1
+  ( cd "$root/web-ws-idle" && bash "$CRUX_HOME/bin/task.sh" wait --on "Alex" --ask "Data from the old database?" >/dev/null 2>&1 )
   local r; r="$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")"
-  assert_contains "$r" "Esperando respuesta:" "las que esperan van en su propio bloque"
-  assert_contains "$r" "proj/espera · a Alex, hoy: ¿Datos de la base vieja?" "con a quién, desde cuándo y qué"
-  assert_not_contains "$r" "conviene insistir" "sin insistir antes de tiempo"
-  local antes despues
-  antes="$(printf '%s' "$r" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.usuario.indexOf("proj/curro")))})')"
-  despues="$(printf '%s' "$r" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.usuario.indexOf("Esperando respuesta")))})')"
-  assert_eq 1 "$([[ "$antes" -ge 0 && "$antes" -lt "$despues" ]] && echo 1 || echo 0)" "el trabajo propio va antes que lo que espera a otro"
-  sed -i 's/^waiting_since: .*/waiting_since: 2020-01-01/' "$SB/tasks/proj/espera.md"
+  assert_contains "$r" "Waiting for an answer:" "those that wait go in their own block"
+  assert_contains "$r" "proj/idle · to Alex, today: Data from the old database?" "with who, since when and what"
+  assert_not_contains "$r" "worth a nudge" "without nudging too early"
+  local antes after
+  antes="$(printf '%s' "$r" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.user.indexOf("proj/busy")))})')"
+  after="$(printf '%s' "$r" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.user.indexOf("Waiting for an answer")))})')"
+  assert_eq 1 "$([[ "$antes" -ge 0 && "$antes" -lt "$after" ]] && echo 1 || echo 0)" "own work goes before what waits on someone else"
+  sed -i 's/^waiting_since: .*/waiting_since: 2020-01-01/' "$SB/tasks/proj/idle.md"
   r="$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")"
-  assert_contains "$r" "conviene insistir" "pasado el plazo sugiere insistir"
+  assert_contains "$r" "worth a nudge" "past the deadline it suggests nudging"
   r="$(CRUX_WAIT_NUDGE_DAYS=100000 node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")"
-  assert_not_contains "$r" "conviene insistir" "y el plazo se puede ajustar"
+  assert_not_contains "$r" "worth a nudge" "and the deadline can be adjusted"
   local st; st="$(cd "$root/app" && bash "$CRUX_HOME/bin/status.sh" 2>&1)"
-  assert_contains "$st" "esperando respuesta" "crux status les da su sección"
-  assert_not_contains "$(printf '%s' "$st" | sed -n '/tareas abiertas sin espacio/,/^$/p')" "proj/espera" "y no la cuenta como abierta sin espacio"
+  assert_contains "$st" "waiting for an answer" "crux status gives them their section"
+  assert_not_contains "$(printf '%s' "$st" | sed -n '/open tasks without a workspace/,/^$/p')" "proj/idle" "and does not count it as open without a workspace"
 }
 
 test_a_merged_task_that_waits_is_not_archived() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new fusionada --repo "$root/app" >/dev/null 2>&1
-  local f="$SB/tasks/proj/fusionada.md"
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new merged --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/merged.md"
   node "$CRUX_HOME/lib/task.mjs" status --file "$f" --to merged >/dev/null
-  node "$CRUX_HOME/lib/task.mjs" wait --file "$f" --on "Alex" --ask "¿seguimos?" >/dev/null
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm fusionada 2>&1)"
-  assert_contains "$out" "espera a Alex: no se archiva" "rm no archiva una tarea que espera"
-  assert_file "$f" "el registro sigue"
-  assert_contains "$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")" "proj/fusionada" "y sigue en el recordatorio aunque esté fusionada"
+  node "$CRUX_HOME/lib/task.mjs" wait --file "$f" --on "Alex" --ask "shall we go on?" >/dev/null
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm merged 2>&1)"
+  assert_contains "$out" "is waiting on Alex: not archiving" "rm does not archive a task that waits"
+  assert_file "$f" "the record stays"
+  assert_contains "$(node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$root/app")" "proj/merged" "and it stays in the reminder even though it is merged"
 }
 
 test_resume_reopens_a_retired_branch_and_stops_waiting() {
   sandbox >/dev/null
-  local root; root="$(_proyecto_de_tareas)"
-  bash "$CRUX_HOME/bin/workspace.sh" new vuelta --repo "$root/app" >/dev/null 2>&1
-  local f="$SB/tasks/proj/vuelta.md"
-  ( cd "$root/app-ws-vuelta" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "¿sí?" >/dev/null 2>&1 )
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new back --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/back.md"
+  ( cd "$root/app-ws-back" && bash "$CRUX_HOME/bin/task.sh" wait --on "Ana" --ask "yes?" >/dev/null 2>&1 )
   local out rc=0
-  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/workspace.sh" resume vuelta 2>&1)" || rc=$?
-  assert_eq 0 "$rc" "resume abre la tarea aunque su rama se retirase"
-  assert_file "$root/app-ws-vuelta/f.txt" "con un espacio nuevo desde la principal"
-  assert_contains "$out" "ya no espera respuesta" "y deja de esperar"
-  assert_not_contains "$(cat "$f")" "waiting_on" "sin rastro de la espera"
-  assert_not_contains "$(cat "$f")" "retired:" "ni de la rama retirada"
-  rc=0; out="$(cd "$root/app-ws-vuelta" && bash "$CRUX_HOME/bin/task.sh" unwait 2>&1)" || rc=$?
-  assert_eq 0 "$rc" "unwait sobre una tarea que no espera no es un error"
-  assert_contains "$out" "no estaba esperando" "y lo dice"
+  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/workspace.sh" resume back 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "resume opens the task even though its branch was retired"
+  assert_file "$root/app-ws-back/f.txt" "with a new workspace from the main one"
+  assert_contains "$out" "no longer waits for an answer" "and stops waiting"
+  assert_not_contains "$(cat "$f")" "waiting_on" "without a trace of the wait"
+  assert_not_contains "$(cat "$f")" "retired:" "nor of the retired branch"
+  rc=0; out="$(cd "$root/app-ws-back" && bash "$CRUX_HOME/bin/task.sh" unwait 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "unwait on a task that does not wait is not an error"
+  assert_contains "$out" "was not waiting" "and says so"
+}
+
+test_a_record_with_spanish_headings_is_still_read() {
+  sandbox >/dev/null
+  local f="$SB/old.md"
+  printf -- '---\ntask: old\nproject: proj\nstatus: open\nrepos: [app]\n---\n\n## Objetivo\n\nKeep it working.\n\n## Pasos\n\n- [ ] T1 first step\n\n## Siguiente paso\n\nfirst step\n\n## Desviaciones y decisiones\n\n' > "$f"
+
+  local out; out="$(node "$CRUX_HOME/lib/task.mjs" summary --file "$f" --json)"
+  assert_contains "$out" '"objective":"Keep it working."' "the old Objetivo heading is read as the objective"
+  assert_contains "$out" '"next":"first step"' "and Siguiente paso as the next step"
+
+  node "$CRUX_HOME/lib/task.mjs" note --file "$f" --text "kept" >/dev/null
+  local body; body="$(cat "$f")"
+  assert_contains "$body" "## Deviations and decisions" "the next write uses the English headings"
+  assert_not_contains "$body" "## Desviaciones y decisiones" "without leaving the Spanish one behind"
+  assert_contains "$body" "kept" "and keeps what it appended"
 }

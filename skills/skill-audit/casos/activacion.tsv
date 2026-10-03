@@ -1,51 +1,51 @@
-# Casos de activación del catálogo del kernel.
+# Activation cases for the kernel catalog.
 #
-# Formato:  <skill esperada> TAB <la frase con la que se pediría el trabajo>
+# Format:  <expected skill> TAB <the sentence you would use to ask for the job>
 #
-# La regla que comprueban: una frase SIN nombres propios tiene que activar el
-# procedimiento del kernel, nunca el adaptador de un proyecto. Si gana un
-# adaptador, en los demás proyectos está ganando algo que no aplica.
+# The rule they check: a sentence WITHOUT proper names has to activate the
+# kernel's procedure, never a project's adapter. If an adapter wins, in the
+# other projects it is winning something that does not apply.
 #
-# Las frases se escriben como se pide el trabajo de verdad, con su registro y
-# sus imprecisiones, no en el vocabulario de la descripción. Una frase copiada
-# de la descripción siempre pasa y no prueba nada.
+# The sentences are written the way the job is really asked for, with their
+# register and their imprecision, not in the vocabulary of the description. A
+# sentence copied from the description always passes and proves nothing.
 
-device-loop	probar la app en un móvil android físico conectado por cable
-oauth-reauthorize	se ha invalidado el refresh token y hay que rehacer la autorización oauth
-auth-bypass-local	saltarme el login en local para poder probar una pantalla protegida
-deploy-fallback	el CI está caído, desplegar a mano construyendo la imagen en local
-render-loop	iterar la maquetación de un documento generado mirando cómo va quedando
-visual-diff	medir cuánto se desvía la salida respecto a la referencia
-carry-env	llevarme los ficheros de entorno de este proyecto a otro portátil
-workspace	quiero trabajar en dos tareas a la vez sobre el mismo repo sin pisarme
-ship	antes de commitear, pasar las comprobaciones de calidad
-review-pr	revisar la propuesta que acabo de abrir con criterio de revisor
-adr	registrar la decisión técnica que acabamos de tomar
-root-cause	depurar esto reproduciendo el fallo antes de tocar nada
-repo-map	orientarme en un repo que no conozco y llevo meses sin tocar
-redaccion	revisar este texto para que no se lea como generado por un modelo
-write-tests	hay que añadir tests a esto, dime cuáles merecen la pena
-end-session	lo dejamos por hoy, repasa qué hay que guardar antes de cerrar
-runbook	escribir el procedimiento de la incidencia que acabamos de resolver
-explain-plan	presentar la propuesta técnica para que se pueda decidir
-skill-creator	escribir una skill nueva que se descubra cuando toque
-read-document	ponme en contexto este word que no puedo abrir
-share-local	enseñarle el entorno local a alguien de fuera sin desplegar
-code-health	medir la salud estructural del repo y su tendencia
-bug-hunt	buscar fallos que nadie ha reportado todavía en esta herramienta
-motion-video	hazme un vídeo de motion graphics para presentar el producto
-motion-video	monta un vídeo animado de mi trayectoria para redes
-x-posts	escribe un tweet para contar lo que he construido esta semana
-x-posts	quiero crecer en X con mi marca personal
-flow	quiero desarrollar esto siguiendo las convenciones del proyecto
-flow	me pongo a tocar código en este repo, ¿qué pasos sigo?
-crux-doctor	comprobar si la documentación de este proyecto se ha desalineado
-deploy-watch	acabo de fusionar, mira si ya está bien en producción
-prod-signals	la api da errores en el servidor, mira qué dicen los logs
-review-pr	revisa la propuesta que acabo de abrir antes de fusionarla
-grill	antes de que te pongas, hazme preguntas sobre lo que quiero
-merge-conflicts	se me ha quedado el rebase a medias y hay marcadores en los ficheros
-wizard	necesito ir sacando credenciales de un panel y metiendolas en el CI
-teach	explicame esto bien porque quiero aprenderlo, no salir del paso
-before-after	enséñame cómo queda antes de subirlo, el antes y el después en móvil
-before-after	quiero revisar en el móvil cómo ha quedado la página nueva antes de desplegar
+device-loop	try the app on a physical android phone connected by cable
+oauth-reauthorize	the refresh token has been invalidated and the oauth authorization has to be redone
+auth-bypass-local	skip the login locally so I can try a protected screen
+deploy-fallback	the CI is down, deploy by hand building the image locally
+render-loop	iterate on the layout of a generated document watching how it turns out
+visual-diff	measure how far the output deviates from the reference
+carry-env	take the environment files of this project to another laptop
+workspace	I want to work on two tasks at once on the same repo without stepping on myself
+ship	before committing, run the quality checks
+review-pr	review the proposal I just opened like a reviewer would
+adr	record the technical decision we just made
+root-cause	debug this by reproducing the failure before touching anything
+repo-map	get my bearings in a repo I do not know and have not touched for months
+redaccion	review this text so it does not read as generated by a model
+write-tests	tests need to be added to this, tell me which ones are worth it
+end-session	we are stopping for today, go over what needs saving before closing
+runbook	write the procedure for the incident we just resolved
+explain-plan	present the technical proposal so it can be decided on
+skill-creator	write a new skill that gets discovered when it should
+read-document	put this word document in context for me, I cannot open it
+share-local	show the local environment to an outsider without deploying
+code-health	measure the structural health of the repo and its trend
+bug-hunt	look for bugs nobody has reported yet in this tool
+motion-video	make me a motion graphics video to present the product
+motion-video	put together an animated video of my career for social media
+x-posts	write a tweet or a thread to tell people what I built this week
+x-posts	I want to grow on X with my personal brand
+flow	I want to develop this following the project conventions
+flow	I am going to start on a development task in this repo, which steps do I follow?
+crux-doctor	check whether the documentation of this project has drifted out of line
+deploy-watch	I just merged, check whether the new version is in production and working
+prod-signals	the api is throwing errors on the server, see what the logs say
+review-pr	review the proposal I just opened before I ask anyone else to look at it
+grill	before you start writing code, ask me questions about what I want to build
+merge-conflicts	my rebase got left half done and there are markers in the files
+wizard	I need to take credentials out of a panel one by one and put them in the CI
+teach	explain this to me properly because I want to learn it, not just get by
+before-after	show me how it looks before pushing it, the before and after on mobile
+before-after	show me how the new page looks on mobile before I push it

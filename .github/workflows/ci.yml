@@ -5,73 +5,73 @@ on:
     branches: [main]
   pull_request:
 
-# Una tanda nueva cancela la anterior de la misma rama: el resultado de un
-# commit que ya no es HEAD no lo mira nadie.
+# A new run cancels the previous one on the same branch: nobody looks at the
+# result of a commit that is no longer HEAD.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verificar:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
 
-      # Los scripts del kernel son bash y node, y el runner trae los dos. No se
-      # instala nada: si esto necesitase dependencias, el propio kernel dejaría
-      # de ser instalable en cualquier máquina.
-      - name: Herramientas disponibles
+      # The kernel scripts are bash and node, and the runner ships both. Nothing
+      # is installed: if this needed dependencies, the kernel itself would stop
+      # being installable on any machine.
+      - name: Available tools
         run: |
           bash --version | head -1
           node --version
           shellcheck --version | head -2
 
-      - name: Análisis estático de los scripts
+      - name: Static analysis of the scripts
         run: |
-          # SC1091: no seguir los `source` de rutas que se resuelven en tiempo
-          # de ejecución. El resto sí se corrige.
+          # SC1091: do not follow `source` of paths that are resolved at run
+          # time. The rest is fixed.
           shellcheck --severity=warning --exclude=SC1091 \
             bin/crux bin/*.sh lib/*.sh install.sh \
             adapters/*/*.sh adapters/claude/hooks/*.sh \
             skills/*/scripts/*.sh test/run.sh test/cases/*.sh
 
-      - name: Suite del kernel
+      - name: Kernel suite
         run: ./test/run.sh
 
-      # Los fallos que han costado caro no salieron en la suite: salieron al
-      # recorrer el ciclo entero seguido, que es lo que esto hace.
-      - name: Batería de extremo a extremo
+      # The failures that cost dearly did not show up in the suite: they showed
+      # up when walking the whole cycle in one go, which is what this does.
+      - name: End-to-end battery
         run: |
           git config --global user.email ci@localhost
           git config --global user.name ci
           ./test/e2e.sh
 
-      # La suite corre en sandboxes; esto comprueba el camino real de
-      # instalación, que es lo primero que ejecuta cualquiera en una máquina
-      # nueva y lo último que se prueba.
-      - name: Instalación en limpio
+      # The suite runs in sandboxes; this checks the real installation path,
+      # which is the first thing anyone runs on a new machine and the last thing
+      # tested.
+      - name: Clean install
         run: |
           export HOME="$(mktemp -d)"
-          ./install.sh --projects-dir "$HOME/proyectos"
+          ./install.sh --projects-dir "$HOME/projects"
           test -f "$HOME/.crux/config"
           test -x "$HOME/.local/bin/crux"
           test "$(ls "$HOME/.claude/skills" | wc -l)" -gt 0
 
-      - name: Un proyecto de principio a fin
+      - name: A project from start to finish
         run: |
           export HOME="$(mktemp -d)"
           export CRUX_HOME="$PWD"
           git config --global user.email ci@localhost
           git config --global user.name ci
-          mkdir -p "$HOME/proyectos/demo/api"
+          mkdir -p "$HOME/projects/demo/api"
 
-          bash bin/init.sh demo --no-remote --parent "$HOME/proyectos" --repos api
-          bash bin/link.sh "$HOME/proyectos/demo/demo-docs"
-          bash bin/doctor.sh "$HOME/proyectos/demo/demo-docs"
+          bash bin/init.sh demo --no-remote --parent "$HOME/projects" --repos api
+          bash bin/link.sh "$HOME/projects/demo/demo-docs"
+          bash bin/doctor.sh "$HOME/projects/demo/demo-docs"
 
-          # El puntero generado tiene que decir cómo se trabaja, no solo dónde
-          # está la documentación: es lo único que lee un agente al entrar.
-          grep -q "Cómo se trabaja aquí" "$HOME/proyectos/demo/api/CLAUDE.md"
-          grep -q "crux:begin" "$HOME/proyectos/demo/api/AGENTS.md"
+          # The generated pointer has to say how work is done, not just where the
+          # documentation is: it is the only thing an agent reads on entering.
+          grep -q "How we work here" "$HOME/projects/demo/api/CLAUDE.md"
+          grep -q "crux:begin" "$HOME/projects/demo/api/AGENTS.md"

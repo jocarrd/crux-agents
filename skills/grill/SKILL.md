@@ -1,105 +1,107 @@
 ---
 name: grill
-description: Interrogar a quien decide hasta agotar el árbol de decisiones de un plan, antes de escribir código. Las preguntas salen por rondas, numeradas y con la respuesta que recomiendas; los hechos los busca el agente y las decisiones las toma el usuario. Usa antes de empezar algo que admite varias formas razonables de hacerse, cuando el encargo llega en dos frases y hay que construir mucho, cuando notes que estás rellenando huecos por tu cuenta, o cuando el usuario diga "pregúntame", "hazme preguntas" o "antes de ponerte, aclaremos".
+description: Interrogate the decision-maker until exhausting a plan's decision tree, before writing code. Questions come in rounds, numbered and with the answer you recommend; the agent looks up facts and the user makes decisions. Use before starting something that can be done in several reasonable ways, when the brief arrives in two sentences and a lot has to be built, when you notice you are filling gaps on your own, or when the user says "pregúntame", "hazme preguntas" or "antes de ponerte, aclaremos".
 ---
 
 # grill
 
-El fallo más caro del desarrollo es construir bien lo que no era. Y casi nunca se detecta al empezar: se detecta al enseñar el resultado.
+The most expensive failure in development is building well what wasn't wanted.
+And it is almost never detected at the start: it is detected when the result is
+shown.
 
-Un encargo llega con huecos. El agente los rellena solos y en silencio, porque
-rellenarlos es más rápido que preguntar. Cada hueco relleno a ojo es una
-apuesta, y una sola que salga mal tira el trabajo de la tarde.
+A brief arrives with gaps. The agent fills them in alone and in silence, because
+filling them is faster than asking. Every gap filled by eye is a bet, and a
+single one going wrong throws away the afternoon's work.
 
-Esta skill convierte esos huecos en preguntas antes de que cuesten.
+This skill turns those gaps into questions before they cost anything.
 
-## El árbol y su frontera
+## The tree and its frontier
 
-Un plan es un árbol de decisiones: cada una abre las que cuelgan de ella. No se
-puede preguntar por el formato del PDF si todavía no se sabe si habrá PDF.
+A plan is a tree of decisions: each one opens the ones that hang from it. You
+can't ask about the PDF format if you don't yet know whether there will be a PDF.
 
-La **frontera** son las decisiones cuyos requisitos ya están resueltos: lo que
-se puede preguntar **ahora** sin adivinar respuestas que aún no has oído.
+The **frontier** is the decisions whose prerequisites are already resolved: what
+can be asked **now** without guessing answers you haven't heard yet.
 
-Se trabaja por rondas:
+Work in rounds:
 
-1. Calcula la frontera.
-2. Pregunta **toda** la frontera de una vez.
-3. Espera las respuestas. No avances sin ellas.
-4. Las respuestas mueven la frontera hacia fuera y desbloquean lo que dependía
-   de ellas. Vuelve al paso 1.
+1. Compute the frontier.
+2. Ask **the whole** frontier at once.
+3. Wait for the answers. Don't move on without them.
+4. The answers push the frontier outward and unlock what depended on them. Go
+   back to step 1.
 
-Una pregunta cuya respuesta depende de otra que sigue abierta **en esta ronda**
-pertenece a la ronda siguiente. Colarla obliga al usuario a contestar dos veces
-o a inventarse una condición.
+A question whose answer depends on another that is still open **in this round**
+belongs to the next round. Slipping it in forces the user to answer twice or to
+invent a condition.
 
-Termina cuando la frontera queda vacía: todas las ramas visitadas, nada
-asumido en silencio.
+It ends when the frontier is empty: all branches visited, nothing assumed in
+silence.
 
-## Cómo se formula una ronda
+## How a round is phrased
 
-Cada pregunta va numerada, con título, y **con la respuesta que recomiendas**.
-La recomendación no es opcional: obliga al agente a mojarse y le deja al
-usuario decir «sí» en vez de redactar.
+Each question is numbered, with a title, and **with the answer you recommend**.
+The recommendation is not optional: it forces the agent to commit and lets the
+user say "yes" instead of writing a reply.
 
 ```
-❓ **P1 — <título corto>**
+❓ **Q1 — <short title>**
 
-<el cuerpo de la pregunta: contexto, opciones, lo que cambia según la
-respuesta. Puede ocupar varios párrafos>
+<the body of the question: context, options, what changes depending on the
+answer. It can run to several paragraphs>
 
-➡️ <lo que recomiendas y por qué, en una o dos frases>
+➡️ <what you recommend and why, in one or two sentences>
 
 ---
 
-❓ **P2 — <título corto>**
+❓ **Q2 — <short title>**
 
 …
 ```
 
-Si el agente dispone de un control de opciones cerradas, úsalo cuando las
-alternativas sean pocas y excluyentes, con la recomendada la primera. Para todo
-lo demás, el formato de arriba.
+If the agent has a closed-options control, use it when the alternatives are few
+and mutually exclusive, with the recommended one first. For everything else, the
+format above.
 
-## La regla que sostiene todo
+## The rule that holds it all up
 
-> **Los hechos los busca el agente. Las decisiones las toma el usuario.**
+> **The agent looks up facts. The user makes decisions.**
 
-Si una pregunta de la frontera necesita un dato del entorno —qué versión hay
-instalada, si ese endpoint existe, cuántas filas tiene esa tabla—, eso **no se
-pregunta**: se mira. Preguntarlo gasta el turno del usuario en algo que el
-agente resuelve con un comando, y encima obtiene una respuesta de memoria en
-vez de un dato.
+If a frontier question needs a fact about the environment (which version is
+installed, whether that endpoint exists, how many rows that table has), that is
+**not asked**: it is looked at. Asking it spends the user's turn on something the
+agent resolves with a command, and on top of that gets an answer from memory
+instead of a fact.
 
-No bloquees por ello. Una exploración en marcha es un requisito sin resolver,
-así que solo esperan las preguntas que cuelgan de ella; el resto de la frontera
-se pregunta ya.
+Don't block on it. An exploration in progress is an unresolved prerequisite, so
+only the questions that hang from it wait; the rest of the frontier is asked
+right away.
 
-## Cuándo parar
+## When to stop
 
-Esta skill es cara en turnos del usuario, así que tiene techo:
+This skill is expensive in user turns, so it has a ceiling:
 
-- **Dos o tres rondas** para un cambio normal. Si vas por la quinta, o el
-  encargo es enorme y hay que partirlo, o estás preguntando cosas que deberías
-  estar mirando.
-- **Ninguna pregunta cuya respuesta no cambie lo que vas a hacer.** Si con las
-  dos respuestas posibles construyes lo mismo, la pregunta sobra.
-- **Nada de confirmar lo que ya se dijo.** Si está en el encargo, está decidido.
+- **Two or three rounds** for a normal change. If you are on the fifth, either
+  the brief is huge and has to be split, or you are asking things you should be
+  looking at.
+- **No question whose answer doesn't change what you are going to do.** If you
+  build the same thing with both possible answers, the question is superfluous.
+- **No confirming what was already said.** If it is in the brief, it is decided.
 
-## Después
+## Afterwards
 
-El resultado de un interrogatorio es un acuerdo, y un acuerdo que solo vive en
-la conversación se pierde al cerrar la sesión. Pásalo a donde corresponda:
+The result of an interrogation is an agreement, and an agreement that only lives
+in the conversation is lost when the session closes. Move it to where it belongs:
 
-- `/explain-plan` si hay que presentar la propuesta antes de construirla.
-- `/adr` si por el camino se descartó una alternativa por un motivo que no es
-  obvio.
-- `crux task` si el trabajo va a durar más de una sesión.
+- `/explain-plan` if the proposal has to be presented before building it.
+- `/adr` if along the way an alternative was discarded for a reason that isn't
+  obvious.
+- `crux task` if the work will last more than one session.
 
-No empieces a construir hasta que el usuario confirme que estáis de acuerdo.
+Don't start building until the user confirms you are in agreement.
 
 ---
 
-*El mecanismo del árbol, la frontera y las rondas está adaptado de la skill
-`grilling` de [mattpocock/skills](https://github.com/mattpocock/skills),
-licencia MIT.*
+*The mechanism of the tree, the frontier and the rounds is adapted from the
+`grilling` skill of [mattpocock/skills](https://github.com/mattpocock/skills),
+MIT license.*

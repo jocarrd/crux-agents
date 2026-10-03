@@ -1,134 +1,135 @@
 #!/usr/bin/env bash
-# Hook de Claude Code (UserPromptSubmit).
+# Claude Code hook (UserPromptSubmit).
 #
-# Recuerda el ciclo cuando se va a trabajar sobre la rama principal de un repo
-# gestionado. Una vez por sesión, y en silencio el resto del tiempo.
+# Reminds about the cycle when about to work on the main branch of a managed
+# repo. Once per session, and silent the rest of the time.
 #
-# No adivina por el texto del prompt: la señal es el estado —dónde estás y en
-# qué rama—, que es determinista. Adivinar la intención por palabras acaba
-# avisando cuando no toca y callando cuando sí.
+# It does not guess from the prompt text: the signal is the state —where you
+# are and on which branch—, which is deterministic. Guessing intent from words
+# ends up warning when it should not and staying silent when it should.
 #
-# Existe porque medimos que no bastaba con describirlo: la skill del ciclo
-# estaba escrita, instalada y con su descripción, y en 31 sesiones se invocó
-# cero veces. Una descripción compite por atención; un hook llega solo.
+# It exists because we measured that describing it was not enough: the cycle
+# skill was written, installed and had its description, and in 31 sessions it
+# was invoked zero times. A description competes for attention; a hook arrives
+# on its own.
 
 set -u
 
-entrada="$(cat 2>/dev/null || true)"
+entry="$(cat 2>/dev/null || true)"
 
-silencio() { exit 0; }
+silence() { exit 0; }
 
-git rev-parse --git-dir >/dev/null 2>&1 || silencio
+git rev-parse --git-dir >/dev/null 2>&1 || silence
 
-# En un espacio de trabajo ya se está haciendo lo correcto.
-[[ "$PWD" == *-ws-* ]] && silencio
+# In a workspace the right thing is already being done.
+[[ "$PWD" == *-ws-* ]] && silence
 
-rama="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || silencio
-principal="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
-[[ -n "$principal" ]] || principal=main
-[[ "$rama" == "$principal" ]] || silencio
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || silence
+main_name="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
+[[ -n "$main_name" ]] || main_name=main
+[[ "$branch" == "$main_name" ]] || silence
 
-# --- ¿Es un repo que gestiona crux? ------------------------------------------
+# --- Is it a repo managed by crux? ------------------------------------------
 #
-# Lo es el propio kernel, un docs repo, o cualquier repo que viva bajo la raíz
-# de proyectos. La raíz sale de la configuración, no de una carpeta asumida: en
-# una máquina con otra convención esto no fallaba, simplemente no hacía nada, y
-# el sistema parecía vigilado sin estarlo.
+# It is the kernel itself, a docs repo, or any repo living under the projects
+# root. The root comes from the configuration, not from an assumed folder: on a
+# machine with another convention this did not fail, it simply did nothing, and
+# the system looked watched without being so.
 #
-# Antes se exigía además el layout <raíz>/<proyecto>/<repo> con su docs repo al
-# lado, y eso dejaba fuera a los repos sueltos de la raíz: cinco en la máquina
-# donde se midió. El estándar ya dice qué hacer sin contrato —un repo sin
-# crux.json se trata como 'light'—, así que la ausencia de docs repo rebaja el
-# rigor, no borra el repo del mapa. Medido el 17-09-2026 en personal-site:
-# sin aviso, una sesión trabajó sobre la principal mientras otra fusionaba, y
-# el push acabó en rebase.
+# Previously the layout <root>/<project>/<repo> with its docs repo next to it
+# was also required, and that left out the loose repos at the root: five on the
+# machine where it was measured. The standard already says what to do without a
+# contract —a repo without crux.json is treated as 'light'—, so the absence of
+# a docs repo lowers the rigor, it does not erase the repo from the map.
+# Measured on 2026-09-17 in personal-site: with no warning, one session
+# worked on main while another merged, and the push ended in a rebase.
 
-raiz="${CRUX_PROJECTS_DIR:-}"
+root="${CRUX_PROJECTS_DIR:-}"
 kernel=""
 if [[ -f "$HOME/.crux/config" ]]; then
   kernel="$(grep -E '^CRUX_HOME=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
-  [[ -n "$raiz" ]] || raiz="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
-  [[ -n "$raiz" || -z "$kernel" ]] || raiz="$(dirname "$kernel")"
+  [[ -n "$root" ]] || root="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+  [[ -n "$root" || -z "$kernel" ]] || root="$(dirname "$kernel")"
 fi
 
-# Una barra de más en la configuración dejaba el patrón sin casar y el guarda
-# callado en todas partes, que es el modo de fallo que este hook no puede tener.
-raiz="${raiz%/}"
+# An extra slash in the configuration left the pattern unmatched and the guard
+# silent everywhere, which is the failure mode this hook cannot have.
+root="${root%/}"
 
-toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || silencio
-gestionado=0
+toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || silence
+managed=0
 
-[[ -n "$kernel" && "$toplevel" == "$kernel" ]] && gestionado=1
+[[ -n "$kernel" && "$toplevel" == "$kernel" ]] && managed=1
 
-# En el docs repo se trabaja sobre la principal y se sube directo: ahí el
-# aviso del ciclo sobra.
+# In the docs repo you work on main and push directly: there the cycle
+# reminder is superfluous.
 if [[ -f "$toplevel/crux.json" ]]; then
-  case "$(basename "$toplevel")" in *-docs|docs) silencio ;; esac
+  case "$(basename "$toplevel")" in *-docs|docs) silence ;; esac
 fi
 
-if [[ $gestionado -eq 0 && -n "$raiz" ]]; then
+if [[ $managed -eq 0 && -n "$root" ]]; then
   case "$toplevel/" in
-    "$raiz"/*/) gestionado=1 ;;
+    "$root"/*/) managed=1 ;;
   esac
 fi
 
-# La salida para lo que no es tuyo aunque esté ahí: un clon ajeno que se deja
-# bajo la raíz para leerlo. Rutas o patrones separados por ':' en la
-# configuración. Sin la variable no hay nada que comprobar, que es el caso
-# normal.
-if [[ $gestionado -eq 1 ]]; then
-  ajenos="${CRUX_UNMANAGED:-}"
-  if [[ -z "$ajenos" && -f "$HOME/.crux/config" ]]; then
-    ajenos="$(grep -E '^CRUX_UNMANAGED=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
+# The way out for what is not yours even though it is there: a foreign clone
+# left under the root to read it. Paths or patterns separated by ':' in the
+# configuration. Without the variable there is nothing to check, which is the
+# normal case.
+if [[ $managed -eq 1 ]]; then
+  foreign_items="${CRUX_UNMANAGED:-}"
+  if [[ -z "$foreign_items" && -f "$HOME/.crux/config" ]]; then
+    foreign_items="$(grep -E '^CRUX_UNMANAGED=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"')"
   fi
-  if [[ -n "$ajenos" ]]; then
-    IFS=':' read -ra patrones <<< "$ajenos"
-    for patron in "${patrones[@]}"; do
-      [[ -n "$patron" ]] || continue
-      # Sin comillas a propósito: el patrón puede traer comodines.
+  if [[ -n "$foreign_items" ]]; then
+    IFS=':' read -ra patterns <<< "$foreign_items"
+    for pattern in "${patterns[@]}"; do
+      [[ -n "$pattern" ]] || continue
+      # Unquoted on purpose: the pattern may carry wildcards.
       # shellcheck disable=SC2053
-      [[ "$toplevel" == $patron ]] && silencio
+      [[ "$toplevel" == $pattern ]] && silence
     done
   fi
 fi
 
-[[ $gestionado -eq 1 ]] || silencio
+[[ $managed -eq 1 ]] || silence
 
-# --- Una vez por sesión ------------------------------------------------------
+# --- Once per session ------------------------------------------------------
 #
-# Repetirlo en cada turno lo convierte en ruido, y el ruido se aprende a
-# ignorar antes que a obedecer.
+# Repeating it every turn turns it into noise, and noise is learned to be
+# ignored before it is obeyed.
 
-sesion="$(printf '%s' "$entrada" | node -e '
+session="$(printf '%s' "$entry" | node -e '
   let s = "";
   process.stdin.on("data", (d) => (s += d));
   process.stdin.on("end", () => {
     try { process.stdout.write(String(JSON.parse(s).session_id || "")); } catch { }
   });
 ' 2>/dev/null || true)"
-[[ -n "$sesion" ]] || sesion="$PPID"
+[[ -n "$session" ]] || session="$PPID"
 
-# La marca va a ~/.crux/state y no a /tmp: el nombre llevaba dentro la ruta
-# del repo, o sea el cliente y la tarea, en un directorio legible por
-# cualquiera en la maquina y sin que nadie las limpiara nunca.
-estado="$HOME/.crux/state"
-( umask 077 && mkdir -p "$estado" ) 2>/dev/null || true
-marca="$estado/cycle-guard-$(printf '%s' "$sesion-$toplevel" | \
+# The marker goes to ~/.crux/state and not to /tmp: the name carried the repo
+# path inside, i.e. the client and the task, in a directory readable by anyone
+# on the machine and never cleaned up by anybody.
+status="$HOME/.crux/state"
+( umask 077 && mkdir -p "$status" ) 2>/dev/null || true
+marker="$status/cycle-guard-$(printf '%s' "$session-$toplevel" | \
   cksum | tr -d ' ' | tr -c 'A-Za-z0-9' '_')"
-find "$estado" -name 'cycle-guard-*' -type f -mtime +2 -delete 2>/dev/null || true
-[[ -e "$marca" ]] && silencio
-: > "$marca"
+find "$status" -name 'cycle-guard-*' -type f -mtime +2 -delete 2>/dev/null || true
+[[ -e "$marker" ]] && silence
+: > "$marker"
 
 cat <<EOF
-Estás en '$rama', la rama principal de $(basename "$toplevel"), que es un repo
-gestionado por crux. Si lo que viene es una tarea de desarrollo, el trabajo
-entra por un espacio propio y sale como propuesta:
+You are on '$branch', the main branch of $(basename "$toplevel"), which is a repo
+managed by crux. If what comes next is a development task, the work enters
+through its own workspace and leaves as a proposal:
 
-  crux workspace new <tarea>       rama, worktree y runtime aislados
-  /ship                            la puerta antes de commitear
-  crux workspace finish <tarea>    sube la rama y abre la propuesta
+  crux workspace new <task>        isolated branch, worktree and runtime
+  /ship                            the gate before committing
+  crux workspace finish <task>     pushes the branch and opens the proposal
 
-Aislar después de empezar obliga a mover cambios ya hechos entre ramas, que es
-justo el lío que esto evita. Para preguntas, exploración o una errata, sigue
-sin más: el ciclo no aplica a todo.
+Isolating after starting forces moving changes already made between branches,
+which is exactly the mess this avoids. For questions, exploration or a typo,
+carry on as is: the cycle does not apply to everything.
 EOF

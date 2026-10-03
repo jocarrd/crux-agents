@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# crux doctor --machine — verifica que esta máquina puede ejecutar el sistema.
+# crux doctor --machine — checks that this machine can run the system.
 #
-# Los proyectos se verifican con `crux doctor`. Esto verifica lo otro: las
-# herramientas, autenticaciones y rutas de las que dependen las skills. Es la
-# diferencia entre descubrir que falta algo ahora o a mitad de una incidencia.
+# Projects are checked with `crux doctor`. This checks the other thing: the
+# tools, authentications and paths the skills depend on. It is the difference
+# between finding out that something is missing now or in the middle of an
+# incident.
 #
-# Lo imprescindible se reporta como error; lo que solo necesitan algunas
-# skills, como aviso, diciendo qué se queda sin poder hacer.
+# What is indispensable is reported as an error; what only some skills need,
+# as a warning, saying what you will be unable to do.
 
 set -uo pipefail
 
@@ -18,156 +19,156 @@ ERRORS=0; WARNS=0
 fail() { err "$*"; ERRORS=$((ERRORS + 1)); }
 note() { warn "$*"; WARNS=$((WARNS + 1)); }
 
-tiene() { command -v "$1" >/dev/null 2>&1; }
+has() { command -v "$1" >/dev/null 2>&1; }
 
-necesario() {
-  # necesario <comando> <para qué>
-  if tiene "$1"; then ok "$1"; else fail "falta $1 — $2"; fi
+needed() {
+  # needed <command> <what for>
+  if has "$1"; then ok "$1"; else fail "missing $1 — $2"; fi
 }
 
-opcional() {
-  # opcional <comando> <qué se queda sin hacer>
-  if tiene "$1"; then ok "$1"; else note "sin $1 — no podrás: $2"; fi
+optional() {
+  # optional <command> <what you will be unable to do>
+  if has "$1"; then ok "$1"; else note "no $1 — you will not be able to: $2"; fi
 }
 
-echo "verificando la máquina"
+echo "checking the machine"
 echo
 
-# --- Imprescindible ----------------------------------------------------------
+# --- Indispensable ----------------------------------------------------------
 
-necesario git  "todo el sistema se apoya en git"
-necesario node "los comandos del kernel leen el contrato con node"
-necesario bash "los comandos del kernel son bash"
+needed git  "the whole system rests on git"
+needed node "kernel commands read the contract with node"
+needed bash "kernel commands are bash"
 
-# --- El propio kernel --------------------------------------------------------
+# --- The kernel itself --------------------------------------------------------
 
 echo
-CONFIG_MAQUINA="${CRUX_CONFIG:-$HOME/.crux/config}"
-[[ -f "$CONFIG_MAQUINA" ]] && ok "config de máquina en $CONFIG_MAQUINA" \
-  || fail "falta $CONFIG_MAQUINA — ejecuta install.sh"
-tiene crux && ok "comando crux en el PATH" || note "crux no está en el PATH — añade ~/.local/bin"
+MACHINE_CONFIG="${CRUX_CONFIG:-$HOME/.crux/config}"
+[[ -f "$MACHINE_CONFIG" ]] && ok "machine config in $MACHINE_CONFIG" \
+  || fail "missing $MACHINE_CONFIG — run install.sh"
+has crux && ok "crux command on the PATH" || note "crux is not on the PATH — add ~/.local/bin"
 
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
-skills_enlazadas="$(ls "$SKILLS_DIR" 2>/dev/null | wc -l)"
+linked_skills="$(ls "$SKILLS_DIR" 2>/dev/null | wc -l)"
 skills_kernel="$(ls "$CRUX_HOME/skills" 2>/dev/null | wc -l)"
-if [[ "$skills_enlazadas" -eq 0 ]]; then
-  fail "ninguna skill materializada — ejecuta install.sh"
+if [[ "$linked_skills" -eq 0 ]]; then
+  fail "no skill materialized — run install.sh"
 else
-  ok "$skills_enlazadas skills disponibles ($skills_kernel en el kernel)"
+  ok "$linked_skills skills available ($skills_kernel in the kernel)"
 fi
 
-rotos="$(find "$SKILLS_DIR" -maxdepth 1 -xtype l 2>/dev/null | wc -l)"
-[[ "$rotos" -gt 0 ]] && fail "$rotos enlaces de skill rotos — ejecuta install.sh"
+broken_items="$(find "$SKILLS_DIR" -maxdepth 1 -xtype l 2>/dev/null | wc -l)"
+[[ "$broken_items" -gt 0 ]] && fail "$broken_items broken skill links — run install.sh"
 
-# Un hook que apunta a un fichero inexistente no falla: no hace nada, y eso es
-# peor, porque el sistema parece vigilado y no lo está.
-AJUSTES="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-if [[ -f "$AJUSTES" ]]; then
-  hooks_rotos="$(node -e '
+# A hook that points at a nonexistent file does not fail: it does nothing, and
+# that is worse, because the system looks guarded and is not.
+SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+if [[ -f "$SETTINGS" ]]; then
+  broken_hooks="$(node -e '
     const fs = require("fs");
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     let n = 0;
-    for (const grupos of Object.values(s.hooks || {}))
-      for (const g of grupos)
+    for (const groups of Object.values(s.hooks || {}))
+      for (const g of groups)
         for (const h of (g.hooks || [])) {
           const p = (h.command || "").replace(/^~/, process.env.HOME).split(" ")[0];
           if (p && !fs.existsSync(p)) n++;
         }
     process.stdout.write(String(n));
-  ' "$AJUSTES" 2>/dev/null || echo 0)"
-  [[ "$hooks_rotos" -gt 0 ]] && fail "$hooks_rotos hooks apuntan a ficheros que no existen — 'crux hooks status'"
+  ' "$SETTINGS" 2>/dev/null || echo 0)"
+  [[ "$broken_hooks" -gt 0 ]] && fail "$broken_hooks hooks point at files that do not exist — 'crux hooks status'"
 
-  # Un hook roto se veía; ninguno, no. Y es el caso de una máquina nueva: se
-  # instala el kernel, se traen los proyectos y no queda enganchado nada. Todo
-  # lo que de verdad sostiene el estándar es automático, así que una máquina sin
-  # hooks parece sana y no lo está.
+  # A broken hook was visible; none at all was not. And it is the case of a new
+  # machine: the kernel is installed, the projects are fetched and nothing is
+  # hooked. Everything that really sustains the standard is automatic, so a
+  # machine without hooks looks healthy and is not.
   hooks_crux="$(node -e '
     const fs = require("fs");
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     let n = 0;
-    for (const grupos of Object.values(s.hooks || {}))
-      for (const g of grupos)
+    for (const groups of Object.values(s.hooks || {}))
+      for (const g of groups)
         for (const h of (g.hooks || []))
           if (/doc-sync|cycle-guard|memory-guard/.test(h.command || "")) n++;
     process.stdout.write(String(n));
-  ' "$AJUSTES" 2>/dev/null || echo 0)"
+  ' "$SETTINGS" 2>/dev/null || echo 0)"
   if [[ "${hooks_crux:-0}" -eq 0 ]]; then
-    # Aviso y no error: `bootstrap` exige que esta comprobación pase, y es
-    # precisamente él quien engancha los hooks al traer los proyectos. Un error
-    # aquí dejaría una máquina nueva sin forma de arrancar.
-    note "ningún hook de crux enganchado — 'crux hooks install'"
+    # A warning and not an error: `bootstrap` requires this check to pass, and
+    # it is precisely what hooks the hooks when fetching the projects. An error
+    # here would leave a new machine with no way to start.
+    note "no crux hook installed — 'crux hooks install'"
   else
-    ok "$hooks_crux hooks de sesión enganchados"
+    ok "$hooks_crux session hooks installed"
   fi
 else
-  note "sin $AJUSTES: no hay ningún hook enganchado — 'crux hooks install'"
+  note "no $SETTINGS: no hook is installed — 'crux hooks install'"
 fi
 
-# --- Lo que necesitan las skills --------------------------------------------
+# --- What the skills need --------------------------------------------
 
 echo
-opcional gh      "crear repos con crux init (usa --no-remote mientras tanto)"
-if tiene gh; then
-  gh auth status >/dev/null 2>&1 && ok "gh autenticado" || note "gh sin autenticar — 'gh auth login'"
+optional gh      "create repos with crux init (use --no-remote meanwhile)"
+if has gh; then
+  gh auth status >/dev/null 2>&1 && ok "gh authenticated" || note "gh not authenticated — 'gh auth login'"
 fi
 
-opcional python3 "visual-diff, render-loop y cualquier análisis de imagen"
-if tiene python3; then
+optional python3 "visual-diff, render-loop and any image analysis"
+if has python3; then
   python3 -c "import numpy, PIL" 2>/dev/null \
-    && ok "numpy y Pillow" \
-    || note "sin numpy o Pillow — no podrás: comparar ni medir imágenes"
+    && ok "numpy and Pillow" \
+    || note "no numpy or Pillow — you will not be able to: compare or measure images"
 fi
 
-opcional pdftoppm "comparar PDFs con visual-diff"
-opcional docker   "deploy-fallback y las bases de datos por espacio de trabajo"
-opcional adb      "device-loop, probar en un dispositivo Android"
-opcional rsync    "publicar una demo con crux stg"
+optional pdftoppm "compare PDFs with visual-diff"
+optional docker   "deploy-fallback and the per-workspace databases"
+optional adb      "device-loop, testing on an Android device"
+optional rsync    "publish a demo with crux stg"
 
-if tiene google-chrome || tiene google-chrome-stable || tiene chromium; then
-  ok "navegador para headless"
+if has google-chrome || has google-chrome-stable || has chromium; then
+  ok "browser for headless"
 else
-  note "sin Chrome ni Chromium — no podrás: visual-test"
+  note "no Chrome or Chromium — you will not be able to: visual-test"
 fi
 
-# --- Espacios de trabajo -----------------------------------------------------
+# --- Workspaces -----------------------------------------------------
 
-registro="${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}"
-if [[ -f "$registro" ]]; then
-  vivos="$(node -e '
+task_record="${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}"
+if [[ -f "$task_record" ]]; then
+  alive_items="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const e = Object.entries(r.workspaces || {});
-    const muertos = e.filter(([, w]) => !fs.existsSync(w.path)).map(([n]) => n);
-    process.stdout.write(`${e.length}|${muertos.join(",")}`);
-  ' "$registro" 2>/dev/null || echo "0|")"
-  total="${vivos%%|*}"; muertos="${vivos#*|}"
-  [[ "$total" -gt 0 ]] && ok "$(cuenta "$total" "espacio de trabajo registrado" "espacios de trabajo registrados")"
-  [[ -n "$muertos" ]] && note "espacios en el registro sin directorio: $muertos — 'crux workspace gc'"
+    const dead = e.filter(([, w]) => !fs.existsSync(w.path)).map(([n]) => n);
+    process.stdout.write(`${e.length}|${dead.join(",")}`);
+  ' "$task_record" 2>/dev/null || echo "0|")"
+  total="${alive_items%%|*}"; dead_items="${alive_items#*|}"
+  [[ "$total" -gt 0 ]] && ok "$(count "$total" "registered workspace" "registered workspaces")"
+  [[ -n "$dead_items" ]] && note "workspaces in the registry without a directory: $dead_items — 'crux workspace gc'"
 
-  # El registro y el disco también se separan al revés, y así no se ve nunca.
-  raiz_ws="$(projects_root)"
-  registrados="$(node -e '
+  # The registry and the disk also drift apart the other way round, and that is never seen.
+  ws_root="$(projects_root)"
+  registered="$(node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     process.stdout.write(Object.values(r.workspaces || {}).map((w) => w.path).join("\n"));
-  ' "$registro" 2>/dev/null || true)"
-  sueltos=0
+  ' "$task_record" 2>/dev/null || true)"
+  standalone_items=0
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
-    printf '%s\n' "$registrados" | grep -qxF "$d" && continue
+    printf '%s\n' "$registered" | grep -qxF "$d" && continue
     git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue
-    sueltos=$((sueltos + 1))
-  done < <(find "$raiz_ws" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null)
-  [[ $sueltos -gt 0 ]] && note "$sueltos worktrees en disco que el registro no conoce — 'crux workspace gc'"
+    standalone_items=$((standalone_items + 1))
+  done < <(find "$ws_root" -maxdepth 2 -type d -name '*-ws-*' 2>/dev/null)
+  [[ $standalone_items -gt 0 ]] && note "$standalone_items worktrees on disk that the registry does not know — 'crux workspace gc'"
 fi
 
 # --- Resumen -----------------------------------------------------------------
 
 echo
 if [[ $ERRORS -eq 0 && $WARNS -eq 0 ]]; then
-  echo "${C_GRN}lista${C_OFF} — esta máquina puede con todo"
+  echo "${C_GRN}ready${C_OFF} — this machine can handle everything"
 else
-  echo "$ERRORS $([[ $ERRORS -eq 1 ]] && echo error || echo errores), $WARNS $([[ $WARNS -eq 1 ]] && echo aviso || echo avisos)"
-  [[ $WARNS -gt 0 && $ERRORS -eq 0 ]] && echo "Los avisos no bloquean: solo limitan qué skills puedes usar."
+  echo "$ERRORS $([[ $ERRORS -eq 1 ]] && echo error || echo errors), $WARNS $([[ $WARNS -eq 1 ]] && echo warning || echo warnings)"
+  [[ $WARNS -gt 0 && $ERRORS -eq 0 ]] && echo "Warnings do not block: they only limit which skills you can use."
 fi
 exit $(( ERRORS > 0 ? 1 : 0 ))

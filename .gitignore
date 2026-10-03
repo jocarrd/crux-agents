@@ -8,16 +8,16 @@ Thumbs.db
 *.swp
 *.swo
 
-# Local notes (no versionar borradores personales)
+# Local notes (do not version personal drafts)
 SCRATCH.md
 notes-*.md
 
-# Pruebas del propio kernel
+# The kernel's own tests
 tmp/
 
-# Marca local de la puerta de calidad
+# Local marker of the quality gate
 .crux-ship
 
-# Python bytecode de scripts de skills
+# Python bytecode of skill scripts
 __pycache__/
 *.pyc

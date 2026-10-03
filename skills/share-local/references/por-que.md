@@ -1,74 +1,74 @@
-# Los detalles de cada problema
+# The details of each problem
 
-El procedimiento está en `SKILL.md`. Aquí están el porqué y el material largo.
+The procedure is in `SKILL.md`. Here are the why and the long material.
 
-## Por qué comprobar antes de repartir el enlace
+## Why check before handing out the link
 
-cloudflared avisa él mismo: *«may take some time to be reachable»*. A veces son
-segundos y a veces el nombre no llega a resolverse (`NXDOMAIN` incluso
-preguntando a `1.1.1.1`) con el túnel perfectamente registrado del otro lado.
+cloudflared warns about it itself: *"may take some time to be reachable"*.
+Sometimes it is seconds and sometimes the name never resolves (`NXDOMAIN` even
+asking `1.1.1.1`) with the tunnel perfectly registered on the other side.
 
-La vía por `npx` esquiva además la política de no descargar binarios sueltos de
-internet. Instalar un binario solo para esto es más superficie de la que el
-problema merece.
+The `npx` route also sidesteps the policy of not downloading loose binaries from
+the internet. Installing a binary just for this is more surface than the problem
+deserves.
 
-## Los dos detalles de SSH que cuestan media hora
+## The two SSH details that cost half an hour
 
-- Sin `-tt`, el servicio abre el túnel pero no imprime la dirección, y te quedas
-  con un proceso conectado y sin URL.
-- Con tu propia clave sin registrar, el servicio responde `Permission denied
-  (publickey)` después de enseñar el saludo de bienvenida, que despista.
+- Without `-tt`, the service opens the tunnel but does not print the address,
+  and you are left with a connected process and no URL.
+- With your own unregistered key, the service answers `Permission denied
+  (publickey)` after showing the welcome greeting, which is misleading.
 
-## Las direcciones absolutas
+## Absolute addresses
 
-Es el fallo que hace que el túnel "no funcione" cuando funciona perfectamente.
-La aplicación escribe su dirección en enlaces, hojas de estilo e imágenes; si es
-`localhost`, quien entra desde fuera recibe una página que le manda a buscar los
-recursos a su propio ordenador. Tú ves el sitio perfecto porque tú sí tienes
-algo en ese puerto.
+It is the failure that makes the tunnel "not work" when it works perfectly. The
+application writes its address into links, stylesheets and images; if it is
+`localhost`, whoever enters from outside receives a page that sends them to look
+for the resources on their own computer. You see the site perfectly because you
+do have something on that port.
 
-Comprobar lo que no es local, en vez de mantener una lista de proveedores de
-túnel, evita volver aquí cada vez que se cambia de servicio. Sin marcar la
-conexión como segura, la aplicación genera enlaces mezclados que el navegador
-bloquea.
+Checking for what is not local, instead of maintaining a list of tunnel
+providers, avoids coming back here every time the service changes. Without
+marking the connection as secure, the application generates mixed links that the
+browser blocks.
 
-## Por qué un supervisor
+## Why a supervisor
 
-Una sesión de túnel se cae sola. Dejar el proceso a pelo significa que a la
-media hora la persona a la que se lo enseñabas ve un error y tú no te enteras.
-Sin `setsid` el proceso muere contigo: tiene que quedar colgando de `init`, no
-de tu terminal.
+A tunnel session drops by itself. Leaving the process bare means that half an
+hour later the person you were showing it to sees an error and you do not find
+out. Without `setsid` the process dies with you: it has to hang from `init`, not
+from your terminal.
 
-No busques el proceso con `pkill -f`: el patrón aparece también en la línea de
-comandos del shell que ejecuta el `pkill`, que se mata a sí mismo. Filtra por
+Do not look for the process with `pkill -f`: the pattern also appears in the
+command line of the shell that runs the `pkill`, which kills itself. Filter by
 PID.
 
-## La dirección cambia sin avisar
+## The address changes without warning
 
-Los servicios gratuitos solo dan subdominio fijo a cuentas registradas: tanto
-localhost.run como Serveo piden dar de alta tu clave pública entrando con Google
-o GitHub.
+Free services only give a fixed subdomain to registered accounts: both
+localhost.run and Serveo ask you to register your public key by signing in with
+Google or GitHub.
 
-Peor: la dirección puede cambiar **sin que la conexión se caiga**. El proceso
-sigue vivo y la dirección que repartiste empieza a devolver 503. Un supervisor
-que solo lee la dirección al abrir la sesión se queda apuntando a la vieja. Por
-eso se relee mientras la conexión vive:
+Worse: the address can change **without the connection dropping**. The process
+stays alive and the address you handed out starts returning 503. A supervisor
+that only reads the address when opening the session keeps pointing at the old
+one. That is why it is reread while the connection lives:
 
 ```bash
 while kill -0 "$ssh_pid" 2>/dev/null; do
-  url=$(grep -oE '[a-z0-9-]+\.lhr\.life' "$salida" | tail -1)   # tail, no head
+  url=$(grep -oE '[a-z0-9-]+\.lhr\.life' "$salida" | tail -1)   # tail, not head
   [ "$url" != "$ultima" ] && { ultima="$url"; echo "https://$url" > "$fichero"; }
   sleep 3
 done
 ```
 
-En la salida quedan todas las direcciones que ha tenido la sesión, y la buena es
-la última: de ahí el `tail -1`.
+The output keeps every address the session has had, and the good one is the
+last: hence the `tail -1`.
 
-Si de verdad hace falta que no cambie, elige la vía (registrar la clave, un
-túnel con nombre bajo un dominio propio, una redirección remota) antes de
-empezar, no después de haber repartido el enlace.
+If it really must not change, choose the route (registering the key, a named
+tunnel under your own domain, a remote redirect) before starting, not after
+having handed out the link.
 
-## Al terminar
+## When finished
 
-Mientras el túnel siga abierto, tu máquina está en internet.
+While the tunnel stays open, your machine is on the internet.

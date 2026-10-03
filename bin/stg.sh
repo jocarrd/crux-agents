@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# crux stg — publica una carpeta construida en un staging con clave, para
-# enseñar trabajo que todavía no está en producción.
+# crux stg — publishes a built folder to a password-protected staging, to show
+# work that is not in production yet.
 #
-#   crux stg deploy <nombre> <carpeta>   sube la carpeta y la publica
-#   crux stg list                        qué demos hay vivas, con su clave
-#   crux stg url <nombre>                el enlace, el usuario y la clave
-#   crux stg rm <nombre>                 la retira
+#   crux stg deploy <name> <folder>      uploads the folder and publishes it
+#   crux stg list                        which demos are live, with their password
+#   crux stg url <name>                  the link, the user and the password
+#   crux stg rm <name>                   removes it
 #
-# El destino no vive aquí: se declara una vez por máquina en
-# ~/.crux/staging.env. El kernel no sabe de qué VPS se trata, así que mover el
-# staging a otro sitio es cambiar ese fichero y no este comando.
+# The destination does not live here: it is declared once per machine in
+# ~/.crux/staging.env. The kernel does not know which VPS it is, so moving the
+# staging elsewhere means changing that file and not this command.
 #
-#   CRUX_STG_SSH        host ssh del servidor (un alias de ~/.ssh/config)
-#   CRUX_STG_DOMAIN     dominio base; cada demo cuelga como <nombre>.<dominio>
-#   CRUX_STG_ROOT       raíz en el servidor (contiene sites/ y caddy/)
-#   CRUX_STG_CONTAINER  contenedor de Caddy al que se le pide recargar
+#   CRUX_STG_SSH        the server's ssh host (an alias from ~/.ssh/config)
+#   CRUX_STG_DOMAIN     base domain; each demo hangs off it as <name>.<domain>
+#   CRUX_STG_ROOT       root on the server (contains sites/ and caddy/)
+#   CRUX_STG_CONTAINER  Caddy container asked to reload
 #
-# Cada demo trae su propio usuario y su propia clave: el usuario es su nombre.
-# Compartir un par para todas hace que retirar una no le quite el acceso a
-# nadie, que es justo lo que se espera al retirarla.
+# Each demo has its own user and its own password: the user is its name.
+# Sharing one pair for all means removing one does not cut anyone's access,
+# which is exactly what is expected when removing it.
 #
-# Un despliegue no reinicia nada: escribe la carpeta, escribe el bloque y
-# recarga la configuración, que Caddy valida antes de aplicar. Si el bloque
-# está mal, la config viva se queda como estaba.
+# A deployment restarts nothing: it writes the folder, writes the block and
+# reloads the configuration, which Caddy validates before applying. If the
+# block is wrong, the live config stays as it was.
 
 set -euo pipefail
 
@@ -32,60 +32,59 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
 CONFIG="${CRUX_STG_CONFIG:-$HOME/.crux/staging.env}"
-CLAVES="$HOME/.crux/staging"
+KEYS="$HOME/.crux/staging"
 
-cargar_config() {
+read_config() {
   if [ ! -f "$CONFIG" ]; then
-    err "no hay configuración de staging en $CONFIG"
-    info "créala con las cuatro variables que documenta la cabecera de este comando:"
+    err "no staging configuration in $CONFIG"
+    info "create it with the four variables documented in this command's header:"
     info "  crux stg --help"
     exit 1
   fi
   # shellcheck disable=SC1090
   . "$CONFIG"
   for v in CRUX_STG_SSH CRUX_STG_DOMAIN CRUX_STG_ROOT CRUX_STG_CONTAINER; do
-    eval "valor=\${$v:-}"
-    [ -n "$valor" ] || die "falta $v en $CONFIG"
+    eval "value=\${$v:-}"
+    [ -n "$value" ] || die "$v missing in $CONFIG"
   done
 }
 
-# El nombre es una etiqueta de dominio y el nombre de una carpeta remota: se
-# acota a lo que es legal en las dos cosas para no tener que confiar en quien
-# lo escribe.
-valida_nombre() {
+# The name is a domain label and the name of a remote folder: it is limited to
+# what is legal in both so as not to have to trust whoever writes it.
+validate_name() {
   case "$1" in
-    *[!a-z0-9-]* | -* | *- | "") die "nombre no válido: '$1' — minúsculas, dígitos y guiones" ;;
+    *[!a-z0-9-]* | -* | *- | "") die "invalid name: '$1' — lowercase letters, digits and hyphens" ;;
   esac
 }
 
-en_servidor() { ssh -o BatchMode=yes "$CRUX_STG_SSH" "$@"; }
+on_server() { ssh -o BatchMode=yes "$CRUX_STG_SSH" "$@"; }
 
-clave_de() {
-  # La clave en claro se guarda solo aquí, para poder repetir el enlace sin
-  # tener que rotarla. En el servidor vive el hash.
-  local nombre="$1"
-  local f="$CLAVES/$nombre.pass"
+key_of() {
+  # The plaintext password is stored only here, to be able to repeat the link
+  # without having to rotate it. The server holds the hash.
+  local name="$1"
+  local f="$KEYS/$name.pass"
   if [ ! -f "$f" ]; then
-    mkdir -p "$CLAVES"
+    mkdir -p "$KEYS"
     ( umask 077 && LC_ALL=C tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 20 > "$f" )
   fi
   cat "$f"
 }
 
-bloque_caddy() {
-  # No importa el snippet de otro proyecto: si alguien lo renombra, el staging
-  # se cae y el motivo no se ve por ningún lado.
-  local nombre="$1" hash="$2"
+caddy_block() {
+  # It does not import another project's snippet: if someone renames it, the
+  # staging goes down and the reason is visible nowhere.
+  local name="$1" hash="$2"
   cat <<EOF
-# Generado por \`crux stg deploy $nombre\`. No editar a mano.
-$nombre.$CRUX_STG_DOMAIN {
+# Generated by \`crux stg deploy $name\`. Do not edit by hand.
+$name.$CRUX_STG_DOMAIN {
     encode zstd gzip
 
     basic_auth {
-        $nombre $hash
+        $name $hash
     }
 
-    # Es trabajo sin publicar: no se indexa aunque alguien reparta el enlace.
+    # This is unpublished work: it is not indexed even if someone shares the link.
     header {
         X-Robots-Tag "noindex, nofollow, noarchive"
         X-Content-Type-Options "nosniff"
@@ -93,103 +92,103 @@ $nombre.$CRUX_STG_DOMAIN {
         -Server
     }
 
-    root * /srv/staging/$nombre
+    root * /srv/staging/$name
     file_server
 }
 EOF
 }
 
-recargar() {
-  # Validar antes de recargar: Caddy rechaza una config rota y deja la viva en
-  # pie, pero el error se lee mejor aquí que en el log del contenedor.
-  en_servidor "sudo docker exec $CRUX_STG_CONTAINER caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile" >/dev/null 2>&1 ||
-    die "la configuración de Caddy no valida; no se ha recargado nada"
-  en_servidor "sudo docker exec -w /etc/caddy $CRUX_STG_CONTAINER caddy reload --config /etc/caddy/Caddyfile" >/dev/null 2>&1 ||
-    die "Caddy no aceptó la recarga"
+reload() {
+  # Validate before reloading: Caddy rejects a broken config and keeps the live
+  # one up, but the error reads better here than in the container's log.
+  on_server "sudo docker exec $CRUX_STG_CONTAINER caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile" >/dev/null 2>&1 ||
+    die "the Caddy configuration does not validate; nothing was reloaded"
+  on_server "sudo docker exec -w /etc/caddy $CRUX_STG_CONTAINER caddy reload --config /etc/caddy/Caddyfile" >/dev/null 2>&1 ||
+    die "Caddy did not accept the reload"
 }
 
 cmd_deploy() {
-  local nombre="${1:-}" carpeta="${2:-}"
-  [ -n "$nombre" ] && [ -n "$carpeta" ] || die "uso: crux stg deploy <nombre> <carpeta>"
-  valida_nombre "$nombre"
-  [ -d "$carpeta" ] || die "no existe la carpeta $carpeta"
-  [ -f "$carpeta/index.html" ] || warn "$carpeta no tiene index.html en la raíz"
+  local name="${1:-}" folder="${2:-}"
+  [ -n "$name" ] && [ -n "$folder" ] || die "usage: crux stg deploy <name> <folder>"
+  validate_name "$name"
+  [ -d "$folder" ] || die "folder $folder does not exist"
+  [ -f "$folder/index.html" ] || warn "$folder has no index.html at the root"
 
-  local clave hash
-  clave="$(clave_de "$nombre")"
-  # Por la entrada estandar y no como argumento: `sudo` deja el comando entero
-  # escrito en /var/log/auth.log del servidor, para siempre, y mientras dura el
-  # hash cualquiera con una sesion ahi la ve en `ps`.
-  # Caddy pide la clave y su confirmación: con una sola línea responde
-  # "Error: EOF". El `|| die` va en la propia asignación porque, con set -e, un
-  # fallo ahí terminaba el script sin llegar a decir qué había pasado.
-  hash="$(printf '%s\n%s\n' "$clave" "$clave" |
-    en_servidor "sudo docker exec -i $CRUX_STG_CONTAINER caddy hash-password")" ||
-    die "caddy no calculó el hash de la clave en $CRUX_STG_SSH"
-  [[ "$hash" == \$2* ]] || die "caddy devolvió algo que no es un hash bcrypt: $hash"
+  local key hash
+  key="$(key_of "$name")"
+  # Through stdin and not as an argument: `sudo` leaves the whole command
+  # written in the server's /var/log/auth.log forever, and while the hash lasts
+  # anyone with a session there sees it in `ps`.
+  # Caddy asks for the password and its confirmation: with a single line it
+  # answers "Error: EOF". The `|| die` goes on the assignment itself because,
+  # under set -e, a failure there ended the script without saying what happened.
+  hash="$(printf '%s\n%s\n' "$key" "$key" |
+    on_server "sudo docker exec -i $CRUX_STG_CONTAINER caddy hash-password")" ||
+    die "caddy did not compute the password hash on $CRUX_STG_SSH"
+  [[ "$hash" == \$2* ]] || die "caddy returned something that is not a bcrypt hash: $hash"
 
-  en_servidor "mkdir -p '$CRUX_STG_ROOT/sites/$nombre'"
-  rsync -a --delete -e "ssh -o BatchMode=yes" "$carpeta"/ "$CRUX_STG_SSH:$CRUX_STG_ROOT/sites/$nombre/"
+  on_server "mkdir -p '$CRUX_STG_ROOT/sites/$name'"
+  rsync -a --delete -e "ssh -o BatchMode=yes" "$folder"/ "$CRUX_STG_SSH:$CRUX_STG_ROOT/sites/$name/"
 
-  bloque_caddy "$nombre" "$hash" | en_servidor "cat > '$CRUX_STG_ROOT/caddy/$nombre.caddy'"
-  recargar
+  caddy_block "$name" "$hash" | on_server "cat > '$CRUX_STG_ROOT/caddy/$name.caddy'"
+  reload
 
-  local url="https://$nombre.$CRUX_STG_DOMAIN"
-  ok "publicado $nombre"
+  local url="https://$name.$CRUX_STG_DOMAIN"
+  ok "published $name"
   info "$url"
-  info "usuario $nombre · clave $clave"
-  local peso
-  peso="$(du -sh "$carpeta" | cut -f1)"
-  info "$peso subidos"
+  info "user $name · password $key"
+  local weight
+  weight="$(du -sh "$folder" | cut -f1)"
+  info "$weight uploaded"
 }
 
 cmd_list() {
-  local nombres
-  nombres="$(en_servidor "ls -1 '$CRUX_STG_ROOT/sites' 2>/dev/null" || true)"
-  if [ -z "$nombres" ]; then
-    info "no hay ninguna demo publicada"
+  local names
+  names="$(on_server "ls -1 '$CRUX_STG_ROOT/sites' 2>/dev/null" || true)"
+  if [ -z "$names" ]; then
+    info "no demo published"
     return 0
   fi
-  echo "$nombres" | while IFS= read -r n; do
+  echo "$names" | while IFS= read -r n; do
     [ -n "$n" ] || continue
-    local f="$CLAVES/$n.pass"
+    local f="$KEYS/$n.pass"
     if [ -f "$f" ]; then
       echo "  https://$n.$CRUX_STG_DOMAIN  ·  $n / $(cat "$f")"
     else
-      echo "  https://$n.$CRUX_STG_DOMAIN  ·  clave no guardada en esta máquina"
+      echo "  https://$n.$CRUX_STG_DOMAIN  ·  password not stored on this machine"
     fi
   done
 }
 
 cmd_url() {
-  local nombre="${1:-}"
-  [ -n "$nombre" ] || die "uso: crux stg url <nombre>"
-  valida_nombre "$nombre"
-  en_servidor "test -d '$CRUX_STG_ROOT/sites/$nombre'" || die "no hay ninguna demo llamada $nombre"
-  echo "https://$nombre.$CRUX_STG_DOMAIN"
-  if [ -f "$CLAVES/$nombre.pass" ]; then
-    echo "usuario $nombre · clave $(cat "$CLAVES/$nombre.pass")"
+  local name="${1:-}"
+  [ -n "$name" ] || die "usage: crux stg url <name>"
+  validate_name "$name"
+  on_server "test -d '$CRUX_STG_ROOT/sites/$name'" || die "there is no demo called $name"
+  echo "https://$name.$CRUX_STG_DOMAIN"
+  if [ -f "$KEYS/$name.pass" ]; then
+    echo "user $name · password $(cat "$KEYS/$name.pass")"
   else
-    warn "la clave no está guardada en esta máquina; regenérala con un deploy"
+    warn "the password is not stored on this machine; regenerate it with a deploy"
   fi
 }
 
 cmd_rm() {
-  local nombre="${1:-}"
-  [ -n "$nombre" ] || die "uso: crux stg rm <nombre>"
-  valida_nombre "$nombre"
-  en_servidor "rm -f '$CRUX_STG_ROOT/caddy/$nombre.caddy' && rm -rf '$CRUX_STG_ROOT/sites/$nombre'"
-  recargar
-  rm -f "$CLAVES/$nombre.pass"
-  ok "retirada $nombre"
+  local name="${1:-}"
+  [ -n "$name" ] || die "usage: crux stg rm <name>"
+  validate_name "$name"
+  on_server "rm -f '$CRUX_STG_ROOT/caddy/$name.caddy' && rm -rf '$CRUX_STG_ROOT/sites/$name'"
+  reload
+  rm -f "$KEYS/$name.pass"
+  ok "removed $name"
 }
 
 sub="${1:-}"
 [ $# -gt 0 ] && shift || true
 case "$sub" in
-  deploy) cargar_config; cmd_deploy "$@" ;;
-  list)   cargar_config; cmd_list "$@" ;;
-  url)    cargar_config; cmd_url "$@" ;;
-  rm)     cargar_config; cmd_rm "$@" ;;
+  deploy) read_config; cmd_deploy "$@" ;;
+  list)   read_config; cmd_list "$@" ;;
+  url)    read_config; cmd_url "$@" ;;
+  rm)     read_config; cmd_rm "$@" ;;
   *)      awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"; [ -z "$sub" ] && exit 0 || exit 1 ;;
 esac

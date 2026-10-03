@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# Adaptador de Codex.
+# Codex adapter.
 #
-# Codex no interpreta el frontmatter de las skills ni tiene un directorio de
-# skills propio. Lo que sí tiene son prompts personalizados en
-# ~/.codex/prompts/<nombre>.md, invocables con /<nombre>.
+# Codex does not interpret skill frontmatter nor has a skills directory of its
+# own. What it does have are custom prompts in ~/.codex/prompts/<name>.md,
+# invocable with /<name>.
 #
-# El stub NO duplica el contenido: apunta al SKILL.md del kernel, que es la
-# única fuente. Así una skill editada una vez vale para los dos agentes.
+# The stub does NOT duplicate the content: it points to the kernel's SKILL.md,
+# which is the single source. So a skill edited once works for both agents.
 
 CODEX_PROMPTS_DIR="${CODEX_PROMPTS_DIR:-$HOME/.codex/prompts}"
 CODEX_HOME_DIR="${CODEX_HOME_DIR:-$HOME/.codex}"
 
 codex_materialize_skill() {
-  # codex_materialize_skill <ruta_de_la_skill> <nombre>
+  # codex_materialize_skill <skill_path> <name>
   local src="$1" name="$2"
   local skill_md="$src/SKILL.md"
   [[ -f "$skill_md" ]] || return 0
   [[ "${CRUX_DRY_RUN:-0}" == "1" ]] && { echo "      [dry-run] codex: $name"; return 0; }
   mkdir -p "$CODEX_PROMPTS_DIR"
   cat > "$CODEX_PROMPTS_DIR/$name.md" <<EOF
-Lee y sigue el procedimiento descrito en:
+Read and follow the procedure described in:
 
 $skill_md
 
-Aplícalo a la tarea actual. Argumentos del usuario (si los hay): \$ARGUMENTS
+Apply it to the current task. User arguments (if any): \$ARGUMENTS
 EOF
 }
 
@@ -39,9 +39,9 @@ codex_prune_skill() {
 }
 
 codex_materialize_global() {
-  # Codex lee ~/.codex/AGENTS.md como contexto global. Se genera apuntando al
-  # estándar del kernel, con marcadores para poder regenerarlo sin pisar lo que
-  # el usuario haya escrito a mano fuera del bloque.
+  # Codex reads ~/.codex/AGENTS.md as global context. It is generated pointing
+  # to the kernel standard, with markers so it can be regenerated without
+  # overwriting what the user wrote by hand outside the block.
   local crux_home="$1"
   local file="$CODEX_HOME_DIR/AGENTS.md"
   local begin="<!-- crux:begin -->"
@@ -50,28 +50,28 @@ codex_materialize_global() {
   local block
   block="$(cat <<EOF
 $begin
-# Sistema de trabajo (crux)
+# Work system (crux)
 
-El estándar de documentación y trabajo con agentes vive en:
+The documentation and agent work standard lives in:
 
   $crux_home/STANDARD.md
 
-Reglas que aplican en cualquier proyecto:
+Rules that apply in any project:
 
-- La documentación de un proyecto vive en su repo \`<project>-docs\`, nunca
-  dentro del repo de código. La específica de un repo, en \`repos/<repo>/\`.
-- Al cambiar código que afecta a una doc, se actualiza la doc en el mismo turno.
-- Las notas de proyecto y las referencias van a git, no a memoria local.
-- Conventional commits, body de 100 caracteres por línea, sin emojis.
-- Antes de trabajar en un repo, lee su \`AGENTS.md\` y el del docs repo.
+- A project's documentation lives in its \`<project>-docs\` repo, never inside
+  the code repo. A repo's specific documentation goes in \`repos/<repo>/\`.
+- When changing code that affects a doc, update the doc in the same turn.
+- Project notes and references go to git, not to local memory.
+- Conventional commits, body lines of 100 characters, no emojis.
+- Before working in a repo, read its \`AGENTS.md\` and the docs repo's.
 
-Los procedimientos disponibles como \`/<nombre>\` están en
-$crux_home/skills/ y en el docs repo de cada proyecto.
+The procedures available as \`/<name>\` are in
+$crux_home/skills/ and in each project's docs repo.
 $end
 EOF
 )"
 
-  [[ "${CRUX_DRY_RUN:-0}" == "1" ]] && { echo "      [dry-run] codex: AGENTS.md global"; return 0; }
+  [[ "${CRUX_DRY_RUN:-0}" == "1" ]] && { echo "      [dry-run] codex: global AGENTS.md"; return 0; }
   mkdir -p "$CODEX_HOME_DIR"
 
   if [[ -f "$file" ]] && grep -qF "$begin" "$file"; then

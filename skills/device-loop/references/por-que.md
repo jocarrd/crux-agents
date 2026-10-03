@@ -1,20 +1,20 @@
-# Por qué se hace así
+# Why it is done this way
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## Por qué un dispositivo físico
+## Why a physical device
 
-Sin virtualización por hardware, el emulador va por software y cualquier
-superficie GL sufre hasta ser inservible.
+Without hardware virtualisation, the emulator runs in software and any GL
+surface suffers until it is unusable.
 
-## Por qué los toques no llegan
+## Why taps do not arrive
 
-Algunas capas de fabricante exigen un permiso extra de depuración que a su vez
-pide cuenta del fabricante y SIM. El síntoma es que los toques no hacen nada, o
-que el gesto lo recibe el fondo en vez del control.
+Some manufacturer layers require an extra debugging permission that in turn asks
+for a manufacturer account and a SIM. The symptom is that taps do nothing, or
+that the background receives the gesture instead of the control.
 
-## Por qué un montaje limpio
+## Why a clean mount
 
-Fast Refresh conserva el estado y no vuelve a lanzar efectos con dependencias
-estables: la instrumentación que abre la pantalla no se ejecutaría sin forzar la
-parada de la app.
+Fast Refresh preserves state and does not rerun effects with stable
+dependencies: the instrumentation that opens the screen would not run without
+force-stopping the app.

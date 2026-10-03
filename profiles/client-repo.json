@@ -1,24 +1,24 @@
 {
   "name": "client-repo",
-  "description": "El docs repo es propio, pero el código pertenece a un cliente. La documentación del estándar no se escribe en el repo del cliente: ni punteros versionados, ni AGENTS.md, ni carpetas. Solo un CLAUDE.local.md sin versionar que lleva al docs repo. Trabajar en su código —ramas, worktrees, commits— es el encargo y sigue siendo normal.",
+  "description": "The docs repo is ours, but the code belongs to a client. The standard's documentation is not written into the client's repo: no versioned pointers, no AGENTS.md, no folders. Only an unversioned CLAUDE.local.md that leads to the docs repo. Working on their code —branches, worktrees, commits— is the assignment and remains normal.",
   "pointers": {
     "write": false,
     "local": true,
     "files": []
   },
   "rules": [
-    "No se modifica el repo del cliente para acomodar esta documentación: ni punteros versionados, ni AGENTS.md, ni carpetas del estándar. Lo único que se escribe es CLAUDE.local.md, excluido de git, que carga el índice del docs repo al trabajar en el código. Si el repo del cliente ya traía su propio AGENTS.md versionado, se respeta: no es nuestro y no se borra.",
-    "Se registran mediciones, no diagnósticos. No se declara algo como bug ni se concluye qué está mal sin validación del cliente.",
-    "Toda observación lleva evidencia reproducible: fichero y línea, comando o consulta que la demuestra. Sin evidencia no se escribe.",
-    "Se distingue siempre lo medido de lo heredado de documentación previa: los documentos describen la intención del momento en que se escribieron, no el estado actual.",
-    "Las notas de proyecto y las referencias van a git, no a memoria local del agente.",
-    "La descripción de una propuesta de cambio dice qué cambia, qué se añade y por qué, más lo comprobado y lo pendiente. No nombra nuestro tooling —crux, sus comandos, sus skills, sus marcas— ni nuestros nombres de rama o procesos internos: quien lee no conoce cómo trabajamos por dentro y no le aporta nada. Los scripts del propio repo del cliente sí se citan, porque son suyos."
+    "The client's repo is not modified to accommodate this documentation: no versioned pointers, no AGENTS.md, no standard folders. The only thing written is CLAUDE.local.md, excluded from git, which loads the docs repo index when working on the code. If the client's repo already came with its own versioned AGENTS.md, it is respected: it is not ours and is not deleted.",
+    "Measurements are recorded, not diagnoses. Nothing is declared a bug and no conclusion is drawn about what is wrong without the client's validation.",
+    "Every observation carries reproducible evidence: file and line, or the command or query that demonstrates it. Without evidence it is not written.",
+    "What was measured is always distinguished from what is inherited from prior documentation: documents describe the intent at the time they were written, not the current state.",
+    "Project notes and references go to git, not to the agent's local memory.",
+    "The description of a change proposal says what changes, what is added and why, plus what was checked and what is pending. It does not name our tooling —crux, its commands, its skills, its markers— nor our branch names or internal processes: the reader does not know how we work inside and it adds nothing for them. The client's own repo scripts are cited, because they are theirs."
   ],
   "propose": {
     "forbid": [
       {
-        "patron": "\\bcrux\\b|\\.crux-ship|/ship\\b|workspace (new|finish)|crux doctor",
-        "motivo": "esto nombra nuestro tooling en el repo de un cliente"
+        "pattern": "\\bcrux\\b|\\.crux-ship|/ship\\b|workspace (new|finish)|crux doctor",
+        "reason": "this names our tooling in a client's repo"
       }
     ],
     "hideDocsRepo": true

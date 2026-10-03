@@ -1,85 +1,86 @@
 ---
 name: add-repo-to-docs
-description: Añadir un repo nuevo a un proyecto ya adoptado bajo el estándar. Crea su carpeta de documentación, lo declara en crux.json, lo registra en la tabla de repos y genera sus punteros de contexto. Usa cuando crees o clones un repo nuevo dentro de un proyecto que ya tiene su docs repo.
+description: Add a new repo to a project already adopted under the standard. Creates its documentation folder, declares it in crux.json, registers it in the repo table and generates its context pointers. Use when you create or clone a new repo inside a project that already has its docs repo.
 ---
 
 # add-repo-to-docs
 
-Registra un repo nuevo en el docs repo de un proyecto que ya sigue el estándar.
+Registers a new repo in the docs repo of a project that already follows the
+standard.
 
-## Cuándo usar
+## When to use
 
-- Acabas de crear o clonar un repo dentro de `~/Proyectos/<project>/`.
-- Quieres que el proyecto lo reconozca: carpeta de documentación, entrada en
-  el contrato, fila en el índice y punteros de contexto.
+- You have just created or cloned a repo inside `~/Proyectos/<project>/`.
+- You want the project to recognize it: documentation folder, entry in the
+  contract, row in the index and context pointers.
 
-## Precondiciones
+## Preconditions
 
-- El proyecto ya tiene su `<project>-docs/` con `crux.json`. Si no,
-  `crux adopt` o `/crux-init` primero.
-- El repo vive como hermano del docs repo. La convención de layout es
-  obligatoria: sin ella, las referencias relativas dejan de resolver.
+- The project already has its `<project>-docs/` with `crux.json`. If not,
+  `crux adopt` or `/crux-init` first.
+- The repo lives as a sibling of the docs repo. The layout convention is
+  mandatory: without it, relative references stop resolving.
 
-## Flujo
+## Flow
 
-### 1. Recoger los datos
+### 1. Collect the data
 
-Pregunta al usuario, si no los tienes:
+Ask the user, if you don't have them:
 
-- **Nombre del repo**, exactamente igual que en el remoto.
-- **Qué hace**, en una línea. Va al índice y a la cabecera de su
-  documentación, así que merece la pena que sea precisa y no genérica.
+- **Repo name**, exactly the same as on the remote.
+- **What it does**, in one line. It goes into the index and the header of its
+  documentation, so it is worth making it precise and not generic.
 
-### 2. Ejecutar
+### 2. Run
 
 ```bash
-crux add-repo <repo> --description "qué hace, en una línea"
+crux add-repo <repo> --description "what it does, in one line"
 ```
 
-Esto, en un solo paso:
+This, in a single step:
 
-- crea `repos/<repo>/README.md` desde la plantilla del kernel;
-- declara el repo en `crux.json`;
-- añade su fila a la tabla de `repos/README.md`;
-- genera `AGENTS.md` y `CLAUDE.md` en el repo de código, salvo que el perfil
-  del proyecto lo prohíba;
-- deja el resto de punteros verificados.
+- creates `repos/<repo>/README.md` from the kernel template;
+- declares the repo in `crux.json`;
+- adds its row to the table in `repos/README.md`;
+- generates `AGENTS.md` and `CLAUDE.md` in the code repo, unless the project's
+  profile forbids it;
+- leaves the rest of the pointers verified.
 
-### 3. Verificar
+### 3. Verify
 
 ```bash
 crux doctor
 ```
 
-Debe salir conforme. Si avisa de que el repo no está en disco, es que se
-declaró antes de clonarlo: no es un error, pero los punteros no se han creado
-todavía y hay que volver a pasar `crux link` cuando esté.
+It must come out conformant. If it warns that the repo is not on disk, it was
+declared before being cloned: it is not an error, but the pointers have not been
+created yet and `crux link` has to be run again once it is there.
 
-### 4. Commitear
+### 4. Commit
 
 ```
 docs(repos): add <repo>
 ```
 
-Pregunta antes de pushear.
+Ask before pushing.
 
-## Después
+## Afterwards
 
-La carpeta nace con solo un README. Se llena a demanda, no de golpe: cuando
-aparezca una decisión que afecta solo a ese repo, `decisions.md`; cuando haya
-estado o bloqueos que recordar, `notes.md`; cuando haya un contrato de API o
-un sistema visual que explicar, su fichero temático.
+The folder is born with just a README. It is filled on demand, not all at once:
+when a decision affecting only that repo appears, `decisions.md`; when there is
+status or blockers to remember, `notes.md`; when there is an API contract or a
+visual system to explain, its topic file.
 
-## Errores comunes
+## Common errors
 
-- **El proyecto no está adoptado todavía.** Deriva a `crux adopt`.
-- **El repo está fuera de la carpeta del proyecto.** Muévelo antes; la
-  convención de hermanos no es opcional.
-- **Ya existe la carpeta con otro contenido.** El comando aborta en vez de
-  pisarla. Decide si fusionar a mano o renombrar.
+- **The project is not adopted yet.** Redirect to `crux adopt`.
+- **The repo is outside the project's folder.** Move it first; the sibling
+  convention is not optional.
+- **The folder already exists with other content.** The command aborts instead of
+  overwriting it. Decide whether to merge by hand or rename.
 
-## Relacionado
+## Related
 
-- `/crux-init` — crear el docs repo de un proyecto nuevo
-- `/crux-doctor` — verificar conformidad
-- `/promote-to-docs` — mover información suelta a su sitio
+- `/crux-init`: create the docs repo of a new project
+- `/crux-doctor`: verify conformance
+- `/promote-to-docs`: move loose information to its place

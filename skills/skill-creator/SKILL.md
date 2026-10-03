@@ -1,113 +1,113 @@
 ---
 name: skill-creator
-description: Escribir una skill nueva que se descubra cuando toca, se pueda seguir sin ambigüedad y ocupe poco contexto: comprobar antes que no exista ya, redactar el disparador, repartir entre el procedimiento y sus referencias, decidir si lleva script, colocarla en el kernel o en el proyecto y probarla con escenarios. Usa cuando quieras convertir en procedimiento algo que ya has hecho más de dos veces a mano, cuando una skill no se active cuando debería, o cuando una skill se haya hecho demasiado larga.
+description: Write a new skill that gets discovered when it should, can be followed without ambiguity and takes up little context: check first that it does not already exist, write the trigger, split between the procedure and its references, decide whether it carries a script, place it in the kernel or the project and test it with scenarios. Use when you want to turn into a procedure something you have done by hand more than twice, when a skill does not activate when it should, or when a skill has grown too long.
 ---
 
 # skill-creator
 
-Una skill es un procedimiento que un agente encuentra por su descripción y
-carga entero en su contexto cada vez que la usa. Por eso tiene que activarse
-cuando toca y ocupar lo menos posible. Los ejemplos y el porqué de cada regla
-están en `<directorio-de-esta-skill>/references/por-que.md`.
+A skill is a procedure that an agent finds through its description and loads in
+full into its context every time it uses it. That is why it has to activate when
+it should and take up as little as possible. The examples and the reason behind
+each rule are in `<this-skill-directory>/references/por-que.md`.
 
-## 1. ¿Hace falta una skill nueva?
+## 1. Is a new skill needed?
 
-- **Solo si lo has hecho a mano más de dos veces** y la tercera tuviste que
-  volver a averiguar algo. Una sola vez no da un procedimiento.
-- **Antes de crearla, busca si ya existe.** Escribe la frase con la que lo
-  pedirías y compruébala contra el catálogo:
-  `node <directorio-de-skill-audit>/scripts/probe.mjs "la frase"`.
-  Si gana una skill existente, **amplía esa**; no crees otra que compita con
-  ella.
-- **Una skill, una cosa.** Si hace tres, se activa mal para las tres.
+- **Only if you have done it by hand more than twice** and the third time you
+  had to work something out again. Once does not make a procedure.
+- **Before creating it, check whether it already exists.** Write the sentence
+  you would ask for it with and check it against the catalogue:
+  `node <skill-audit-directory>/scripts/probe.mjs "the sentence"`.
+  If an existing skill wins, **extend that one**; do not create another that
+  competes with it.
+- **One skill, one thing.** If it does three, it activates badly for all three.
 
-## 2. El disparador
+## 2. The trigger
 
-La descripción del frontmatter es lo único que se lee para decidir si
-activarla. Dos mitades: **qué hace**, en términos concretos, y **cuándo
-usarla**, con las situaciones y las palabras de quien tiene el problema, no de
-quien ya sabe la solución.
+The frontmatter description is the only thing read to decide whether to
+activate it. Two halves: **what it does**, in concrete terms, and **when to use
+it**, with the situations and the words of whoever has the problem, not of
+whoever already knows the solution.
 
 ```yaml
 ---
-name: nombre-en-kebab-case        # igual que el directorio
-description: Qué hace. Usa cuando <situación>, cuando <otra>, o cuando <síntoma>.
+name: name-in-kebab-case        # same as the directory
+description: What it does. Use when <situation>, when <another>, or when <symptom>.
 ---
 ```
 
-## 3. El tamaño
+## 3. The size
 
-| | Palabras de `SKILL.md` |
+| | Words in `SKILL.md` |
 | - | - |
-| Objetivo | 400 a 800 |
-| Máximo | 1.000 (la suite del kernel y `crux doctor` lo comprueban) |
+| Target | 400 to 800 |
+| Maximum | 1,000 (the kernel suite and `crux doctor` check it) |
 
-`SKILL.md` lleva **lo que el agente tiene que hacer**: pasos, comandos, reglas,
-tablas de decisión, gotchas en una línea y cómo verificar. Lo demás va en
-`references/por-que.md` y se abre solo si hace falta: el porqué de cada regla,
-la historia de cómo se descubrió, los casos que la originaron, las fuentes y
-los ejemplos largos. Cita la referencia al principio con
-`<directorio-de-esta-skill>/references/por-que.md`.
+`SKILL.md` carries **what the agent has to do**: steps, commands, rules,
+decision tables, gotchas in one line and how to verify. Everything else goes in
+`references/por-que.md` and is opened only if needed: the reason behind each
+rule, the history of how it was discovered, the cases that gave rise to it, the
+sources and the long examples. Cite the reference at the start with
+`<this-skill-directory>/references/por-que.md`.
 
-Escribe en imperativo y en frases cortas. No narres lo que el comando ya dice
-ni expliques lo que cualquier manual cuenta.
+Write in the imperative and in short sentences. Do not narrate what the command
+already says or explain what any manual covers.
 
-## 4. El cuerpo
+## 4. The body
 
 ```markdown
-# nombre
-Qué resuelve, en una o dos frases, y dónde está la referencia.
-Cuándo usar y cuándo no (se repite: no todos los agentes leen el frontmatter).
-El procedimiento, por pasos.
+# name
+What it solves, in one or two sentences, and where the reference is.
+When to use and when not to (repeated: not all agents read the frontmatter).
+The procedure, step by step.
 Gotchas.
-Anti-patterns, en una línea cada uno.
-Relacionado.
+Anti-patterns, one line each.
+Related.
 ```
 
-Los gotchas son lo que más vale: lo que no se deduce del camino feliz.
+Gotchas are what is worth most: what cannot be deduced from the happy path.
 
-## 5. ¿Lleva script?
+## 5. Does it carry a script?
 
-Un script para la parte **mecánica y exacta** que se repite igual (un cálculo,
-un formato, una comparación). Prosa para el **criterio** (qué mirar y cómo
-interpretarlo). Un script que encapsula el criterio se vuelve una caja negra.
+A script for the **mechanical and exact** part that repeats the same way (a
+calculation, a format, a comparison). Prose for the **judgement** (what to look
+at and how to interpret it). A script that encapsulates the judgement becomes a
+black box.
 
-## 6. Neutralidad y sitio
+## 6. Neutrality and place
 
-- No nombres herramientas de un agente concreto: describe la acción.
-- En el kernel no se nombran proyectos: los datos van en un adaptador.
-- **Test de la frontera:** tapa los nombres propios. Si el procedimiento sigue
-  teniendo sentido, va al kernel y en el proyecto queda un adaptador; si no, es
-  del proyecto.
-- Un adaptador tiene que ganar la frase con los nombres del proyecto y perder la
-  genérica. Compruébalo con las dos frases escritas antes de la descripción:
-  `node <directorio-de-skill-audit>/scripts/probe.mjs --adaptador <adaptador> <skill> "<genérica>" "<con nombres>"`.
+- Do not name tools of a specific agent: describe the action.
+- In the kernel no projects are named: the data goes in an adapter.
+- **Boundary test:** cover the proper names. If the procedure still makes sense,
+  it goes in the kernel and the project keeps an adapter; if not, it belongs to
+  the project.
+- An adapter has to win the sentence with the project's names and lose the
+  generic one. Check it with the two sentences written before the description:
+  `node <skill-audit-directory>/scripts/probe.mjs --adaptador <adapter> <skill> "<generic>" "<with names>"`.
 
-## 7. Antes de darla por buena
+## 7. Before accepting it
 
-1. **La descripción:** prueba con `probe.mjs` una frase que no salga de la
-   propia descripción. Si gana otra skill, o gana por menos del 15 %, no la
-   distingue.
-2. **El tamaño:** `wc -w SKILL.md` dentro del presupuesto.
-3. **Tres escenarios con respuesta conocida**, en `tests/escenarios.md`: un
-   caso normal, un caso límite y uno que la skill deba rechazar, cada uno con su
-   `Pregunta:` y sus comprobaciones `Debe:` / `No debe:` (expresiones
-   regulares). Pásalos con `crux skill test <skill>`; si estás acortando o
-   cambiando una skill, con `--against <ref>` y `--runs 3`: **la nueva tiene que
-   responder igual**. Una regresión es un matiz perdido; va en `SKILL.md`, no en
-   la referencia.
-4. **Ejecútala** siguiendo lo que dice, no lo que recuerdas.
+1. **The description:** test with `probe.mjs` a sentence that does not come from
+   the description itself. If another skill wins, or it wins by less than 15 %,
+   it does not distinguish it.
+2. **The size:** `wc -w SKILL.md` within budget.
+3. **Three scenarios with a known answer**, in `tests/escenarios.md`: a normal
+   case, an edge case and one the skill must reject, each with its `Pregunta:`
+   and its `Debe:` / `No debe:` checks (regular expressions). Run them with
+   `crux skill test <skill>`; if you are shortening or changing a skill, with
+   `--against <ref>` and `--runs 3`: **the new one has to answer the same**. A
+   regression is a lost nuance; it goes in `SKILL.md`, not in the reference.
+4. **Execute it** following what it says, not what you remember.
 
 ## Anti-patterns
 
-- Crear una skill que compite con otra existente.
-- Descripción genérica ("ayuda con los despliegues").
-- Documentar la herramienta en vez del procedimiento.
-- Meter la historia y el porqué en `SKILL.md`.
-- Escribirla desde la memoria sin ejecutarla ni probarla.
-- Dejarla sin mantenimiento: una skill que miente se sigue con confianza.
+- Creating a skill that competes with an existing one.
+- Generic description ("helps with deployments").
+- Documenting the tool instead of the procedure.
+- Putting the history and the why in `SKILL.md`.
+- Writing it from memory without executing or testing it.
+- Leaving it unmaintained: a skill that lies is followed with confidence.
 
-## Relacionado
+## Related
 
-- `/skill-audit` — si una skill está en el sitio correcto y si hay que fusionar
-- `/promote-to-docs` — para lo que es conocimiento y no procedimiento
+- `/skill-audit` — whether a skill is in the right place and whether to merge
+- `/promote-to-docs` — for what is knowledge and not procedure

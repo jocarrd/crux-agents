@@ -1,5 +1,5 @@
-<!-- Puntero local de crux, sin versionar: lo escribe `crux link`. -->
+<!-- Local crux pointer, unversioned: written by `crux link`. -->
 
-Repo de un cliente. El contexto del proyecto está en el docs repo:
+A client's repo. The project context is in the docs repo:
 
 @../{{DOCS}}/CLAUDE.md

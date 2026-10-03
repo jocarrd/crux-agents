@@ -1,35 +1,36 @@
 #!/usr/bin/env bash
-# Reúne los ficheros de entorno de un proyecto en una carpeta que puedas llevarte.
+# Gathers a project's env files into a folder you can take with you.
 #
 #   collect.sh [--project <dir>] [--out <dir>]
 #
-# Los copia con `cp` y no los abre nunca: si un agente ejecuta esto, ningún valor
-# entra en su contexto ni queda en la transcripción de la sesión.
+# Copies them with `cp` and never opens them: if an agent runs this, no value
+# enters its context or stays in the session transcript.
 #
-# Deja el mapa de a dónde va cada uno y el script que los devuelve a su sitio.
-# Doce ficheros con nombres planos y ninguna pista de su ruta no sirven de nada
-# dentro de tres meses, que es justo cuando se usan.
+# Leaves a map of where each one goes and the script that puts them back.
+# Twelve files with flat names and no hint of their path are useless three
+# months from now, which is exactly when they get used.
 
 set -euo pipefail
-AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-PROYECTO="$PWD"
-SALIDA=""
+PROJECT="$PWD"
+OUTPUT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --project) PROYECTO="$2"; shift 2 ;;
-    --out)     SALIDA="$2"; shift 2 ;;
-    *) echo "opción desconocida: $1" >&2; exit 1 ;;
+    --project) PROJECT="$2"; shift 2 ;;
+    --out)     OUTPUT="$2"; shift 2 ;;
+    *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
 
-PROYECTO="$(cd "$PROYECTO" && pwd)"
+PROJECT="$(cd "$PROJECT" && pwd)"
 
-# El ancla es la raíz del proyecto, no el repo desde el que se llame. Apuntar
-# esto a un repo deja un paquete inservible de dos maneras a la vez: el mapa
-# guarda rutas relativas al repo, y el paquete dice llamarse como él, así que al
-# restaurar se busca <raíz>/<repo> — que no existe — en vez de <raíz>/<proyecto>.
-# El fallo no se ve al reunirlos: se ve meses después, en la máquina nueva.
+# The anchor is the project root, not the repo it is called from. Pointing
+# this at a repo makes the bundle useless in two ways at once: the map stores
+# repo-relative paths, and the bundle claims the repo's name, so restoring looks
+# for <root>/<repo> (which does not exist) instead of <root>/<project>.
+# The failure is not visible when gathering: it shows up months later, on the
+# new machine.
 docs_repo() {
   local probe="$1" d
   while [[ "$probe" != "/" ]]; do
@@ -42,32 +43,32 @@ docs_repo() {
   return 1
 }
 
-NOMBRE=""
-if DOCS="$(docs_repo "$PROYECTO")"; then
-  RAIZ="$(dirname "$DOCS")"
-  if [[ "$RAIZ" != "$PROYECTO" ]]; then
-    echo "$(basename "$PROYECTO") es un repo de $(basename "$RAIZ"): reúno el proyecto entero"
-    echo "desde $RAIZ, que es lo que la otra máquina sabrá encontrar."
+NAME=""
+if DOCS="$(docs_repo "$PROJECT")"; then
+  ROOT="$(dirname "$DOCS")"
+  if [[ "$ROOT" != "$PROJECT" ]]; then
+    echo "$(basename "$PROJECT") is a repo of $(basename "$ROOT"): gathering the whole project"
+    echo "from $ROOT, which is what the other machine will know how to find."
     echo
-    PROYECTO="$RAIZ"
+    PROJECT="$ROOT"
   fi
-  # El nombre declarado manda sobre el del directorio: es el que usa
-  # `crux bootstrap` para crear la carpeta en la máquina de destino.
-  NOMBRE="$(sed -n 's/.*"project"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DOCS/crux.json" | head -1)"
+  # The declared name wins over the directory name: it is the one
+  # `crux bootstrap` uses to create the folder on the destination machine.
+  NAME="$(sed -n 's/.*"project"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DOCS/crux.json" | head -1)"
 fi
-NOMBRE="${NOMBRE:-$(basename "$PROYECTO")}"
-SALIDA="${SALIDA:-$HOME/entornos-$NOMBRE}"
+NAME="${NAME:-$(basename "$PROJECT")}"
+OUTPUT="${OUTPUT:-$HOME/entornos-$NAME}"
 
-# Lo que se excluye, y por qué:
+# What is excluded, and why:
 #
-#   *-ws-*                  copias que genera `crux workspace` del repo
-#                           principal. Son derivadas, y restaurarlas encima de
-#                           las buenas es meter la pata.
-#   .next, dist, build, out artefactos de construcción: el mismo fichero copiado
-#                           por la herramienta. Restaurar uno no arregla nada.
-#   *.example y compañía    plantillas sin valores; ya están en el repo.
-buscar() {
-  find "$PROYECTO" -maxdepth 6 \
+#   *-ws-*                  copies `crux workspace` generates of the main
+#                           repo. They are derived, and restoring them over
+#                           the good ones is a blunder.
+#   .next, dist, build, out build artifacts: the same file copied by the
+#                           tool. Restoring one fixes nothing.
+#   *.example and friends   templates without values; already in the repo.
+search() {
+  find "$PROJECT" -maxdepth 6 \
     \( -name ".env" -o -name ".env.*" \) \
     -not -path "*/node_modules/*" -not -path "*/.git/*" \
     -not -path "*-ws-*" \
@@ -76,85 +77,85 @@ buscar() {
     -type f 2>/dev/null | sort
 }
 
-# .env → sin sufijo; .env.local → .local. Si el fichero está anidado dentro del
-# repo, el directorio que lo contiene entra en el nombre: si no, el .env de la
-# raíz y el de un servicio de dentro se pisarían.
-nombre_plano() {
-  local rel="${1#$PROYECTO/}"
-  local variante; variante="$(basename "$1")"; variante="${variante#.env}"
+# .env -> no suffix; .env.local -> .local. If the file is nested inside the
+# repo, its containing directory goes into the name: otherwise the root .env
+# and one from a service inside would overwrite each other.
+plain_name() {
+  local rel="${1#$PROJECT/}"
+  local variant; variant="$(basename "$1")"; variant="${variant#.env}"
 
-  # Un fichero en la raíz del proyecto no tiene repo del que tomar el nombre.
-  # Sin esto se toma `.env` por nombre de repo y sale `.env..env.`, que es justo
-  # lo contrario de para lo que están estos nombres: decir de dónde salió.
-  [[ "$rel" == */* ]] || { echo ".env${variante}"; return; }
+  # A file at the project root has no repo to take the name from.
+  # Without this `.env` is taken as the repo name and yields `.env..env.`,
+  # the opposite of what these names are for: saying where it came from.
+  [[ "$rel" == */* ]] || { echo ".env${variant}"; return; }
 
   local repo="${rel%%/*}"
   local dir; dir="$(dirname "$rel")"
-  local sufijo=""
-  local hoja; hoja="$(basename "$dir")"
-  [[ "$dir" != "$repo" && "$hoja" != "$repo" ]] && sufijo=".$hoja"
-  echo ".env.${repo}${sufijo}${variante}"
+  local suffix=""
+  local sheet; sheet="$(basename "$dir")"
+  [[ "$dir" != "$repo" && "$sheet" != "$repo" ]] && suffix=".$sheet"
+  echo ".env.${repo}${suffix}${variant}"
 }
 
-mapfile -t FICHEROS < <(buscar)
-[[ ${#FICHEROS[@]} -gt 0 ]] || { echo "ningún fichero de entorno bajo $PROYECTO"; exit 1; }
+mapfile -t FILES < <(search)
+[[ ${#FILES[@]} -gt 0 ]] || { echo "no env file under $PROJECT"; exit 1; }
 
-rm -rf "$SALIDA"; mkdir -p "$SALIDA"; chmod 700 "$SALIDA"
+rm -rf "$OUTPUT"; mkdir -p "$OUTPUT"; chmod 700 "$OUTPUT"
 
-echo "# proyecto: $NOMBRE" > "$SALIDA/mapa.txt"
-for f in "${FICHEROS[@]}"; do
-  n="$(nombre_plano "$f")"
-  cp -p "$f" "$SALIDA/$n"
-  chmod 600 "$SALIDA/$n"
-  echo "$n|${f#$PROYECTO/}" >> "$SALIDA/mapa.txt"
-  printf "  ok   %-44s ← %s\n" "$n" "${f#$PROYECTO/}"
+echo "# proyecto: $NAME" > "$OUTPUT/mapa.txt"
+for f in "${FILES[@]}"; do
+  n="$(plain_name "$f")"
+  cp -p "$f" "$OUTPUT/$n"
+  chmod 600 "$OUTPUT/$n"
+  echo "$n|${f#$PROJECT/}" >> "$OUTPUT/mapa.txt"
+  printf "  ok   %-44s ← %s\n" "$n" "${f#$PROJECT/}"
 done
 
-cp "$AQUI/restaurar.sh" "$SALIDA/restaurar.sh"
-chmod 700 "$SALIDA/restaurar.sh"
+cp "$HERE/restaurar.sh" "$OUTPUT/restaurar.sh"
+chmod 700 "$OUTPUT/restaurar.sh"
 
 {
-  echo "# Entornos de $NOMBRE — copia para otra máquina"
+  echo "# Environments of $NAME: copy for another machine"
   echo
-  echo "**Aquí no hay ningún secreto**: este fichero solo dice qué va dónde."
+  echo "**There are no secrets here**: this file only says what goes where."
   echo
-  echo "## Antes de nada"
+  echo "## First of all"
   echo
-  echo "La carpeta lleva claves y tokens en claro. No la dejes donde se sincronice"
-  echo "sola, no la enseñes en una pantalla compartida, y bórrala en cuanto acabes"
-  echo "de restaurar."
+  echo "The folder holds keys and tokens in plain text. Do not leave it where it"
+  echo "syncs by itself, do not show it on a shared screen, and delete it as soon"
+  echo "as you finish restoring."
   echo
-  echo "## Cómo se restaura"
+  echo "## How to restore"
   echo
   echo '```bash'
-  echo "./restaurar.sh           # dice qué haría, sin tocar nada"
-  echo "./restaurar.sh --hazlo   # lo copia a su sitio"
+  echo "./restaurar.sh           # says what it would do, touching nothing"
+  echo "./restaurar.sh --apply   # copies them into place"
   echo '```'
   echo
-  echo "Busca el proyecto en \`~/Proyectos/$NOMBRE\`; si está en otro sitio, pásalo"
-  echo "como argumento. Nunca sobreescribe: si el destino existe lo salta y lo dice."
+  echo "It looks for the project at \`~/Proyectos/$NAME\`; if it is elsewhere, pass it"
+  echo "as an argument. It never overwrites: if the destination exists it skips it and says so."
   echo
-  echo "## Qué va dónde"
+  echo "## What goes where"
   echo
-  echo "| Fichero | Destino, relativo a la raíz del proyecto |"
-  echo "| ------- | ---------------------------------------- |"
+  echo "| File | Destination, relative to the project root |"
+  echo "| ---- | ---------------------------------------- |"
   while IFS='|' read -r n d; do
     [[ -n "$n" && "$n" != \#* ]] && echo "| \`$n\` | \`$d\` |"
-  done < "$SALIDA/mapa.txt"
+  done < "$OUTPUT/mapa.txt"
   echo
-  echo "## Lo que NO está aquí"
+  echo "## What is NOT here"
   echo
-  echo "**Nada del servidor.** Los ficheros de entorno de producción viven donde"
-  echo "corre el servicio; esto es para trabajar en local."
+  echo "**Nothing from the server.** Production env files live where the service"
+  echo "runs; this is for working locally."
   echo
-  echo "**Nada personal y regenerable**: claves SSH, sesiones de CLI, tokens de"
-  echo "registro, OAuth. Eso se genera en cada máquina y no se copia — copiarlo es"
-  echo "peor, porque un token que viaja es un token que ya no sabes dónde ha estado."
+  echo "**Nothing personal and regenerable**: SSH keys, CLI sessions, registry"
+  echo "tokens, OAuth. Those are generated on each machine and not copied: copying"
+  echo "is worse, because a token that travels is one you no longer know where it has been."
   echo
-  echo "**Ni copias de espacios de trabajo ni artefactos de construcción**, que son"
-  echo "derivados del repo principal."
-} > "$SALIDA/RESTAURAR.md"
+  echo "**No workspace copies or build artifacts either**, which are derived from"
+  echo "the main repo."
+} > "$OUTPUT/RESTAURAR.md"
 
 echo
-echo "${#FICHEROS[@]} ficheros en $SALIDA (carpeta 0700, ficheros 0600)"
-echo "el mapa está en RESTAURAR.md y el camino de vuelta en restaurar.sh"
+echo "${#FILES[@]} files in $OUTPUT (folder 0700, files 0600)"
+echo "the map is in RESTAURAR.md and the way back in restaurar.sh"

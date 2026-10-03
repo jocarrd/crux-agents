@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# Copia el perfil de Chrome que TIENE la sesión a un directorio no-default y
-# arranca Chrome HEADED con puerto de depuración y llavero, para que las cookies
-# se descifren. Pensado para lanzarse desacoplado (background) y luego pilotar
-# con cdp.py mientras vive.
+# Copies the Chrome profile that HAS the session to a non-default directory and
+# starts Chrome HEADED with a debugging port and keyring, so the cookies get
+# decrypted. Meant to be launched detached (background) and then driven with
+# cdp.py while it lives.
 #
-# Uso: chrome-session.sh <src-profile-dir> [workdir] [port]
-#   src-profile-dir : p.ej. ~/.config/google-chrome/"Profile 1"  (el que tiene la sesión)
-#   workdir         : dónde va la copia (default: /tmp/cdp-profile)
-#   port            : puerto de depuración (default 9222)
+# Usage: chrome-session.sh <src-profile-dir> [workdir] [port]
+#   src-profile-dir : e.g. ~/.config/google-chrome/"Profile 1"  (the one with the session)
+#   workdir         : where the copy goes (default: /tmp/cdp-profile)
+#   port            : debugging port (default 9222)
 #
-# OJO: kill por PUERTO (fuser -k), nunca `pkill -f remote-debugging-port` (se
-# mata a sí mismo porque tu propia línea de comando contiene ese texto).
+# NOTE: kill by PORT (fuser -k), never `pkill -f remote-debugging-port` (it
+# kills itself because your own command line contains that text).
 set -u
-SRC="${1:?perfil de origen requerido}"
+SRC="${1:?source profile required}"
 WORK="${2:-/tmp/cdp-profile}"
 PORT="${3:-9222}"
 CHROME="${CHROME_BIN:-/opt/google/chrome/chrome}"
-CFG="$(dirname "$SRC")"   # .../google-chrome (el dir del perfil, no su padre)
+CFG="$(dirname "$SRC")"   # .../google-chrome (the profile dir, not its parent)
 
 fuser -k "${PORT}/tcp" >/dev/null 2>&1; sleep 1
 rm -rf "$WORK"; mkdir -p "$WORK/Default"
-# Local State lleva la clave de cifrado envuelta por el llavero: imprescindible.
-cp "$CFG/Local State" "$WORK/" || { echo "FATAL: no se encontró $CFG/Local State; sin él Chrome no descifra las cookies" >&2; exit 1; }
+# Local State holds the encryption key wrapped by the keyring: essential.
+cp "$CFG/Local State" "$WORK/" || { echo "FATAL: $CFG/Local State not found; without it Chrome cannot decrypt the cookies" >&2; exit 1; }
 for f in Cookies Cookies-wal Preferences "Login Data"; do
   [ -e "$SRC/$f" ] && cp "$SRC/$f" "$WORK/Default/$f" 2>/dev/null
 done

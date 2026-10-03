@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Captura las mismas páginas en dos versiones —la publicada y la nueva— para
-// montar el antes y el después.
+// Captures the same pages in two versions (the published one and the new one)
+// to build the before and after.
 //
 //   node capture.mjs --base <url> --head <url> --paths /,/ficha \
-//     --widths 1440,820,390 --out <carpeta> [--cookie nombre=valor] [--wait 3000] \
-//     [--hide '<selectores css>']
+//     --widths 1440,820,390 --out <folder> [--cookie name=value] [--wait 3000] \
+//     [--hide '<css selectors>']
 //
-// Deja <carpeta>/before/<página>-<ancho>.png y <carpeta>/after/<página>-<ancho>.png.
-// Requiere `npm i playwright-core` en el cwd, como visual-test.
+// Leaves <folder>/before/<page>-<width>.png and <folder>/after/<page>-<width>.png.
+// Requires `npm i playwright-core` in the cwd, like visual-test.
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
@@ -21,7 +21,7 @@ const args = Object.fromEntries(
 
 for (const required of ['base', 'head', 'paths', 'out']) {
   if (!args[required]) {
-    console.error(`falta --${required}`)
+    console.error(`missing --${required}`)
     process.exit(2)
   }
 }
@@ -35,20 +35,20 @@ const CHROME =
     (p) => existsSync(p),
   )
 
-// Con un servidor de desarrollo, el Chrome del sistema puede quedarse sin
-// pintar nunca (una transición de vista que no termina). El navegador que
-// trae Playwright no lo tiene, así que va primero si está instalado.
+// With a development server, the system Chrome may never get to paint (a view
+// transition that never ends). The browser Playwright ships does not have
+// that, so it goes first if installed.
 async function launch() {
   try {
     return await chromium.launch()
   } catch {
-    if (!CHROME) throw new Error('no hay navegador: instala uno o define CHROME_BIN')
+    if (!CHROME) throw new Error('no browser: install one or set CHROME_BIN')
     return chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] })
   }
 }
 
 const slug = (path) =>
-  path.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'inicio'
+  path.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'home'
 
 async function capture(browser, url, width, file) {
   const mobile = width < 600
@@ -64,13 +64,13 @@ async function capture(browser, url, width, file) {
   }
   const page = await ctx.newPage()
   await page.goto(url, { waitUntil: 'networkidle', timeout: 240000 })
-  // Avisos de cookies, burbujas de chat y demás capas flotantes tapan la página
-  // en todos los tramos; cada web guarda el consentimiento a su manera, así que
-  // se ocultan por selector en vez de intentar aceptarlos.
+  // Cookie notices, chat bubbles and other floating layers cover the page in
+  // every chunk; each site stores consent its own way, so they are hidden by
+  // selector instead of trying to accept them.
   if (args.hide) {
     await page.addStyleTag({ content: `${args.hide} { display: none !important }` })
   }
-  // Recorrer despierta lo que carga al entrar en pantalla.
+  // Scrolling through wakes whatever loads on entering the viewport.
   await page.evaluate(async () => {
     for (let y = 0; y < document.documentElement.scrollHeight; y += 600) {
       scrollTo(0, y)
@@ -79,9 +79,9 @@ async function capture(browser, url, width, file) {
     scrollTo(0, 0)
   })
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
-  // La captura de página completa cambia el tamaño de la ventana, y las
-  // gráficas que se redibujan al cambiar de tamaño reinician su animación: la
-  // foto las pilla vacías. Se agranda antes, se espera y después se dispara.
+  // A full-page capture resizes the window, and charts that redraw on resize
+  // restart their animation: the shot catches them empty. It is enlarged
+  // first, then it waits, and only then does it fire.
   await page.setViewportSize({ width, height })
   await page.waitForTimeout(wait)
   await page.screenshot({ path: file, fullPage: true })

@@ -1,74 +1,75 @@
-# Cómo reparte alcance X, y por qué las reglas son estas
+# How X distributes reach, and why the rules are these
 
-El procedimiento está en `SKILL.md`. Aquí están los datos en los que se apoya.
+The procedure is in `SKILL.md`. Here is the data it rests on.
 
-## El algoritmo publicado
+## The published algorithm
 
-X publicó el código de su feed "Para ti" en `github.com/xai-org/x-algorithm` y
-se comprometió a actualizarlo cada cuatro semanas. Antes de una campaña
-importante, comprueba el repositorio: los pesos cambian. Lo estable es esto:
+X published the code of its "For you" feed at `github.com/xai-org/x-algorithm`
+and committed to updating it every four weeks. Before an important campaign,
+check the repository: the weights change. What is stable is this:
 
-- **El feed predice acciones y las pondera.** Cada post recibe la suma de
-  "probabilidad de que hagas X × peso de X": responder, compartir por mensaje o
-  copiando el enlace, citar, repostear, dar like, seguir al autor, hacer clic y
-  tiempo de lectura, y también "no me interesa", silenciar, bloquear y denunciar.
-- **Conversar pesa mucho más que un like.** En los pesos publicados en agosto de
-  2026, una respuesta vale unas 10 veces un like. Compartir copiando el enlace,
-  o una respuesta dentro de una conversación entre cuentas que se siguen, unas
-  40. Seguir al autor, unas 8.
-- **Lo negativo pesa muchísimo más.** Una denuncia resta lo que suman cientos de
-  likes, y silenciar o "no me interesa", decenas. Un post que molesta a unos
-  pocos hunde el alcance de muchos.
-- **Fuera de tus seguidores llegas con descuento.** Los posts de cuentas que no
-  sigues se multiplican por un factor menor que 1. Las cuentas pequeñas tienen
-  un empujón hasta cierto umbral de impresiones.
-- **Publicar seguido tiene rendimiento decreciente.** Cada post del mismo autor
-  en el feed de una persona recibe un factor que decae. Dos posts buenos al día
-  rinden más que cinco seguidos.
-- **La vida útil es corta.** Los posts de más de 48 horas salen de la selección.
-- **Un enlace en el cuerpo reduce el alcance.** No aparece como regla en el
-  código, pero las mediciones de 2026 coinciden en una caída fuerte, mayor en
-  cuentas sin Premium, porque un clic saca a la gente de X.
+- **The feed predicts actions and weighs them.** Each post receives the sum of
+  "probability that you do X × weight of X": replying, sharing by message or by
+  copying the link, quoting, reposting, liking, following the author, clicking
+  and reading time, and also "not interested", muting, blocking and reporting.
+- **Conversing weighs much more than a like.** In the weights published in
+  August 2026, a reply is worth about 10 times a like. Sharing by copying the
+  link, or a reply inside a conversation between accounts that follow each
+  other, about 40. Following the author, about 8.
+- **Negative signals weigh far more.** A report subtracts what hundreds of likes
+  add, and muting or "not interested", dozens. A post that annoys a few sinks
+  the reach for many.
+- **Outside your followers you reach with a discount.** Posts from accounts you
+  do not follow are multiplied by a factor below 1. Small accounts get a boost
+  up to a certain impression threshold.
+- **Posting often has diminishing returns.** Each post by the same author in a
+  person's feed receives a decaying factor. Two good posts a day perform better
+  than five in a row.
+- **The shelf life is short.** Posts older than 48 hours drop out of the
+  selection.
+- **A link in the body reduces reach.** It does not appear as a rule in the
+  code, but the 2026 measurements agree on a sharp drop, larger on accounts
+  without Premium, because a click takes people off X.
 
-## Por qué un post, un objetivo
+## Why one post, one goal
 
-Si un post pide varias acciones a la vez, no consigue ninguna.
+If a post asks for several actions at once, it achieves none.
 
-## Por qué la marca se construye así
+## Why the brand is built this way
 
-La marca personal se construye enseñando el trabajo, no anunciándolo. La
-promoción funciona cuando llega después de muchos posts que no pedían nada. La
-continuidad hace que te sigan, porque seguirte es la forma de no perderse el
-siguiente capítulo. Abrir con una situación o una persona, y no con el
-producto, es lo que hace que alguien se pare.
+A personal brand is built by showing the work, not by announcing it. Promotion
+works when it comes after many posts that asked for nothing. Continuity makes
+people follow you, because following you is the way not to miss the next
+chapter. Opening with a situation or a person, and not with the product, is
+what makes someone stop.
 
-## Por qué la primera línea
+## Why the first line
 
-Decide si se lee el resto. Los ganchos que prometen sin dar ahuyentan a la
-gente que buscas y cuentan como marcadores de contenido vacío.
+It decides whether the rest is read. Hooks that promise without delivering
+drive away the people you are looking for and count as markers of empty content.
 
-## Por qué estas reglas de escritura
+## Why these writing rules
 
-En el móvil un bloque de seis líneas se salta. Etiquetar a gente para que lo
-vea, sin que el post trate de ellos, se lee como spam y provoca silencios. En
-X delatan un texto generado sobre todo la raya larga, las enumeraciones de
-tres, el paralelismo negativo y el tono de anuncio. Pedir interacción vacía
-atrae interacción de baja calidad y lecturas de spam.
+On mobile a six-line block gets skipped. Tagging people so they see it, when the
+post is not about them, reads as spam and provokes silence. On X, a generated
+text is given away above all by the em dash, enumerations of three, negative
+parallelism and an announcement tone. Asking for empty engagement attracts
+low-quality engagement and spam readings.
 
-## Por qué la primera hora
+## Why the first hour
 
-Lo que pasa justo después de publicar decide el resto. La respuesta del autor
-dentro de una conversación es de las señales que más pesan. Para una cuenta
-pequeña, responder bien vale más que publicar mucho.
+What happens right after publishing decides the rest. The author's reply inside
+a conversation is one of the signals that weigh most. For a small account,
+replying well is worth more than posting a lot.
 
-## Fuentes
+## Sources
 
-- Código del feed de X: `github.com/xai-org/x-algorithm` (señales, puntuación,
-  diversidad de autor, descuento fuera de la red, ventana de 48 horas).
-- Pesos publicados en agosto de 2026, resumidos en explainx.ai ("X Discloses
+- X feed code: `github.com/xai-org/x-algorithm` (signals, scoring, author
+  diversity, out-of-network discount, 48-hour window).
+- Weights published in August 2026, summarised in explainx.ai ("X Discloses
   Ranking Weights").
-- Mediciones sobre enlaces en el cuerpo del post: Social Media Today, OpenTweet
-  (2026).
-- Skills públicas de X revisadas: `sergebulaev/x-skills`,
+- Measurements on links in the post body: Social Media Today, OpenTweet (2026).
+- Public X skills reviewed: `sergebulaev/x-skills`,
   `alirezarezvani/claude-skills` (`x-twitter-growth`), `yamz8/x-thread-skill`.
-- Build in public y marca personal: guías de Indie Hackers y Justin Welsh.
+- Build in public and personal brand: guides from Indie Hackers and Justin
+  Welsh.

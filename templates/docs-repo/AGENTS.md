@@ -1,81 +1,80 @@
 # AGENTS.md — {{PROJECT}}-docs
 
-Documentación transversal de **{{PROJECT}}**. Es el contexto canónico del
-proyecto para cualquier agente de código.
+Cross-cutting documentation for **{{PROJECT}}**. It is the project's canonical
+context for any coding agent.
 
-Este archivo es un **índice**: lee solo la sección que necesitas para la tarea
-actual, no todo a ciegas.
-
----
-
-## Cómo se trabaja aquí
-
-**Ante cualquier tarea de desarrollo, el ciclo es `/flow`**: entender, aislar
-el espacio, planificar, desarrollar, pasar la puerta, proponer y cerrar. Esa
-skill explica el orden y por qué ese orden.
-
-Los pasos, si necesitas ir directo a uno:
-
-| Momento | Qué invocar |
-| ------- | ----------- |
-| Entras y no conoces el repo | `/repo-map` |
-| Vas a empezar a trabajar | `/workspace` — tu rama y tu entorno, sin pisar a nadie |
-| Antes de tocar código | `/explain-plan` |
-| Algo falla y no sabes por qué | `/root-cause` |
-| Vas a commitear | `/ship` |
-| Has terminado | `/workspace finish` — sube la rama y abre la propuesta |
-| Cierras la sesión | `/end-session` |
-
-Las dos que más se pasan por alto son `/ship` y `/end-session`, y son las que
-sostienen el resto: la primera evita que entre trabajo roto, la segunda evita
-que se pierda lo aprendido.
+This file is an **index**: read only the section you need for the current task,
+not everything blindly.
 
 ---
 
-## Cuándo leer qué
+## How we work here
 
-**Vas a tocar código de un repo concreto**
-- Documentación específica del repo → `repos/<repo>/`
-- Decisiones que afectan solo a ese repo → `repos/<repo>/decisions.md`
+**For any development task, the cycle is `/flow`**: understand, isolate the
+space, plan, develop, pass the gate, propose and close. That skill explains the
+order and why that order.
 
-**Vas a tomar o revisar una decisión que cruza varios repos**
-- Registro de ADRs → `decisions/index.md`
-- Formato y cómo añadir uno → `decisions/README.md`
+The steps, if you need to go straight to one:
 
-**Quieres entender cómo está organizada esta documentación**
-- El estándar completo vive en el kernel: `crux/STANDARD.md`
-- Versión y perfil aplicados aquí: `crux.json`
+| Moment | What to invoke |
+| ------ | -------------- |
+| You arrive and do not know the repo | `/repo-map` |
+| You are about to start working | `/workspace` — your branch and your environment, without stepping on anyone |
+| Before touching code | `/explain-plan` |
+| Something fails and you do not know why | `/root-cause` |
+| You are about to commit | `/ship` |
+| You have finished | `/workspace finish` — pushes the branch and opens the proposal |
+| You close the session | `/end-session` |
 
-<!-- Añade secciones a medida que aparezcan: architecture/, conventions/,
-     operations/, topics/<tema>/ -->
+The two most often overlooked are `/ship` and `/end-session`, and they are the
+ones that hold up the rest: the first stops broken work from getting in, the
+second stops what was learned from being lost.
+
+---
+
+## When to read what
+
+**You are going to touch the code of a specific repo**
+- Repo-specific documentation → `repos/<repo>/`
+- Decisions that affect only that repo → `repos/<repo>/decisions.md`
+
+**You are going to make or review a decision that crosses several repos**
+- ADR registry → `decisions/index.md`
+- Format and how to add one → `decisions/README.md`
+
+**You want to understand how this documentation is organized**
+- The complete standard lives in the kernel: `crux/STANDARD.md`
+- Version and profile applied here: `crux.json`
+
+<!-- Add sections as they appear: architecture/, conventions/,
+     operations/, topics/<topic>/ -->
 
 ---
 
 ## Skills
 
-Los procedimientos transversales viven en el kernel y están disponibles como
-`/<nombre>`. Esta lista la mantiene `crux link`:
+The cross-cutting procedures live in the kernel and are available as
+`/<name>`. This list is maintained by `crux link`:
 
 <!-- crux:skills -->
 <!-- /crux:skills -->
 
-Las específicas de {{PROJECT}} viven en `.claude/skills/project/` de este repo.
-Cuando aparezcan, se listan aquí con su disparador, para que los agentes que no
-leen frontmatter puedan descubrirlas.
+{{PROJECT}}-specific ones live in `.claude/skills/project/` of this repo. When
+they appear, they are listed here with their trigger, so that agents that do
+not read frontmatter can discover them.
 
 ---
 
-## Reglas duras
+## Hard rules
 
-- **La documentación específica de un repo va en `repos/<repo>/`**, no dentro
-  del repo de código. Lo transversal va en `architecture/`, `conventions/`,
-  `operations/` o `topics/<tema>/`.
-- **Sincronización código ↔ doc:** al modificar código que invalida una doc de
-  aquí, se actualiza en el mismo turno.
-- **Las notas de proyecto y las referencias van a git, no a memoria local del
-  agente.** La memoria local queda para lo relativo a la persona.
-- **Los cambios en este repo se commitean y pushean al terminar.**
-- **Conventional commits**, body de 100 caracteres por línea como máximo.
-- **Sin `Co-Authored-By`. Sin emojis.** Ni en el commit ni en la descripción de
-  una propuesta de cambio: nada de firmas de la herramienta ni de líneas de
-  "generado con".
+- **Repo-specific documentation goes in `repos/<repo>/`**, not inside the code
+  repo. What is cross-cutting goes in `architecture/`, `conventions/`,
+  `operations/` or `topics/<topic>/`.
+- **Code ↔ doc sync:** when changing code that invalidates a doc here, it is
+  updated in the same turn.
+- **Project notes and references go to git, not to the agent's local memory.**
+  Local memory is kept for what concerns the person.
+- **Changes in this repo are committed and pushed when finished.**
+- **Conventional commits**, body of 100 characters per line at most.
+- **No `Co-Authored-By`. No emojis.** Neither in the commit nor in a change
+  proposal's description: no tool signatures and no "generated with" lines.

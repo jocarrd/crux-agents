@@ -1,29 +1,29 @@
-# Decisiones (ADRs) — {{PROJECT}}
+# Decisions (ADRs) — {{PROJECT}}
 
-Registro de decisiones que afectan a más de un repo del proyecto. Previene
-decisiones conflictivas entre sesiones y agentes, y conserva el contexto
-histórico de por qué las cosas son como son.
+Register of decisions that affect more than one repo of the project. It
+prevents conflicting decisions between sessions and agents, and keeps the
+historical context of why things are the way they are.
 
-Mientras haya menos de 30, todas viven en este fichero consolidado: facilita la
-lectura cronológica, que es lo que deja ver cómo evolucionó el criterio. Al
-pasar de ahí, el fichero abre con una tabla de contenidos —número, título,
-estado— antes de plantearse partirlo: partir obliga a reescribir todas las
-referencias que lo citan desde otras docs.
+While there are fewer than 30, they all live in this consolidated file: it
+makes chronological reading easier, which is what shows how the criteria
+evolved. Beyond that, the file opens with a table of contents —number, title,
+status— before considering splitting it: splitting forces rewriting every
+reference that cites it from other docs.
 
-Formato y flujo de promoción: `README.md` de esta carpeta.
+Format and promotion flow: `README.md` in this folder.
 
 ---
 
-<!-- Añade cada ADR al final, con numeración correlativa:
+<!-- Add each ADR at the end, with consecutive numbering:
 
-### ADR-001: Título
+### ADR-001: Title
 
 - **Date**: YYYY-MM-DD
 - **Status**: Accepted
-- **Context**: qué problema o situación lo motiva
-- **Decision**: qué decidimos
-- **Consequences**: cómo cambia el código, la operación o el despliegue
-- **Reversibility**: cómo de caro sería deshacerlo
-- **Related**: refs a otros ADRs
+- **Context**: what problem or situation motivates it
+- **Decision**: what we decided
+- **Consequences**: how the code, the operation or the deployment changes
+- **Reversibility**: how costly it would be to undo
+- **Related**: refs to other ADRs
 
 -->

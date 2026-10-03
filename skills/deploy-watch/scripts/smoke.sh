@@ -1,47 +1,47 @@
 #!/usr/bin/env bash
-# Comprueba que un despliegue ha llegado y que sus rutas responden.
+# Checks that a deployment has arrived and that its routes respond.
 #
-#   smoke.sh [--url <base>] [--expect <texto>] [--timeout <seg>] [ruta ...]
+#   smoke.sh [--url <base>] [--expect <text>] [--timeout <sec>] [path ...]
 #
-# Sin --url, lee del contrato del proyecto `deploy.url` y `deploy.paths`, o
-# `deploy.repos.<repo>` si el proyecto tiene varios repos desplegables.
+# Without --url, it reads `deploy.url` and `deploy.paths` from the project
+# contract, or `deploy.repos.<repo>` if the project has several deployable repos.
 #
-# --expect espera a que la primera ruta contenga un texto que solo tiene la
-# versión nueva. Sin eso, un 200 no dice nada: puede estar respondiendo todavía
-# la versión anterior mientras la nueva se construye.
+# --expect waits until the first path contains a text only the new version has.
+# Without it, a 200 says nothing: the previous version may still be answering
+# while the new one builds.
 #
-# Salida: 0 todo responde · 1 alguna ruta falla · 3 la versión nueva no llegó.
+# Exit: 0 everything responds · 1 some path fails · 3 the new version did not arrive.
 
 set -uo pipefail
 
 KERNEL="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)"
 source "$KERNEL/lib/common.sh"
 
-URL=""; EXPECT=""; TIMEOUT=600; RUTAS=()
-INTERVALO="${CRUX_SMOKE_INTERVAL:-10}"
+URL=""; EXPECT=""; TIMEOUT=600; PATHS=()
+INTERVAL="${CRUX_SMOKE_INTERVAL:-10}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --url) URL="${2:-}"; shift 2 ;;
     --expect) EXPECT="${2:-}"; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
-    -*) die "opción desconocida: $1" ;;
-    *) RUTAS+=("$1"); shift ;;
+    -*) die "unknown option: $1" ;;
+    *) PATHS+=("$1"); shift ;;
   esac
 done
-[[ "$TIMEOUT" =~ ^[0-9]+$ ]] || die "--timeout son segundos enteros, no '$TIMEOUT'"
-command -v curl >/dev/null || die "hace falta curl"
+[[ "$TIMEOUT" =~ ^[0-9]+$ ]] || die "--timeout is whole seconds, not '$TIMEOUT'"
+command -v curl >/dev/null || die "curl is required"
 
 if [[ -z "$URL" ]]; then
-  docs="$(find_docs_repo "$PWD")" || die "sin --url y sin crux.json del que leer deploy.url"
-  contrato="$docs/crux.json"
-  json_valido "$contrato" || die "$contrato no se puede leer como JSON"
+  docs="$(find_docs_repo "$PWD")" || die "no --url and no crux.json to read deploy.url from"
+  contract="$docs/crux.json"
+  valid_json "$contract" || die "$contract cannot be read as JSON"
 
   repo=""
-  comun="$(git rev-parse --git-common-dir 2>/dev/null || true)"
-  [[ -n "$comun" ]] && repo="$(basename "$(cd "$(dirname "$comun")" && pwd)")"
+  common="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+  [[ -n "$common" ]] && repo="$(basename "$(cd "$(dirname "$common")" && pwd)")"
 
   rc=0
-  bloque="$(node -e '
+  block="$(node -e '
     const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
     const d = c.deploy;
     if (!d) process.exit(2);
@@ -49,68 +49,68 @@ if [[ -z "$URL" ]]; then
     if (!b || !b.url) process.exit(3);
     console.log(b.url);
     for (const p of b.paths || ["/"]) console.log(p);
-  ' "$contrato" "$repo")" || rc=$?
+  ' "$contract" "$repo")" || rc=$?
   case $rc in
     0) ;;
-    2) die "el contrato no declara 'deploy': pásale --url o declara deploy.url en $contrato" ;;
-    3) die "'deploy' no tiene url para el repo '${repo:-?}' en $contrato" ;;
-    *) die "no se pudo leer 'deploy' de $contrato" ;;
+    2) die "the contract does not declare 'deploy': pass --url or declare deploy.url in $contract" ;;
+    3) die "'deploy' has no url for the repo '${repo:-?}' in $contract" ;;
+    *) die "could not read 'deploy' from $contract" ;;
   esac
-  URL="$(echo "$bloque" | sed -n 1p)"
-  if [[ ${#RUTAS[@]} -eq 0 ]]; then
-    while IFS= read -r r; do [[ -n "$r" ]] && RUTAS+=("$r"); done < <(echo "$bloque" | sed -n '2,$p')
+  URL="$(echo "$block" | sed -n 1p)"
+  if [[ ${#PATHS[@]} -eq 0 ]]; then
+    while IFS= read -r r; do [[ -n "$r" ]] && PATHS+=("$r"); done < <(echo "$block" | sed -n '2,$p')
   fi
 fi
 
 URL="${URL%/}"
-[[ "$URL" =~ ^https?:// ]] || die "la url tiene que empezar por http:// o https://, no '$URL'"
-[[ ${#RUTAS[@]} -gt 0 ]] || RUTAS=("/")
+[[ "$URL" =~ ^https?:// ]] || die "the url must start with http:// or https://, not '$URL'"
+[[ ${#PATHS[@]} -gt 0 ]] || PATHS=("/")
 
-cuerpo="$(mktemp)"; trap 'rm -f "$cuerpo"' EXIT
+body="$(mktemp)"; trap 'rm -f "$body"' EXIT
 
-pedir() {
-  # pedir <url>: deja el cuerpo en $cuerpo e imprime "código segundos"
-  curl -sS -L --max-time 20 -o "$cuerpo" -w '%{http_code} %{time_total}' "$1" 2>/dev/null || echo "000 0"
+request() {
+  # request <url>: leaves the body in $body and prints "code seconds"
+  curl -sS -L --max-time 20 -o "$body" -w '%{http_code} %{time_total}' "$1" 2>/dev/null || echo "000 0"
 }
 
 if [[ -n "$EXPECT" ]]; then
-  primera="$URL${RUTAS[0]}"
-  inicio=$(date +%s)
+  first="$URL${PATHS[0]}"
+  start=$(date +%s)
   while :; do
-    pedir "$primera" >/dev/null
-    grep -qF -- "$EXPECT" "$cuerpo" && { ok "la versión nueva ya responde en $primera"; break; }
-    if (( $(date +%s) - inicio >= TIMEOUT )); then
-      err "tras ${TIMEOUT}s, $primera sigue sin contener «$EXPECT»"
-      info "o el despliegue no ha terminado, o ha fallado y sigue la versión anterior"
+    request "$first" >/dev/null
+    grep -qF -- "$EXPECT" "$body" && { ok "the new version is already responding at $first"; break; }
+    if (( $(date +%s) - start >= TIMEOUT )); then
+      err "after ${TIMEOUT}s, $first still does not contain «$EXPECT»"
+      info "either the deployment has not finished, or it failed and the previous version is still live"
       exit 3
     fi
-    sleep "$INTERVALO"
+    sleep "$INTERVAL"
   done
 fi
 
-fallos=0
-echo "rutas en $URL"
-for r in "${RUTAS[@]}"; do
+failures=0
+echo "paths on $URL"
+for r in "${PATHS[@]}"; do
   [[ "$r" == /* ]] || r="/$r"
-  read -r codigo segundos <<< "$(pedir "$URL$r")"
-  ms="$(awk -v s="$segundos" 'BEGIN { printf "%d", s * 1000 }')"
-  if [[ "$codigo" == "000" ]]; then
-    err "$r no responde"; fallos=$((fallos + 1)); continue
+  read -r code seconds <<< "$(request "$URL$r")"
+  ms="$(awk -v s="$seconds" 'BEGIN { printf "%d", s * 1000 }')"
+  if [[ "$code" == "000" ]]; then
+    err "$r does not respond"; failures=$((failures + 1)); continue
   fi
-  if [[ "$codigo" -ge 400 ]]; then
-    err "$r → $codigo (${ms} ms)"; fallos=$((fallos + 1)); continue
+  if [[ "$code" -ge 400 ]]; then
+    err "$r → $code (${ms} ms)"; failures=$((failures + 1)); continue
   fi
-  # Un 200 con la página de error del framework dentro también es un fallo:
-  # algunos sirven el error con código de éxito.
-  if grep -qiE 'Application error: a (client|server)-side exception|Internal Server Error|__NEXT_ERROR__|Traceback \(most recent call last\)' "$cuerpo"; then
-    err "$r → $codigo pero el cuerpo es una página de error (${ms} ms)"; fallos=$((fallos + 1)); continue
+  # A 200 with the framework's error page inside is also a failure: some
+  # serve the error with a success code.
+  if grep -qiE 'Application error: a (client|server)-side exception|Internal Server Error|__NEXT_ERROR__|Traceback \(most recent call last\)' "$body"; then
+    err "$r → $code but the body is an error page (${ms} ms)"; failures=$((failures + 1)); continue
   fi
   if [[ "$ms" -gt 3000 ]]; then
-    warn "$r → $codigo, lento: ${ms} ms"
+    warn "$r → $code, slow: ${ms} ms"
   else
-    ok "$r → $codigo (${ms} ms)"
+    ok "$r → $code (${ms} ms)"
   fi
 done
 
-[[ $fallos -eq 0 ]] || exit 1
+[[ $failures -eq 0 ]] || exit 1
 exit 0

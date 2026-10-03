@@ -1,44 +1,43 @@
 ---
 name: css-to-components
-description: Mover estilos de una hoja CSS global a los componentes que los usan sin cambiar el diseño ni un píxel, midiendo la geometría antes y después en vez de comparar capturas. Usa cuando un fichero CSS global haya crecido hasta ser el sitio donde de verdad se decide el aspecto, cuando quieras adoptar utilidades o un design system sobre una interfaz que ya existe, o cuando te pidan ordenar el CSS "sin tocar el diseño".
+description: Move styles from a global CSS sheet to the components that use them without changing the design by a single pixel, measuring the geometry before and after instead of comparing screenshots. Use when a global CSS file has grown into the place where the look is really decided, when you want to adopt utilities or a design system on an interface that already exists, or when asked to tidy the CSS "sin tocar el diseño".
 ---
 
-# De CSS global a componentes
+# From global CSS to components
 
-Trasladar estilos sin que se muevan. El éxito se mide en que **los valores
-computados sean los mismos** antes y después.
+Move styles without anything shifting. Success is measured by **the computed
+values being the same** before and after.
 
-## Cuándo usar
+## When to use
 
-- Una hoja global concentra el aspecto de la aplicación y crece sola.
-- Se quiere adoptar utilidades o un design system sobre una interfaz existente.
-- El encargo dice explícitamente "sin cambiar el diseño".
+- A global sheet concentrates the application's look and grows on its own.
+- You want to adopt utilities or a design system on an existing interface.
+- The request explicitly says "sin cambiar el diseño".
 
-## La regla que lo sostiene
+## The rule that holds it up
 
-**Mide números, no píxeles.**
+**Measure numbers, not pixels.**
 
-Comparar capturas parece la verificación obvia y es la que más tiempo hace
-perder. Da rojos por cosas que no son el cambio:
+Comparing screenshots seems the obvious verification and is the one that wastes
+the most time. It gives reds for things that are not the change:
 
-- **Contenido que varía solo**: listas que paginan según el alto disponible,
-  registros que crecen con el uso, cualquier pantalla con datos vivos.
-- **Animaciones**: una animación en bucle impide que dos capturas coincidan.
-- **Preferencias del navegador**: un navegador sin cabeza puede arrancar con
-  alto contraste o movimiento reducido activados, y entonces se compara un modo
-  que nadie ve.
-- **Los arreglos legítimos** que se pidan por el camino: en cuanto uno entra,
-  las referencias caducan y el resto de rojos deja de significar nada.
+- **Content that varies by itself**: lists that paginate according to the
+  available height, records that grow with use, any screen with live data.
+- **Animations**: a looping animation prevents two captures from matching.
+- **Browser preferences**: a headless browser can start with high contrast or
+  reduced motion enabled, and then a mode nobody sees is being compared.
+- **Legitimate fixes** requested along the way: as soon as one goes in, the
+  references expire and the rest of the reds stop meaning anything.
 
-Medir la geometría computada no falla por nada de eso, y cuando falla dice qué
-propiedad se movió.
+Measuring the computed geometry does not fail for any of that, and when it fails
+it says which property moved.
 
-## El procedimiento
+## The procedure
 
-### 1. Medir el original
+### 1. Measure the original
 
-Antes de escribir una sola clase, y en los anchos donde el diseño cambia
-(típicamente uno ancho, uno intermedio y uno de móvil):
+Before writing a single class, and at the widths where the design changes
+(typically a wide one, an intermediate one and a mobile one):
 
 ```js
 const caja = (sel) => {
@@ -48,92 +47,93 @@ const caja = (sel) => {
 };
 ```
 
-Guarda también las propiedades que dan forma: `display`, `position`, `padding`,
-`minHeight`, `gridTemplateColumns`, `borderRadius`, `zIndex`. Esa lista es el
-contrato.
+Also save the properties that give shape: `display`, `position`, `padding`,
+`minHeight`, `gridTemplateColumns`, `borderRadius`, `zIndex`. That list is the
+contract.
 
-### 2. Averiguar el valor efectivo
+### 2. Find out the effective value
 
-**El valor que manda no es el primero que aparece en el fichero.** Es habitual
-que al final de una hoja larga haya un bloque que redeclara componentes ya
-definidos arriba y los pisa. Migrar el primero produce un cambio silencioso.
+**The value that rules is not the first one that appears in the file.** It is
+common for a long sheet to have, at the end, a block that redeclares components
+already defined above and overrides them. Migrating the first produces a silent
+change.
 
-El script `scripts/reglas.py` lista **todas** las reglas que tocan un selector,
-en orden y con la media query que las envuelve:
+The script `scripts/reglas.py` lists **all** the rules that touch a selector, in
+order and with the media query wrapping them:
 
 ```bash
-python3 scripts/reglas.py ruta/al/fichero.css "nombre-del-bloque"
+python3 scripts/reglas.py path/to/file.css "block-name"
 ```
 
-### 3. Traducir
+### 3. Translate
 
-Copia los valores tal cual. **No es el momento de unificar**: un tamaño suelto
-se conserva suelto, con su nombre, y se anota. Unificar es otro trabajo y otra
-decisión, casi siempre de diseño y no de desarrollo.
+Copy the values as they are. **This is not the time to unify**: a stray size
+stays stray, with its name, and is noted. Unifying is another job and another
+decision, almost always a design one and not a development one.
 
-Los cortes responsive se traducen literalmente (`max-[900px]:`) aunque no
-coincidan con los del framework. Cambiarlos mueve el diseño.
+Responsive breakpoints are translated literally (`max-[900px]:`) even if they do
+not match the framework's. Changing them moves the design.
 
-### 4. Retirar las reglas
+### 4. Remove the rules
 
-Solo las del bloque migrado, y con cuidado del **selector agrupado**:
+Only those of the migrated block, and careful with the **grouped selector**:
 
 ```css
 .cabecera-pagina p,
 .cabecera-panel p { ... }
 ```
 
-Es una sola regla que sirve a dos clases. Borrarla entera al migrar una deja a
-la otra sin estilo. Cuando el selector es mixto se **poda**: se quitan las
-partes migradas y se conservan las vivas.
+It is a single rule that serves two classes. Deleting it whole when migrating one
+leaves the other without style. When the selector is mixed it is **pruned**: the
+migrated parts are removed and the live ones kept.
 
-### 5. Volver a medir
+### 5. Measure again
 
-Mismo script, mismos anchos. Los números tienen que coincidir. Si no coinciden,
-el que sobra dice dónde mirar.
+Same script, same widths. The numbers have to match. If they do not, the one
+that is off says where to look.
 
-### 6. Si hay que deshacer
+### 6. If it has to be undone
 
-**Siempre con `git checkout`.** Reinsertar reglas a mano cambia el orden de la
-cascada aunque el contenido sea idéntico, y rompe pantallas en silencio. Borrar
-es seguro y reversible; reconstruir a mano, no.
+**Always with `git checkout`.** Reinserting rules by hand changes the cascade
+order even if the content is identical, and silently breaks screens. Deleting is
+safe and reversible; rebuilding by hand is not.
 
-## Antes de empezar, comprobar dos cosas
+## Before starting, check two things
 
-**Que las clases del design system se apliquen de verdad.** Una sintaxis de una
-versión anterior del framework puede no generar ninguna regla, y entonces el CSS
-global es lo único que pinta. Se comprueba buscando la utilidad en la hoja
-compilada, no en el código fuente.
+**That the design system's classes really apply.** A syntax from an earlier
+version of the framework may generate no rule at all, and then the global CSS is
+the only thing painting. It is checked by looking for the utility in the
+compiled sheet, not in the source code.
 
-**Qué reglas de elemento alcanzan el bloque.** Un selector como
-`.contenedor h1` tiene más especificidad que cualquier utilidad y le gana
-siempre. O se saca esa regla a los componentes —lo que afecta a toda la
-aplicación de golpe— o el caso concreto necesita forzarse, y eso se anota como
-excepción.
+**Which element rules reach the block.** A selector like `.contenedor h1` has
+more specificity than any utility and always beats it. Either that rule is moved
+out to the components —which affects the whole application at once— or the
+concrete case needs to be forced, and that is noted as an exception.
 
-## Lo que no se migra
+## What is not migrated
 
-- La geometría de página impresa (`@page`) y las declaraciones de fuentes: no
-  tienen forma de utilidad.
-- Los resets que aplican a todo el árbol (`*`, `prefers-reduced-motion`,
+- The printed-page geometry (`@page`) and font declarations: they have no
+  utility form.
+- Resets that apply to the whole tree (`*`, `prefers-reduced-motion`,
   `prefers-contrast`).
-- Lo que sirva de **gancho** a otra capa: si la hoja de impresión selecciona
-  elementos por su clase, quitarles la clase la rompe. Antes de migrar, se
-  sustituye esa lista de clases por un gancho único aplicado a los contenedores.
+- What serves as a **hook** for another layer: if the print sheet selects
+  elements by their class, removing the class from them breaks it. Before
+  migrating, that class list is replaced by a single hook applied to the
+  containers.
 
-El objetivo no es cero CSS, que sería una meta tonta. Es **cero CSS que compita
-con el design system**: una regla de página impresa no compite con nada; un
-tamaño de fuente decidido a quinientas líneas del componente que lo usa, sí.
+The goal is not zero CSS, which would be a silly target. It is **zero CSS that
+competes with the design system**: a printed-page rule competes with nothing; a
+font size decided five hundred lines away from the component that uses it, does.
 
-## Al terminar
+## When finished
 
-Queda un inventario que antes no se podía hacer: todos los valores sueltos que
-la hoja escondía, ahora con nombre y ubicación. Tamaños fuera de escala, pesos
-intermedios, sombras escritas a mano. **Ese inventario es el material para la
-conversación con diseño**, y es la parte que de verdad unifica el sistema.
+What is left is an inventory that could not be made before: all the stray values
+the sheet was hiding, now with name and location. Sizes off the scale,
+intermediate weights, hand-written shadows. **That inventory is the material for
+the conversation with design**, and it is the part that truly unifies the system.
 
-## Relacionado
+## Related
 
-- `/visual-test` — inspección visual y auditoría de accesibilidad
-- `/visual-diff` — medir contra una referencia de diseño
-- `/root-cause` — cuando un valor no coincide y no se sabe por qué
+- `/visual-test` — visual inspection and accessibility audit
+- `/visual-diff` — measure against a design reference
+- `/root-cause` — when a value does not match and it is not known why

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Materialización de skills para todos los agentes soportados.
+# Skill materialization for all supported agents.
 #
-# Una skill es un directorio con un SKILL.md dentro. El contenido es markdown
-# neutro; cada adaptador decide cómo lo expone su agente.
+# A skill is a directory with a SKILL.md inside. The content is neutral
+# markdown; each adapter decides how its agent exposes it.
 #
-# Requiere CRUX_HOME. Respeta CRUX_DRY_RUN=1.
+# Requires CRUX_HOME. Honours CRUX_DRY_RUN=1.
 
 # shellcheck source=../adapters/claude/materialize.sh
 source "$CRUX_HOME/adapters/claude/materialize.sh"
@@ -12,8 +12,8 @@ source "$CRUX_HOME/adapters/claude/materialize.sh"
 source "$CRUX_HOME/adapters/codex/materialize.sh"
 
 crux_materialize_skills() {
-  # crux_materialize_skills <directorio_que_contiene_skills> [etiqueta]
-  # Acepta tanto un directorio de skills plano como uno con subcategorías.
+  # crux_materialize_skills <directory_containing_skills> [label]
+  # Accepts both a flat skills directory and one with subcategories.
   local root="$1" label="${2:-}"
   local count=0
 

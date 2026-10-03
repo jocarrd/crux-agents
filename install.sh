@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Instalación de crux en una máquina. Idempotente.
+# crux installation on a machine. Idempotent.
 #
-#   ~/Proyectos/crux/install.sh                          instala
-#   ~/Proyectos/crux/install.sh --remote '<plantilla>'    instala fijando el
-#                                                        remoto habitual
-#   ~/Proyectos/crux/install.sh --projects-dir <ruta>    fija la raíz de proyectos
-#   ~/Proyectos/crux/install.sh --dry-run                enseña qué haría
+#   ~/Proyectos/crux/install.sh                          installs
+#   ~/Proyectos/crux/install.sh --remote '<template>'    installs, setting the
+#                                                        usual remote
+#   ~/Proyectos/crux/install.sh --projects-dir <path>    sets the projects root
+#   ~/Proyectos/crux/install.sh --dry-run                shows what it would do
 #
-# La raíz de proyectos es, por defecto, el directorio donde has clonado el
-# kernel: si crux está en /opt/dev/crux, tus proyectos van en /opt/dev. Se puede
-# cambiar, pero conviene que el kernel viva con ellos.
+# The projects root is, by default, the directory where you cloned the kernel:
+# if crux is in /opt/dev/crux, your projects go in /opt/dev. It can be changed,
+# but the kernel should live alongside them.
 #
-# No toca los docs repos de ningún proyecto: para eso están `crux link` y
-# `crux upgrade`.
+# It does not touch any project's docs repos: that is what `crux link` and
+# `crux upgrade` are for.
 
 set -euo pipefail
 
@@ -22,104 +22,109 @@ source "$CRUX_HOME/lib/common.sh"
 source "$CRUX_HOME/lib/skills.sh"
 
 export CRUX_DRY_RUN=0
-REMOTE_DEFECTO=""
-RAIZ_PROYECTOS=""
-MODO="release"
+DEFAULT_REMOTE=""
+PROJECTS_ROOT=""
+MODE="release"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) export CRUX_DRY_RUN=1; shift ;;
-    --dev)     MODO="dev"; shift ;;
-    --remote)  REMOTE_DEFECTO="$2"; shift 2 ;;
-    --projects-dir) RAIZ_PROYECTOS="$2"; shift 2 ;;
+    --dev)     MODE="dev"; shift ;;
+    --remote)  DEFAULT_REMOTE="$2"; shift 2 ;;
+    --projects-dir) PROJECTS_ROOT="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
 
-# Los proyectos consumen el kernel por symlink. Enlazados al working copy, usan
-# lo que haya en él en cada momento: una rama a medias cambia el comportamiento
-# de todos los proyectos sin tocarlos. La copia por versión los desacopla.
-ORIGEN="$CRUX_HOME"
-VERSION_INSTALADA="$(tr -d '[:space:]' < "$ORIGEN/VERSION")"
-# Esta version es parte de la ruta que se borra unas lineas mas abajo, asi que
-# un VERSION con ../ dentro borraba lo que hubiera ahi. es_semver ya existe.
-es_semver "$VERSION_INSTALADA" ||
-  die "VERSION no es una version valida: '$VERSION_INSTALADA'"
+# Projects consume the kernel through a symlink. Linked to the working copy,
+# they use whatever is in it at any moment: a half-finished branch changes the
+# behaviour of every project without touching them. The per-version copy
+# decouples them.
+ORIGIN="$CRUX_HOME"
+INSTALLED_VERSION="$(tr -d '[:space:]' < "$ORIGIN/VERSION")"
+# This version is part of the path that is deleted a few lines below, so a
+# VERSION containing ../ would delete whatever was there. is_semver already
+# exists.
+is_semver "$INSTALLED_VERSION" ||
+  die "VERSION is not a valid version: '$INSTALLED_VERSION'"
 
-# En dev todo cuelga por symlink de este directorio: si es un worktree, al
-# cerrarlo la máquina se queda sin skills. En release da igual, porque se copia.
-if [[ "$MODO" == "dev" ]] && es_worktree "$ORIGEN"; then
-  err "esto es un worktree del kernel: $ORIGEN"
-  info "en dev las skills quedarían colgando de un directorio efímero"
-  info "instala desde el principal ($(repo_principal "$ORIGEN")), o sin --dev"
+# In dev everything hangs off this directory by symlink: if it is a worktree,
+# closing it leaves the machine without skills. In release it does not matter,
+# because everything is copied.
+if [[ "$MODE" == "dev" ]] && is_worktree "$ORIGIN"; then
+  err "this is a kernel worktree: $ORIGIN"
+  info "in dev the skills would hang off an ephemeral directory"
+  info "install from the main checkout ($(main_repo "$ORIGIN")), or without --dev"
   exit 1
 fi
-es_worktree "$ORIGEN" && warn "instalando desde un worktree: la copia será de la rama $(git -C "$ORIGEN" rev-parse --abbrev-ref HEAD)"
-if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" ]]; then
-  DESTINO="$HOME/.crux/kernel/$VERSION_INSTALADA"
-  rm -rf "$DESTINO"
-  mkdir -p "$DESTINO"
-  for pieza in bin lib skills templates profiles adapters VERSION STANDARD.md GUIA.md README.md AGENTS.md; do
-    [[ -e "$ORIGEN/$pieza" ]] && cp -R "$ORIGEN/$pieza" "$DESTINO/"
+is_worktree "$ORIGIN" && warn "installing from a worktree: the copy will be of branch $(git -C "$ORIGIN" rev-parse --abbrev-ref HEAD)"
+if [[ "$MODE" == "release" && "$CRUX_DRY_RUN" == "0" ]]; then
+  TARGET="$HOME/.crux/kernel/$INSTALLED_VERSION"
+  rm -rf "$TARGET"
+  mkdir -p "$TARGET"
+  for piece in bin lib skills templates profiles adapters VERSION STANDARD.md GUIA.md README.md AGENTS.md; do
+    [[ -e "$ORIGIN/$piece" ]] && cp -R "$ORIGIN/$piece" "$TARGET/"
   done
-  CRUX_HOME="$DESTINO"
+  CRUX_HOME="$TARGET"
   export CRUX_HOME
 fi
 
-echo "crux $VERSION_INSTALADA — $CRUX_HOME"
-[[ "$MODO" == "dev" ]] && warn "modo dev: los proyectos usarán tu working copy, tal como esté en cada momento"
-[[ "$CRUX_DRY_RUN" == "1" ]] && warn "dry-run: no se escribe nada"
+echo "crux $INSTALLED_VERSION — $CRUX_HOME"
+[[ "$MODE" == "dev" ]] && warn "dev mode: projects will use your working copy, as it is at any moment"
+[[ "$CRUX_DRY_RUN" == "1" ]] && warn "dry-run: nothing is written"
 echo
 
-# --- 1. Config de máquina ----------------------------------------------------
+# --- 1. Machine config ----------------------------------------------------
 
-# La raíz se deduce del clon del kernel, no de $CRUX_HOME: en release este ya
-# apunta a ~/.crux/kernel/<version>, cuyo padre es el directorio de kernels y no
-# contiene ningún proyecto. Con esa raíz, la comprobación de consumidores de
-# `crux release` no encontraba a nadie y publicaba sin verificar nada.
-# Precedencia: la bandera, lo ya declarado, y por último la deducción.
-RAIZ_ORIGEN_TEXTO="deducida de dónde está el clon del kernel"
-RAIZ_POR_BANDERA=0
-[[ -n "$RAIZ_PROYECTOS" ]] && RAIZ_POR_BANDERA=1
-if [[ -z "$RAIZ_PROYECTOS" && -f "$HOME/.crux/config" ]]; then
-  declarada="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
-  # El directorio de kernels es donde una instalación anterior dejó escrita la
-  # raíz mal deducida. Conservarlo sería conservar el fallo en toda máquina ya
-  # instalada, así que se descarta y se vuelve a deducir.
-  if [[ -n "$declarada" && "$declarada" == "$HOME/.crux/kernel" ]]; then
-    warn "la raíz declarada era el directorio de kernels: se corrige"
-    declarada=""
+# The root is deduced from the kernel clone, not from $CRUX_HOME: in release
+# the latter already points to ~/.crux/kernel/<version>, whose parent is the
+# kernels directory and contains no project. With that root, the consumer
+# check of `crux release` found nobody and published without verifying
+# anything. Precedence: the flag, then what is already declared, then the
+# deduction.
+ROOT_ORIGIN_TEXT="deduced from where the kernel clone is"
+ROOT_FROM_FLAG=0
+[[ -n "$PROJECTS_ROOT" ]] && ROOT_FROM_FLAG=1
+if [[ -z "$PROJECTS_ROOT" && -f "$HOME/.crux/config" ]]; then
+  declared="$(grep -E '^CRUX_PROJECTS_DIR=' "$HOME/.crux/config" | cut -d= -f2- | tr -d '"' || true)"
+  # The kernels directory is where an earlier install left the wrongly deduced
+  # root written. Keeping it would keep the bug on every machine already
+  # installed, so it is discarded and deduced again.
+  if [[ -n "$declared" && "$declared" == "$HOME/.crux/kernel" ]]; then
+    warn "the declared root was the kernels directory: fixing it"
+    declared=""
   fi
-  if [[ -n "$declarada" ]]; then
-    RAIZ_PROYECTOS="$declarada"
-    RAIZ_ORIGEN_TEXTO="conservada de la instalación anterior"
+  if [[ -n "$declared" ]]; then
+    PROJECTS_ROOT="$declared"
+    ROOT_ORIGIN_TEXT="kept from the previous install"
   fi
 fi
-RAIZ_EFECTIVA="${RAIZ_PROYECTOS:-$(dirname "$ORIGEN")}"
+EFFECTIVE_ROOT="${PROJECTS_ROOT:-$(dirname "$ORIGIN")}"
 
 if [[ "$CRUX_DRY_RUN" == "0" ]]; then
   mkdir -p "$HOME/.crux"
-  # Se conserva el remoto por defecto si ya estaba: reinstalar no debe borrarlo.
-  anterior=""
-  [[ -f "$HOME/.crux/config" ]] && anterior="$(grep -E '^CRUX_REMOTE=' "$HOME/.crux/config" || true)"
+  # The default remote is kept if it was already there: reinstalling must not
+  # delete it.
+  previous=""
+  [[ -f "$HOME/.crux/config" ]] && previous="$(grep -E '^CRUX_REMOTE=' "$HOME/.crux/config" || true)"
   cat > "$HOME/.crux/config" <<EOF
-# Generado por crux install.sh
+# Generated by crux install.sh
 CRUX_HOME="$CRUX_HOME"
-CRUX_MODE="$MODO"
+CRUX_MODE="$MODE"
 EOF
-  if [[ -n "$REMOTE_DEFECTO" ]]; then
-    echo "CRUX_REMOTE=\"$REMOTE_DEFECTO\"" >> "$HOME/.crux/config"
-  elif [[ -n "$anterior" ]]; then
-    echo "$anterior" >> "$HOME/.crux/config"
+  if [[ -n "$DEFAULT_REMOTE" ]]; then
+    echo "CRUX_REMOTE=\"$DEFAULT_REMOTE\"" >> "$HOME/.crux/config"
+  elif [[ -n "$previous" ]]; then
+    echo "$previous" >> "$HOME/.crux/config"
   fi
-  # Se deja escrita para que la lean también los hooks y los scripts de node,
-  # que no pasan por lib/common.sh.
-  echo "CRUX_PROJECTS_DIR=\"$RAIZ_EFECTIVA\"" >> "$HOME/.crux/config"
+  # Written so that the hooks and node scripts, which do not go through
+  # lib/common.sh, can read it too.
+  echo "CRUX_PROJECTS_DIR=\"$EFFECTIVE_ROOT\"" >> "$HOME/.crux/config"
 fi
-ok "config en ~/.crux/config"
-info "raíz de proyectos: $RAIZ_EFECTIVA"
-[[ "$RAIZ_POR_BANDERA" == "0" ]] && info "($RAIZ_ORIGEN_TEXTO; cámbiala con --projects-dir)"
+ok "config in ~/.crux/config"
+info "projects root: $EFFECTIVE_ROOT"
+[[ "$ROOT_FROM_FLAG" == "0" ]] && info "($ROOT_ORIGIN_TEXT; change it with --projects-dir)"
 
-# --- 2. Comando en el PATH ---------------------------------------------------
+# --- 2. Command on the PATH ---------------------------------------------------
 
 BIN_DIR="$HOME/.local/bin"
 if [[ "$CRUX_DRY_RUN" == "0" ]]; then
@@ -127,80 +132,80 @@ if [[ "$CRUX_DRY_RUN" == "0" ]]; then
   ln -sfn "$CRUX_HOME/bin/crux" "$BIN_DIR/crux"
   chmod +x "$CRUX_HOME/bin/crux" "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/lib/*.sh "$CRUX_HOME"/lib/*.mjs 2>/dev/null || true
 fi
-ok "comando en $BIN_DIR/crux"
+ok "command in $BIN_DIR/crux"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
-  *) warn "$BIN_DIR no está en tu PATH — añádelo para usar 'crux' directamente" ;;
+  *) warn "$BIN_DIR is not on your PATH — add it to use 'crux' directly" ;;
 esac
 
-# --- 3. Skills del kernel ----------------------------------------------------
+# --- 3. Kernel skills ----------------------------------------------------
 
 crux_materialize_skills "$CRUX_HOME/skills" "kernel"
-ok "skills del kernel materializadas (Claude + Codex)"
+ok "kernel skills materialized (Claude + Codex)"
 
-# Los hooks del agente llevan la versión en la ruta: sin esto, la sesión seguía
-# ejecutando el kernel anterior hasta un 'crux hooks install' que nadie lanzaba.
-AJUSTES="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$AJUSTES" ]]; then
-  movidos="$(node -e '
+# The agent hooks carry the version in the path: without this, the session kept
+# running the previous kernel until a 'crux hooks install' that nobody ran.
+SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+if [[ "$MODE" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$SETTINGS" ]]; then
+  moved="$(node -e '
     const fs = require("fs");
-    const [file, kernels, destino] = process.argv.slice(1);
+    const [file, kernels, target] = process.argv.slice(1);
     const s = JSON.parse(fs.readFileSync(file, "utf8"));
     const esc = kernels.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const viejo = new RegExp(`${esc}/[^/]+/adapters/`, "g");
+    const old = new RegExp(`${esc}/[^/]+/adapters/`, "g");
     let n = 0;
-    for (const grupos of Object.values(s.hooks || {})) for (const g of grupos) for (const h of g.hooks || []) {
-      const cmd = (h.command || "").replace(viejo, `${destino}/adapters/`);
+    for (const groups of Object.values(s.hooks || {})) for (const g of groups) for (const h of g.hooks || []) {
+      const cmd = (h.command || "").replace(old, `${target}/adapters/`);
       if (cmd !== h.command) { h.command = cmd; n++; }
     }
     const dirs = s.env?.CLAUDE_CODE_PLUGIN_DIRS;
     if (dirs) {
-      const nuevo = dirs.replace(new RegExp(`${esc}/[^/:]+/adapters/`, "g"), `${destino}/adapters/`);
-      if (nuevo !== dirs) { s.env.CLAUDE_CODE_PLUGIN_DIRS = nuevo; n++; }
+      const updated = dirs.replace(new RegExp(`${esc}/[^/:]+/adapters/`, "g"), `${target}/adapters/`);
+      if (updated !== dirs) { s.env.CLAUDE_CODE_PLUGIN_DIRS = updated; n++; }
     }
     if (n) fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
     process.stdout.write(String(n));
-  ' "$AJUSTES" "$HOME/.crux/kernel" "$CRUX_HOME")"
-  [[ "$movidos" != "0" ]] && ok "hooks del agente movidos a $VERSION_INSTALADA ($movidos)"
+  ' "$SETTINGS" "$HOME/.crux/kernel" "$CRUX_HOME")"
+  [[ "$moved" != "0" ]] && ok "agent hooks moved to $INSTALLED_VERSION ($moved)"
 fi
 
-# Lo mismo para los hooks de Codex, que llevan la versión en la ruta igual.
+# Same for the Codex hooks, which also carry the version in the path.
 CODEX_HOOKS="${CODEX_HOME_DIR:-${CODEX_HOME:-$HOME/.codex}}/hooks.json"
-if [[ "$MODO" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$CODEX_HOOKS" ]]; then
-  movidos="$(node -e '
+if [[ "$MODE" == "release" && "$CRUX_DRY_RUN" == "0" && -f "$CODEX_HOOKS" ]]; then
+  moved="$(node -e '
     const fs = require("fs");
-    const [file, kernels, destino] = process.argv.slice(1);
+    const [file, kernels, target] = process.argv.slice(1);
     const s = JSON.parse(fs.readFileSync(file, "utf8"));
     const esc = kernels.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const viejo = new RegExp(`${esc}/[^/]+/adapters/`, "g");
+    const old = new RegExp(`${esc}/[^/]+/adapters/`, "g");
     let n = 0;
-    for (const grupos of Object.values(s.hooks || {})) for (const g of grupos) for (const h of g.hooks || []) {
-      const cmd = (h.command || "").replace(viejo, `${destino}/adapters/`);
+    for (const groups of Object.values(s.hooks || {})) for (const g of groups) for (const h of g.hooks || []) {
+      const cmd = (h.command || "").replace(old, `${target}/adapters/`);
       if (cmd !== h.command) { h.command = cmd; n++; }
     }
     if (n) fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
     process.stdout.write(String(n));
   ' "$CODEX_HOOKS" "$HOME/.crux/kernel" "$CRUX_HOME")"
-  [[ "$movidos" != "0" ]] && ok "hooks de Codex movidos a $VERSION_INSTALADA ($movidos)"
+  [[ "$moved" != "0" ]] && ok "Codex hooks moved to $INSTALLED_VERSION ($moved)"
 fi
 
-# --- 4. Contexto global por agente ------------------------------------------
+# --- 4. Global context per agent ------------------------------------------
 
 codex_materialize_global "$CRUX_HOME"
-ok "contexto global de Codex en ~/.codex/AGENTS.md"
+ok "global Codex context in ~/.codex/AGENTS.md"
 
 claude_materialize_global "$CRUX_HOME"
-ok "contexto global de Claude verificado"
+ok "global Claude context verified"
 
 echo
-if [[ "$MODO" == "release" ]]; then
-  echo "Instalado $VERSION_INSTALADA en $CRUX_HOME"
-  echo "Tus proyectos usan esa copia, no tu working copy: al cambiar el kernel, repite el install."
-  echo "Para desarrollar el propio kernel: install.sh --dev"
+if [[ "$MODE" == "release" ]]; then
+  echo "Installed $INSTALLED_VERSION in $CRUX_HOME"
+  echo "Your projects use that copy, not your working copy: when the kernel changes, run the install again."
+  echo "To develop the kernel itself: install.sh --dev"
 else
-  echo "Modo dev: enlazado a $CRUX_HOME"
-  echo "Para volver a una versión inmutable: install.sh"
+  echo "Dev mode: linked to $CRUX_HOME"
+  echo "To go back to an immutable version: install.sh"
 fi
 echo
-echo "Siguiente paso: en el docs repo de un proyecto, 'crux adopt' o 'crux doctor'."
-echo "Para un proyecto nuevo: 'crux init <project>'."
+echo "Next step: in a project's docs repo, 'crux adopt' or 'crux doctor'."
+echo "For a new project: 'crux init <project>'."

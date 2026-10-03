@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Marcadores de interfaz generada, medidos sobre la página renderizada.
-// Uso:
-//   node ui-tells.mjs revisar <url> [url...]   # cuenta los marcadores
-//   node ui-tells.mjs detalle <url>            # enseña cada caso con su texto
+// Markers of generated UI, measured on the rendered page.
+// Usage:
+//   node ui-tells.mjs check <url> [url...]   # counts the markers
+//   node ui-tells.mjs detail <url>           # shows each case with its text
+// (revisar / detalle still work)
 //
-// Requiere: google-chrome instalado y `npm i playwright-core` en el cwd.
+// Requires: google-chrome installed and `npm i playwright-core` in the cwd.
 import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
@@ -19,209 +20,209 @@ const CHROME =
 
 const DESKTOP = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }
 
-// Los que puntúan son fallos objetivos: o el texto cabe o no cabe, o la
-// navegación ocupa 80px o no. Los que solo informan dependen del criterio de
-// quien diseña, y una expresión regular no puede decidir por él.
-const PUNTUAN = ['rayaLarga', 'heroFuera', 'navAlta', 'ctaPartido', 'alturaFija']
-const INFORMAN = [
-  'tresIguales',
+// The scored ones are objective failures: the text either fits or it does
+// not, the navigation is either 80px tall or it is not. The merely reported
+// ones depend on the designer's judgement, and a regex cannot decide for them.
+const SCORED = ['emDash', 'heroOverflow', 'tallNav', 'splitCta', 'fixedHeight']
+const REPORTED = [
+  'equalThree',
   'eyebrows',
-  'puntoMedio',
-  'eyebrowNumerada',
-  'cromoFalso',
+  'midDot',
+  'numberedEyebrow',
+  'fakeChrome',
   'scrollCue',
-  'versionEnHero',
-  'nombreGenerico',
-  'cifraRedonda',
-  'verboRelleno',
+  'heroVersion',
+  'genericName',
+  'roundFigure',
+  'fillerVerb',
 ]
 
-const ETIQUETAS = {
-  rayaLarga: 'Raya larga (— o –) en texto visible',
-  heroFuera: 'El titular o la llamada a la acción no caben en la primera pantalla',
-  navAlta: 'Navegación de más de 80px o partida en dos líneas',
-  ctaPartido: 'Etiqueta de un botón partida en dos líneas',
-  alturaFija: 'Altura 100vh en vez de 100dvh',
-  tresIguales: 'Rejilla de tres columnas iguales',
-  eyebrows: 'Antetítulos en versalita por encima del tope',
-  puntoMedio: 'Líneas con más de un punto medio (·)',
-  eyebrowNumerada: 'Antetítulo numerado (001 ·, 00 / INDEX)',
-  cromoFalso: 'Ventana falsa dibujada con divs',
-  scrollCue: 'Indicación de «scroll» escrita',
-  versionEnHero: 'Etiqueta de versión o beta en la primera pantalla',
-  nombreGenerico: 'Nombre o marca de relleno (Acme, John Doe, Lorem)',
-  cifraRedonda: 'Cifra falsamente redonda (99,9 %, 50 %, 10.000)',
-  verboRelleno: 'Verbo de folleto (impulsar, potenciar, unleash, seamless)',
+const LABELS = {
+  emDash: 'Em or en dash (— or –) in visible text',
+  heroOverflow: 'The headline or call to action do not fit on the first screen',
+  tallNav: 'Navigation taller than 80px or split over two lines',
+  splitCta: 'Button label split over two lines',
+  fixedHeight: 'Height 100vh instead of 100dvh',
+  equalThree: 'Grid of three equal columns',
+  eyebrows: 'Small-caps eyebrows above the cap',
+  midDot: 'Lines with more than one middle dot (·)',
+  numberedEyebrow: 'Numbered eyebrow (001 ·, 00 / INDEX)',
+  fakeChrome: 'Fake window drawn with divs',
+  scrollCue: 'Written "scroll" hint',
+  heroVersion: 'Version or beta label on the first screen',
+  genericName: 'Placeholder name or brand (Acme, John Doe, Lorem)',
+  roundFigure: 'Falsely round figure (99.9%, 50%, 10,000)',
+  fillerVerb: 'Brochure verb (impulsar, potenciar, unleash, seamless)',
 }
 
-const MEDIDA = `(() => {
+const MEASURE = `(() => {
   const visible = (e) => {
     const s = getComputedStyle(e)
     if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity === 0) return false
     const r = e.getBoundingClientRect()
     return r.width > 0 && r.height > 0
   }
-  const hojas = () => {
+  const sheets = () => {
     let css = ''
-    for (const h of document.styleSheets) {
+    for (const sheet of document.styleSheets) {
       try {
-        for (const r of h.cssRules) css += r.cssText
+        for (const r of sheet.cssRules) css += r.cssText
       } catch (e) {}
     }
     return css
   }
-  const texto = document.body.innerText
-  const lineas = texto.split('\\n').map((l) => l.trim()).filter(Boolean)
-  const todos = [...document.querySelectorAll('body *')].filter(visible)
-  const hojas_css = hojas()
-  const alto = innerHeight
-  const casos = {}
-  const anota = (clave, muestra) => {
-    casos[clave] = casos[clave] || []
-    if (casos[clave].length < 12) casos[clave].push(String(muestra).slice(0, 110))
+  const text = document.body.innerText
+  const lines = text.split('\\n').map((l) => l.trim()).filter(Boolean)
+  const all = [...document.querySelectorAll('body *')].filter(visible)
+  const cssText = sheets()
+  const viewportHeight = innerHeight
+  const cases = {}
+  const note = (key, sample) => {
+    cases[key] = cases[key] || []
+    if (cases[key].length < 12) cases[key].push(String(sample).slice(0, 110))
   }
 
-  for (const l of lineas) if (/[—–]/.test(l)) anota('rayaLarga', l)
+  for (const l of lines) if (/[—–]/.test(l)) note('emDash', l)
 
   const h1 = document.querySelector('h1')
   if (h1) {
     const r = h1.getBoundingClientRect()
-    if (r.bottom > alto) anota('heroFuera', 'el h1 termina en ' + Math.round(r.bottom) + 'px')
+    if (r.bottom > viewportHeight) note('heroOverflow', 'the h1 ends at ' + Math.round(r.bottom) + 'px')
     const cta = [...document.querySelectorAll('a,button')].filter(visible).find((e) => {
       const c = e.getBoundingClientRect()
       return c.top > r.top && (e.innerText || '').trim().length > 1
     })
-    if (cta && cta.getBoundingClientRect().bottom > alto) {
-      anota('heroFuera', 'la primera llamada a la acción cae fuera: ' + cta.innerText.trim())
+    if (cta && cta.getBoundingClientRect().bottom > viewportHeight) {
+      note('heroOverflow', 'the first call to action falls outside: ' + cta.innerText.trim())
     }
   }
 
   const nav = document.querySelector('header nav, nav, header')
   if (nav && visible(nav)) {
     const r = nav.getBoundingClientRect()
-    if (r.height > 80) anota('navAlta', Math.round(r.height) + 'px de alto')
-    // Dos enlaces están en filas distintas solo si los separa más de media
-    // altura de enlace. Unos pocos píxeles son alineación, no salto de línea.
-    const enlaces = [...nav.querySelectorAll('a')].filter(visible)
-    const cajas = enlaces.map((a) => a.getBoundingClientRect())
-    const holgura = Math.max(12, Math.max(...cajas.map((c) => c.height), 0) / 2)
-    const filas = []
-    for (const c of cajas.sort((a, b) => a.top - b.top)) {
-      if (!filas.length || c.top - filas[filas.length - 1] > holgura) filas.push(c.top)
+    if (r.height > 80) note('tallNav', Math.round(r.height) + 'px tall')
+    // Two links are on different rows only if more than half a link height
+    // separates them. A few pixels is alignment, not a line break.
+    const links = [...nav.querySelectorAll('a')].filter(visible)
+    const boxes = links.map((a) => a.getBoundingClientRect())
+    const slack = Math.max(12, Math.max(...boxes.map((c) => c.height), 0) / 2)
+    const rows = []
+    for (const c of boxes.sort((a, b) => a.top - b.top)) {
+      if (!rows.length || c.top - rows[rows.length - 1] > slack) rows.push(c.top)
     }
-    if (enlaces.length > 2 && filas.length > 1) {
-      anota('navAlta', 'los enlaces ocupan ' + filas.length + ' filas')
+    if (links.length > 2 && rows.length > 1) {
+      note('tallNav', 'the links span ' + rows.length + ' rows')
     }
   }
 
-  // Contar rectángulos de un rango sobre el propio texto es lo único que
-  // distingue una etiqueta partida de uná con mucho relleno vertical.
-  const filasDeTexto = (e) => {
-    let filas = 0
+  // Counting the rectangles of a range over the text itself is the only thing
+  // that tells a split label from one with a lot of vertical padding.
+  const textRows = (e) => {
+    let rows = 0
     for (const n of e.childNodes) {
       if (n.nodeType !== 3 || !n.textContent.trim()) continue
       const r = document.createRange()
       r.selectNodeContents(n)
-      const cajas = [...r.getClientRects()].filter((c) => c.width > 1 && c.height > 1)
-      const tops = new Set(cajas.map((c) => Math.round(c.top / 4)))
-      filas = Math.max(filas, tops.size)
+      const boxes = [...r.getClientRects()].filter((c) => c.width > 1 && c.height > 1)
+      const tops = new Set(boxes.map((c) => Math.round(c.top / 4)))
+      rows = Math.max(rows, tops.size)
     }
-    return filas
+    return rows
   }
   for (const e of [...document.querySelectorAll('a,button')].filter(visible)) {
     const t = (e.innerText || '').trim()
     if (!t || t.length > 40 || t.includes('\\n')) continue
-    if (filasDeTexto(e) > 1) anota('ctaPartido', t)
+    if (textRows(e) > 1) note('splitCta', t)
   }
 
-  // 100vh no encoge cuando el navegador móvil esconde la barra de direcciones,
-  // así que el contenido pega un salto. 100dvh sí. calc() sobre 100vh cuenta
-  // igual: arrastra el mismo error.
-  for (const trozo of hojas_css.match(/[^{}]+\\{[^{}]*100vh[^{}]*\\}/g) || []) {
-    anota('alturaFija', trozo.replace(/\\s+/g, ' ').slice(0, 100))
+  // 100vh does not shrink when the mobile browser hides the address bar, so
+  // the content jumps. 100dvh does. calc() over 100vh counts the same: it
+  // carries the same bug.
+  for (const chunk of cssText.match(/[^{}]+\\{[^{}]*100vh[^{}]*\\}/g) || []) {
+    note('fixedHeight', chunk.replace(/\\s+/g, ' ').slice(0, 100))
   }
 
-  for (const e of todos) {
+  for (const e of all) {
     const s = getComputedStyle(e)
     if (s.display !== 'grid') continue
     const cols = s.gridTemplateColumns.split(' ').filter(Boolean)
     if (cols.length !== 3) continue
     if (new Set(cols.map((c) => Math.round(parseFloat(c)))).size !== 1) continue
     if (e.children.length !== 3) continue
-    anota('tresIguales', (e.innerText || '').replace(/\\s+/g, ' ').slice(0, 90))
+    note('equalThree', (e.innerText || '').replace(/\\s+/g, ' ').slice(0, 90))
   }
 
-  const secciones = Math.max(1, document.querySelectorAll('section').length)
-  const tope = Math.ceil(secciones / 3)
-  const cejas = todos.filter((e) => {
+  const sections = Math.max(1, document.querySelectorAll('section').length)
+  const cap = Math.ceil(sections / 3)
+  const eyebrowEls = all.filter((e) => {
     if (e.children.length) return false
     const t = (e.textContent || '').trim()
     if (t.length < 2 || t.length > 42) return false
     const s = getComputedStyle(e)
-    const mayus = s.textTransform === 'uppercase' || (t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t))
-    return mayus && parseFloat(s.letterSpacing) > 0.8
+    const upper = s.textTransform === 'uppercase' || (t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t))
+    return upper && parseFloat(s.letterSpacing) > 0.8
   })
-  for (const c of cejas) {
+  for (const c of eyebrowEls) {
     const t = c.textContent.trim()
-    if (/^[0-9]{2,3}\\s*[\\/·.-]|^[0-9]{2,3}\\s+[A-Za-zÁ-Úá-ú]/.test(t)) anota('eyebrowNumerada', t)
+    if (/^[0-9]{2,3}\\s*[\\/·.-]|^[0-9]{2,3}\\s+[A-Za-zÁ-Úá-ú]/.test(t)) note('numberedEyebrow', t)
   }
-  if (cejas.length > tope) {
-    anota('eyebrows', cejas.length + ' antetítulos para ' + secciones + ' secciones (tope ' + tope + ')')
+  if (eyebrowEls.length > cap) {
+    note('eyebrows', eyebrowEls.length + ' eyebrows for ' + sections + ' sections (cap ' + cap + ')')
   }
 
-  for (const l of lineas) if ((l.match(/·/g) || []).length > 1) anota('puntoMedio', l)
+  for (const l of lines) if ((l.match(/·/g) || []).length > 1) note('midDot', l)
 
-  for (const e of todos) {
-    const hijos = [...e.children].filter(visible)
-    if (hijos.length < 3) continue
-    const puntos = hijos.filter((h) => {
+  for (const e of all) {
+    const kids = [...e.children].filter(visible)
+    if (kids.length < 3) continue
+    const dots = kids.filter((h) => {
       const r = h.getBoundingClientRect()
       const s = getComputedStyle(h)
       return r.width < 18 && r.height < 18 && Math.abs(r.width - r.height) < 4 &&
         parseFloat(s.borderRadius) >= r.width / 2 - 1 && !(h.innerText || '').trim()
     })
-    if (puntos.length < 3) continue
-    const y = new Set(puntos.map((p) => Math.round(p.getBoundingClientRect().top)))
+    if (dots.length < 3) continue
+    const y = new Set(dots.map((p) => Math.round(p.getBoundingClientRect().top)))
     if (y.size !== 1) continue
-    // Un marco de ventana alrededor de una captura real es legítimo. El tell es
-    // dibujar la interfaz entera con divs, sin imagen ninguna dentro.
-    const marco = e.closest('figure, div, section') || e
-    const raiz = marco.parentElement || marco
-    if (raiz.querySelector('img, canvas, video, picture, svg image')) continue
-    anota('cromoFalso', (raiz.innerText || '').replace(/\\s+/g, ' ').slice(0, 80) || 'ventana dibujada con divs')
+    // A window frame around a real screenshot is legitimate. The tell is
+    // drawing the whole interface with divs, with no image inside.
+    const frame = e.closest('figure, div, section') || e
+    const root = frame.parentElement || frame
+    if (root.querySelector('img, canvas, video, picture, svg image')) continue
+    note('fakeChrome', (root.innerText || '').replace(/\\s+/g, ' ').slice(0, 80) || 'window drawn with divs')
   }
 
-  for (const l of lineas) {
+  for (const l of lines) {
     if (/^(scroll|desliza|↓\\s*scroll|scroll to explore|scroll para)\\b/i.test(l) && l.length < 30) {
-      anota('scrollCue', l)
+      note('scrollCue', l)
     }
   }
 
-  for (const e of todos) {
-    if (e.getBoundingClientRect().top > alto) continue
+  for (const e of all) {
+    if (e.getBoundingClientRect().top > viewportHeight) continue
     const t = (e.textContent || '').trim()
     if (e.children.length || t.length > 26) continue
     if (/\\b(beta|alpha|early access|invite[- ]only|v\\d+(\\.\\d+)+|rc\\.\\d+)\\b/i.test(t)) {
-      anota('versionEnHero', t)
+      note('heroVersion', t)
     }
   }
 
-  const genericos = /\\b(acme|john doe|jane doe|jack su|sarah chan|lorem ipsum|nexus|smartflow|cloudly|example\\.com|foo ?bar)\\b/i
-  for (const l of lineas) if (genericos.test(l)) anota('nombreGenerico', l)
+  const generics = /\\b(acme|john doe|jane doe|jack su|sarah chan|lorem ipsum|nexus|smartflow|cloudly|example\\.com|foo ?bar)\\b/i
+  for (const l of lines) if (generics.test(l)) note('genericName', l)
 
-  for (const l of lineas) {
+  for (const l of lines) {
     if (/(^|\\s)(99[.,]9{1,2}\\s?%|100\\s?%|50\\s?%|10\\.000|1\\.000\\.000|1234567)(\\s|$)/.test(l) && l.length < 60) {
-      anota('cifraRedonda', l)
+      note('roundFigure', l)
     }
   }
 
-  const relleno = /\\b(impulsar|potenciar|revolucionar|desbloquear|empoderar|sin fisuras|de nueva generaci[oó]n|elevate|unleash|seamless|next[- ]gen|revolutioniz\\w*|supercharge|empower)\\b/i
-  for (const l of lineas) if (relleno.test(l)) anota('verboRelleno', l)
+  const filler = /\\b(impulsar|potenciar|revolucionar|desbloquear|empoderar|sin fisuras|de nueva generaci[oó]n|elevate|unleash|seamless|next[- ]gen|revolutioniz\\w*|supercharge|empower)\\b/i
+  for (const l of lines) if (filler.test(l)) note('fillerVerb', l)
 
-  return { casos, secciones, lineas: lineas.length }
+  return { cases, sections, lines: lines.length }
 })()`
 
-async function medir(url) {
+async function measure(url) {
   const browser = await chromium.launch({
     executablePath: CHROME,
     args: ['--no-sandbox'],
@@ -231,62 +232,64 @@ async function medir(url) {
     const page = await ctx.newPage()
     await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 })
     await page.waitForTimeout(900)
-    return await page.evaluate(MEDIDA)
+    return await page.evaluate(MEASURE)
   } finally {
     await browser.close()
   }
 }
 
-function fila(clave, n) {
-  const marca = n === 0 ? '   ' : PUNTUAN.includes(clave) ? '🔴 ' : '⚠️  '
-  return `${marca}${String(n).padStart(3)}  ${ETIQUETAS[clave]}`
+function row(key, n) {
+  const marker = n === 0 ? '   ' : SCORED.includes(key) ? '🔴 ' : '⚠️  '
+  return `${marker}${String(n).padStart(3)}  ${LABELS[key]}`
 }
 
-function informe(url, r, detalle) {
-  const carga = PUNTUAN.reduce((s, k) => s + (r.casos[k]?.length || 0), 0)
-  const avisos = INFORMAN.reduce((s, k) => s + (r.casos[k]?.length || 0), 0)
+function report(url, r, detail) {
+  const load = SCORED.reduce((s, k) => s + (r.cases[k]?.length || 0), 0)
+  const warnings = REPORTED.reduce((s, k) => s + (r.cases[k]?.length || 0), 0)
 
   console.log(`\n${url}`)
-  console.log(`${r.lineas} líneas de texto · ${r.secciones} secciones\n`)
-  console.log('  fallos objetivos')
-  for (const k of PUNTUAN) console.log('  ' + fila(k, r.casos[k]?.length || 0))
-  console.log('\n  indicios, decide tú')
-  for (const k of INFORMAN) console.log('  ' + fila(k, r.casos[k]?.length || 0))
+  console.log(`${r.lines} lines of text · ${r.sections} sections\n`)
+  console.log('  objective failures')
+  for (const k of SCORED) console.log('  ' + row(k, r.cases[k]?.length || 0))
+  console.log('\n  hints, your call')
+  for (const k of REPORTED) console.log('  ' + row(k, r.cases[k]?.length || 0))
 
-  if (detalle) {
+  if (detail) {
     console.log('')
-    for (const k of [...PUNTUAN, ...INFORMAN]) {
-      const casos = r.casos[k]
-      if (!casos?.length) continue
-      console.log(`\n  ${ETIQUETAS[k]}`)
-      for (const c of casos) console.log('    · ' + c)
+    for (const k of [...SCORED, ...REPORTED]) {
+      const cases = r.cases[k]
+      if (!cases?.length) continue
+      console.log(`\n  ${LABELS[k]}`)
+      for (const c of cases) console.log('    · ' + c)
     }
   }
 
   console.log(
-    `\ncarga ${carga} · ${avisos} indicios — ` +
-      (carga === 0
-        ? avisos === 0
-          ? 'limpio'
-          : 'sin fallos objetivos, mira los indicios'
-        : 'hay fallos que arreglar'),
+    `\nload ${load} · ${warnings} hints — ` +
+      (load === 0
+        ? warnings === 0
+          ? 'clean'
+          : 'no objective failures, look at the hints'
+        : 'there are failures to fix'),
   )
-  return carga
+  return load
 }
 
-const [modo, ...urls] = process.argv.slice(2)
-if (!modo || !urls.length || !['revisar', 'detalle'].includes(modo)) {
-  console.log('uso: ui-tells.mjs revisar <url> [url...]  |  ui-tells.mjs detalle <url>')
+const [rawMode, ...urls] = process.argv.slice(2)
+const MODE_ALIASES = { check: 'revisar', detail: 'detalle' }
+const mode = MODE_ALIASES[rawMode] || rawMode
+if (!mode || !urls.length || !['revisar', 'detalle'].includes(mode)) {
+  console.log('usage: ui-tells.mjs check <url> [url...]  |  ui-tells.mjs detail <url>')
   process.exit(2)
 }
 
-let peor = 0
+let worst = 0
 for (const url of urls) {
-  const r = await medir(url)
-  peor = Math.max(peor, informe(url, r, modo === 'detalle'))
+  const r = await measure(url)
+  worst = Math.max(worst, report(url, r, mode === 'detalle'))
 }
 console.log(
-  '\nLos fallos objetivos se arreglan. Los indicios son criterio: una rejilla de\n' +
-    'tres columnas puede ser exactamente lo que pide el contenido.',
+  '\nObjective failures get fixed. Hints are judgement: a grid of three\n' +
+    'columns may be exactly what the content calls for.',
 )
-process.exit(peor > 0 ? 1 : 0)
+process.exit(worst > 0 ? 1 : 0)

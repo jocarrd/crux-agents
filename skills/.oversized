@@ -1,4 +1,4 @@
-# Skills que ya pasaban de 1.000 palabras cuando entró el tope (28-09-2026),
-# con su tamaño de entonces. Solo pueden encoger: al bajar del tope, se quitan
-# de aquí. Lo comprueba lib/check-skill-description.mjs.
-# Vacía desde el 28-09-2026: todas las skills del kernel caben en el tope.
+# Skills that already went over 1,000 words when the cap came in (2026-09-28),
+# with their size at the time. They can only shrink: once under the cap, they
+# are removed from here. Checked by lib/check-skill-description.mjs.
+# Empty since 2026-09-28: every kernel skill fits under the cap.

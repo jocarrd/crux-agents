@@ -1,81 +1,81 @@
 #!/usr/bin/env node
-// Traduce el bloque `mcp` del contrato al fichero que lee Claude Code.
+// Translates the contract's `mcp` block into the file Claude Code reads.
 //
-//   mcp.mjs write <crux.json> <destino>   escribe/actualiza <destino>/.mcp.json
-//   mcp.mjs clear <crux.json> <destino>   retira solo lo que declara el contrato
-//   mcp.mjs diff  <crux.json> <destino>   qué hay puesto frente a lo declarado
+//   mcp.mjs write <crux.json> <target>   writes/updates <target>/.mcp.json
+//   mcp.mjs clear <crux.json> <target>   removes only what the contract declares
+//   mcp.mjs diff  <crux.json> <target>   what is set versus what is declared
 //
-// El contrato es la fuente de verdad y el fichero del cliente es un derivado: se
-// reescribe lo declarado, se respeta lo que haya puesto alguien a mano y se
-// reporta lo que sobra en vez de borrarlo. Borrar configuración ajena porque no
-// aparece en nuestro contrato sería el mismo error que `crux hooks remove` evita
-// al retirar únicamente los suyos.
+// The contract is the source of truth and the client file is a derivative: what
+// is declared is rewritten, what someone put by hand is respected and what is
+// left over is reported instead of deleted. Deleting foreign configuration
+// because it does not appear in our contract would be the same mistake that
+// `crux hooks remove` avoids by removing only its own.
 
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { aFormatoCliente } from '../../lib/mcp-format.mjs'
+import { toClientFormat } from '../../lib/mcp-format.mjs'
 
-const [accion, contratoPath, destino] = process.argv.slice(2)
-if (!accion || !contratoPath || !destino) {
-  console.error('uso: mcp.mjs write|clear|diff <crux.json> <destino>')
+const [action, contractPath, target] = process.argv.slice(2)
+if (!action || !contractPath || !target) {
+  console.error('usage: mcp.mjs write|clear|diff <crux.json> <target>')
   process.exit(2)
 }
 
-const ficheroPath = join(destino, '.mcp.json')
-const declarados = JSON.parse(readFileSync(contratoPath, 'utf8')).mcp || {}
+const filePath = join(target, '.mcp.json')
+const declared = JSON.parse(readFileSync(contractPath, 'utf8')).mcp || {}
 
-// Un fichero corrupto no se pisa en silencio: es configuración de alguien, y
-// quien llama necesita enterarse por el código de salida.
-let actual = { mcpServers: {} }
-if (existsSync(ficheroPath)) {
+// A corrupt file is not overwritten silently: it is someone's configuration,
+// and the caller needs to find out through the exit code.
+let current = { mcpServers: {} }
+if (existsSync(filePath)) {
   try {
-    actual = JSON.parse(readFileSync(ficheroPath, 'utf8'))
+    current = JSON.parse(readFileSync(filePath, 'utf8'))
   } catch (e) {
-    console.error(`.mcp.json ilegible (${e.message}) — no se toca`)
+    console.error(`.mcp.json unreadable (${e.message}) — left untouched`)
     process.exit(1)
   }
-  actual.mcpServers = actual.mcpServers || {}
+  current.mcpServers = current.mcpServers || {}
 }
 
-const nombres = Object.keys(declarados)
-const ajenos = Object.keys(actual.mcpServers).filter((n) => !nombres.includes(n))
+const names = Object.keys(declared)
+const foreign = Object.keys(current.mcpServers).filter((n) => !names.includes(n))
 
-if (accion === 'diff') {
-  for (const n of nombres) {
-    const esperado = JSON.stringify(aFormatoCliente(n, declarados[n]))
-    const puesto = actual.mcpServers[n] ? JSON.stringify(actual.mcpServers[n]) : null
-    if (!puesto) console.log(`falta ${n}`)
-    else if (puesto !== esperado) console.log(`difiere ${n}`)
+if (action === 'diff') {
+  for (const n of names) {
+    const expected = JSON.stringify(toClientFormat(n, declared[n]))
+    const current_entry = current.mcpServers[n] ? JSON.stringify(current.mcpServers[n]) : null
+    if (!current_entry) console.log(`missing ${n}`)
+    else if (current_entry !== expected) console.log(`differs ${n}`)
     else console.log(`ok ${n}`)
   }
-  for (const n of ajenos) console.log(`ajeno ${n}`)
+  for (const n of foreign) console.log(`foreign ${n}`)
   process.exit(0)
 }
 
-if (accion === 'clear') {
-  for (const n of nombres) delete actual.mcpServers[n]
-  // Un fichero que solo contenía lo nuestro se va entero: dejar un
-  // `{"mcpServers":{}}` huérfano es ruido en el git status de quien clone.
-  if (!Object.keys(actual.mcpServers).length && Object.keys(actual).length === 1) {
-    if (existsSync(ficheroPath)) unlinkSync(ficheroPath)
+if (action === 'clear') {
+  for (const n of names) delete current.mcpServers[n]
+  // A file that only contained what is ours goes away entirely: leaving an
+  // orphan `{"mcpServers":{}}` is noise in the git status of whoever clones.
+  if (!Object.keys(current.mcpServers).length && Object.keys(current).length === 1) {
+    if (existsSync(filePath)) unlinkSync(filePath)
     console.log('borrado')
   } else {
-    writeFileSync(ficheroPath, JSON.stringify(actual, null, 2) + '\n')
-    console.log(`retirados ${nombres.length}`)
+    writeFileSync(filePath, JSON.stringify(current, null, 2) + '\n')
+    console.log(`retirados ${names.length}`)
   }
   process.exit(0)
 }
 
-if (accion === 'write') {
-  if (!nombres.length) {
-    console.log('el contrato no declara ninguno')
+if (action === 'write') {
+  if (!names.length) {
+    console.log('the contract declares none')
     process.exit(0)
   }
-  for (const n of nombres) actual.mcpServers[n] = aFormatoCliente(n, declarados[n])
-  writeFileSync(ficheroPath, JSON.stringify(actual, null, 2) + '\n')
-  console.log(`escritos ${nombres.length}${ajenos.length ? ` (${ajenos.length} ajenos intactos)` : ''}`)
+  for (const n of names) current.mcpServers[n] = toClientFormat(n, declared[n])
+  writeFileSync(filePath, JSON.stringify(current, null, 2) + '\n')
+  console.log(`written ${names.length}${foreign.length ? ` (${foreign.length} foreign left intact)` : ''}`)
   process.exit(0)
 }
 
-console.error(`acción desconocida: ${accion}`)
+console.error(`unknown action: ${action}`)
 process.exit(2)

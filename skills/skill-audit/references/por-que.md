@@ -1,55 +1,53 @@
-# Por qué la auditoría es así
+# Why the audit works this way
 
-El procedimiento está en `SKILL.md`.
+The procedure is in `SKILL.md`.
 
-## Por qué hace falta
+## Why it is needed
 
-Sin auditoría, la frontera se degrada en las dos direcciones: procedimientos
-valiosos encerrados en un proyecto y skills del kernel llenándose de
-condicionales.
+Without an audit, the boundary degrades in both directions: valuable procedures
+locked inside a project and kernel skills filling up with conditionals.
 
-## Los dos momentos
+## The two moments
 
-Al crear una skill es cuando de verdad se sabe qué parte es procedimiento y qué
-parte son rutas y credenciales. La revisión periódica va enganchada al cierre de
-sesión porque una auditoría trimestral que hay que acordarse de lanzar no se
-lanza nunca.
+When creating a skill is when you really know which part is procedure and which
+part is paths and credentials. The periodic review is hooked to session close
+because a quarterly audit that you have to remember to launch is never launched.
 
-## Las señales
+## The signals
 
-Los nombres propios salen del `crux.json` de cada proyecto, así que no hay lista
-que mantener. Los pares entre proyectos son la promoción más obvia y la más
-invisible, porque nadie ve las dos skills a la vez. Los adaptadores se listan
-aparte porque también tienen baja densidad, y sin esa distinción el informe
-propondría una y otra vez promover lo ya promovido.
+Proper names come from each project's `crux.json`, so there is no list to
+maintain. Pairs across projects are the most obvious promotion and the most
+invisible, because nobody sees both skills at once. Adapters are listed
+separately because they also have low density, and without that distinction the
+report would propose over and over promoting what is already promoted.
 
-La competencia entre un adaptador y su procedimiento es la secuela de una
-promoción: las otras señales miran qué merece subir, y el par que la promoción
-deja atrás no lo mira nadie. El umbral de 0,18 es el mismo de los duplicados
-entre proyectos y recoge el ejemplo canónico del estándar. Se mira la
-descripción porque es lo único que se enseña al agente.
+Competition between an adapter and its procedure is the sequel to a promotion:
+the other signals look at what deserves to move up, and nobody looks at the pair
+the promotion leaves behind. The 0.18 threshold is the same as for duplicates
+across projects and covers the standard's canonical example. The description is
+looked at because it is the only thing shown to the agent.
 
-La densidad no sabe de dominios: una skill sobre la voz editorial de un producto
-puede tener pocos nombres propios y no ser un patrón.
+Density knows nothing about domains: a skill about a product's editorial voice
+may have few proper names and not be a pattern.
 
-## La activación
+## Activation
 
-Todo lo demás del sistema se verifica (la estructura con `doctor`, el cambio con
-la puerta, el idioma con un hook); la activación era lo único que se confiaba, y
-decide si el resto llega a usarse. El margen se mide en fracción del líder
-porque la puntuación crece con la longitud de la frase: por debajo del 15 %, el
-ganador depende del azar de una palabra.
+Everything else in the system is verified (the structure with `doctor`, the
+change with the gate, the language with a hook); activation was the only thing
+taken on trust, and it decides whether the rest gets used at all. The margin is
+measured as a fraction of the leader because the score grows with the length of
+the sentence: below 15 %, the winner depends on the luck of a single word.
 
-Medido sobre los adaptadores reales, el parecido de las descripciones señalaba
-seis y el que no repartía era uno: compartir vocabulario no es competir. Por eso
-el parecido es un indicio y `--adaptador` el veredicto.
+Measured on the real adapters, the similarity of descriptions flagged six and
+the one that did not discriminate was one: sharing vocabulary is not competing.
+That is why similarity is a hint and `--adaptador` the verdict.
 
-Una frase copiada de la descripción siempre pasa y no prueba nada.
+A sentence copied from the description always passes and proves nothing.
 
-## Promover
+## Promote
 
-Los datos concretos (qué texto es el más largo, qué puerto usa el servicio, qué
-dispositivo es el de referencia) son lo que nadie recuerda a los dos meses: por
-eso el adaptador no se omite. Una skill genérica que ya no resuelve el caso
-concreto es peor que la específica que había. Cada skill que no se usa es ruido
-en el descubrimiento de las que sí.
+The concrete data (which text is the longest, which port the service uses, which
+device is the reference one) is what nobody remembers two months later: that is
+why the adapter is not omitted. A generic skill that no longer solves the
+concrete case is worse than the specific one that was there. Every skill that is
+not used is noise in the discovery of those that are.

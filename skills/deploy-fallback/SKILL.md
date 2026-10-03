@@ -1,94 +1,95 @@
 ---
 name: deploy-fallback
-description: Desplegar a un servidor propio sin pasar por el CI, construyendo la imagen en local y transfiriéndola por SSH para recrear el contenedor. Usa cuando el CI no esté disponible o se haya quedado sin cuota, cuando haya que desplegar urgentemente una rama que no ha pasado por revisión, o como plan B documentado de un pipeline que depende de un tercero.
+description: Deploy to your own server without going through CI, building the image locally and transferring it over SSH to recreate the container. Use when CI is unavailable or has run out of quota, when a branch that hasn't gone through review has to be deployed urgently, or as the documented plan B of a pipeline that depends on a third party.
 ---
 
 # deploy-fallback
 
-Ruta alternativa de despliegue: construir en local, transferir la imagen y
-recrear el contenedor. Más lenta que el CI, pero no depende de nadie.
+Alternative deployment route: build locally, transfer the image and recreate the
+container. Slower than CI, but it depends on nobody.
 
-## Cuándo usar
+## When to use
 
-- El CI se quedó sin cuota o está caído.
-- Hay que desplegar una rama local urgentemente sin pasar por el flujo normal.
-- Estás validando que el plan B existe **antes** de necesitarlo, que es la
-  única forma de que funcione el día que haga falta.
+- CI ran out of quota or is down.
+- A local branch has to be deployed urgently without going through the normal
+  flow.
+- You are validating that plan B exists **before** needing it, which is the only
+  way it will work the day it is needed.
 
-## El pipeline
+## The pipeline
 
 ```
-docker build (con los build-args de producción)
+docker build (with the production build-args)
   └─ docker save | gzip -1 | ssh <host> 'gunzip | docker load'
-       └─ ssh <host> 'docker compose up -d --force-recreate <servicio>'
-            └─ invalidar el CDN si lo hay
+       └─ ssh <host> 'docker compose up -d --force-recreate <service>'
+            └─ invalidate the CDN if there is one
 ```
 
-`gzip -1` a propósito: en una subida doméstica el cuello de botella es la red,
-pero comprimir al máximo tarda más de lo que ahorra. Prioriza velocidad.
+`gzip -1` on purpose: on a home upload the bottleneck is the network, but
+compressing to the maximum takes longer than it saves. Prioritize speed.
 
-## Antes de lanzar
+## Before launching
 
-Comprueba **qué vas a desplegar**. Al saltarte el CI también te saltas la
-garantía de que lo que sube es lo que está en la rama principal:
+Check **what you are going to deploy**. By skipping CI you also skip the
+guarantee that what goes up is what is on the main branch:
 
 ```bash
 git -C <repo> status
 git -C <repo> log -1 --oneline
 ```
 
-## La trampa de las variables horneadas en build
+## The trap of variables baked in at build
 
-**Las variables que un framework de frontend expone al navegador se hornean en
-el momento del build, no en el arranque del contenedor.** Es la causa número
-uno de despliegues que parecen correctos y no lo son.
+**The variables a frontend framework exposes to the browser are baked in at build
+time, not at container startup.** It is the number one cause of deployments that
+look correct and aren't.
 
-Consecuencia práctica: el fichero de entorno del servidor **no sirve** para
-esas variables. Si el fichero de producción local tiene una clave de prueba, el
-navegador arrancará con la clave de prueba aunque el runtime del servidor
-muestre la de producción, y los servicios que dependan de ella fallarán de
-formas confusas.
+Practical consequence: the server's environment file **does not work** for those
+variables. If the local production file has a test key, the browser will start
+with the test key even though the server runtime shows the production one, and
+the services that depend on it will fail in confusing ways.
 
-Verifica el fichero de entorno del que se construye, no el del servidor. Y si
-puedes, haz que el script aborte cuando detecte una clave de entorno
-equivocado: es una comprobación de dos líneas que se paga sola.
+Verify the environment file it is built from, not the server's. And if you can,
+make the script abort when it detects the wrong environment key: it is a two-line
+check that pays for itself.
 
-## Invalidar el CDN al terminar
+## Invalidate the CDN when finished
 
-Si delante hay un CDN, **purgarlo forma parte del despliegue, no es un extra**.
+If there is a CDN in front, **purging it is part of the deployment, not an
+extra**.
 
-El fallo típico: el CDN sigue sirviendo el HTML del build anterior, que pide
-recursos estáticos que ya no existen en el contenedor nuevo. Resultado: errores
-404 en los bundles, el JavaScript no arranca y funciones como el inicio de
-sesión dejan de responder sin ningún error visible en el servidor.
+The typical failure: the CDN keeps serving the HTML of the previous build, which
+requests static resources that no longer exist in the new container. Result: 404
+errors on the bundles, the JavaScript doesn't start and features like login stop
+responding with no visible error on the server.
 
-Síntomas que apuntan justo a esto: el botón de login no hace nada, errores de
-acciones de servidor que no se encuentran, y 404 en las rutas de assets
-estáticos. Se confirma en la consola del navegador en diez segundos.
+Symptoms pointing exactly at this: the login button does nothing, errors about
+server actions not being found, and 404s on the static asset routes. It is
+confirmed in the browser console in ten seconds.
 
-## Verificación post-despliegue
+## Post-deployment verification
 
-No des un despliegue por bueno sin dos comprobaciones:
+Don't accept a deployment without two checks:
 
 ```bash
-curl -sS -o /dev/null -w "HTTP %{http_code} | %{time_total}s\n" https://<dominio>/
-ssh <host> 'docker ps --filter name=<servicio> --format "{{.Names}} | {{.Status}}"'
+curl -sS -o /dev/null -w "HTTP %{http_code} | %{time_total}s\n" https://<domain>/
+ssh <host> 'docker ps --filter name=<service> --format "{{.Names}} | {{.Status}}"'
 ```
 
-Esperado: 200 y el contenedor `Up` y sano. Si el healthcheck no pasa, el
-contenedor está arriba pero la aplicación no.
+Expected: 200 and the container `Up` and healthy. If the healthcheck doesn't pass,
+the container is up but the application isn't.
 
 ## Gotchas
 
-- **El build local sin caché del CI tarda bastante más** de lo que recuerdas.
-  Cuéntalo antes de prometer un despliegue en cinco minutos.
-- **Los servicios con caché persistente entre despliegues** no se limpian
-  solos: si cambiaste lo que generan, hay que purgarla aparte.
-- **Si el recreate falla por dependencias de red entre contenedores**, es un
-  problema de orquestación, no del despliegue: mira el playbook de incidentes
-  del proyecto.
+- **A local build without CI's cache takes considerably longer** than you
+  remember. Account for that before promising a five-minute deployment.
+- **Services with a cache persisted across deployments** don't clean themselves:
+  if you changed what they generate, it has to be purged separately.
+- **If the recreate fails because of network dependencies between containers**,
+  it is an orchestration problem, not a deployment one: see the project's
+  incident playbook.
 
-## Relacionado
+## Related
 
-- La documentación de release del proyecto, para el pipeline canónico y el
-  layout concreto del servidor
+- The project's release documentation, for the canonical pipeline and the
+  concrete server layout

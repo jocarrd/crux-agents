@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# crux ship — la puerta de calidad, con recibo.
+# crux ship — the quality gate, with a receipt.
 #
-#   crux ship run -- <comando...>   ejecuta el comando y anota su resultado
-#   crux ship seal                  cierra el recibo con el sha de HEAD
-#   crux ship show                  enseña el recibo
-#   crux ship clear                 lo descarta y vuelve a empezar
+#   crux ship run -- <command...>   runs the command and records its result
+#   crux ship seal                  closes the receipt with the HEAD sha
+#   crux ship show                  shows the receipt
+#   crux ship clear                 discards it and starts over
 #
-# Antes la marca era un sha suelto que escribía el propio agente después de
-# decir que había verificado. Eso no prueba que se verificara: prueba que
-# alguien escribió un sha. `run` ejecuta de verdad y anota el código de salida,
-# así que el recibo es evidencia y no una declaración.
+# The mark used to be a bare sha that the agent itself wrote after saying it
+# had verified. That does not prove anything was verified: it proves someone
+# wrote a sha. `run` really executes and records the exit code, so the
+# receipt is evidence and not a statement.
 #
-# El atajo sigue existiendo —`finish --skip-gate`— porque a veces hace falta.
-# Lo que no puede pasar es que se tome solo y sin dejar rastro.
+# The shortcut still exists —`finish --skip-gate`— because sometimes it is
+# needed. What cannot happen is for it to be taken silently and leave no trace.
 
 set -uo pipefail
 
@@ -21,189 +21,190 @@ export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-[[ -n "$REPO" ]] || die "esto no es un repositorio git"
-RECIBO="$REPO/.crux-ship"
+[[ -n "$REPO" ]] || die "this is not a git repository"
+RECEIPT="$REPO/.crux-ship"
 
-# Una marca del formato viejo —un sha a secas— no vale como recibo: no dice
-# qué se ejecutó. Se trata como si no estuviera.
-es_recibo_viejo() {
-  [[ -f "$RECIBO" ]] && ! grep -q '^run ' "$RECIBO" 2>/dev/null
+# A mark in the old format —a bare sha— is not valid as a receipt: it does not
+# say what was run. It is treated as if it were not there.
+is_stale_receipt() {
+  [[ -f "$RECEIPT" ]] && ! grep -q '^run ' "$RECEIPT" 2>/dev/null
 }
 
 cmd_run() {
   [[ "${1:-}" == "--" ]] && shift
-  [[ $# -gt 0 ]] || die "uso: crux ship run -- <comando...>"
+  [[ $# -gt 0 ]] || die "usage: crux ship run -- <command...>"
 
-  # Un recibo ya cerrado pertenece a otra pasada: la siguiente empieza limpia.
-  if [[ -f "$RECIBO" ]] && { grep -q '^sealed ' "$RECIBO" 2>/dev/null || es_recibo_viejo; }; then
-    rm -f "$RECIBO"
+  # A receipt that is already closed belongs to another pass: the next one starts clean.
+  if [[ -f "$RECEIPT" ]] && { grep -q '^sealed ' "$RECEIPT" 2>/dev/null || is_stale_receipt; }; then
+    rm -f "$RECEIPT"
   fi
-  [[ -f "$RECIBO" ]] || printf '# recibo de la puerta de calidad — crux\nrepo %s\n' "$REPO" > "$RECIBO"
+  [[ -f "$RECEIPT" ]] || printf '# quality gate receipt — crux\nrepo %s\n' "$REPO" > "$RECEIPT"
 
-  local inicio fin rc
-  inicio=$(date +%s)
+  local start end rc
+  start=$(date +%s)
   "$@"; rc=$?
-  fin=$(date +%s)
+  end=$(date +%s)
 
-  # El recibo anota el comando tal y como se declaró, no el envoltorio.
-  local etiqueta="${ETIQUETA:-$*}"
-  printf 'run %s %s %s\n' "$rc" "$((fin - inicio))" "$etiqueta" >> "$RECIBO"
-  if [[ $rc -eq 0 ]]; then ok "$etiqueta — $((fin - inicio))s"; else err "$etiqueta — salida $rc"; fi
+  # The receipt records the command as declared, not the wrapper.
+  local label="${LABEL:-$*}"
+  printf 'run %s %s %s\n' "$rc" "$((end - start))" "$label" >> "$RECEIPT"
+  if [[ $rc -eq 0 ]]; then ok "$label — $((end - start))s"; else err "$label — exit $rc"; fi
   return $rc
 }
 
 cmd_seal() {
-  [[ -f "$RECIBO" ]] && ! es_recibo_viejo || die "no hay recibo: pasa la puerta con 'crux ship run -- <comando>'"
+  [[ -f "$RECEIPT" ]] && ! is_stale_receipt || die "no receipt: pass the gate with 'crux ship run -- <command>'"
 
-  local total fallos
-  total="$(recibo_comandos "$RECIBO")"
-  fallos="$(recibo_fallos "$RECIBO")"
-  [[ "${total:-0}" -gt 0 ]] || die "el recibo no tiene ni un comando ejecutado"
-  if [[ "${fallos:-0}" -gt 0 ]]; then
-    err "$fallos de $total comandos fallaron: la puerta no se cierra"
-    recibo_en_rojo "$RECIBO" | sed 's/^/      /'
+  local total failures
+  total="$(receipt_commands "$RECEIPT")"
+  failures="$(receipt_failures "$RECEIPT")"
+  [[ "${total:-0}" -gt 0 ]] || die "the receipt has not a single command run"
+  if [[ "${failures:-0}" -gt 0 ]]; then
+    err "$failures of $total commands failed: the gate does not close"
+    receipt_failed "$RECEIPT" | sed 's/^/      /'
     exit 1
   fi
 
-  # El comportamiento de la puerta es del kernel que la ejecuta, no del repo:
-  # sin la versión, un recibo sellado no dice con qué reglas se ganó.
-  local kernel fijada
+  # The gate's behaviour belongs to the kernel that runs it, not to the repo:
+  # without the version, a sealed receipt does not say which rules it was won under.
+  local kernel pinned
   kernel="$(crux_version)"
-  fijada="$(version_fijada "$REPO")"
-  grep -vE '^(sealed|kernel) ' "$RECIBO" > "$RECIBO.tmp" && mv "$RECIBO.tmp" "$RECIBO"
-  printf 'kernel %s\n' "$kernel" >> "$RECIBO"
-  printf 'sealed %s %s\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RECIBO"
-  ok "puerta cerrada sobre $(git -C "$REPO" rev-parse --short HEAD) con $(cuenta "$total" comprobación comprobaciones) (crux $kernel)"
-  if [[ -n "$fijada" && "$fijada" != "$kernel" ]]; then
-    warn "el proyecto fija crux $fijada y la puerta se ha pasado con $kernel"
-    info "alinéalo con: crux upgrade"
+  pinned="$(pinned_version "$REPO")"
+  grep -vE '^(sealed|kernel) ' "$RECEIPT" > "$RECEIPT.tmp" && mv "$RECEIPT.tmp" "$RECEIPT"
+  printf 'kernel %s\n' "$kernel" >> "$RECEIPT"
+  printf 'sealed %s %s\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RECEIPT"
+  ok "gate closed on $(git -C "$REPO" rev-parse --short HEAD) with $(count "$total" check checks) (crux $kernel)"
+  if [[ -n "$pinned" && "$pinned" != "$kernel" ]]; then
+    warn "the project pins crux $pinned and the gate was passed with $kernel"
+    info "align it with: crux upgrade"
   fi
 
-  # Lo comprobado pasa a la tarea como evidencia: es lo que después dice la
-  # propuesta, y así no se reescribe de memoria.
-  local registro_tarea
-  registro_tarea="$(task_file_for_path "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}" "$REPO" 2>/dev/null || echo "")"
-  if [[ -n "$registro_tarea" && -f "$registro_tarea" ]]; then
-    node "$CRUX_HOME/lib/task.mjs" verify --file "$registro_tarea" --receipt "$RECIBO" \
+  # What was checked goes into the task as evidence: it is what the proposal
+  # says afterwards, so it is not rewritten from memory.
+  local task_record_file
+  task_record_file="$(task_file_for_path "${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}" "$REPO" 2>/dev/null || echo "")"
+  if [[ -n "$task_record_file" && -f "$task_record_file" ]]; then
+    node "$CRUX_HOME/lib/task.mjs" verify --file "$task_record_file" --receipt "$RECEIPT" \
       --sha "$(git -C "$REPO" rev-parse HEAD)" >/dev/null 2>&1 \
-      && info "tarea verificada: $registro_tarea" \
-      || warn "no pude anotar la verificación en $registro_tarea"
+      && info "task verified: $task_record_file" \
+      || warn "could not record the verification in $task_record_file"
   fi
 }
 
 cmd_show() {
-  [[ -f "$RECIBO" ]] || die "no hay recibo en $REPO"
-  if es_recibo_viejo; then
-    warn "recibo del formato antiguo (un sha suelto): no dice qué se ejecutó"
-    sed 's/^/      /' "$RECIBO"
+  [[ -f "$RECEIPT" ]] || die "no receipt in $REPO"
+  if is_stale_receipt; then
+    warn "receipt in the old format (a bare sha): it does not say what was run"
+    sed 's/^/      /' "$RECEIPT"
     return 0
   fi
-  local head sellado
+  local head sealed
   head="$(git -C "$REPO" rev-parse HEAD)"
-  sellado="$(awk '/^sealed /{print $2}' "$RECIBO" | tail -1)"
-  sed 's/^/  /' "$RECIBO"
+  sealed="$(awk '/^sealed /{print $2}' "$RECEIPT" | tail -1)"
+  sed 's/^/  /' "$RECEIPT"
   echo
-  local kernel_recibo
-  kernel_recibo="$(recibo_kernel "$RECIBO")"
-  if [[ -n "$sellado" && -z "$kernel_recibo" ]]; then
-    warn "sellado sin versión de crux: el recibo no dice con qué reglas se pasó"
-  elif [[ -n "$kernel_recibo" && "$kernel_recibo" != "$(crux_version)" ]]; then
-    warn "sellado con crux $kernel_recibo, y ahora se ejecuta $(crux_version)"
+  local kernel_receipt
+  kernel_receipt="$(receipt_kernel "$RECEIPT")"
+  if [[ -n "$sealed" && -z "$kernel_receipt" ]]; then
+    warn "sealed without a crux version: the receipt does not say which rules it was passed under"
+  elif [[ -n "$kernel_receipt" && "$kernel_receipt" != "$(crux_version)" ]]; then
+    warn "sealed with crux $kernel_receipt, and now $(crux_version) is running"
   fi
-  if [[ -z "$sellado" ]]; then
-    info "sin cerrar: 'crux ship seal'"
-  elif [[ "$sellado" != "$head" ]]; then
-    warn "cerrado sobre ${sellado:0:8}, y HEAD es ${head:0:8}: hay que volver a pasarla"
+  if [[ -z "$sealed" ]]; then
+    info "not closed: 'crux ship seal'"
+  elif [[ "$sealed" != "$head" ]]; then
+    warn "closed on ${sealed:0:8}, and HEAD is ${head:0:8}: it has to be passed again"
   else
-    ok "vigente sobre ${head:0:8}"
+    ok "current on ${head:0:8}"
   fi
 }
 
-cmd_clear() { rm -f "$RECIBO"; ok "recibo descartado"; }
+cmd_clear() { rm -f "$RECEIPT"; ok "receipt discarded"; }
 
-# El cuerpo de una propuesta era el único artefacto del flujo sin comprobar, y
-# es el que se publica. Por ahí se coló la firma de la herramienta.
+# A proposal's body was the only artifact in the flow left unchecked, and it
+# is the one that gets published. The tool's signature slipped in through there.
 cmd_body() {
-  local fichero="${1:-}"
-  [[ -f "$fichero" ]] || die "uso: crux ship body <fichero con el cuerpo>"
+  local file="${1:-}"
+  [[ -f "$file" ]] || die "usage: crux ship body <file with the body>"
 
-  local fallos=0
-  reporta() { err "$1"; shift; printf '%s\n' "$@" | sed 's/^/      /'; fallos=$((fallos+1)); }
+  local failures=0
+  report() { err "$1"; shift; printf '%s\n' "$@" | sed 's/^/      /'; failures=$((failures+1)); }
 
-  local firma
-  firma="$(grep -inE 'co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(generated|generado) with|🤖' "$fichero" || true)"
-  [[ -n "$firma" ]] && reporta "la firma de la herramienta no va en una propuesta" "$firma"
+  local signature
+  signature="$(grep -inE 'co-authored-by:[[:space:]]*(claude|ona|copilot|cursor|devin|gemini)|claude-session:|(generated|generado) with|🤖' "$file" || true)"
+  [[ -n "$signature" ]] && report "the tool's signature does not belong in a proposal" "$signature"
 
-  # Las mismas huellas que la documentacion y los .mcp.json. Esto se publica
-  # fuera, asi que es el ultimo sitio donde mirar, no el primero que se salta.
-  local credenciales
-  credenciales="$(node -e '
+  # The same fingerprints as the documentation and the .mcp.json files. This
+  # is published outside, so it is the last place to look, not the first one skipped.
+  local credentials
+  credentials="$(node -e '
     import("file://" + process.argv[1] + "/lib/credential-prints.mjs").then((m) => {
       const fs = require("fs");
       const t = fs.readFileSync(process.argv[2], "utf8");
-      for (const h of m.huellasEn(t)) console.log(h);
+      for (const h of m.fingerprintsIn(t)) console.log(h);
     });
-  ' "$CRUX_HOME" "$fichero" 2>/dev/null || true)"
-  [[ -n "$credenciales" ]] && reporta "hay algo con pinta de credencial" "$credenciales"
+  ' "$CRUX_HOME" "$file" 2>/dev/null || true)"
+  [[ -n "$credentials" ]] && report "something that looks like a credential" "$credentials"
 
-  # La ruta de la maquina no le dice nada a quien lee la propuesta, y dice
-  # demasiado de como trabajamos y para quien.
-  local rutas
-  rutas="$(grep -nE "(^|[^A-Za-z0-9_])($HOME|/home/[a-z_][a-z0-9_-]*|/Users/[A-Za-z0-9_-]+)/" "$fichero" || true)"
-  [[ -n "$rutas" ]] && reporta "rutas de la maquina en el cuerpo" "$rutas"
+  # The machine's path tells the proposal's reader nothing, and says too much
+  # about how we work and for whom.
+  local paths
+  paths="$(grep -nE "(^|[^A-Za-z0-9_])($HOME|/home/[a-z_][a-z0-9_-]*|/Users/[A-Za-z0-9_-]+)/" "$file" || true)"
+  [[ -n "$paths" ]] && report "machine paths in the body" "$paths"
 
-  # Lo demás lo declara el perfil, que es de quien depende: en el repo de un
-  # cliente no se enseña nuestro andamiaje, y en otro puede ser su nombre.
-  local docs perfil=""
+  # The rest is declared by the profile, which is up to whoever depends on it:
+  # in a client's repo our scaffolding is not shown, and in another it may be
+  # their name.
+  local docs profile=""
   docs="$(find_docs_repo "$REPO" 2>/dev/null || echo "")"
   [[ -n "$docs" && -f "$docs/crux.json" ]] &&
-    perfil="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
-  if [[ -n "$perfil" ]]; then
-    local patron motivo hallado
-    while IFS=$'\t' read -r patron motivo; do
-      [[ -n "$patron" ]] || continue
-      hallado="$(grep -inE "$patron" "$fichero" || true)"
-      [[ -n "$hallado" ]] && reporta "perfil $perfil: $motivo" "$hallado"
-    done < <(perfil_forbid "$perfil" "$docs")
-    # El nombre del docs repo es de cada proyecto, así que no cabe en un patrón
-    # fijo del perfil: una ruta a él en la propuesta enseña dónde guardamos las
-    # notas del cliente.
-    if [[ "$(perfil_get "$perfil" "$docs" propose.hideDocsRepo false)" == "true" ]]; then
-      local nombre_docs
-      nombre_docs="$(basename "$docs")"
-      hallado="$(grep -inF "$nombre_docs" "$fichero" || true)"
-      [[ -n "$hallado" ]] && reporta "perfil $perfil: nombra nuestro repo de documentación" "$hallado"
+    profile="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
+  if [[ -n "$profile" ]]; then
+    local pattern reason found_one
+    while IFS=$'\t' read -r pattern reason; do
+      [[ -n "$pattern" ]] || continue
+      found_one="$(grep -inE "$pattern" "$file" || true)"
+      [[ -n "$found_one" ]] && report "profile $profile: $reason" "$found_one"
+    done < <(profile_forbid "$profile" "$docs")
+    # The docs repo name is per project, so it does not fit in a fixed profile
+    # pattern: a path to it in the proposal shows where we keep the client's
+    # notes.
+    if [[ "$(profile_get "$profile" "$docs" propose.hideDocsRepo false)" == "true" ]]; then
+      local docs_name
+      docs_name="$(basename "$docs")"
+      found_one="$(grep -inF "$docs_name" "$file" || true)"
+      [[ -n "$found_one" ]] && report "profile $profile: names our documentation repo" "$found_one"
     fi
   else
-    # Sin perfil no se comprueba lo que el perfil prohibe, y el repo de un
-    # cliente clonado fuera de la convencion es justo el que mas lo necesita.
-    # Decir "ok" aqui era el peor sitio para fallar en abierto.
-    warn "sin contrato a la vista: no se ha comprobado lo que prohibe el perfil"
-    info "si es el repo de un cliente, revisa el cuerpo a mano"
+    # Without a profile, what the profile forbids is not checked, and a
+    # client's repo cloned outside the convention is exactly the one that
+    # needs it most. Saying "ok" here was the worst place to fail open.
+    warn "no contract in sight: what the profile forbids was not checked"
+    info "if it is a client's repo, review the body by hand"
   fi
 
-  if [[ $fallos -gt 0 ]]; then
+  if [[ $failures -gt 0 ]]; then
     echo
-    info "el cuerpo dice qué cambia, qué se añade y por qué; ver STANDARD.md §8"
+    info "the body says what changes, what is added and why; see STANDARD.md §8"
     exit 1
   fi
-  ok "el cuerpo de la propuesta no enseña nada que no deba"
+  ok "the proposal body shows nothing it should not"
 }
 
-# Las comprobaciones no las sabe el kernel: las declara el proyecto en
-# `quality.gate` de su crux.json, con solapado por repo. Sin esto la puerta eran
-# cuatro invocaciones que había que recordar una por una, y lo medido dice que
-# lo que se salta es justo lo que hay que recordar.
+# The kernel does not know the checks: the project declares them in
+# `quality.gate` of its crux.json, with a per-repo override. Without this the
+# gate was four invocations to remember one by one, and what was measured says
+# that what gets skipped is exactly what has to be remembered.
 cmd_gate() {
   local docs; docs="$(find_docs_repo "$REPO" 2>/dev/null || echo "")"
   [[ -n "$docs" && -f "$docs/crux.json" ]] \
-    || die "no encuentro el crux.json del proyecto: declara ahí quality.gate"
+    || die "cannot find the project's crux.json: declare quality.gate there"
 
   local repo_name; repo_name="$(basename "$REPO")"
-  # En un worktree el nombre lleva el sufijo del espacio; el contrato habla del repo.
+  # In a worktree the name carries the workspace suffix; the contract talks about the repo.
   repo_name="${repo_name%%-ws-*}"
 
-  local comandos; comandos="$(node -e '
+  local commands; commands="$(node -e '
     const fs = require("fs");
     const [file, repo] = process.argv.slice(1);
     const q = (JSON.parse(fs.readFileSync(file, "utf8")).quality) || {};
@@ -212,52 +213,52 @@ cmd_gate() {
     process.stdout.write((Array.isArray(g) ? g : [g]).join("\n"));
   ' "$docs/crux.json" "$repo_name" 2>/dev/null)"
 
-  if [[ -z "$comandos" ]]; then
-    err "el contrato no declara qué comprobar en $repo_name"
-    info "decláralo en $docs/crux.json:"
-    info '  "quality": { "gate": ["<comando>", "<comando>"] }'
-    info "o por repo:  \"quality\": { \"repos\": { \"$repo_name\": { \"gate\": [...] } } }"
+  if [[ -z "$commands" ]]; then
+    err "the contract does not declare what to check in $repo_name"
+    info "declare it in $docs/crux.json:"
+    info '  "quality": { "gate": ["<command>", "<command>"] }'
+    info "or per repo:  \"quality\": { \"repos\": { \"$repo_name\": { \"gate\": [...] } } }"
     exit 1
   fi
 
-  # Estos comandos salen de un fichero versionado, asi que cambian con la rama
-  # que tengas puesta. Se recuerda su huella: mientras sea la misma no se
-  # pregunta nada, y cuando cambia se enseña lo que va a ejecutarse antes de
-  # ejecutarlo. Un contrato que llega en una propuesta no ejecuta en silencio.
-  local huella_dir="$HOME/.crux/state"
-  ( umask 077 && mkdir -p "$huella_dir" ) 2>/dev/null || true
-  local huella_f huella_ahora huella_antes=""
-  huella_f="$huella_dir/gate-$(printf '%s' "$docs/$repo_name" | cksum | tr -d ' ' | tr -c 'A-Za-z0-9' '_')"
-  huella_ahora="$(printf '%s' "$comandos" | cksum | tr -d ' ')"
-  [[ -f "$huella_f" ]] && huella_antes="$(cat "$huella_f")"
+  # These commands come from a versioned file, so they change with the branch
+  # you have checked out. Their fingerprint is remembered: while it is the same
+  # nothing is asked, and when it changes what is about to run is shown before
+  # running it. A contract that arrives in a proposal does not execute silently.
+  local fingerprint_dir="$HOME/.crux/state"
+  ( umask 077 && mkdir -p "$fingerprint_dir" ) 2>/dev/null || true
+  local fingerprint_f fingerprint_now fingerprint_before=""
+  fingerprint_f="$fingerprint_dir/gate-$(printf '%s' "$docs/$repo_name" | cksum | tr -d ' ' | tr -c 'A-Za-z0-9' '_')"
+  fingerprint_now="$(printf '%s' "$commands" | cksum | tr -d ' ')"
+  [[ -f "$fingerprint_f" ]] && fingerprint_before="$(cat "$fingerprint_f")"
 
-  if [[ "$huella_ahora" != "$huella_antes" ]]; then
-    if [[ -n "$huella_antes" ]]; then
-      warn "la puerta de calidad de $repo_name ha cambiado desde la ultima vez"
+  if [[ "$fingerprint_now" != "$fingerprint_before" ]]; then
+    if [[ -n "$fingerprint_before" ]]; then
+      warn "the quality gate of $repo_name has changed since last time"
     else
-      info "la puerta de calidad de $repo_name, declarada en el contrato:"
+      info "the quality gate of $repo_name, declared in the contract:"
     fi
-    printf '%s\n' "$comandos" | sed 's/^/      /'
+    printf '%s\n' "$commands" | sed 's/^/      /'
     if [[ "${CRUX_GATE_ASSUME_YES:-0}" != "1" && -t 0 ]]; then
-      local respuesta
-      read -r -p "      ¿se ejecutan? [s/N] " respuesta
-      case "$respuesta" in
+      local answer
+      read -r -p "      Run them? [y/N] " answer
+      case "$answer" in
         s|S|y|Y) : ;;
-        *) die "puerta cancelada" ;;
+        *) die "gate cancelled" ;;
       esac
     fi
-    printf '%s' "$huella_ahora" > "$huella_f" 2>/dev/null || true
+    printf '%s' "$fingerprint_now" > "$fingerprint_f" 2>/dev/null || true
   fi
 
   cmd_clear >/dev/null
-  local fallos=0
+  local failures=0
   while IFS= read -r c; do
     [[ -n "$c" ]] || continue
-    ETIQUETA="$c" cmd_run -- bash -c "$c" || fallos=$((fallos+1))
-  done <<< "$comandos"
+    LABEL="$c" cmd_run -- bash -c "$c" || failures=$((failures+1))
+  done <<< "$commands"
 
-  [[ $fallos -eq 0 ]] || { err "$(cuenta "$fallos" "comprobación" "comprobaciones") en rojo: la puerta no se cierra"; exit 1; }
-  info "commitea y cierra con: crux ship seal"
+  [[ $failures -eq 0 ]] || { err "$(count "$failures" "check" "checks") failing: the gate does not close"; exit 1; }
+  info "commit and close with: crux ship seal"
 }
 
 case "${1:-}" in

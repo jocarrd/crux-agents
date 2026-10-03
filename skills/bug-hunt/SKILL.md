@@ -1,112 +1,114 @@
 ---
 name: bug-hunt
-description: Buscar fallos que nadie ha reportado todavía en una herramienta propia —comandos, scripts, instaladores—, ejercitándola en un entorno desechable con las entradas que nadie prueba, y midiendo cada hallazgo antes de proponer el arreglo. Usa cuando quieras endurecer algo que ya funciona, antes de enseñárselo a alguien de fuera, después de una tanda de cambios grande, o cuando te pidan "busca bugs" o "a ver si esto aguanta".
+description: Hunt for bugs nobody has reported yet in your own tooling (commands, scripts, installers) by exercising it in a disposable environment with the inputs nobody tries, and measuring each finding before proposing the fix. Use when you want to harden something that already works, before showing it to an outsider, after a large batch of changes, or when asked "busca bugs" or "a ver si esto aguanta".
 ---
 
 # bug-hunt
 
-Buscar fallos que aún no ha reportado nadie. `/root-cause` depura un fallo que
-ya tienes; esto encuentra los que todavía no sabes que tienes.
+Look for failures nobody has reported yet. `/root-cause` debugs a failure you
+already have; this one finds the ones you don't know you have.
 
-La idea central: **el camino feliz ya lo ha recorrido su autor**. Los fallos
-viven en los bordes —lo corrupto, lo ausente, lo simultáneo, lo repetido— y en
-el diagnóstico, que casi siempre está peor probado que la funcionalidad.
+The core idea: **the happy path has already been walked by its author**. Bugs
+live at the edges (the corrupt, the missing, the simultaneous, the repeated)
+and in diagnostics, which are almost always less tested than the feature.
 
-## Cuándo usar
+## When to use
 
-- Vas a enseñar la herramienta a alguien de fuera y quieres que la primera hora
-  no se estrelle.
-- Acabas de meter varios cambios y no sabes qué se ha desalineado.
-- Quieres endurecer algo que "ya funciona".
+- You are about to show the tool to an outsider and want their first hour not to
+  crash.
+- You just landed several changes and don't know what got misaligned.
+- You want to harden something that "already works".
 
-## Cuándo no usar
+## When not to use
 
-- **Tienes un fallo concreto delante**: eso es `/root-cause`.
-- **Buscas deuda estructural** —duplicación, funciones enormes—: eso es
-  `/code-health`. Aquí se buscan comportamientos incorrectos.
-- Sobre código de terceros que no vas a poder arreglar.
+- **You have a specific failure in front of you**: that is `/root-cause`.
+- **You are looking for structural debt** (duplication, huge functions): that is
+  `/code-health`. This skill looks for incorrect behaviour.
+- On third-party code you won't be able to fix.
 
-## 1. Un entorno desechable, nunca los datos reales
+## 1. A disposable environment, never the real data
 
-Antes de nada, un lugar donde romper cosas sin consecuencias: directorio
-temporal, variables de entorno redirigidas, credenciales falsas, remotos
-locales en vez de servicios de verdad.
+First of all, a place to break things without consequences: a temporary
+directory, redirected environment variables, fake credentials, local remotes
+instead of real services.
 
-Si la herramienta escribe en el directorio del usuario, redirígelo también. Una
-caza que ensucia el entorno real acaba costando más que los bugs que encuentra.
+If the tool writes to the user's directory, redirect that too. A hunt that dirties
+the real environment ends up costing more than the bugs it finds.
 
-## 2. Recorrer primero el camino real
+## 2. Walk the real path first
 
-Ejercita el ciclo completo como lo haría alguien de fuera, del principio al
-final, antes de tocar ningún borde. Esto calibra qué es normal y de paso caza
-lo que esté roto de frente.
+Exercise the full cycle the way an outsider would, from start to finish, before
+touching any edge. This calibrates what is normal and, along the way, catches
+whatever is broken head-on.
 
-## 3. Después, los bordes
+## 3. Then, the edges
 
-Los que dan resultado, por orden de rentabilidad:
+The ones that pay off, in order of return:
 
-- **Configuración corrupta.** No ausente: corrupta a medias. Un fichero de
-  contrato con el JSON truncado descubre si el programa distingue "no está" de
-  "no se puede leer".
-- **Lo ausente donde siempre hubo algo.** Sin remoto, sin red, sin credencial,
-  sin permisos.
-- **Repetir.** Ejecuta dos veces lo mismo. La segunda ejecución revela lo que se
-  duplica, lo que se pisa y lo que se rompe.
-- **A la vez.** Lanza tres instancias en paralelo sobre el mismo recurso.
-- **Nombres hostiles.** Espacios, acentos, barras, cadenas vacías.
-- **El estado heredado.** Una configuración de una versión anterior, un
-  directorio a medio migrar. Es el caso que solo sufre quien lleva tiempo
-  usándolo, y por eso nunca está probado.
+- **Corrupt configuration.** Not missing: half-corrupt. A contract file with
+  truncated JSON reveals whether the program distinguishes "it isn't there" from
+  "it can't be read".
+- **What is missing where something was always present.** No remote, no network,
+  no credential, no permissions.
+- **Repeat.** Run the same thing twice. The second run reveals what gets
+  duplicated, what gets overwritten and what breaks.
+- **At the same time.** Launch three instances in parallel against the same
+  resource.
+- **Hostile names.** Spaces, accents, slashes, empty strings.
+- **Inherited state.** A configuration from an earlier version, a half-migrated
+  directory. It is the case only long-time users suffer, and that is why it is
+  never tested.
 
-## 4. Antes de llamarlo bug: leer la intención
+## 4. Before calling it a bug: read the intent
 
-Muchas rarezas son decisiones. Antes de arreglar, busca la cabecera del fichero,
-el comentario o la documentación que explique por qué es así. Si el
-comportamiento es deliberado pero deja a quien lo usa sin salida, el arreglo
-está en **decir cuál es el siguiente paso**.
+Many oddities are decisions. Before fixing, look for the file header, comment or
+documentation that explains why it is the way it is. If the behaviour is
+deliberate but leaves the user with no way out, the fix is to **say what the next
+step is**.
 
-## 5. Medir antes de proponer
+## 5. Measure before proposing
 
-Una mejora que parece obvia hay que **medirla contra los datos reales** antes de
-escribirla. Aplica el cambio propuesto sobre el histórico y mira a cuántos casos
-afecta y cuántos falsos positivos crea.
+An improvement that looks obvious must be **measured against the real data**
+before it is written. Apply the proposed change to the history and see how many
+cases it affects and how many false positives it creates.
 
-Descartar una mejora tras medirla también es trabajo hecho.
+Discarding an improvement after measuring it is also work done.
 
-## 6. Un arreglo, un test que falle sin él
+## 6. One fix, one test that fails without it
 
-Por cada hallazgo, el test se valida **quitando el arreglo** y viendo el rojo.
-Un test que pasa antes y después no prueba nada.
+For each finding, validate the test by **removing the fix** and seeing it go red.
+A test that passes before and after proves nothing.
 
-Y el test tiene que ejercitar **el comando de verdad**. Si copias su lógica
-dentro del test para poder probarla, estás probando la copia. Cuando el comando
-depende de algo externo, sustituye ese binario por uno de mentira en el PATH,
-que devuelva lo que haga falta: eso mantiene el test sin red y sin dejar de
-probar el código real.
+And the test has to exercise **the real command**. If you copy its logic into the
+test in order to test it, you are testing the copy. When the command depends on
+something external, replace that binary with a fake one on the PATH that returns
+whatever is needed: that keeps the test offline while still testing the real
+code.
 
-## Gotchas que aparecen una y otra vez
+## Gotchas that keep showing up
 
-Son de shell, pero el patrón se repite en cualquier lenguaje: **el error que se
-traga se convierte en un dato falso**.
+These are shell gotchas, but the pattern repeats in any language: **a swallowed
+error becomes a false datum**.
 
-- **Silenciar la salida de error no cubre la redirección de entrada.** La
-  resuelve el intérprete antes de ejecutar el comando, y su error sale igual.
-- **Contar líneas con una herramienta que falla cuando no hay ninguna**, y
-  encadenarle un valor por defecto, produce **dos** valores pegados.
-- **Abortar al primer error dentro de un bucle** deja la tarea a medias y
-  reporta éxito: el resto de elementos ni se intentan.
-- **Preguntar si una rama está integrada** no funciona donde se integra
-  aplastando los commits: hay que preguntar por la propuesta, no por el grafo.
-- **Un valor por defecto deducido de la ruta de instalación** acierta en
-  desarrollo y falla en producción, sin que nadie lo note durante meses.
+- **Silencing error output does not cover input redirection.** The interpreter
+  resolves it before running the command, and its error comes out anyway.
+- **Counting lines with a tool that fails when there are none**, and chaining a
+  default value onto it, produces **two** values glued together.
+- **Aborting at the first error inside a loop** leaves the task half done and
+  reports success: the remaining items are never even attempted.
+- **Asking whether a branch is merged** does not work where merging squashes the
+  commits: you have to ask about the proposal, not the graph.
+- **A default derived from the install path** is right in development and wrong
+  in production, and nobody notices for months.
 
-## Cerrar
+## Close
 
-Borra el entorno desechable y comprueba que no queda nada fuera: procesos
-levantados, ficheros temporales, ramas o recursos creados durante las pruebas.
+Delete the disposable environment and check that nothing is left outside:
+processes started, temporary files, branches or resources created during the
+tests.
 
-## Relacionado
+## Related
 
-- `/root-cause` — cuando el fallo ya lo tienes delante
-- `/write-tests` — cómo se escribe el test que acompaña al arreglo
-- `/code-health` — deuda estructural, no comportamientos incorrectos
+- `/root-cause`: when you already have the failure in front of you
+- `/write-tests`: how to write the test that goes with the fix
+- `/code-health`: structural debt, not incorrect behaviour
