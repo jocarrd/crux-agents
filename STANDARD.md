@@ -746,7 +746,8 @@ a project**, declared in `crux.json` with `"language"`.
 | Technical terms | Untranslated: `worktree`, `commit`, `hook`, `deploy` |
 
 The commit part **is verified**: `crux hooks install` puts in a `commit-msg`
-that rejects messages in Spanish. This rule had been written down since day one
+that rejects messages in Spanish, in client repos too, where it leaves the
+commit format alone. This rule had been written down since day one
 and the kernel's history was entirely in Spanish — a rule nobody checks is a
 recommendation.
 

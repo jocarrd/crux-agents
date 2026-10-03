@@ -741,8 +741,13 @@ The language one is the clearest example of why a hook is needed and not a line
 in a document: the rule had been written since the first commit and **all 27
 messages in the kernel's history were in Spanish**. The `commit-msg` goes into
 the code repos as well as the docs repo, because that is where most commits
-happen — except with the `client-repo` profile, where nothing of the client's
-is touched, not even its hooks.
+happen. In a `client-repo` it lives in `.git/hooks`, which is not versioned, and
+checks less: it strips the tool's signature and checks the language, but not our
+commit format, which is the client's. If the repo has its own hooks
+(`core.hooksPath`), git ignores `.git/hooks`, so crux points `core.hooksPath` at
+a local directory of wrappers that run its hook first and then the repo's.
+Without that, a client repo with `.githooks` received dozens of commits in
+Spanish and no hook ever ran.
 
 The cycle one exists because of an uncomfortable measurement: the skill that
 describes it was written, installed and had its description, and `crux usage`

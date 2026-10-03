@@ -38,12 +38,31 @@ result="$(printf '%s' "$entry" | node -e '
       /\bfind\b(?=[^\n]*\s-delete\b)/,
       /\bfind\b(?=[^\n]*-exec\s+rm\b)/,
     ];
-    const hits = DESTROYS.map((rx) => runnable.search(rx)).filter((i) => i >= 0);
-    if (!hits.length) process.exit(0);
-    const since = Math.min(...hits);
+    // Each command on its own: a later `; export X=<workspace>` is not part of
+    // what gets deleted. Separators inside quotes, or escaped as in
+    // `-exec rm {} \;`, do not end a command.
+    const segments = (text) => {
+      const out = [];
+      let quote = "", from = 0;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === "\\") { i++; continue; }
+        if (quote) { if (c === quote) quote = ""; continue; }
+        if (c === "\"" || c === "'"'"'") { quote = c; continue; }
+        if (c === "\n" || c === ";" || c === "|" || c === "&") { out.push(text.slice(from, i)); from = i + 1; }
+      }
+      out.push(text.slice(from));
+      return out;
+    };
     // Only what comes AFTER the destructive command counts: mentioning the path
     // before, in a cd or an echo, is not deleting it.
-    const tail = runnable.slice(since);
+    const tails = [];
+    for (const seg of segments(runnable)) {
+      const hits = DESTROYS.map((rx) => seg.search(rx)).filter((i) => i >= 0);
+      if (hits.length) tails.push(seg.slice(Math.min(...hits)));
+    }
+    if (!tails.length) process.exit(0);
+    const tail = tails.join("\n");
 
     // A wildcard (web-ws-*, project/*) deletes the workspaces that match it even
     // if their name does not appear written out.

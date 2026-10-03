@@ -47,4 +47,30 @@ echo
 dirty="$(git -C "$REPO_DIR" status --porcelain | wc -l)"
 [[ "$dirty" -eq 0 ]] || warn "$(count "$dirty" "uncommitted file" "uncommitted files") in the repo (it does not prevent the merge)"
 
-gh pr merge "$NUM" --repo "$slug" --merge --delete-branch "${@:2}"
+gh pr merge "$NUM" --repo "$slug" --merge --delete-branch "${@:2}" || true
+
+# The exit code is not trusted: the cleanup after the merge can fail once the
+# merge is already done.
+merged_at="$(gh pr view "$NUM" --repo "$slug" --json mergedAt -q '.mergedAt // ""' 2>/dev/null || true)"
+[[ -n "$merged_at" ]] || die "proposal #$NUM was not merged"
+
+# The task of the workspace that held the branch is now merged. Without this,
+# `crux workspace rm` afterwards left it open instead of archiving it.
+source "$CRUX_HOME/lib/registry.sh"
+main_dir="$REPO_DIR"
+is_worktree "$REPO_DIR" && main_dir="$(cd "$(main_repo "$REPO_DIR")" && pwd)"
+ws_path="$(node -e '
+  const fs = require("fs");
+  const [file, branch, repo] = process.argv.slice(1);
+  let r = {};
+  try { r = JSON.parse(fs.readFileSync(file, "utf8")); } catch { process.exit(0); }
+  const hit = Object.values(r.workspaces || {}).find((w) => w.branch === branch && w.repo === repo);
+  if (hit) process.stdout.write(hit.path);
+' "$REGISTRY" "$branch" "$main_dir")"
+if [[ -n "$ws_path" ]]; then
+  task_record_file="$(task_file_for_path "$REGISTRY" "$ws_path" 2>/dev/null || echo "")"
+  if [[ -n "$task_record_file" && -f "$task_record_file" ]] &&
+     node "$CRUX_HOME/lib/task.mjs" status --file "$task_record_file" --to merged >/dev/null 2>&1; then
+    ok "task $(basename "$task_record_file" .md) marked as merged"
+  fi
+fi

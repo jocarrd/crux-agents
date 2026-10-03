@@ -98,3 +98,13 @@ bash "$CRUX_HOME/bin/link.sh" "$DOCS"
 
 echo
 info "suggested commit: docs(repos): add $REPO"
+
+# The pointers written into the code repo only reach the workspaces once they
+# are committed: a workspace branches from the main branch, not from the files
+# lying around in the checkout.
+if [[ -d "$ROOT/$REPO/.git" ]]; then
+  pending="$(git -C "$ROOT/$REPO" status --porcelain -- AGENTS.md CLAUDE.md 2>/dev/null | awk '{print $2}' | tr '\n' ' ')"
+  [[ -n "$pending" ]] &&
+    info "and in $REPO: commit ${pending% }, or the workspaces, which branch from $(main_branch "$ROOT/$REPO"), will not have them"
+fi
+exit 0

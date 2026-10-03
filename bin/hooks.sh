@@ -41,6 +41,66 @@ dir_hooks() {
   echo "$d/hooks"
 }
 
+# A repo with core.hooksPath —its own versioned hooks, as many clients have—
+# makes git ignore .git/hooks, and with it every hook crux installs there: the
+# commit-msg that checks the language and the pre-push that guards the main
+# branch never ran, and nothing said so. crux keeps writing its hooks where it
+# always did, and points core.hooksPath at a directory of wrappers that run
+# crux's hook first and then the repo's own. It is local config, not versioned:
+# nothing of the client's repo changes.
+GIT_HOOK_NAMES="applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-commit
+prepare-commit-msg commit-msg post-commit pre-rebase post-checkout post-merge pre-push
+post-rewrite pre-auto-gc push-to-checkout"
+
+chain_hooks_path() {
+  local repo="$1" common own chain name
+  common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  chain="$common/crux-hooks"
+  own="$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)"
+  [[ -n "$own" ]] || return 0
+  if [[ "$own" != "$chain" ]]; then
+    git -C "$repo" config crux.originalHooksPath "$own"
+    git -C "$repo" config core.hooksPath "$chain"
+  fi
+  mkdir -p "$chain"
+  for name in $GIT_HOOK_NAMES; do
+    cat > "$chain/$name" <<'EOF'
+#!/usr/bin/env bash
+# Installed by crux hooks install: crux's hook, then the repo's own.
+name="$(basename "$0")"
+common="$(git rev-parse --path-format=absolute --git-common-dir)"
+original="$(git config --get crux.originalHooksPath || true)"
+[[ -z "$original" || "$original" = /* ]] || original="$(git rev-parse --show-toplevel)/$original"
+input="$(mktemp)"; trap 'rm -f "$input"' EXIT
+[[ -t 0 ]] || cat > "$input"
+if [[ -x "$common/hooks/$name" ]]; then
+  "$common/hooks/$name" "$@" < "$input" || exit $?
+fi
+if [[ -n "$original" && -x "$original/$name" ]]; then
+  "$original/$name" "$@" < "$input" || exit $?
+fi
+exit 0
+EOF
+    chmod +x "$chain/$name"
+  done
+  info "$(basename "$repo") has its own hooks ($own): crux runs its hooks first, then those"
+}
+
+unchain_hooks_path() {
+  local repo="$1" common original
+  common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  [[ "$(git -C "$repo" config --get core.hooksPath 2>/dev/null)" == "$common/crux-hooks" ]] || return 0
+  original="$(git -C "$repo" config --get crux.originalHooksPath 2>/dev/null || true)"
+  if [[ -n "$original" ]]; then
+    git -C "$repo" config core.hooksPath "$original"
+  else
+    git -C "$repo" config --unset core.hooksPath
+  fi
+  git -C "$repo" config --unset crux.originalHooksPath 2>/dev/null || true
+  rm -rf "$common/crux-hooks"
+  ok "$(basename "$repo"): core.hooksPath back to ${original:-the default}"
+}
+
 cmd_status() {
   echo "agent hooks — $SETTINGS"
   if [[ ! -f "$SETTINGS" ]]; then
@@ -302,6 +362,7 @@ EOF
   if [[ -n "$kernel" ]] && git -C "$kernel" rev-parse --git-dir >/dev/null 2>&1; then
     install_pre_push "$kernel"
     install_commit_msg "$kernel"
+    chain_hooks_path "$kernel"
     ok "pre-push and commit-msg in the kernel"
   fi
 
@@ -335,6 +396,7 @@ rm -f /tmp/crux-precommit.$$
 EOF
     chmod +x "$(dir_hooks "$docs")/pre-commit"
     install_commit_msg "$docs"
+    chain_hooks_path "$docs"
     ok "pre-commit and commit-msg in $(basename "$docs")"
 
     # Commits in code repos are the majority, so that is where it is needed
@@ -362,6 +424,7 @@ EOF
       # in the code repos, which is where almost all the work happens. Like
       # commit-msg, it is local state: it touches nothing of a client's repo.
       install_pre_push "$root/$repo" && ok "pre-push in $repo"
+      chain_hooks_path "$root/$repo"
     done < <(json_get "$docs/crux.json" repos 2>/dev/null)
   else
     info "no docs repo in the current directory: the pre-commit is not installed"
@@ -395,6 +458,12 @@ cmd_remove() {
     if [[ -f "$(dir_hooks "$docs")/commit-msg" ]]; then
       grep -q "crux hooks install" "$(dir_hooks "$docs")/commit-msg" && rm "$(dir_hooks "$docs")/commit-msg" && ok "commit-msg removed"
     fi
+    unchain_hooks_path "$docs"
+    local repo
+    while IFS= read -r repo; do
+      [[ -n "$repo" ]] && valid_name "$repo" && [[ -d "$(dirname "$docs")/$repo" ]] &&
+        unchain_hooks_path "$(dirname "$docs")/$repo"
+    done < <(json_get "$docs/crux.json" repos 2>/dev/null)
   fi
 }
 

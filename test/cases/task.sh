@@ -455,3 +455,31 @@ test_a_record_with_spanish_headings_is_still_read() {
   assert_not_contains "$body" "## Desviaciones y decisiones" "without leaving the Spanish one behind"
   assert_contains "$body" "kept" "and keeps what it appended"
 }
+
+test_crux_merge_marks_the_workspace_task_as_merged() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  git -C "$root/app" remote add origin "https://github.com/someone/app.git"
+  bash "$CRUX_HOME/bin/workspace.sh" new maps --repo "$root/app" >/dev/null 2>&1
+
+  local fake="$SB/bin"; mkdir -p "$fake"
+  cat > "$fake/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "pr view")
+    if [[ "$*" == *mergedAt* ]]; then echo "2026-10-04T00:00:00Z"
+    else echo '{"title":"feat: maps","state":"OPEN","headRefName":"ws/maps","baseRefName":"main","isDraft":false,"mergeable":"MERGEABLE"}'; fi ;;
+  *) exit 0 ;;
+esac
+GH
+  chmod +x "$fake/gh"
+
+  local out
+  out="$(cd "$root/app" && PATH="$fake:$PATH" bash "$CRUX_HOME/bin/merge.sh" 7 2>&1)"
+  assert_contains "$out" "task maps marked as merged" "says it closed the task's step"
+  assert_contains "$(cat "$SB/tasks/proj/maps.md")" "status: merged" "the record moves to merged"
+
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm maps 2>&1)"
+  assert_contains "$out" "task 'maps' archived" "so removing the workspace archives it"
+}

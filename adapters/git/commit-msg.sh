@@ -9,12 +9,15 @@
 # It has two scopes, and the difference matters:
 #
 #   full       our repo: our conventions are checked
-#   signature  client repo: only the tool signature is removed
+#   signature  client repo: the tool signature is removed and the language checked
 #
-# In a client's repo, the language and format of their history are theirs.
-# Imposing our conventions on them would be exactly the same mistake the
-# client-repo profile exists to avoid. What is neither theirs nor ours is the
-# agent's signature: that must not appear anywhere.
+# In a client's repo, the format of their history is theirs: imposing our
+# conventional commits or line width would be exactly the mistake the
+# client-repo profile exists to avoid. The language is not ours to choose
+# either, and that is why it comes from the contract: English unless the
+# project declares another. Leaving it out let a client whose whole team writes
+# English receive dozens of commits in Spanish. And the agent's signature must
+# not appear anywhere.
 SCOPE="${CRUX_COMMIT_MSG_SCOPE:-full}"
 COMMIT_LANG="${CRUX_COMMIT_MSG_LANG:-en}"
 
@@ -35,8 +38,6 @@ if grep -qiE "$SIGNATURE" "$1"; then
   echo "crux: removed the tool signature from the commit message"
 fi
 
-[[ "$SCOPE" == "full" ]] || exit 0
-
 # A merge, a revert or a fixup is written by nobody: git generates them.
 subject="$(grep -v '^#' "$1" | grep -m1 . || true)"
 case "$subject" in
@@ -53,27 +54,29 @@ rejection() {
   exit 1
 }
 
-# --- Conventional commits ----------------------------------------------------
-#
-# All 97 commits of the kernel comply except the 8 merges, already exempt above.
-KINDS='feat|fix|chore|docs|refactor|test|style|perf|build|ci|revert'
-if ! printf '%s' "$subject" | grep -qE "^($KINDS)(\([^)]+\))?!?: ."; then
-  rejection "the subject does not follow conventional commits" \
-    "$(printf '%s\n\ntypes: %s' "$subject" "$KINDS")"
-fi
+if [[ "$SCOPE" == "full" ]]; then
+  # --- Conventional commits ----------------------------------------------------
+  #
+  # All 97 commits of the kernel comply except the 8 merges, already exempt above.
+  KINDS='feat|fix|chore|docs|refactor|test|style|perf|build|ci|revert'
+  if ! printf '%s' "$subject" | grep -qE "^($KINDS)(\([^)]+\))?!?: ."; then
+    rejection "the subject does not follow conventional commits" \
+      "$(printf '%s\n\ntypes: %s' "$subject" "$KINDS")"
+  fi
 
-# Not a single one in the history starts with a capital after the prefix: it costs nothing.
-if printf '%s' "$subject" | grep -qE "^($KINDS)(\([^)]+\))?!?: [A-Z]"; then
-  rejection "the subject starts with a capital letter after the prefix" "$subject"
-fi
+  # Not a single one in the history starts with a capital after the prefix: it costs nothing.
+  if printf '%s' "$subject" | grep -qE "^($KINDS)(\([^)]+\))?!?: [A-Z]"; then
+    rejection "the subject starts with a capital letter after the prefix" "$subject"
+  fi
 
-# --- Body width --------------------------------------------------------
-#
-# 100 characters. Of the real history only two lines exceed it, and by one.
-# A line without spaces cannot be split: a long URL is not an oversight.
-long_ones="$(grep -v '^#' "$1" | awk 'length($0)>100 && $0 ~ / / {print NR": "substr($0,1,60)"…"}')"
-if [[ -n "$long_ones" ]]; then
-  rejection "there are lines over 100 characters in the body" "$long_ones"
+  # --- Body width --------------------------------------------------------
+  #
+  # 100 characters. Of the real history only two lines exceed it, and by one.
+  # A line without spaces cannot be split: a long URL is not an oversight.
+  long_ones="$(grep -v '^#' "$1" | awk 'length($0)>100 && $0 ~ / / {print NR": "substr($0,1,60)"…"}')"
+  if [[ -n "$long_ones" ]]; then
+    rejection "there are lines over 100 characters in the body" "$long_ones"
+  fi
 fi
 
 # --- Language ------------------------------------------------------------------

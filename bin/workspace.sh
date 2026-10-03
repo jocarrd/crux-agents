@@ -81,7 +81,7 @@ load_config() {
     const w = (JSON.parse(fs.readFileSync(file, "utf8")).workspace) || {};
     const r = (w.repos || {})[repo] || {};
     const env = { ...(w.env || {}), ...(r.env || {}) };
-    const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, "")}'"'"'`;
+    const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, `'"'"'\\'"'"''"'"'`)}'"'"'`;
     console.log(`PORT_BASE=${Number(w.portBase) || 3000}`);
     console.log(`PORTS_PER_SLOT=${Number(w.portsPerSlot) || 10}`);
     console.log(`ENV_FILE=${q(r.envFile || w.envFile || "")}`);
@@ -617,6 +617,12 @@ cmd_finish() {
     local first_one
     first_one="$(git -C "$path" log --format='%s' "$base..$branch" | tail -1)"
     [[ -n "$first_one" ]] || first_one="$(git -C "$path" log -1 --format=%s "$branch")"
+    # The title is what the squash leaves in the main branch's history. With
+    # several commits, the first one rarely sums them up.
+    if [[ -z "$title" && "$commits" -gt 1 ]]; then
+      warn "the title comes from the first of $commits commits: \"$first_one\""
+      info "if it does not sum them up: gh pr edit --title \"...\", or next time finish --title \"...\""
+    fi
     # gh's error is kept instead of thrown away: without it, an already open
     # proposal, a mandatory template or a missing permission gave the same
     # message as not having gh installed.
@@ -689,7 +695,7 @@ cmd_merge() {
     // Single quotes, as in load_config: inside double quotes bash still expands
     // $(...), and these values come from gh, that is from the title anyone can
     // give the proposal.
-    const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, "")}'"'"'`;
+    const q = (v) => `'"'"'${String(v).replace(/'"'"'/g, `'"'"'\\'"'"''"'"'`)}'"'"'`;
     console.log(`PR_NUM=${d.number}`);
     console.log(`PR_URL=${q(d.url)}`);
     console.log(`PR_TITLE=${q(d.title)}`);

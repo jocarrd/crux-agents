@@ -113,6 +113,11 @@ test_the_guard_covers_the_other_ways_of_taking_a_workspace_away() {
   assert_eq "2" "$(_cut "rm -rf $root/*")" "and with one that takes the whole project folder"
   assert_eq "0" "$(_cut "rm -rf $root/*.log")" "but not with one that reaches no workspace"
   assert_eq "0" "$(_cut "rm -rf ./dist/*")" "nor with one relative to another folder"
+
+  # It used to look at everything after the rm, later commands included.
+  assert_eq "0" "$(_cut "rm -rf /tmp/scratch; export CRUX_HOME=$ws")" "a later command that names it is not the rm"
+  assert_eq "2" "$(_cut "rm -rf /tmp/scratch; rm -rf $ws")" "but a second rm on it is still stopped"
+  assert_eq "2" "$(_cut "rm -rf \"$ws\" && echo ok")" "and the path in quotes before an &&"
 }
 
 test_hooks_install_hooks_the_guard_for_bash_only() {

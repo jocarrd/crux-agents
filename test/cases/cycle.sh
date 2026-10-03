@@ -158,7 +158,7 @@ test_status_flags_open_proposal_without_receipt() {
   local src; src="$(cat "$CRUX_HOME/bin/status.sh")"
   assert_contains "$src" "has no gate receipt" \
     "status warns about an open proposal whose branch did not pass the gate"
-  assert_contains "$src" "command -v gh >/dev/null || break" \
+  assert_contains "$src" "if command -v gh >/dev/null; then" \
     "and does not even try without gh"
   assert_contains "$src" "sealed " "reading the receipt seal, not a loose sha"
 }
@@ -222,7 +222,7 @@ test_workspace_supports_per_repo_config() {
    "repos":{
      "front":{"env":{"PORT":"{{PORT0}}","API":"http://localhost:{{PORT1}}"}},
      "back":{"env":{"PORT":"{{PORT1}}","DB":"db_{{SLOT}}"},
-             "setup":"echo created db_{{SLOT}} > $CRUX_PROJECTS_DIR/setup-ran.txt"}}}}
+             "setup":"echo 'created  db_{{SLOT}}' > $CRUX_PROJECTS_DIR/setup-ran.txt"}}}}
 JSON
 
   bash "$CRUX_HOME/bin/workspace.sh" new f --repo "$root/front" >/dev/null 2>&1
@@ -240,6 +240,8 @@ JSON
   assert_not_contains "$f" "DB=" "those of another repo do not leak in"
 
   assert_file "$CRUX_PROJECTS_DIR/setup-ran.txt" "the setup hook runs"
+  # Its single quotes used to be stripped on the way to the shell.
+  assert_contains "$(cat "$CRUX_PROJECTS_DIR/setup-ran.txt")" "created  db_1" "with its quotes intact"
 }
 
 # The machine doctor looks at the same directories as the rest of the kernel,
@@ -414,11 +416,51 @@ test_hooks_install_commit_msg_in_client_repo_too() {
   bash "$root/vendor/.git/hooks/commit-msg" "$f" >/dev/null 2>&1
   assert_not_contains "$(cat "$f")" "Co-Authored-By" "and the hook strips the signature"
 
-  # But only that: the language and format of a client's history are theirs.
-  # Imposing ours would be the error the profile exists to avoid.
-  printf 'Añadido lo que hacia falta para que esto pase de una vez\n' > "$f"
-  assert_exit 0 "and does not impose our language or format on it" \
+  # The format of a client's history is theirs: ours is not imposed.
+  printf 'Update the readme\n' > "$f"
+  assert_exit 0 "does not impose our commit format on it" \
     bash "$root/vendor/.git/hooks/commit-msg" "$f"
+
+  # The language comes from the contract, English unless it says otherwise.
+  # Leaving it out let dozens of Spanish commits into an English-only client.
+  printf 'Añadido lo que hacia falta para que esto pase de una vez\n' > "$f"
+  assert_exit 1 "but checks the language the contract asks for" \
+    bash "$root/vendor/.git/hooks/commit-msg" "$f"
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[],"commit":{"language":"es"}}\n' \
+    > "$root/cli-docs/crux.json"
+  ( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+  assert_exit 0 "and a client that writes Spanish declares it" \
+    bash "$root/vendor/.git/hooks/commit-msg" "$f"
+}
+
+test_hooks_run_in_a_repo_with_its_own_hooks_path() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/cli"
+  mkdir -p "$root/vendor/.githooks" "$root/cli-docs"
+  git -C "$root/vendor" init -q
+  git -C "$root/vendor" config core.hooksPath .githooks
+  printf '#!/usr/bin/env bash\necho client-hook-ran >> "%s/ran"\n' "$SB" > "$root/vendor/.githooks/commit-msg"
+  chmod +x "$root/vendor/.githooks/commit-msg"
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' \
+    > "$root/cli-docs/crux.json"
+  git -C "$root/cli-docs" init -q
+
+  # git ignores .git/hooks when core.hooksPath is set: crux's hooks never ran.
+  local out; out="$( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" install 2>&1 )"
+  assert_contains "$out" "has its own hooks (.githooks)" "says the repo has its own hooks"
+
+  local f="$SB/MSG" rc=0
+  printf 'Añadido lo que hacia falta para que esto pase de una vez\n' > "$f"
+  ( cd "$root/vendor" && git hook run commit-msg -- "$f" ) >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "git now runs crux's commit-msg"
+
+  printf 'Update the readme\n' > "$f"
+  rc=0; ( cd "$root/vendor" && git hook run commit-msg -- "$f" ) >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "a good message goes through"
+  assert_contains "$(cat "$SB/ran" 2>/dev/null)" "client-hook-ran" "and the repo's own hook still runs after it"
+
+  out="$( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" remove 2>&1 )"
+  assert_eq ".githooks" "$(git -C "$root/vendor" config --get core.hooksPath)" "remove gives the repo its hooks path back"
 }
 
 test_hooks_enforce_conventions_in_own_repo() {

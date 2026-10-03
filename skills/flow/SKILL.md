@@ -13,6 +13,12 @@ questions or code reading, to obvious one-line changes (a typo, a config value)
 or to an emergency in production, where the incident playbook rules and the
 order is recovered afterwards. If in doubt, apply it.
 
+**Long waits run in the background.** The suite, the gate, the CI, a deployment,
+a sub-agent: launch it in the background, say it is running and carry on with
+work that does not touch the tree being tested, such as another task, the next
+fix or the proposal text. Commit before launching the gate: the receipt is for
+HEAD, and editing while it runs tests something other than what gets committed.
+
 ## 1. Understand the terrain
 
 If you do not know the repo: `/repo-map`. If the project follows the standard,

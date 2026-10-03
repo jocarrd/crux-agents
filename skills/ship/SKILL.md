@@ -102,6 +102,8 @@ crux ship seal                  # after the commit
 ```
 
 `seal` refuses if anything is left red and closes the receipt against HEAD.
+A long suite goes in the background once the commit is made: work elsewhere
+until it reports, and do not touch the tree it is testing.
 `crux workspace finish` does not open the proposal without that receipt.
 `finish --skip-gate` exists only to obey whoever decides, never to save
 yourself a step.

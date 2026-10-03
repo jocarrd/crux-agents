@@ -58,10 +58,15 @@ if [[ -f "$REGISTRY" ]]; then
   if [[ -z "$(registry_entries)" ]]; then
     echo "  none"
   else
+    # The columns fit the longest name: a fixed width pushed the long ones out
+    # of line.
+    entries="$(registry_entries)"
+    name_w="$(cut -f1 <<<"$entries" | awk '{ if (length > w) w = length } END { print w }')"
+    branch_w="$(cut -f3 <<<"$entries" | awk '{ if (length > w) w = length } END { print w }')"
     while IFS=$'\t' read -r n path_value branch slot; do
       alive=""; [[ -d "$path_value" ]] || alive="  (no worktree)"
-      printf '  %-14s %-24s slot %s%s\n' "$n" "$branch" "$slot" "$alive"
-    done < <(registry_entries)
+      printf "  %-${name_w}s  %-${branch_w}s  slot %s%s\n" "$n" "$branch" "$slot" "$alive"
+    done <<<"$entries"
   fi
 
   # A workspace whose branch is no longer on the remote is almost always merged
@@ -87,23 +92,37 @@ if [[ -f "$REGISTRY" ]]; then
   # A proposal opened from a branch without a receipt is the shortcut taken
   # behind the back: legitimate if a person asked for it, but it has to be
   # visible. Without this, going around the gate left no trace anywhere.
-  registry_entries | while IFS=$'\t' read -r n path branch _slot; do
-    [[ -d "$path" ]] || continue
-    command -v gh >/dev/null || break
-    origin="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
-    [[ -n "$origin" ]] || continue
-    slug="$(echo "$origin" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
-    open_pr="$(gh pr list --repo "$slug" --head "$branch" --state open --json number \
-      --jq '.[0].number' 2>/dev/null || true)"
-    [[ -n "$open_pr" && "$open_pr" != "null" ]] || continue
-    receipt="$path/.crux-ship"
-    head="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
-    sealed=""
-    [[ -f "$receipt" ]] && sealed="$(awk '/^sealed /{print $2}' "$receipt" | tail -1)"
-    if [[ "$sealed" != "$head" ]]; then
-      warn "$slug#$open_pr ($n) is open and its branch has no gate receipt"
-    fi
-  done
+  # One call per repository and all of them at once: one per workspace, one
+  # after the other, was 0.6 s each and almost all of what status took.
+  # No associative arrays: macOS ships bash 3.2.
+  if command -v gh >/dev/null; then
+    prs_dir="$(mktemp -d "${TMPDIR:-/tmp}/crux-status.XXXXXX")"
+    while IFS=$'\t' read -r n path branch _slot; do
+      [[ -d "$path" ]] || continue
+      origin="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
+      [[ -n "$origin" ]] || continue
+      printf '%s\t%s\t%s\t%s\n' "$n" "$path" "$branch" \
+        "$(echo "$origin" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+    done < <(registry_entries) > "$prs_dir/workspaces"
+    for slug in $(cut -f4 "$prs_dir/workspaces" | sort -u); do
+      gh pr list --repo "$slug" --state open --limit 200 --json number,headRefName \
+        --jq '.[] | "\(.headRefName)\t\(.number)"' > "$prs_dir/${slug//\//__}" 2>/dev/null &
+    done
+    wait
+
+    while IFS=$'\t' read -r n path branch slug; do
+      open_pr="$(awk -F'\t' -v b="$branch" '$1 == b { print $2; exit }' "$prs_dir/${slug//\//__}" 2>/dev/null)"
+      [[ -n "$open_pr" ]] || continue
+      receipt="$path/.crux-ship"
+      head="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
+      sealed=""
+      [[ -f "$receipt" ]] && sealed="$(awk '/^sealed /{print $2}' "$receipt" | tail -1)"
+      if [[ "$sealed" != "$head" ]]; then
+        warn "$slug#$open_pr ($n) is open and its branch has no gate receipt"
+      fi
+    done < "$prs_dir/workspaces"
+    rm -rf "$prs_dir"
+  fi
 else
   echo "  none"
 fi
