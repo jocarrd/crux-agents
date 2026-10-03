@@ -12,6 +12,8 @@ const RECORDATORIO = {
   tareas: [
     { tarea: 'alfa/revisar-informe', nombre: 'revisar-informe', estado: 'open', cuando: 'hoy', siguiente: 'Decidir qué enseña el informe', aqui: false },
     { tarea: 'beta/radar', nombre: 'radar', estado: 'open', cuando: 'hace 14 días', siguiente: '', aqui: true },
+    { tarea: 'alfa/dominio', nombre: 'dominio', estado: 'waiting', cuando: 'ayer', siguiente: '¿Apuntamos el dominio?', aqui: false,
+      waiting: { on: 'Alex', ask: '¿Apuntamos el dominio?', since: '2026-09-20', ref: '', days: 9, nudge: true } },
   ],
 }
 
@@ -92,5 +94,14 @@ test('fuera de un espacio de trabajo el pie queda como estaba', async ($, on) =>
   await $.classic.SessionStart(INICIO)
   const ui = await $.ui.mount({ plugin: 'crux', surface: 'terminal', ...PIE })
   expect(await ui.find({ type: 'Text', text: /checkout/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('una tarea en espera dice a quién espera y avisa de insistir', async ($, on) => {
+  entorno(on)
+  await $.classic.SessionStart(INICIO)
+  const ui = await $.ui.mount({ plugin: 'crux', surface: 'terminal', ...BANDA })
+  expect(await ui.find({ key: 'retomar-alfa/dominio' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /esperando a Alex, hace 9 días · conviene insistir/ })).toBeDefined()
   await ui.unmount()
 })

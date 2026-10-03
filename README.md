@@ -237,6 +237,16 @@ Lo escriben los comandos, no hay que editarlo a mano:
 | `crux workspace merge --yes` | Se anota la fusión | `merged` |
 | `crux workspace rm` | Al cerrar su último espacio, si está fusionada, se archiva en `done/` | `closed` |
 
+Cuando falta la respuesta de otra persona, la tarea **espera** sin ocupar sitio:
+
+```bash
+crux task wait --on "Alex" --ask "¿apuntamos el dominio al servidor nuevo?" --ref "correo del 3-10"
+```
+
+Apunta a quién, qué y desde cuándo; retira el espacio y la rama si no tienen
+nada propio, y el recordatorio la enseña aparte («esperando a Alex, hace 4
+días»), con aviso de insistir a los 7. `crux workspace resume` la retoma.
+
 **No se acumula.** Las archivadas salen de las listas y caducan a los 180 días
 con `crux workspace gc --yes` (`CRUX_TASKS_RETENTION_DAYS` para cambiarlo).
 

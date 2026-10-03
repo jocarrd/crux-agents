@@ -88,6 +88,13 @@ export function register(on) {
     return next({ ...e, props: { ...e.props, modes: [...e.props.modes, '▸ ' + etiqueta] } })
   })
 
+  // Una tarea que espera a otra persona no es trabajo pendiente: dice a quién
+  // espera y desde cuándo, y avisa cuando conviene insistir.
+  const waitingLabel = (w) => {
+    const age = w.days == null ? '' : w.days === 0 ? 'hoy' : w.days === 1 ? 'ayer' : 'hace ' + w.days + ' días'
+    return '· esperando a ' + w.on + (age ? ', ' + age : '') + (w.nudge ? ' · conviene insistir' : '')
+  }
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const lista = await read($, tareas)
@@ -114,8 +121,12 @@ export function register(on) {
                   await $.prompt.submit({ text: `Retomemos la tarea ${t.tarea}.`, asUser: true })
                 },
               }),
-              Text({ dimColor: true, children: ['· ' + t.cuando + (t.estado === 'open' ? '' : ' · ' + t.estado)] }),
-              ...(t.aqui ? [] : [Text({ color: 'warning', children: ['· sin espacio aquí'] })]),
+              ...(t.waiting
+                ? [Text({ color: t.waiting.nudge ? 'warning' : undefined, dimColor: !t.waiting.nudge, children: [waitingLabel(t.waiting)] })]
+                : [
+                    Text({ dimColor: true, children: ['· ' + t.cuando + (t.estado === 'open' ? '' : ' · ' + t.estado)] }),
+                    ...(t.aqui ? [] : [Text({ color: 'warning', children: ['· sin espacio aquí'] })]),
+                  ]),
             ],
           }),
           ...(t.siguiente

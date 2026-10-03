@@ -14,6 +14,10 @@
 #                                    con --why es una decisión, y al archivar la tarea
 #                                    pasa a repos/<repo>/notes.md del docs repo
 #   crux task status <estado> [--force]
+#   crux task wait --on "<quién>" --ask "<qué>" [--ref "<dónde>"] [--keep]
+#                                    la tarea espera a otra persona: lo apunta y retira
+#                                    los espacios y ramas que ya no aportan nada
+#   crux task unwait                 la respuesta llegó: la tarea vuelve a ser trabajo
 #   crux task list [--all] [--done]  las tareas abiertas, con su siguiente paso; --done, las archivadas
 #   crux task archive                la cierra y la aparta a done/, fechada
 #
@@ -67,6 +71,54 @@ fichero_actual() {
 }
 
 motor() { node "$MOTOR" "$@"; }
+
+# Al ponerse a esperar, un espacio limpio y una rama sin nada propio solo ocupan
+# sitio. Se retiran; lo que tenga trabajo sin publicar se queda y se dice.
+retire_idle_workspaces() {
+  local task_file="$1" task project
+  task="$(awk -F': ' '/^task:/{print $2; exit}' "$task_file")"
+  project="$(basename "$(dirname "$task_file")")"
+  local entries
+  entries="$(node -e '
+    const fs = require("fs");
+    let r = {};
+    try { r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch (e) {
+      if (fs.existsSync(process.argv[1])) { console.error("no pude leer " + process.argv[1]); process.exit(2); }
+    }
+    for (const [name, w] of Object.entries(r.workspaces || {}))
+      if (w.project === process.argv[2] && w.task === process.argv[3]) console.log([name, w.repo, w.path, w.branch].join("\t"));
+  ' "$REGISTRY" "$project" "$task")" || die "no pude leer el registro de espacios $REGISTRY"
+  [[ -n "$entries" ]] || { info "la tarea no tiene espacios en esta máquina"; return 0; }
+
+  local name repo path branch main ahead merged_pr
+  while IFS=$'\t' read -r name repo path branch; do
+    if [[ -d "$path" && -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
+      warn "$name tiene cambios sin commitear: se queda"
+      continue
+    fi
+    main="$(rama_principal "$repo")"
+    ahead="$(git -C "$repo" rev-list --count "$main..$branch" 2>/dev/null || echo 0)"
+    merged_pr=""
+    if [[ "$ahead" -gt 0 ]]; then
+      merged_pr="$(cd "$repo" && gh pr list --head "$branch" --state merged --json number -q '.[0].number // ""' 2>/dev/null || true)"
+      if [[ -z "$merged_pr" ]]; then
+        warn "$name tiene $ahead commit(s) sin fusionar en $branch: se queda"
+        continue
+      fi
+    fi
+    if [[ -d "$path" ]]; then
+      "$CRUX_HOME/bin/workspace.sh" rm "$name" --include-ignored >/dev/null 2>&1 \
+        || { warn "no pude retirar el espacio $name: crux workspace rm $name"; continue; }
+    fi
+    git -C "$repo" branch -D "$branch" >/dev/null 2>&1 || true
+    if [[ -n "$merged_pr" ]] && git -C "$repo" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+      git -C "$repo" push -q origin --delete "$branch" >/dev/null 2>&1 \
+        || warn "no pude borrar la rama remota $branch"
+    fi
+    motor retire --file "$task_file" --repo "$(basename "$repo")" --branch "$branch" --workspace "$name"
+    ok "$name retirado, y su rama $branch${merged_pr:+ (fusionada en #$merged_pr)}"
+  done <<< "$entries"
+}
 
 case "$op" in
   show)
@@ -129,6 +181,35 @@ case "$op" in
     motor status --file "$f" --to "$1" ${2:+"$2"}
     ok "estado: $(awk -F': ' '/^status:/{print $2; exit}' "$f")"
     ;;
+  wait)
+    f="$(fichero_actual)"
+    [[ -f "$f" ]] || die "no existe el registro $f"
+    on="" ask="" ref="" keep=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --on|--ask|--ref)
+          [[ -n "${2:-}" && "$2" != --* ]] || die "$1 necesita un texto"
+          case "$1" in --on) on="$2" ;; --ask) ask="$2" ;; --ref) ref="$2" ;; esac
+          shift 2 ;;
+        --keep) keep=1; shift ;;
+        *) die "opción desconocida: $1" ;;
+      esac
+    done
+    [[ -n "$on" && -n "$ask" ]] || die "uso: crux task wait --on \"<quién>\" --ask \"<qué>\" [--ref \"<dónde>\"] [--keep]"
+    motor wait --file "$f" --on "$on" --ask "$ask" ${ref:+--ref "$ref"}
+    ok "esperando a $on: $ask"
+    if [[ $keep -eq 1 ]]; then
+      info "espacios y ramas intactos (--keep)"
+    else
+      retire_idle_workspaces "$f"
+    fi
+    info "cuando llegue la respuesta: crux workspace resume $(awk -F': ' '/^task:/{print $2; exit}' "$f"), o crux task unwait"
+    ;;
+  unwait)
+    f="$(fichero_actual)"
+    [[ -f "$f" ]] || die "no existe el registro $f"
+    if [[ "$(motor unwait --file "$f")" == "cleared" ]]; then ok "la tarea ya no espera respuesta"; else info "la tarea no estaba esperando"; fi
+    ;;
   archive)
     f="$(fichero_actual)"
     [[ -f "$f" ]] || die "no existe el registro $f"
@@ -165,6 +246,12 @@ case "$op" in
       IFS=$'\x1f' read -r tarea estado pasos siguiente < <(motor summary --file "$f")
       [[ "$estado" == "closed" ]] && continue
       hay=1
+      waiting="$(motor waiting --file "$f")"
+      if [[ -n "$waiting" ]]; then
+        IFS=$'\x1f' read -r on ask since _ <<< "$waiting"
+        printf '%-28s %-12s %-6s %s\n' "$p/$tarea" "waiting" "$pasos" "a $on desde $since: ${ask:0:50}"
+        continue
+      fi
       printf '%-28s %-12s %-6s %s\n' "$p/$tarea" "$estado" "$pasos" "${siguiente:0:70}"
     done
     [[ $hay -eq 1 ]] || echo "sin tareas abiertas${proyecto:+ en $proyecto (todas: crux task list --all)}"
