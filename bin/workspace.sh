@@ -300,18 +300,47 @@ cmd_new() {
     fi
   fi
 
-  if [[ -n "$ENV_FILE" && "$ENV_TEMPLATE" != "{}" ]]; then
-    node -e '
+  if [[ -n "$ENV_FILE" ]]; then
+    # It starts from the main checkout's file: it is ignored by git, so the
+    # worktree never gets it, and writing only the template's variables left a
+    # workspace without the keys the app needs to start (a 404 at login). The
+    # template wins where both define a variable: ports and databases are per
+    # slot.
+    local env_report
+    env_report="$(node -e '
       const fs = require("fs");
-      const [file, tmplRaw, slot, port0, name, branch] = process.argv.slice(1);
+      const [file, base, example, tmplRaw, slot, port0, name, branch] = process.argv.slice(1);
       const subst = (v) => String(v)
         .replace(/\{\{SLOT\}\}/g, slot).replace(/\{\{NAME\}\}/g, name)
         .replace(/\{\{BRANCH\}\}/g, branch)
         .replace(/\{\{PORT(\d+)\}\}/g, (_, i) => String(Number(port0) + Number(i)));
-      const lines = Object.entries(JSON.parse(tmplRaw)).map(([k, v]) => `${k}=${subst(v)}`);
-      fs.writeFileSync(file, lines.join("\n") + "\n");
-    ' "$path/$ENV_FILE" "$ENV_TEMPLATE" "$slot" "$PORT0" "$name" "$branch"
-    ok "$ENV_FILE with slot $slot (ports from $PORT0)"
+      const keyOf = (l) => (l.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/) || [])[1];
+      const tmpl = Object.fromEntries(Object.entries(JSON.parse(tmplRaw)).map(([k, v]) => [k, subst(v)]));
+      const lines = fs.existsSync(base) ? fs.readFileSync(base, "utf8").split("\n") : [];
+      const seen = new Set();
+      const out = lines.map((l) => {
+        const k = keyOf(l);
+        if (!k) return l;
+        seen.add(k);
+        return k in tmpl ? `${k}=${tmpl[k]}` : l;
+      });
+      while (out.length && out[out.length - 1] === "") out.pop();
+      for (const [k, v] of Object.entries(tmpl)) if (!seen.has(k)) out.push(`${k}=${v}`);
+      fs.writeFileSync(file, out.join("\n") + "\n", { mode: 0o600 });
+      const have = new Set(out.map(keyOf).filter(Boolean));
+      const missing = fs.existsSync(example)
+        ? [...new Set(fs.readFileSync(example, "utf8").split("\n").map(keyOf).filter(Boolean))].filter((k) => !have.has(k))
+        : [];
+      process.stdout.write(`${lines.length ? "copied" : "fresh"}\t${missing.join(" ")}`);
+    ' "$path/$ENV_FILE" "$repo/$ENV_FILE" "$path/.env.example" "$ENV_TEMPLATE" "$slot" "$PORT0" "$name" "$branch")"
+    if [[ "${env_report%%$'\t'*}" == "copied" ]]; then
+      ok "$ENV_FILE from $repo_name's, with slot $slot (ports from $PORT0)"
+    else
+      ok "$ENV_FILE with slot $slot (ports from $PORT0)"
+    fi
+    local missing_keys="${env_report#*$'\t'}"
+    [[ -n "$missing_keys" ]] &&
+      warn "$ENV_FILE lacks what .env.example asks for: $missing_keys"
   else
     info "no workspace configuration for $repo_name: only the port range is reserved"
   fi

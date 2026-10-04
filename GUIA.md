@@ -239,7 +239,16 @@ tools, authentications, broken links. What comes out as a warning limits which
 skills you can use; what comes out as an error breaks something.
 
 Each project's credentials and secrets remain manual work, and live in its own
-onboarding documentation.
+onboarding documentation. What expires on its own —an OAuth refresh token, a CLI
+session— can be watched from here: declare it in `~/.crux/machine-checks.json`
+and `doctor --machine` runs it, with a time limit, and says how to fix it.
+
+```json
+{ "checks": [
+  { "name": "Search Console OAuth", "command": "bash ~/.config/<app>/refresh.sh",
+    "fix": "/oauth-reauthorize" }
+] }
+```
 
 ## Level 4 — Adopting a project that already exists
 
@@ -475,6 +484,11 @@ file. It is configured in the project's `crux.json`:
   }
 }
 ```
+
+The space's environment file starts from the main checkout's one, which git
+ignores and so never reaches a worktree on its own, and the template wins on
+every variable it defines. If the repo has a `.env.example`, the keys it asks
+for that are still missing are listed when the space opens.
 
 A shared registry guarantees that two spaces do not take the same slot, and
 released slots are reused.

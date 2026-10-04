@@ -244,6 +244,30 @@ JSON
   assert_contains "$(cat "$CRUX_PROJECTS_DIR/setup-ran.txt")" "created  db_1" "with its quotes intact"
 }
 
+test_workspace_env_starts_from_the_main_checkouts() {
+  sandbox >/dev/null
+  local root="$CRUX_PROJECTS_DIR/envp"
+  mkdir -p "$root/app" "$root/envp-docs"
+  git -C "$root/app" init -q
+  printf 'AUTH_SECRET=\nPORT=\nDB_URL=\nNEW_KEY=\n' > "$root/app/.env.example"
+  printf '.env.local\n' > "$root/app/.gitignore"
+  git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  # The real one, ignored by git: it never reaches a worktree on its own.
+  printf '# local\nAUTH_SECRET=s3cr3t\nPORT=3000\nDB_URL=mysql://main\n' > "$root/app/.env.local"
+  cat > "$root/envp-docs/crux.json" <<'JSON'
+{"crux":"0.1.0","project":"envp","profile":"multi-repo","repos":["app"],"sections":[],
+ "workspace":{"portBase":5000,"portsPerSlot":10,"envFile":".env.local",
+   "repos":{"app":{"env":{"PORT":"{{PORT0}}","DB_URL":"mysql://ws{{SLOT}}"}}}}}
+JSON
+  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new e --repo "$root/app" 2>&1)"
+  local env; env="$(cat "$root/app-ws-e/.env.local")"
+  assert_contains "$env" "AUTH_SECRET=s3cr3t" "the workspace gets the keys of the main checkout"
+  assert_contains "$env" "PORT=5000" "the template wins on what is per slot"
+  assert_contains "$env" "DB_URL=mysql://ws0" "including the database"
+  assert_not_contains "$env" "PORT=3000" "without the main checkout's port left behind"
+  assert_contains "$out" "lacks what .env.example asks for: NEW_KEY" "and says what .env.example asks for that nobody has"
+}
+
 # The machine doctor looks at the same directories as the rest of the kernel,
 # and like the rest it lets them be redirected. Pointing them at the fake home
 # says what is being tested; forcing only HOME depended on no override being set.
@@ -254,6 +278,30 @@ _machine_in() {
   CLAUDE_SKILLS_DIR="$home/.claude/skills" \
   CLAUDE_SETTINGS="$home/.claude/settings.json" \
     bash "$CRUX_HOME/bin/machine.sh"
+}
+
+test_machine_runs_the_checks_this_machine_declares() {
+  sandbox >/dev/null
+  local fakehome="$SB/home"
+  mkdir -p "$fakehome/.claude/skills" "$fakehome/.crux"
+  echo "CRUX_HOME=\"$CRUX_HOME\"" > "$fakehome/.crux/config"
+  # A refresh token that expired said nothing until the integration failed.
+  cat > "$fakehome/.crux/machine-checks.json" <<'JSON'
+{ "checks": [
+  { "name": "still valid", "command": "true" },
+  { "name": "expired token", "command": "printf '{\n  \"error\": \"invalid_grant\"\n}\n'; exit 1", "fix": "reauthorize it" },
+  { "name": "hangs", "command": "sleep 5" }
+] }
+JSON
+  local out
+  out="$(CRUX_MACHINE_CHECK_TIMEOUT=1 _machine_in "$fakehome" 2>&1)"
+  assert_contains "$out" "ok    still valid" "a check that passes says so"
+  assert_contains "$out" 'expired token: { "error": "invalid_grant" } — reauthorize it' "one that fails says why, on one line, and how to fix it"
+  assert_contains "$out" "hangs: no answer in 1 s" "and one that hangs does not hang the doctor"
+
+  echo '{ "checks": [' > "$fakehome/.crux/machine-checks.json"
+  out="$(_machine_in "$fakehome" 2>&1)" || true
+  assert_contains "$out" "machine-checks.json cannot be read" "a broken file is named, not taken as empty"
 }
 
 test_machine_detects_broken_hook() {

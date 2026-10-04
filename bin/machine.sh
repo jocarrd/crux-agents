@@ -130,6 +130,47 @@ else
   note "no Chrome or Chromium — you will not be able to: visual-test"
 fi
 
+# --- Credentials and services this machine declares --------------------------
+#
+# What expires on its own —an OAuth refresh token, a CLI session, a key with a
+# date— belongs to the machine, not to a project, and the kernel cannot name
+# it. Whoever uses it declares the check in ~/.crux/machine-checks.json:
+#
+#   { "checks": [ { "name": "…", "command": "…", "fix": "…" } ] }
+#
+# Each command is read-only and exits 0 when all is well. It runs with a time
+# limit: a check that hangs is reported, it does not hang the doctor.
+checks_file="${CRUX_MACHINE_CHECKS:-$HOME/.crux/machine-checks.json}"
+if [[ -f "$checks_file" ]]; then
+  echo
+  checks="$(node -e '
+    const fs = require("fs");
+    let c;
+    try { c = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
+    catch (e) { process.stderr.write(e.message); process.exit(1); }
+    for (const k of c.checks || []) {
+      if (!k.name || !k.command) { process.stderr.write("a check without name or command"); process.exit(1); }
+      // The command travels in base64: one with a newline or a tab would split
+      // the line it travels on.
+      process.stdout.write([k.name, Buffer.from(k.command).toString("base64"), k.fix || ""].join("\t") + "\n");
+    }
+  ' "$checks_file" 2>&1)" || { fail "$checks_file cannot be read: $checks"; checks=""; }
+  while IFS=$'\t' read -r check_name check_cmd check_fix; do
+    [[ -n "$check_name" ]] || continue
+    check_cmd="$(printf '%s' "$check_cmd" | base64 -d)"
+    check_out="$(timeout "${CRUX_MACHINE_CHECK_TIMEOUT:-20}" bash -c "$check_cmd" 2>&1 < /dev/null)"
+    check_rc=$?
+    if [[ $check_rc -eq 0 ]]; then
+      ok "$check_name"
+    elif [[ $check_rc -eq 124 ]]; then
+      note "$check_name: no answer in ${CRUX_MACHINE_CHECK_TIMEOUT:-20} s${check_fix:+ — $check_fix}"
+    else
+      # The whole output on one line: a JSON error starts with a lone "{".
+      note "$check_name: $(printf '%s' "$check_out" | tr -s '[:space:]' ' ' | cut -c1-120)${check_fix:+ — $check_fix}"
+    fi
+  done <<<"$checks"
+fi
+
 # --- Workspaces -----------------------------------------------------
 
 task_record="${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}"
