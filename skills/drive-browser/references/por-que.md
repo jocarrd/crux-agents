@@ -67,3 +67,10 @@ Killing Chrome would lose the session.
 The agent's environment kills background processes when each call ends. That is
 why Chrome is launched as a persistent task and driven with short calls; the
 profile copy keeps the cookies between them.
+
+## A locked screen
+
+Measured on 2026-10-04 at 02:47 with the desktop locked: headed Chrome
+navigated, took screenshots, answered `requestAnimationFrame` and took a real
+click. What a locked screen does not stop, a reboot does: the keyring stays
+closed until the user logs in, and the cookies cannot be decrypted.

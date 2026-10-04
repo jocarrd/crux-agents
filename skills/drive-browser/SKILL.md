@@ -17,8 +17,9 @@ repeat this, install one (it loads when the agent restarts):
 
 ## Needed
 
-- `google-chrome` and a **desktop session** (`echo $DISPLAY` non-empty), ideally
-  with the screen unlocked so you can look at it when something hangs.
+- `google-chrome` and a **desktop session** (`echo $DISPLAY` non-empty). A
+  locked screen does not stop headed Chrome; a reboot does, until the user logs
+  in and the keyring opens.
 - `python3` with `websockets`.
 - The keyring unlocked (it is if the user has Chrome open).
 
