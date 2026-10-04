@@ -66,14 +66,18 @@ write_profile_rules() {
   local rules; rules="$(profile_get "$PROFILE" "$DOCS" rules "")"
   [[ -n "$rules" ]] || return 0
 
-  local block
-  block="$(printf '<!-- crux:begin profile -->\n## Rules of the `%s` profile\n\nThe profile declares them, and `crux doctor` checks they are written here.\nFollowing them is up to whoever does the work: they are working rules, not\nautomatic checks.\n\n' "$PROFILE")"
-  local r
+  # Built with $'\n' and not with $(printf ...): a command substitution drops
+  # the trailing newlines, and every rule ended up glued to the previous one.
+  local nl=$'\n' block r
+  block="<!-- crux:begin profile -->${nl}## Rules of the \`$PROFILE\` profile${nl}${nl}"
+  block+="The profile declares them, and \`crux doctor\` checks they are written here.${nl}"
+  block+="Following them is up to whoever does the work: they are working rules, not${nl}"
+  block+="automatic checks.${nl}${nl}"
   while IFS= read -r r; do
     [[ -n "$r" ]] || continue
-    block="$block$(printf -- '- %s\n' "$r")"
+    block+="- $r${nl}"
   done <<< "$rules"
-  block="$block$(printf '\n<!-- crux:end -->')"
+  block+="${nl}<!-- crux:end -->"
 
   local target="$DOCS/AGENTS.md"
   [[ -f "$target" ]] || return 0

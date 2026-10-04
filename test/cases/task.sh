@@ -146,6 +146,26 @@ test_the_proposal_comes_from_the_task_without_showing_the_scaffolding() {
     env -C "$ws" bash "$CRUX_HOME/bin/ship.sh" body "$body"
 }
 
+test_a_task_without_objective_says_what_changes_from_the_commits() {
+  # With nothing but the gate receipt in the record, the proposal said only
+  # what was run, and not what it changes.
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new nogoal --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/nogoal.md"
+  node "$CRUX_HOME/lib/task.mjs" set --file "$f" --section "Verification" \
+    --text "- ok · test/run.sh (40s)" >/dev/null
+
+  local b; b="$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang en --commits "- fix: the guard skips heredocs")"
+  assert_contains "$b" $'## What changes\n\n- fix: the guard skips heredocs' "the commits stand in for the objective"
+  assert_contains "$b" "## Checked" "and what was checked is still there"
+
+  node "$CRUX_HOME/lib/task.mjs" set --file "$f" --section Objective --text "Heredocs are text" >/dev/null
+  b="$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang en --commits "- fix: the guard skips heredocs")"
+  assert_contains "$b" "Heredocs are text" "with an objective, the objective wins"
+  assert_not_contains "$b" "- fix: the guard" "and the commits are not repeated"
+}
+
 test_the_hook_brings_the_task_once_per_session() {
   sandbox >/dev/null
   local root; root="$(_tasks_project)"

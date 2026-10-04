@@ -120,6 +120,32 @@ test_the_guard_covers_the_other_ways_of_taking_a_workspace_away() {
   assert_eq "2" "$(_cut "rm -rf \"$ws\" && echo ok")" "and the path in quotes before an &&"
 }
 
+test_the_guard_does_not_read_heredoc_bodies_as_commands() {
+  # A heredoc body is text: an apostrophe in it opened a quote that swallowed
+  # the rest, and its brackets were taken as a wildcard over the workspace.
+  sandbox >/dev/null
+  local root; root="$(_hygiene_project)"
+  bash "$CRUX_HOME/bin/workspace.sh" new design --repo "$root/app" >/dev/null 2>&1
+  local hook="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
+  local ws="$root/app-ws-design"
+  _cut() {
+    printf '{"tool_input":{"command":%s}}' \
+      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+    echo $?
+  }
+  local nl=$'\n'
+
+  assert_eq "0" "$(_cut "cat > notes.md <<'EOF'${nl}Don't rm -rf by hand${nl}see app-ws-[a-z]*${nl}EOF${nl}echo ok")" \
+    "an apostrophe and brackets in the body do not reach the rm"
+  assert_eq "0" "$(_cut "cat <<-EOF > notes.md${nl}	rm -rf $ws${nl}	EOF${nl}echo ok")" \
+    "nor a body that only talks about deleting it"
+  assert_eq "2" "$(_cut "cat > a <<EOF${nl}text${nl}EOF${nl}rm -rf $ws")" \
+    "an rm after the heredoc is still stopped"
+  assert_eq "2" "$(_cut "bash <<'EOF'${nl}rm -rf $ws${nl}EOF")" \
+    "and a body fed to a shell is a command"
+  assert_eq "2" "$(_cut "rm -rf $ws <<< yes")" "a here-string is not a heredoc"
+}
+
 test_hooks_install_hooks_the_guard_for_bash_only() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"

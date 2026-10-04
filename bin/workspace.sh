@@ -582,7 +582,8 @@ cmd_finish() {
   # comes from it.
   language="$(commit_language "$profile_fin" "$docs_fin")"
   if [[ -n "$task_record_file" && -f "$task_record_file" ]]; then
-    body="$(node "$CRUX_HOME/lib/task.mjs" body --file "$task_record_file" --lang "$language" 2>/dev/null || true)"
+    body="$(node "$CRUX_HOME/lib/task.mjs" body --file "$task_record_file" --lang "$language" \
+      --commits "$(git -C "$path" log --format='- %s' "$base..$branch")" 2>/dev/null || true)"
   fi
   # If the gate was skipped, the proposal says so. The default body used to
   # claim "gate passed" even with --skip-gate: false evidence misleads more
@@ -1311,11 +1312,13 @@ ignored_files() {
   # What a plain git status does not show and is deleted anyway when the
   # worktree is removed: the workspace's database and whatever was left by hand
   # live there. What an install can restore, the gate receipt, the local
-  # pointer and the environment file crux itself writes are left out.
+  # pointer and the environment file crux itself writes are left out. The
+  # regenerable folders, at any depth: a monorepo or a server/ has its own.
   local own="${2:-}"
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
-    grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$|node_modules/|\.next/|dist/|build/|target/|\.venv/|__pycache__/|\.turbo/|\.nx/|\.pnpm-store/|coverage/)' |
+    grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$)' |
+    grep -vE '^!! (.*/)?(node_modules|\.next|dist|build|target|\.venv|__pycache__|\.turbo|\.nx|\.pnpm-store|coverage)/' |
     { [[ -n "$own" ]] && grep -vxF "!! $own" || cat; } || true
 }
 

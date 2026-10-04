@@ -1657,6 +1657,27 @@ test_workspace_with_ignored_files_is_not_considered_clean() {
   assert_file "$ws/data/dump.sql" "and so is the data"
 }
 
+test_regenerable_folders_do_not_hold_a_workspace_at_any_depth() {
+  # Only the ones at the root were left out: a server/__pycache__/ made rm
+  # refuse, as if it were work that would be lost.
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_two_repos)"
+  printf '__pycache__/\nnode_modules/\n' > "$root/app/.gitignore"
+  git -C "$root/app" add -A; git -C "$root/app" commit -qm ignore
+
+  bash "$CRUX_HOME/bin/workspace.sh" new regen --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-regen"
+  mkdir -p "$ws/server/__pycache__" "$ws/packages/ui/node_modules/x"
+  echo x > "$ws/server/__pycache__/main.cpython-312.pyc"
+  echo x > "$ws/packages/ui/node_modules/x/index.js"
+
+  local out rc=0
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm regen 2>&1)" || rc=$?
+  assert_eq "0" "$rc" "rm goes ahead"
+  assert_no_file "$ws/server/__pycache__/main.cpython-312.pyc" "and the worktree is gone"
+}
+
 test_nonexistent_base_does_not_fall_back_to_head_silently() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"

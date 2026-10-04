@@ -410,6 +410,34 @@ test_tasks_one_merged_on_the_other_machine_reconciles_on_arrival() {
   teardown
 }
 
+test_tasks_the_sync_does_not_share_a_ref_with_git_fetch() {
+  # Right after a merge the sync runs in the background, and a git pull at the
+  # same moment failed: "cannot lock ref refs/remotes/origin/crux/tasks". The
+  # lock left in place stands for that concurrent fetch.
+  sandbox >/dev/null
+  _tasks_two_machines
+  local docs="$SB/A/P/alpha/alpha-docs"
+  _new_task A t0 "first"
+  replicate A >/dev/null
+  mkdir -p "$docs/.git/refs/remotes/origin/crux"
+  : > "$docs/.git/refs/remotes/origin/crux/tasks.lock"
+  _new_task A t1 "do X"
+
+  replicate A >/dev/null 2>&1
+  rm -f "$docs/.git/refs/remotes/origin/crux/tasks.lock"
+  assert_eq "" "$(git -C "$docs" rev-parse -q --verify refs/remotes/origin/crux/tasks)" \
+    "the sync does not write the ref that git fetch owns"
+
+  replicate B >/dev/null
+  assert_file "$(task_record B t1)" "it publishes with a fetch holding that ref, and the other machine gets it"
+  git -C "$SB/B/P/alpha/alpha-docs" fetch -q origin
+  _new_task B t2 "do Y"
+  en B node "$CRUX_HOME/lib/task-sync.mjs" sync --all --fetched >/dev/null
+  replicate A >/dev/null
+  assert_file "$(task_record A t2)" "also after a crux sync that already fetched"
+  teardown
+}
+
 test_tasks_with_a_stale_already_fetched_branch_nothing_is_overwritten() {
   sandbox >/dev/null
   _tasks_two_machines

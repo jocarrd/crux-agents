@@ -25,9 +25,30 @@ result="$(printf '%s' "$entry" | node -e '
   process.stdin.on("end", () => {
     let cmd = "";
     try { cmd = String(JSON.parse(s).tool_input?.command || ""); } catch { process.exit(0); }
+    // A heredoc body is data for whoever reads it, not more commands, unless
+    // that reader is a shell. An apostrophe in the body used to open a quote
+    // that swallowed the rest, and its brackets were taken as a wildcard.
+    const SHELL = /\b(?:bash|sh|zsh|dash|ksh|ssh|eval)\b/;
+    const dropHeredocs = (text) => {
+      const out = [], pending = [];
+      for (const line of text.split("\n")) {
+        if (pending.length) {
+          const h = pending[0];
+          if ((h.tabs ? line.replace(/^\t+/, "") : line) === h.word) pending.shift();
+          out.push(h.keep ? line : "");
+          continue;
+        }
+        out.push(line);
+        const rx = /(?<!<)<<(?!<)(-?)\s*(["'"'"']?)([A-Za-z_][\w.-]*)\2/g;
+        for (let m; (m = rx.exec(line)); ) {
+          pending.push({ word: m[3], tabs: m[1] === "-", keep: SHELL.test(line.slice(0, m.index)) });
+        }
+      }
+      return out.join("\n");
+    };
     // What follows a hash sign is a comment, not a command. Without this the
     // guard fired on text that merely mentioned the words.
-    const runnable = cmd.replace(/(^|\s)#[^\n]*/g, " ");
+    const runnable = dropHeredocs(cmd).replace(/(^|\s)#[^\n]*/g, " ");
 
     // The ways of taking a directory out, not only the canonical one:
     // rm -rf, rm --recursive, rm -f -r, and find ... -delete.

@@ -2016,6 +2016,10 @@ test_the_profile_rules_are_written_and_verified() {
   assert_contains "$agents" "A repo's specific documentation lives in" \
     "with the rules the profile declares, not copied by hand"
   assert_contains "$agents" "checks they are written here" "and says what doctor checks: that they are there, not that they are followed"
+  assert_eq "1" "$(grep -c "^- A repo's specific documentation lives in" "$docs/AGENTS.md")" \
+    "each rule on its own line, as a list item"
+  assert_eq "1" "$(grep -c '^<!-- crux:end -->$' "$docs/AGENTS.md")" "and the end marker on its own line"
+  assert_contains "$agents" $'automatic checks.\n\n- ' "with a blank line before the list"
 
   # If someone deletes them, doctor says so instead of staying quiet.
   node -e '
