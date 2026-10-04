@@ -159,7 +159,16 @@ cmd_body() {
   docs="$(find_docs_repo "$REPO" 2>/dev/null || echo "")"
   [[ -n "$docs" && -f "$docs/crux.json" ]] &&
     profile="$(json_get "$docs/crux.json" profile 2>/dev/null || echo "")"
-  if [[ -n "$profile" ]]; then
+  # Those rules protect the client's code repos. The docs repo is ours, and
+  # what it documents is precisely our tooling: there they do not apply.
+  local in_docs=0
+  if [[ -n "$docs" ]] && [[ "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" == \
+       "$(git -C "$docs" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ]]; then
+    in_docs=1
+  fi
+  if [[ $in_docs -eq 1 ]]; then
+    :
+  elif [[ -n "$profile" ]]; then
     local pattern reason found_one
     while IFS=$'\t' read -r pattern reason; do
       [[ -n "$pattern" ]] || continue

@@ -1071,6 +1071,10 @@ test_the_hook_rejects_a_spanish_commit_message() {
   printf 'refactor: rename `esta_lista` and `el_valor` helpers\n' > "$f"
   assert_exit 0 "identifiers in backticks do not count" bash "$hook" "$f"
 
+  # Paths and URLs are addresses, not language: /es/ is a route.
+  printf 'feat(i18n): locale routing\n\nSpanish will go under /es/ and never serve English on an /es/ URL.\nSee https://example.com/es/la/guia.\n' > "$f"
+  assert_exit 0 "paths and URLs do not count" bash "$hook" "$f"
+
   # Comment lines belong to git.
   printf 'chore: bump deps\n\n# Por favor escribe el mensaje para tu commit\n' > "$f"
   assert_exit 0 "neither do git's comments" bash "$hook" "$f"
@@ -2028,6 +2032,27 @@ test_the_profile_rules_are_written_and_verified() {
   ' "$docs/AGENTS.md"
   assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "profile rules are not in AGENTS.md" \
     "doctor warns when the block is not there"
+}
+
+test_link_in_a_docs_repo_workspace_writes_to_the_workspace() {
+  # The contract is still read from the main checkout, but what link writes
+  # into the docs repo belongs to the tree it was run from: it used to land in
+  # the main checkout and leave the workspace with nothing to propose.
+  sandbox >/dev/null
+  local docs; docs="$(new_project wsdocs)"
+  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  git -C "$docs" add -A >/dev/null 2>&1; git -C "$docs" commit -qm linked >/dev/null 2>&1
+  node -e '
+    const fs = require("fs"); const f = process.argv[1];
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/<!-- crux:begin profile[\s\S]*?crux:end -->/, "<!-- crux:begin profile -->old<!-- crux:end -->"));
+  ' "$docs/AGENTS.md"
+  git -C "$docs" commit -qam "stale block"
+  local ws; ws="$(dirname "$docs")/wsdocs-docs-ws-relink"
+  git -C "$docs" worktree add -q -b ws/relink "$ws" 2>/dev/null
+
+  ( cd "$ws" && bash "$CRUX_HOME/bin/link.sh" >/dev/null 2>&1 )
+  assert_contains "$(cat "$ws/AGENTS.md")" "Rules of the" "the workspace gets the block"
+  assert_eq "" "$(git -C "$docs" status --porcelain)" "and the main checkout is left alone"
 }
 
 # The block used to be marked `perfil`: projects written before the translation

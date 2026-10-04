@@ -86,11 +86,12 @@ fi
 # occurrences. With only one, a proper name —"Los Angeles", "Los Angeles"— would
 # be a false positive, and a hook that gets it wrong is disabled within a week.
 #
-# Comment lines belong to git, and what is in backticks is code: neither says
-# what language the message is written in.
+# Comment lines belong to git, what is in backticks is code, and a path or a
+# URL is an address (/es/ is a route): none says what language the message is
+# written in.
 [[ "$COMMIT_LANG" == "en" ]] || exit 0
 
-msg="$(sed -e '/^#/d' -e 's/`[^`]*`//g' "$1" | tr '[:upper:]' '[:lower:]')"
+msg="$(sed -E -e '/^#/d' -e 's/`[^`]*`//g' -e 's#[^[:space:]]*/[^[:space:]]*##g' "$1" | tr '[:upper:]' '[:lower:]')"
 
 hints="$(printf '%s' "$msg" | grep -owE \
   'que|para|porque|cuando|esto|esta|este|esa|ese|del|las|los|una|unos|unas|pero|aunque|desde|tambien|segun|asi|muy|cada|donde|hasta|mientras|siempre|nunca|antes|despues|ahora|hace|hacer|tiene|tener|puede|debe|deja|pasa|sigue|vuelve|el|la|al|un|es|son|ser|su|sus|ni|se|de|en|por|añade|anade|arregla|corrige|quita|elimina|actualiza|mejora|cambia|mueve|evita|permite|crea|borra|sube|muestra|comprueba')"

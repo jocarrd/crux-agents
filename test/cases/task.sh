@@ -166,6 +166,24 @@ test_a_task_without_objective_says_what_changes_from_the_commits() {
   assert_not_contains "$b" "- fix: the guard" "and the commits are not repeated"
 }
 
+test_the_client_filter_does_not_apply_to_our_own_docs_repo() {
+  # The docs repo of a client project is ours: its proposals may name the
+  # tooling it documents. The filter refused "crux doctor" in its Checked.
+  sandbox >/dev/null
+  local root; root="$(_tasks_project client-repo)"
+  git -C "$root/proj-docs" init -q
+  git -C "$root/proj-docs" add -A; git -C "$root/proj-docs" commit -qm init
+  printf '## Checked\n\n- ok · crux doctor (3s)\n' > "$SB/BODY.md"
+
+  assert_exit 0 "in the docs repo the profile rules do not apply" \
+    env -C "$root/proj-docs" bash "$CRUX_HOME/bin/ship.sh" body "$SB/BODY.md"
+  assert_exit 1 "in the client's code repo they still do" \
+    env -C "$root/app" bash "$CRUX_HOME/bin/ship.sh" body "$SB/BODY.md"
+  printf 'Co-Authored-By: Claude <noreply@anthropic.com>\n' > "$SB/SIGNED.md"
+  assert_exit 1 "and the tool signature is still refused in the docs repo" \
+    env -C "$root/proj-docs" bash "$CRUX_HOME/bin/ship.sh" body "$SB/SIGNED.md"
+}
+
 test_the_hook_brings_the_task_once_per_session() {
   sandbox >/dev/null
   local root; root="$(_tasks_project)"

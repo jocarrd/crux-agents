@@ -1663,7 +1663,7 @@ test_regenerable_folders_do_not_hold_a_workspace_at_any_depth() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_two_repos)"
-  printf '__pycache__/\nnode_modules/\n' > "$root/app/.gitignore"
+  printf '__pycache__/\nnode_modules/\n.astro/\n.pytest_cache/\n' > "$root/app/.gitignore"
   git -C "$root/app" add -A; git -C "$root/app" commit -qm ignore
 
   bash "$CRUX_HOME/bin/workspace.sh" new regen --repo "$root/app" >/dev/null 2>&1
@@ -1671,6 +1671,8 @@ test_regenerable_folders_do_not_hold_a_workspace_at_any_depth() {
   mkdir -p "$ws/server/__pycache__" "$ws/packages/ui/node_modules/x"
   echo x > "$ws/server/__pycache__/main.cpython-312.pyc"
   echo x > "$ws/packages/ui/node_modules/x/index.js"
+  mkdir -p "$ws/apps/web/.astro" "$ws/.pytest_cache"
+  echo x > "$ws/apps/web/.astro/types.d.ts"; echo x > "$ws/.pytest_cache/README.md"
 
   local out rc=0
   out="$(bash "$CRUX_HOME/bin/workspace.sh" rm regen 2>&1)" || rc=$?

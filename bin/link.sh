@@ -30,6 +30,17 @@ PROFILE="$(json_get "$CONFIG" profile)"
 DOCS_NAME="$(basename "$DOCS")"
 ROOT="$(dirname "$DOCS")"
 
+# The contract is read from the main checkout, but what is written into the
+# docs repo goes to the tree link was run from when that tree is a worktree of
+# it: from a workspace of the docs repo it used to land in the main checkout.
+DOCS_TREE="$DOCS"
+target_top="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$target_top" && "$target_top" != "$DOCS" ]] &&
+   [[ "$(git -C "$TARGET" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" == \
+      "$(git -C "$DOCS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ]]; then
+  DOCS_TREE="$target_top"
+fi
+
 echo "project $PROJECT · profile $PROFILE"
 echo
 
@@ -79,7 +90,7 @@ write_profile_rules() {
   done <<< "$rules"
   block+="${nl}<!-- crux:end -->"
 
-  local target="$DOCS/AGENTS.md"
+  local target="$DOCS_TREE/AGENTS.md"
   [[ -f "$target" ]] || return 0
   if grep -qE 'crux:begin (perfil|profile)' "$target"; then
     node -e '
@@ -181,7 +192,7 @@ fi
 # an index that lies is worse than none. If AGENTS.md marks the spot, it fills
 # itself in.
 
-if grep -q '<!-- crux:skills -->' "$DOCS/AGENTS.md" 2>/dev/null; then
+if grep -q '<!-- crux:skills -->' "$DOCS_TREE/AGENTS.md" 2>/dev/null; then
   catalog="$(for d in "$CRUX_HOME"/skills/*/; do
     n="$(basename "$d")"
     line="$(awk '/^---$/{c++; next} c==1 && /^description:/{sub(/^description: /,""); print; exit}' "$d/SKILL.md" 2>/dev/null)"
@@ -197,13 +208,13 @@ if grep -q '<!-- crux:skills -->' "$DOCS/AGENTS.md" 2>/dev/null; then
     const src = fs.readFileSync(file, "utf8");
     const re = /<!-- crux:skills -->[\s\S]*?<!-- \/crux:skills -->/;
     fs.writeFileSync(file, src.replace(re, `<!-- crux:skills -->\n${catalog}\n<!-- /crux:skills -->`));
-  ' "$DOCS/AGENTS.md" "$catalog"
+  ' "$DOCS_TREE/AGENTS.md" "$catalog"
   ok "kernel catalog updated in AGENTS.md ($(echo "$catalog" | wc -l) skills)"
 fi
 
 # --- Project's own skills ----------------------------------------------------
 
 echo
-crux_materialize_skills "$DOCS/.claude/skills" "$PROJECT"
+crux_materialize_skills "$DOCS_TREE/.claude/skills" "$PROJECT"
 crux_prune_skills
 ok "project skills materialized"

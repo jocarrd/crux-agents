@@ -1318,7 +1318,7 @@ ignored_files() {
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
     grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$)' |
-    grep -vE '^!! (.*/)?(node_modules|\.next|dist|build|target|\.venv|__pycache__|\.turbo|\.nx|\.pnpm-store|coverage)/' |
+    grep -vE '^!! (.*/)?(node_modules|\.next|\.astro|\.svelte-kit|\.nuxt|\.output|\.vercel|\.wrangler|\.cache|\.parcel-cache|dist|build|target|\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.gradle|\.turbo|\.nx|\.pnpm-store|coverage)/' |
     { [[ -n "$own" ]] && grep -vxF "!! $own" || cat; } || true
 }
 
