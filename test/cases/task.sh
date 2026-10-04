@@ -471,6 +471,11 @@ test_resume_reopens_a_retired_branch_and_stops_waiting() {
   assert_eq 0 "$rc" "resume opens the task even though its branch was retired"
   assert_file "$root/app-ws-back/f.txt" "with a new workspace from the main one"
   assert_contains "$out" "no longer waits for an answer" "and stops waiting"
+  # Where to go is the last thing said: the cd hint used to come before the
+  # rest of what resume reports.
+  assert_eq "      cd $root/app-ws-back" "$(printf '%s\n' "$out" | grep -v '^$' | tail -1)" \
+    "and the cd hint comes last"
+  assert_eq 1 "$(printf '%s\n' "$out" | grep -c "cd $root/app-ws-back")" "said only once"
   assert_not_contains "$(cat "$f")" "waiting_on" "without a trace of the wait"
   assert_not_contains "$(cat "$f")" "retired:" "nor of the retired branch"
   rc=0; out="$(cd "$root/app-ws-back" && bash "$CRUX_HOME/bin/task.sh" unwait 2>&1)" || rc=$?

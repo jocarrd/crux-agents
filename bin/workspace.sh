@@ -383,7 +383,8 @@ cmd_new() {
   echo
   ok "workspace '$name' ready"
   info "slot $slot · ports $PORT0-$((PORT0 + PORTS_PER_SLOT - 1))"
-  info "cd $path"
+  # resume says where to go once, after everything else it reports.
+  [[ -n "${CRUX_DEFER_CD:-}" ]] || info "cd $path"
 }
 
 cmd_finish() {
@@ -1318,6 +1319,7 @@ ignored_files() {
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
     grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$)' |
+    grep -vE '^!! (.*/)?[^/]*\.tsbuildinfo$' |
     grep -vE '^!! (.*/)?(node_modules|\.next|\.astro|\.svelte-kit|\.nuxt|\.output|\.vercel|\.wrangler|\.cache|\.parcel-cache|dist|build|target|\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.gradle|\.turbo|\.nx|\.pnpm-store|coverage)/' |
     { [[ -n "$own" ]] && grep -vxF "!! $own" || cat; } || true
 }
@@ -1426,7 +1428,7 @@ cmd_resume() {
     || die "could not read the record $task_record: $data"
   [[ -n "$data" ]] || die "the task '$task' declares no repo: open it with crux workspace new"
 
-  local root repo_name branch_ref ws_name dir_repo n_repos done_count=0
+  local root repo_name branch_ref ws_name dir_repo n_repos done_count=0 opened=()
   root="$(projects_root)"
   n_repos="$(printf '%s\n' "$data" | wc -l | tr -d ' ')"
   while IFS=$'\t' read -r repo_name branch_ref ws_name; do
@@ -1452,6 +1454,7 @@ cmd_resume() {
     ' "$REGISTRY" "$ws_name")"
     if [[ -n "$already" ]]; then
       ok "$repo_name: the workspace is already here — $already"
+      opened+=("$already")
       done_count=$((done_count + 1)); continue
     fi
 
@@ -1462,8 +1465,9 @@ cmd_resume() {
     retired_branch="$(node "$CRUX_HOME/lib/task.mjs" retired --file "$task_record" | awk -F'\t' -v r="$repo_name" '$1 == r {print $2; exit}')"
     if [[ -n "$retired_branch" ]]; then
       branch_ref="$retired_branch"
-      if ( cmd_new "$ws_name" --repo "$dir_repo" --branch "$branch_ref" --base "$(main_branch "$dir_repo")" --task "$task" ); then
+      if ( CRUX_DEFER_CD=1 cmd_new "$ws_name" --repo "$dir_repo" --branch "$branch_ref" --base "$(main_branch "$dir_repo")" --task "$task" ); then
         node "$CRUX_HOME/lib/task.mjs" reopen --file "$task_record" --repo "$repo_name"
+        opened+=("$(workspace_path "$ws_name")")
         done_count=$((done_count + 1))
       fi
       continue
@@ -1474,7 +1478,10 @@ cmd_resume() {
       info "on the other machine: crux sync --leave tells you what is left to push"
       continue
     fi
-    ( cmd_new "$ws_name" --repo "$dir_repo" --branch "$branch_ref" --task "$task" ) && done_count=$((done_count + 1))
+    if ( CRUX_DEFER_CD=1 cmd_new "$ws_name" --repo "$dir_repo" --branch "$branch_ref" --task "$task" ); then
+      opened+=("$(workspace_path "$ws_name")")
+      done_count=$((done_count + 1))
+    fi
   done <<< "$data"
 
   [[ $done_count -gt 0 ]] || exit 1
@@ -1489,6 +1496,19 @@ cmd_resume() {
   ok "task '$task' resumed · $status${steps:+ · steps $steps}"
   [[ -n "$next_step" ]] && info "next: $next_step"
   info "record: $task_record"
+  local p
+  for p in "${opened[@]}"; do [[ -n "$p" ]] && info "cd $p"; done
+  return 0
+}
+
+workspace_path() {
+  # workspace_path <name> — the folder the registry gives that workspace.
+  node -e '
+    try {
+      const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(((r.workspaces || {})[process.argv[2]] || {}).path || "");
+    } catch {}
+  ' "$REGISTRY" "$1"
 }
 
 usage() {
