@@ -43,3 +43,27 @@ claude_materialize_global() {
   [[ -f "$file" ]] || return 0
   grep -qF "$marker" "$file" || echo "      claude: ~/.claude/CLAUDE.md does not reference the kernel"
 }
+
+claude_materialize_profile() {
+  # claude_materialize_profile <profile_dir> [machine_note] — loads the person's
+  # profile in every session through ~/.claude/CLAUDE.md, which Claude reads in
+  # any project. With an import, not a copy: what changes in the profile is
+  # read as it is in the next session, without regenerating anything.
+  local dir="$1" note="${2:-}"
+  local file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
+  local begin="<!-- crux:profile:begin -->" end="<!-- crux:profile:end -->"
+  local block=""
+  if [[ -n "$dir" ]]; then
+    block="$begin
+The person's profile lives in $dir (paths in its index are relative to it).
+
+@$dir/PROFILE.md"
+    [[ -n "$note" ]] && block+="
+@$note"
+    block+="
+$end"
+  fi
+  [[ "${CRUX_DRY_RUN:-0}" == "1" ]] && { echo "      [dry-run] claude: profile in $file"; return 0; }
+  mkdir -p "$(dirname "$file")"
+  write_marked_block "$file" "$begin" "$end" "$block"
+}

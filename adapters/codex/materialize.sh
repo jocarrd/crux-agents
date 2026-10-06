@@ -86,3 +86,30 @@ EOF
     printf '%s\n' "$block" >> "$file"
   fi
 }
+
+codex_materialize_profile() {
+  # codex_materialize_profile <profile_dir> [machine_note] — Codex has no
+  # imports, so the index is copied into ~/.codex/AGENTS.md between markers.
+  # The copy goes stale when the profile changes: `crux sync` and
+  # `crux profile link` regenerate it. Codex stops reading at 32 KiB, which is
+  # why the profile keeps its index short and the detail in separate notes.
+  local dir="$1" note="${2:-}"
+  local file="$CODEX_HOME_DIR/AGENTS.md"
+  local begin="<!-- crux:profile:begin -->" end="<!-- crux:profile:end -->"
+  local block=""
+  if [[ -n "$dir" ]]; then
+    local strip='NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { fm = 0; next } !fm'
+    block="$begin
+The person's profile lives in $dir (paths in its index are relative to it).
+
+$(awk "$strip" "$dir/PROFILE.md")"
+    [[ -n "$note" ]] && block+="
+
+$(awk "$strip" "$note")"
+    block+="
+$end"
+  fi
+  [[ "${CRUX_DRY_RUN:-0}" == "1" ]] && { echo "      [dry-run] codex: profile in $file"; return 0; }
+  mkdir -p "$CODEX_HOME_DIR"
+  write_marked_block "$file" "$begin" "$end" "$block"
+}

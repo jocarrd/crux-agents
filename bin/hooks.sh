@@ -24,6 +24,7 @@ DESTRUCTIVE_GUARD="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
 PROPOSAL_GUARD="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
 SESSION_SYNC="$CRUX_HOME/adapters/claude/hooks/session-sync.sh"
 SESSION_IDLE="$CRUX_HOME/adapters/claude/hooks/session-idle.sh"
+PROFILE_REMINDER="$CRUX_HOME/adapters/claude/hooks/profile-reminder.sh"
 CLAUDE_PLUGIN="$CRUX_HOME/adapters/claude/plugin"
 CODEX_DIR="${CODEX_HOME_DIR:-${CODEX_HOME:-$HOME/.codex}}"
 CODEX_HOOKS="$CODEX_DIR/hooks.json"
@@ -204,10 +205,10 @@ codex_hooks() {
   # codex_hooks add|remove
   node -e '
     const fs = require("fs");
-    const [file, action, ctx, sync, idle, cycle, task, destr, wt, prop, doc] = process.argv.slice(1);
+    const [file, action, ctx, sync, idle, cycle, task, destr, wt, prop, doc, lang] = process.argv.slice(1);
     const s = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
     s.hooks = s.hooks || {};
-    const isCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|contexto\.sh/;
+    const isCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|profile-reminder|contexto\.sh/;
     for (const [ev, groups] of Object.entries(s.hooks)) {
       s.hooks[ev] = groups
         .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isCrux.test(h.command || "")) }))
@@ -223,6 +224,7 @@ codex_hooks() {
       put("UserPromptSubmit", "", [
         `${q(ctx)} UserPromptSubmit ${q(cycle)}`,
         `${q(ctx)} UserPromptSubmit ${q(task)}`,
+        `${q(ctx)} UserPromptSubmit ${q(lang)}`,
         idle,
       ]);
       put("PreToolUse", "Bash", [destr, wt, prop]);
@@ -231,7 +233,7 @@ codex_hooks() {
     if (!Object.keys(s.hooks).length) delete s.hooks;
     fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
   ' "$CODEX_HOOKS" "$1" "$CODEX_CONTEXT" "$SESSION_SYNC" "$SESSION_IDLE" "$CYCLE_GUARD" "$TASK_CONTEXT" \
-    "$DESTRUCTIVE_GUARD" "$WORKTREE_GUARD" "$PROPOSAL_GUARD" "$DOC_SYNC"
+    "$DESTRUCTIVE_GUARD" "$WORKTREE_GUARD" "$PROPOSAL_GUARD" "$DOC_SYNC" "$PROFILE_REMINDER"
 }
 
 cmd_install() {
@@ -244,8 +246,9 @@ cmd_install() {
   [[ -f "$PROPOSAL_GUARD" ]] || die "missing $PROPOSAL_GUARD"
   [[ -f "$SESSION_SYNC" ]] || die "missing $SESSION_SYNC"
   [[ -f "$SESSION_IDLE" ]] || die "missing $SESSION_IDLE"
+  [[ -f "$PROFILE_REMINDER" ]] || die "missing $PROFILE_REMINDER"
   [[ -f "$COMMIT_MSG" ]] || die "missing $COMMIT_MSG"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$DESTRUCTIVE_GUARD" "$PROPOSAL_GUARD" "$SESSION_SYNC" "$SESSION_IDLE" "$COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$DESTRUCTIVE_GUARD" "$PROPOSAL_GUARD" "$SESSION_SYNC" "$SESSION_IDLE" "$PROFILE_REMINDER" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -277,6 +280,9 @@ cmd_install() {
 
   hook_up UserPromptSubmit "$SESSION_IDLE" 'session-idle'
   ok "hook that does the same when returning to a session idle for hours"
+
+  hook_up UserPromptSubmit "$PROFILE_REMINDER" 'profile-reminder'
+  ok "hook that repeats the reminder the person set in their profile"
 
   # Only if Codex is on the machine: creating its folder installs nothing.
   if [[ -d "$CODEX_DIR" && -f "$CODEX_CONTEXT" ]]; then
@@ -440,7 +446,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [event, groups] of Object.entries(s.hooks || {})) {
       s.hooks[event] = groups
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|profile-reminder/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[event].length) delete s.hooks[event];
     }

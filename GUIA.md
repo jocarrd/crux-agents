@@ -581,8 +581,9 @@ doctor`, review of the skills boundary, per-item confirmation from the user,
 commits by category and a final report.
 
 A rule that runs through it all: **memories of type `project` and `reference`
-go to git; only `user` and `feedback` stay local**. The former belongs to the
-project and has to survive a change of machine; the latter is about the person.
+go to the project's docs repo, and `user` and `feedback` to the person's
+profile** (`crux profile`, ADR-018). Both have to survive a change of machine
+and of agent; the agent's local memory is only a draft.
 
 That part no longer depends on the ritual being invoked. `crux memory` lists
 what is still only local, and a hook reminds you at session close. It was

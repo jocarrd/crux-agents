@@ -21,8 +21,13 @@
 #
 # Tasks travel too, in the crux/tasks branch of each docs repo (ADR-016).
 #
+# The person's profile (ADR-018) is one more repo in the root: it is brought up
+# to date like the rest and loaded again into the agents, because Codex keeps a
+# copy of its index that goes stale.
+#
 # What it does NOT sync, on purpose: credentials (see `carry-env`) and the
-# agent's personal memories, which belong to each machine.
+# agent's local memory, which is a draft: what is worth keeping goes to the
+# profile or to a project's docs repo.
 
 set -uo pipefail
 
@@ -202,6 +207,15 @@ sync_departure() {
     stuck=$((stuck + 1))
   done < <(node "$CRUX_HOME/lib/task-sync.mjs" pending 2>/dev/null)
 
+  # What the agent learned about the person, still only in its local memory: on
+  # the other machine it would start without it (ADR-018).
+  local personal
+  if profile_dir >/dev/null 2>&1 && ! bash "$CRUX_HOME/bin/memory.sh" --check >/dev/null 2>&1; then
+    personal="$(bash "$CRUX_HOME/bin/memory.sh" --brief 2>&1 | head -1 | sed 's/^[^ ]* *//')"
+    err "agent memory: ${personal:-there are memories that should be in git} — 'crux memory'"
+    stuck=$((stuck + 1))
+  fi
+
   echo
   if [[ $warnings -gt 0 ]]; then
     info "$(count "$warnings" "branch tracks" "branches track") a branch deleted from the remote (merged, almost surely): they do not block"
@@ -349,6 +363,23 @@ tasks_up_to_date() {
     });'
 }
 
+# The profile is reloaded into the agents after advancing it. Without a profile
+# here it is not looked for on the remote in the hook, which runs every session:
+# on a manual sync it is said if one exists.
+profile_up_to_date() {
+  if profile_dir >/dev/null 2>&1; then
+    bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1 \
+      || echo "failed	profile: could not load it into the agents — 'crux profile link'"
+    return 0
+  fi
+  [[ "$MODE" == "hook" ]] && return 0
+  command -v gh >/dev/null 2>&1 || return 0
+  local owner; owner="$(default_owner)"
+  [[ -n "$owner" ]] && gh repo view "$owner/$(profile_repo_name)" >/dev/null 2>&1 \
+    && echo "warning	the profile $owner/$(profile_repo_name) is not on this machine — 'crux profile clone'"
+  return 0
+}
+
 sync_arrival() {
   local offline lines repo
   offline="$(fetch_all)"
@@ -360,6 +391,7 @@ sync_arrival() {
   lines+="$(fetch_new_repos)"$'\n'
   lines+="$(kernel_up_to_date)"$'\n'
   lines+="$(tasks_up_to_date)"$'\n'
+  lines+="$(profile_up_to_date)"$'\n'
   lines="$(printf '%s' "$lines" | sed '/^$/d')"
 
   local n_offline=0

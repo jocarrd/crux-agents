@@ -325,7 +325,8 @@ installed by `crux hooks install`:
 | `crux stg` | Publishes a built folder to a keyed staging, to show work without publishing it |
 | `crux usage` | Which skills are actually used |
 | `crux skill test <skill> [--against <ref>]` | Runs a skill's scenarios and flags what changes compared with another version |
-| `crux memory` | Agent memories that belong to the project and are still only local |
+| `crux memory` | Agent memories that are still only local: the project's go to its docs repo, the person's to the profile; `search <text>` looks in both |
+| `crux profile` | The person's profile: preferences, who they are and what holds on each machine, in a repo of its own that every agent loads |
 | `crux status` | What is open right now across all projects |
 | `crux sync` | Up to date with the remote on arriving at a machine; `--leave` checks that you leave nothing trapped when you go |
 | `crux upgrade` | Re-materializes the kernel in a project at the current version |

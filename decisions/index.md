@@ -707,3 +707,48 @@
   one more field. The wait does not notify the other person: that remains up to
   whoever asks.
 - **Related**: `ADR-012`, `ADR-016`, `STANDARD.md` §The task
+
+### ADR-018: The person's memory travels in a repo of its own
+
+- **Date**: 2026-10-06
+- **Status**: Accepted
+- **Context**: the standard sent `project` and `reference` memories to git and
+  left `user` and `feedback` local "by design", because they are about the
+  person and not about a project. In practice that meant they lived only on
+  the machine where they were learned. Measured on 06-10-2026, before switching
+  computers after a month: 55 memories on the laptop, 31 of them preferences,
+  none on the other machine. Each agent also keeps them in its own place, so
+  switching agent lost them too. The language preference, written as one more
+  memory, was ignored again and again in long sessions: almost everything the
+  agent reads while it works is in English. The vendors do not cover it: the
+  request to sync Claude Code's user memory across machines was closed as not
+  planned, and Codex and Cursor keep it local as well.
+- **Decision**:
+  - The person gets a private repo next to the projects, `agent-profile` by
+    default, in neutral markdown: `PROFILE.md` as a short index, and
+    `preferences/`, `about/` and `machines/<hostname>.md`.
+  - Each adapter loads it in its own place: Claude with an `@-import` in
+    `~/.claude/CLAUDE.md`; Codex, which has no imports and stops reading at
+    32 KiB, with a copy of the index in `~/.codex/AGENTS.md` that `crux sync`
+    regenerates. Both inside markers, at the top, without touching what the
+    person wrote outside them.
+  - `crux profile` creates, links and clones it; `bootstrap` brings it and
+    `sync` keeps it up to date. `crux memory`, the session-close hook and
+    `sync --leave` treat personal memories outside it as trapped.
+  - An optional `reminder:` in the profile is repeated on every message by a
+    hook. The kernel ships no text: the framework stays in English and the
+    reminder is the person's setting.
+  - A docs repo is for a project (code to coordinate or a client). A theme that
+    is not one goes to the profile's `about/` or to a project's `topics/`.
+  - No database or RAG for now. Letta's benchmark (74 % with a plain file and
+    the agent's own search, against 68.5 % for Mem0's graph) and the size —tens
+    of notes, hundreds of documents— do not justify one. `crux memory search`
+    is the single entry point, so an index built from the markdown can be put
+    behind it later without changing the content or the agents.
+- **Consequences**: switching machine or agent keeps who the person is and how
+  they want to work. The local memory becomes a draft. Codex's copy goes stale
+  between syncs, which is accepted because the profile changes rarely and the
+  notes are read from disk. A second person on the same machine would need
+  `CRUX_PROFILE_REPO` pointing to their own profile.
+- **Related**: `ADR-015`, `ADR-016`, `STANDARD.md` §6 Agent auto-memory, §Multi-agent
+

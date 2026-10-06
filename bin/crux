@@ -34,6 +34,7 @@ crux — kernel of the agent work system
   crux usage            which skills are really used
   crux skill test <sk>  tests a skill with its scenarios and compares it with another version
   crux memory [--check] agent memories that should be in git
+  crux profile ...      the person's memory: a repo of its own that every agent loads
   crux status [--check] what is open right now across all projects
   crux sync [--leave]   brings what is on this machine up to date; nothing trapped when you leave
   crux doctor [dir]     verifies conformity with the standard
@@ -80,6 +81,7 @@ case "$cmd" in
   usage)   exec node "$CRUX_HOME/bin/usage.mjs" "$@" ;;
   skill)   exec node "$CRUX_HOME/bin/skill.mjs" "$@" ;;
   memory)  exec bash "$CRUX_HOME/bin/memory.sh" "$@" ;;
+  profile)  exec bash "$CRUX_HOME/bin/profile.sh" "$@" ;;
   doctor)  exec bash "$CRUX_HOME/bin/doctor.sh" "$@" ;;
   status)  exec bash "$CRUX_HOME/bin/status.sh" "$@" ;;
   sync)    exec bash "$CRUX_HOME/bin/sync.sh" "$@" ;;

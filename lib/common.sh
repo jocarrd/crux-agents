@@ -310,6 +310,59 @@ projects_root() {
   echo "$HOME/Proyectos"
 }
 
+# --- The person's profile ----------------------------------------------------
+#
+# A project's knowledge lives in its docs repo; the person's (how they want to
+# work, who they are, what only holds on one machine) lives in a repo of its
+# own next to the projects. It is markdown that does not belong to any agent:
+# each adapter loads it in its own place. See ADR-018.
+
+profile_repo_name() {
+  preference CRUX_PROFILE_REPO agent-profile
+}
+
+profile_dir() {
+  # profile_dir — prints the profile's directory; fails if there is none here.
+  local dir
+  dir="$(projects_root)/$(profile_repo_name)"
+  [[ -f "$dir/PROFILE.md" ]] || return 1
+  echo "$dir"
+}
+
+profile_field() {
+  # profile_field <dir> <key> — a value of PROFILE.md's frontmatter.
+  awk -v key="$2" '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    index($0, key ":") == 1 { sub("^" key ":[ \t]*", ""); gsub(/^"|"$/, ""); print; exit }
+  ' "$1/PROFILE.md"
+}
+
+profile_machine_note() {
+  # profile_machine_note <dir> — this machine's note, if the profile has one.
+  local note
+  note="$1/machines/$(hostname 2>/dev/null || uname -n).md"
+  [[ -f "$note" ]] && echo "$note"
+  return 0
+}
+
+write_marked_block() {
+  # write_marked_block <file> <begin> <end> <block> — puts the block at the top
+  # of the file, replacing the one between the markers if it was already there,
+  # and leaves the rest of the file as the person wrote it. An empty block
+  # removes it. At the top because what is read first is what weighs most.
+  node -e '
+    const fs = require("fs");
+    const [file, begin, end, block] = process.argv.slice(1);
+    const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const src = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    const re = new RegExp(esc(begin) + "[\\s\\S]*?" + esc(end) + "\\n*");
+    const rest = src.replace(re, "").replace(/^\n+/, "");
+    const out = block ? block + "\n" + (rest ? "\n" + rest : "") : rest;
+    if (out !== src) fs.writeFileSync(file, out);
+  ' "$1" "$2" "$3" "$4"
+}
+
 # --- Locating the docs repo ---------------------------------------------------
 
 find_docs_repo() {

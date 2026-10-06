@@ -4,6 +4,7 @@
 #   crux memory           the memories by type, and the ones missing from git
 #   crux memory --brief   one line with what is missing, to hook into a hook
 #   crux memory --check   silent; exits 1 if any should have been promoted
+#   crux memory search <t> looks for the text in the profile and every docs repo
 #
 # The standard splits things by who each one belongs to: `project` and
 # `reference` belong to the project and go to git; `user` and `feedback`
@@ -21,13 +22,35 @@ CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/..
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
+# --- Search ---------------------------------------------------------------------
+#
+# The interface stays even if what is behind it changes. Today it is a plain
+# search over the markdown: the profile and every project's docs repo. If one
+# day there is so much that an index pays off (SQLite, vectors), it is built
+# from these same files and answered here; neither the content nor the agents
+# notice (ADR-018).
+if [[ "${1:-}" == "search" ]]; then
+  shift
+  [[ $# -gt 0 ]] || die "usage: crux memory search <text>"
+  query="$*"
+  root="$(projects_root)"
+  places=()
+  p_dir="$(profile_dir 2>/dev/null)" && places+=("$p_dir")
+  for d in "$root"/*/*-docs; do [[ -d "$d" ]] && places+=("$d"); done
+  (( ${#places[@]} > 0 )) || die "nothing to search: no profile and no docs repo in $root"
+  grep -rniF --include='*.md' --exclude-dir=node_modules --exclude-dir=.git \
+    -m 3 -- "$query" "${places[@]}" 2>/dev/null \
+    | sed "s#^$root/##" | cut -c1-220 | head -60
+  exit 0
+fi
+
 CHECK=false
 BRIEF=false
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK=true ;;
     --brief) BRIEF=true ;;
-    *) die "usage: crux memory [--brief|--check]" ;;
+    *) die "usage: crux memory [--brief|--check] | crux memory search <text>" ;;
   esac
 done
 
@@ -79,8 +102,13 @@ done
 
 (( adapters > 0 )) || die "no memory adapter in $CRUX_HOME/adapters"
 
-total=0; scopes=""; unpromoted=""; untyped=""; unreadable=""
+total=0; scopes=""; unpromoted=""; untyped=""; unreadable=""; personal=""
 n_user=0; n_feedback=0; n_scopes=0
+
+# With a profile, what belongs to the person also has a place in git and stops
+# being "local by design" (ADR-018). Without one, the old rule holds.
+profile=""
+profile="$(profile_dir 2>/dev/null)" || profile=""
 
 while IFS=$'\t' read -r kind scope_name path_value; do
   [[ -n "${kind:-}" ]] || continue
@@ -96,10 +124,18 @@ while IFS=$'\t' read -r kind scope_name path_value; do
       # would be right sometimes and would put documentation in the wrong
       # project the rest.
       target="${project:+$project-docs}"
+      # Outside every project, what is about the person's own plans has a
+      # destination too once there is a profile: its about/ folder.
+      [[ -z "$target" && -n "$profile" ]] && target="$(basename "$profile")/about or a -docs repo"
       unpromoted+="$kind	$name	${target:-scope $scope_name}	$path_value"$'\n'
       ;;
-    user)     n_user=$((n_user + 1)) ;;
-    feedback) n_feedback=$((n_feedback + 1)) ;;
+    user|feedback)
+      if [[ -n "$profile" ]]; then
+        folder="preferences"; [[ "$kind" == user ]] && folder="about"
+        personal+="$kind	$name	$(basename "$profile")/$folder	$path_value"$'\n'
+      fi
+      [[ "$kind" == user ]] && n_user=$((n_user + 1)) || n_feedback=$((n_feedback + 1))
+      ;;
     '?')
       untyped+="$name	$path_value"$'\n'
       ;;
@@ -122,13 +158,20 @@ fi
 
 n_unpromoted=0
 [[ -n "$unpromoted" ]] && n_unpromoted=$(grep -c . <<< "${unpromoted%$'\n'}")
+n_personal=0
+[[ -n "$personal" ]] && n_personal=$(grep -c . <<< "${personal%$'\n'}")
 
 if $CHECK; then
-  (( n_unpromoted > 0 )) && exit 1
+  (( n_unpromoted + n_personal > 0 )) && exit 1
   exit 0
 fi
 
 if $BRIEF; then
+  if (( n_personal > 0 )); then
+    warn "$n_personal personal memories are not in the profile ($(basename "$profile")): they do not reach the other machine"
+    info "crux memory lists them · move each one to its folder, add it to PROFILE.md and push"
+    (( n_unpromoted > 0 )) || exit 1
+  fi
   (( n_unpromoted > 0 )) || exit 0
   sample="$(cut -f2 <<< "${unpromoted%$'\n'}" | head -3 |
     awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $0 }')"
@@ -171,9 +214,26 @@ if [[ -n "$untyped" ]]; then
   echo
 fi
 
-summary=""
-(( n_user > 0 )) && summary+="$n_user user"
-(( n_feedback > 0 )) && summary+="${summary:+ · }$n_feedback feedback"
-[[ -n "$summary" ]] && info "local by design: $summary"
+if (( n_personal > 0 )); then
+  warn "personal, not in the profile ($n_personal)"
+  echo
+  printf '%s' "$personal" | while IFS=$'\t' read -r kind name target _; do
+    printf '      %-10s %-34s → %s\n' "$kind" "$name" "$target"
+  done
+  echo
+  info "they go to $profile: one note per fact, a line in PROFILE.md, commit and push;"
+  info "then delete the local copy, or the agent reads both and they drift apart."
+  echo
+  exit 0
+fi
+
+if [[ -n "$profile" ]]; then
+  ok "no personal memory outside the profile ($profile)"
+else
+  summary=""
+  (( n_user > 0 )) && summary+="$n_user user"
+  (( n_feedback > 0 )) && summary+="${summary:+ · }$n_feedback feedback"
+  [[ -n "$summary" ]] && info "local, with no profile to go to: $summary — 'crux profile init' gives them a repo that travels"
+fi
 
 exit 0

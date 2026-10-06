@@ -197,6 +197,11 @@ ok "global Codex context in ~/.codex/AGENTS.md"
 claude_materialize_global "$CRUX_HOME"
 ok "global Claude context verified"
 
+# The person's profile, if this machine has it (ADR-018).
+if [[ "$CRUX_DRY_RUN" == "0" ]] && bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1; then
+  ok "person's profile loaded into the agents"
+fi
+
 echo
 if [[ "$MODE" == "release" ]]; then
   echo "Installed $INSTALLED_VERSION in $CRUX_HOME"

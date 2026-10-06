@@ -144,12 +144,33 @@ if [[ ${#with_credentials[@]} -gt 0 ]]; then
   done
 fi
 
+# The person's profile is not a project but comes the same: without it the
+# agents on this machine start knowing nothing about who they work for (ADR-018).
+PROFILE_NAME="$(profile_repo_name)"
+echo
+if [[ -f "$PARENT/$PROFILE_NAME/PROFILE.md" ]]; then
+  ok "profile already in $PARENT/$PROFILE_NAME"
+  (( DRY )) || CRUX_PROJECTS_DIR="$PARENT" bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1 \
+    || warn "could not load the profile into the agents — 'crux profile link'"
+elif grep -qx "$PROFILE_NAME" <<< "$all_repos"; then
+  if (( DRY )); then
+    info "[dry-run] would clone the profile $OWNER/$PROFILE_NAME"
+  elif CRUX_PROJECTS_DIR="$PARENT" bash "$CRUX_HOME/bin/profile.sh" clone --owner "$OWNER" >/dev/null 2>&1; then
+    ok "profile $OWNER/$PROFILE_NAME cloned and loaded into the agents"
+  else
+    warn "could not bring the profile — 'crux profile clone'"
+  fi
+else
+  info "no profile on $OWNER: 'crux profile init' creates one, so preferences travel too"
+fi
+
 # A remote repo that belongs to no project is not fetched by this, and keeping
 # quiet about it would be worse than not fetching it: you leave believing
 # everything is there.
 standalone_items=()
 while IFS= read -r r; do
   [[ -n "$r" ]] || continue
+  [[ "$r" == "$PROFILE_NAME" ]] && continue
   found=0
   for d in "$PARENT"/*/"$r"; do
     [[ -d "$d" ]] && { found=1; break; }
