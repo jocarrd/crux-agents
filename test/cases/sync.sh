@@ -185,8 +185,17 @@ test_sync_does_not_bring_projects_the_machine_does_not_have() {
   _ready_machine
   _fake_gh "other-docs" "other"
 
-  crux sync >/dev/null 2>&1
+  local out
+  out="$(crux sync 2>&1)"
   assert_no_file "$CRUX_PROJECTS_DIR/other" "a project on the remote that is not here stays out"
+  # But silence would leave you believing this machine has everything.
+  assert_contains "$out" "other" "it says the project exists"
+  assert_contains "$out" "crux clone other" "and how to bring it"
+  assert_not_contains "$out" "warn  other" "a missing project is news, not a warning"
+
+  rm -f "$CRUX_STATE_DIR/sync-last"
+  out="$(crux sync --hook </dev/null 2>&1)"
+  assert_not_contains "$out" "crux clone other" "the session hook does not go asking the remote for it"
   teardown
 }
 
@@ -286,5 +295,106 @@ test_sync_says_why_it_cannot_advance() {
   out="$(crux sync 2>&1)"
   assert_contains "$out" "clashes with one that is arriving" "it names the cause"
   assert_eq "mine" "$(cat "$CRUX_PROJECTS_DIR/alpha/app/clashes")" "and does not overwrite the local file"
+  teardown
+}
+
+test_sync_installs_the_hooks_of_the_new_kernel() {
+  sandbox >/dev/null
+  _no_gh
+  local home="$SB/home-upgrade" clone="$CRUX_PROJECTS_DIR/crux"
+  mkdir -p "$home/.crux" "$clone"
+  printf 'CRUX_MODE="release"\n' > "$home/.crux/config"
+  echo "99.0.0" > "$clone/VERSION"
+  # A stand-in installer: the new kernel's hooks.sh writes down which kernel it believes it is.
+  cat > "$clone/install.sh" <<'SH'
+mkdir -p "$HOME/.crux/kernel/99.0.0/bin"
+printf 'echo "$CRUX_HOME" > "$HOME/hooks-from"\n' > "$HOME/.crux/kernel/99.0.0/bin/hooks.sh"
+SH
+  git -C "$clone" init -q -b main
+  git -C "$clone" add -A && git -C "$clone" commit -q -m "release"
+  git -C "$clone" tag v99.0.0
+
+  local out
+  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 bash "$CRUX_HOME/bin/sync.sh" 2>&1)"
+
+  assert_contains "$out" "99.0.0, with its hooks" "it installs the published version"
+  assert_eq "$home/.crux/kernel/99.0.0" "$(cat "$home/hooks-from" 2>/dev/null)" \
+    "and registers the hooks of the new kernel, not of the one running the sync"
+  teardown
+}
+
+_workspace_on_both() {
+  # The ws/feat branch, checked out in a worktree here and pushed; OTHER is
+  # left on that branch, as when the task is resumed on the other machine.
+  _two_machines
+  local app="$CRUX_PROJECTS_DIR/alpha/app"
+  git -C "$app" worktree add -q -b ws/feat "$CRUX_PROJECTS_DIR/alpha/app-ws-feat" 2>/dev/null
+  git -C "$CRUX_PROJECTS_DIR/alpha/app-ws-feat" push -q -u origin ws/feat 2>/dev/null
+  git -C "$OTHER" fetch -q origin
+  git -C "$OTHER" checkout -q -b ws/feat origin/ws/feat
+  echo "from-there" > "$OTHER/from-there"
+  git -C "$OTHER" add from-there && git -C "$OTHER" commit -q -m "from there"
+  git -C "$OTHER" push -q origin ws/feat
+}
+
+test_sync_advances_a_workspace_the_other_machine_moved_on() {
+  sandbox >/dev/null
+  _workspace_on_both
+
+  local out
+  out="$(crux sync 2>&1)"
+
+  # Left behind, the next commit here diverges and it only shows on pushing.
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app-ws-feat/from-there" "the workspace gets what was done on the other machine"
+  assert_contains "$out" "alpha/app-ws-feat" "and it says which one"
+  teardown
+}
+
+test_sync_leaves_a_dirty_workspace_alone_and_says_so() {
+  sandbox >/dev/null
+  _workspace_on_both
+  local ws="$CRUX_PROJECTS_DIR/alpha/app-ws-feat"
+  echo "half" > "$ws/half" && git -C "$ws" add half
+
+  local out
+  out="$(crux sync 2>&1)"
+
+  assert_no_file "$ws/from-there" "it does not advance over uncommitted work"
+  assert_contains "$out" "alpha/app-ws-feat" "but it says the workspace is behind"
+  teardown
+}
+
+test_sync_points_out_a_workspace_whose_task_was_archived() {
+  sandbox >/dev/null
+  _two_machines
+  local app="$CRUX_PROJECTS_DIR/alpha/app" tasks
+  git -C "$app" worktree add -q -b ws/old "$CRUX_PROJECTS_DIR/alpha/app-ws-old" 2>/dev/null
+  git -C "$app" worktree add -q -b ws/live "$CRUX_PROJECTS_DIR/alpha/app-ws-live" 2>/dev/null
+  tasks="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; task_dir')"
+  mkdir -p "$tasks/alpha/done"
+  echo "task: old" > "$tasks/alpha/done/2026-10-01-old.md"
+  echo "task: live" > "$tasks/alpha/live.md"
+
+  local out
+  out="$(crux sync 2>&1)"
+  assert_contains "$out" "crux workspace rm old" "says the closed task's workspace can go"
+  assert_not_contains "$out" "crux workspace rm live" "and leaves the open one alone"
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app-ws-old/.git" "without removing anything itself"
+  teardown
+}
+
+test_sync_names_the_copy_left_by_a_task_conflict() {
+  sandbox >/dev/null
+  _two_machines
+  local tasks
+  tasks="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; task_dir')"
+  mkdir -p "$tasks/alpha"
+  echo "task: feat" > "$tasks/alpha/feat.md"
+  echo "task: feat" > "$tasks/alpha/feat.conflicto-remota.md"
+
+  local out
+  out="$(crux sync 2>&1)"
+  assert_contains "$out" "alpha/feat.conflicto-remota.md" "names the copy that lost"
+  assert_not_contains "$out" "alpha/feat.md holds" "and not the task itself"
   teardown
 }

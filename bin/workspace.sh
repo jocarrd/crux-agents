@@ -427,9 +427,12 @@ cmd_finish() {
     exit 1
   fi
 
-  # What is not yet in any remote: it is what goes into the proposal.
+  # What is not yet in any remote: it is what goes into the proposal. The
+  # branch's own remote copy does not count: a finish cut off after pushing and
+  # before opening the proposal left it there, and the second attempt said there
+  # was nothing to propose.
   local commits
-  commits="$(git -C "$path" log --oneline "$branch" --not --remotes 2>/dev/null | wc -l | tr -d ' ')"
+  commits="$(git -C "$path" log --oneline "$branch" --not --exclude="*/$branch" --remotes 2>/dev/null | wc -l | tr -d ' ')"
   [[ "${commits:-0}" -gt 0 ]] || commits=0
   [[ "$commits" -eq 0 ]] && die "there is nothing to propose in $branch"
 

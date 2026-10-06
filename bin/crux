@@ -87,7 +87,7 @@ case "$cmd" in
   sync)    exec bash "$CRUX_HOME/bin/sync.sh" "$@" ;;
   upgrade) exec bash "$CRUX_HOME/bin/upgrade.sh" "$@" ;;
   release) exec bash "$CRUX_HOME/bin/release.sh" "$@" ;;
-  version) echo "crux $(crux_version) — $CRUX_HOME" ;;
+  version|--version|-v) echo "crux $(crux_version) — $CRUX_HOME" ;;
   help|-h|--help) usage ;;
   *) err "unknown subcommand: $cmd"; echo; usage; exit 1 ;;
 esac

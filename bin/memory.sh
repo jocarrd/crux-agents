@@ -8,7 +8,7 @@
 #
 # The standard splits things by who each one belongs to: `project` and
 # `reference` belong to the project and go to git; `user` and `feedback`
-# belong to the person and stay local. The rule was written from day one and
+# belong to the person and go to their profile. The rule was written from day one and
 # nobody checked it, so there was project analysis living on a single machine.
 # This is what makes it verifiable.
 #
@@ -38,9 +38,13 @@ if [[ "${1:-}" == "search" ]]; then
   p_dir="$(profile_dir 2>/dev/null)" && places+=("$p_dir")
   for d in "$root"/*/*-docs; do [[ -d "$d" ]] && places+=("$d"); done
   (( ${#places[@]} > 0 )) || die "nothing to search: no profile and no docs repo in $root"
-  grep -rniF --include='*.md' --exclude-dir=node_modules --exclude-dir=.git \
-    -m 3 -- "$query" "${places[@]}" 2>/dev/null \
-    | sed "s#^$root/##" | cut -c1-220 | head -60
+  found="$(grep -rniF --include='*.md' --exclude-dir=node_modules --exclude-dir=.git \
+    -m 3 -- "$query" "${places[@]}" 2>/dev/null || true)"
+  if [[ -z "$found" ]]; then
+    info "nothing found for \"$query\""
+    exit 0
+  fi
+  printf '%s\n' "$found" | sed "s#^$root/##" | cut -c1-220 | head -60
   exit 0
 fi
 

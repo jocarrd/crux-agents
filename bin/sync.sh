@@ -12,7 +12,8 @@
 # This covers the case of alternating, which is the everyday one.
 #
 # It works on what is already in the projects root. It does not bring projects
-# that are missing: each machine has its own, and `crux clone` brings one.
+# that are missing: each machine has its own, and `crux clone` brings one. By
+# hand it does say which ones exist on the remote and are not here.
 #
 # On arrival it only advances what can be advanced without deciding anything:
 # a clean branch that is behind its remote. If there are uncommitted changes
@@ -53,8 +54,8 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
 
 # The repos in the root and those inside each project. Worktrees are returned
-# separately: on arrival they are left alone, because their branch is work in
-# progress; on leaving they count like any other.
+# separately: they share their main repo's fetch, so on arrival they are only
+# advanced, under the same rule as any branch.
 main_repos() {
   local d
   for d in "$ROOT"/*/ "$ROOT"/*/*/; do
@@ -327,8 +328,10 @@ kernel_up_to_date() {
   # In dev mode the kernel already is the clone: reinstalling would switch it to release.
   grep -qE '^CRUX_MODE="?dev' "${CRUX_CONFIG:-$HOME/.crux/config}" 2>/dev/null && return 0
 
+  # This process exports its own CRUX_HOME; inherited, the new hooks would point at the old kernel.
   if ( cd "$HOME" && bash "$clone/install.sh" ) >/dev/null 2>&1 \
-     && ( cd "$HOME" && bash "$HOME/.crux/kernel/$new_one/bin/hooks.sh" install ) >/dev/null 2>&1; then
+     && ( cd "$HOME" && CRUX_HOME="$HOME/.crux/kernel/$new_one" \
+          bash "$HOME/.crux/kernel/$new_one/bin/hooks.sh" install ) >/dev/null 2>&1; then
     echo "kernel	crux $current → $new_one, with its hooks"
   else
     echo "failed	kernel: could not install crux $new_one — run '$clone/install.sh' by hand"
@@ -383,6 +386,52 @@ profile_up_to_date() {
   return 0
 }
 
+# Projects on the remote that this machine does not have. Only by hand: it asks
+# the remote once per candidate, too slow for every session start.
+missing_projects() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 || return 0
+  local o p seen=" "
+  while IFS= read -r o; do
+    while IFS= read -r p; do
+      [[ -n "$p" && "$seen" != *" $p "* ]] || continue
+      seen+="$p "
+      [[ -d "$ROOT/$p/$p-docs" ]] && continue
+      echo "notice	$p is on the remote ($o) and not on this machine — 'crux clone $p' if you need it"
+    done < <(projects_with_contract "$o")
+  done < <(search_owners)
+}
+
+# A workspace whose task was archived, here or on the other machine: left
+# there it looks like work in progress. Only by hand, where advice is read.
+closed_workspaces() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  local wt base task project dir
+  dir="$(task_dir)"
+  while IFS= read -r wt; do
+    base="$(basename "$wt")"
+    [[ "$base" == *-ws-* ]] || continue
+    task="${base##*-ws-}"
+    project="$(project_name_for "$wt")"
+    [[ -f "$dir/$project/$task.md" ]] && continue
+    compgen -G "$dir/$project/done/*-$task.md" >/dev/null || continue
+    echo "notice	$(name_of "$wt"): its task is archived — 'crux workspace rm $task' once nothing in it is pending"
+  done < <(worktrees)
+}
+
+# A task edited on both machines keeps the most recent version and saves the
+# other alongside. That is decided in a background publish nobody reads, so
+# the copy is named here until someone reviews it.
+task_conflicts() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  local f dir
+  dir="$(task_dir)"
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r f; do
+    echo "notice	task changed on both machines: ${f#"$dir"/} holds the version that lost — merge what is missing and delete it"
+  done < <(find "$dir" -mindepth 2 -maxdepth 2 -name '*.conflicto-*.md' 2>/dev/null | sort)
+}
+
 sync_arrival() {
   local offline lines repo
   offline="$(fetch_all)"
@@ -391,10 +440,18 @@ sync_arrival() {
     lines+="$(advance "$repo")"$'\n'
     lines+="$(advance_the_rest "$repo")"$'\n'
   done < <(main_repos)
+  # A task resumed on the other machine moves its branch on there: left
+  # behind here, the next commit diverges and it only shows on pushing.
+  while IFS= read -r repo; do
+    lines+="$(advance "$repo")"$'\n'
+  done < <(worktrees)
   lines+="$(fetch_new_repos)"$'\n'
   lines+="$(kernel_up_to_date)"$'\n'
   lines+="$(tasks_up_to_date)"$'\n'
   lines+="$(profile_up_to_date)"$'\n'
+  lines+="$(missing_projects)"$'\n'
+  lines+="$(closed_workspaces)"$'\n'
+  lines+="$(task_conflicts)"$'\n'
   lines="$(printf '%s' "$lines" | sed '/^$/d')"
 
   local n_offline=0
@@ -425,6 +482,7 @@ sync_arrival() {
       case "$kind" in
         ok|new|kernel|tasks) ok "$text" ;;
         diverged|dirty|warning)  warn "$text" ;;
+        notice)          info "$text" ;;
         *)               err "$text" ;;
       esac
     done <<< "$lines"

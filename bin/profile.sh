@@ -29,6 +29,17 @@ source "$CRUX_HOME/adapters/codex/materialize.sh"
 NAME="$(profile_repo_name)"
 DIR="$(projects_root)/$NAME"
 
+# Each machine adds its line at the end of the same index section, so two
+# preferences saved on two machines always clashed on joining. The index is a
+# list of independent lines: keeping both is the right merge. Local to the
+# clone, it does not dirty the repo, and link runs on every machine.
+union_index() {
+  local attrs="$1/.git/info/attributes"
+  [[ -d "$1/.git" ]] || return 0
+  grep -qx 'PROFILE.md merge=union' "$attrs" 2>/dev/null && return 0
+  mkdir -p "$1/.git/info" && echo 'PROFILE.md merge=union' >> "$attrs"
+}
+
 link() {
   local dir note
   if ! dir="$(profile_dir)"; then
@@ -38,6 +49,7 @@ link() {
     [[ -d "$CODEX_HOME_DIR" ]] && codex_materialize_profile ""
     die "there is no profile at $DIR — removed its block from the agents; 'crux profile init' or 'crux profile clone'"
   fi
+  union_index "$dir"
   note="$(profile_machine_note "$dir")"
   claude_materialize_profile "$dir" "$note"
   ok "Claude: ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md imports $dir/PROFILE.md"
@@ -65,7 +77,9 @@ status() {
   [[ -n "$reminder" ]] && info "reminder on every message: $reminder" || info "no reminder on every message (reminder: in PROFILE.md)"
   local sub n
   for sub in preferences about machines; do
-    n="$(find "$dir/$sub" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l)"
+    # git does not keep empty folders: a cloned profile may not have them yet.
+    n=0
+    [[ -d "$dir/$sub" ]] && n="$(find "$dir/$sub" -maxdepth 1 -name '*.md' | wc -l)"
     info "$sub: $n"
   done
   local note; note="$(profile_machine_note "$dir")"
@@ -84,6 +98,8 @@ status() {
 
 skeleton() {
   mkdir -p "$DIR/preferences" "$DIR/about" "$DIR/machines"
+  # Empty folders do not travel in git; the other machine would get none.
+  touch "$DIR/preferences/.gitkeep" "$DIR/about/.gitkeep" "$DIR/machines/.gitkeep"
   [[ -f "$DIR/PROFILE.md" ]] || cat > "$DIR/PROFILE.md" <<'EOF'
 ---
 # reminder: a line the agents get on every message, in your words (optional)
