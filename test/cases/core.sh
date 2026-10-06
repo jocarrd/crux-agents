@@ -2251,3 +2251,16 @@ test_install_moves_the_codex_hooks_of_the_previous_kernel() {
   local version; version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
   assert_contains "$(cat "$matches/.codex/hooks.json")" "$matches/.crux/kernel/$version/adapters/claude/hooks/session-sync.sh" "Codex's hooks move to the installed version"
 }
+
+# Reinstalling rewrote ~/.crux/config from scratch and deleted the person's own
+# settings: on 06-10-2026 it took CRUX_MEMORY_IGNORE with it on the first upgrade.
+test_install_keeps_the_settings_the_person_added() {
+  sandbox >/dev/null
+  local home="$SB/home-keep"; mkdir -p "$home/.crux"
+  printf 'CRUX_MODE="release"\nCRUX_MEMORY_IGNORE="/somewhere/else"\nCRUX_PROFILE_REPO=my-profile\n' > "$home/.crux/config"
+  env HOME="$home" bash "$CRUX_HOME/install.sh" --projects-dir "$SB/p" >/dev/null 2>&1
+  local config; config="$(cat "$home/.crux/config")"
+  assert_contains "$config" 'CRUX_MEMORY_IGNORE="/somewhere/else"' "keeps a setting it does not manage"
+  assert_contains "$config" "CRUX_PROFILE_REPO=my-profile" "and every other one"
+  assert_eq "1" "$(grep -c '^CRUX_MODE=' "$home/.crux/config")" "without duplicating its own"
+}
