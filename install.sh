@@ -217,5 +217,7 @@ else
   echo "To go back to an immutable version: install.sh"
 fi
 echo
-echo "Next step: in a project's docs repo, 'crux adopt' or 'crux doctor'."
-echo "For a new project: 'crux init <project>'."
+# On a new machine the step is bootstrap; suggesting adopt there sent you
+# looking for a docs repo that was not on disk yet.
+echo "Next step: on a new machine, 'crux bootstrap'; on one you already used, 'crux sync'."
+echo "For a new project: 'crux init <project>'; for a docs repo that exists, 'crux adopt'."

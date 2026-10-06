@@ -363,3 +363,22 @@ test_sync_leaves_a_dirty_workspace_alone_and_says_so() {
   assert_contains "$out" "alpha/app-ws-feat" "but it says the workspace is behind"
   teardown
 }
+
+test_sync_points_out_a_workspace_whose_task_was_archived() {
+  sandbox >/dev/null
+  _two_machines
+  local app="$CRUX_PROJECTS_DIR/alpha/app" tasks
+  git -C "$app" worktree add -q -b ws/old "$CRUX_PROJECTS_DIR/alpha/app-ws-old" 2>/dev/null
+  git -C "$app" worktree add -q -b ws/live "$CRUX_PROJECTS_DIR/alpha/app-ws-live" 2>/dev/null
+  tasks="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; task_dir')"
+  mkdir -p "$tasks/alpha/done"
+  echo "task: old" > "$tasks/alpha/done/2026-10-01-old.md"
+  echo "task: live" > "$tasks/alpha/live.md"
+
+  local out
+  out="$(crux sync 2>&1)"
+  assert_contains "$out" "crux workspace rm old" "says the closed task's workspace can go"
+  assert_not_contains "$out" "crux workspace rm live" "and leaves the open one alone"
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app-ws-old/.git" "without removing anything itself"
+  teardown
+}

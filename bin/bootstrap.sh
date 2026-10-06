@@ -61,11 +61,10 @@ gh auth status >/dev/null 2>&1 \
   || die "gh not authenticated — 'gh auth login' and come back"
 
 # The first owner is yours: the profile and the loose repos are looked for there.
-if [[ -n "$OWNERS" ]]; then
-  mapfile -t owners < <(echo "$OWNERS" | tr ',' '\n' | sed '/^$/d' | awk '!seen[$0]++')
-else
-  mapfile -t owners < <(search_owners)
-fi
+owners=()
+while IFS= read -r o; do
+  [[ -n "$o" ]] && owners+=("$o")
+done < <(if [[ -n "$OWNERS" ]]; then echo "$OWNERS" | tr ',' '\n' | awk 'NF && !seen[$0]++'; else search_owners; fi)
 [[ ${#owners[@]} -gt 0 ]] || die "I do not know which account to search under — pass it with --owner"
 OWNER="${owners[0]}"
 
@@ -84,8 +83,10 @@ filter=""
 
 # Both live under $PARENT/<project>: two owners with the same project name
 # cannot share the machine, and the first one found keeps it.
+# project<TAB>owner, one per line: macOS bash has no associative arrays.
 projects=()
-declare -A owner_of=()
+owner_map=""
+owner_of() { awk -F'\t' -v p="$1" '$1 == p { print $2; exit }' <<< "$owner_map"; }
 any_candidate=0
 for o in "${owners[@]}"; do
   candidates="$(candidate_projects "$o")"
@@ -93,13 +94,14 @@ for o in "${owners[@]}"; do
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue
     any_candidate=1
-    if [[ -n "${owner_of[$p]:-}" ]]; then
-      warn "$o/$p-docs has the same name as ${owner_of[$p]}/$p-docs — only the first one comes"
+    first="$(owner_of "$p")"
+    if [[ -n "$first" ]]; then
+      warn "$o/$p-docs has the same name as $first/$p-docs — only the first one comes"
       continue
     fi
     label="$p"; [[ "$o" == "$OWNER" ]] || label="$p ($o)"
     if has_contract "$o" "$p"; then
-      projects+=("$p"); owner_of[$p]="$o"
+      projects+=("$p"); owner_map+="$p"$'\t'"$o"$'\n'
       ok "$label"
     else
       info "$label: $p-docs has no contract — not a crux project, skipped"
@@ -151,8 +153,9 @@ for p in "${projects[@]}"; do
   echo "── $p"
   # Your own projects use the machine template as is, whatever host it points at.
   from=()
-  [[ "${owner_of[$p]}" == "$OWNER" ]] || from=(--from "$(template_for_owner "${owner_of[$p]}")")
-  if bash "$CRUX_HOME/bin/clone.sh" "$p" --parent "$PARENT" "${from[@]}"; then
+  o="$(owner_of "$p")"
+  [[ "$o" == "$OWNER" ]] || from=(--from "$(template_for_owner "$o")")
+  if bash "$CRUX_HOME/bin/clone.sh" "$p" --parent "$PARENT" ${from[@]+"${from[@]}"}; then
     fetched+=("$p")
   else
     failed_items+=("$p")

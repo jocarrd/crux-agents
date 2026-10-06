@@ -16,6 +16,9 @@ export CRUX_HOME
 # Read by the commands that in turn run the suite, so they do not call each
 # other in a loop.
 export CRUX_IN_TESTS=1
+# Set by the crux plugin inside an agent session: inherited, the hooks under
+# test draw a panel instead of printing, and their cases fail only there.
+unset CRUX_REMINDER_UI
 
 PASS=0; FAIL=0; CURRENT=""; FAILED_CASES=()
 

@@ -402,6 +402,23 @@ missing_projects() {
   done < <(search_owners)
 }
 
+# A workspace whose task was archived, here or on the other machine: left
+# there it looks like work in progress. Only by hand, where advice is read.
+closed_workspaces() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  local wt base task project dir
+  dir="$(task_dir)"
+  while IFS= read -r wt; do
+    base="$(basename "$wt")"
+    [[ "$base" == *-ws-* ]] || continue
+    task="${base##*-ws-}"
+    project="$(project_name_for "$wt")"
+    [[ -f "$dir/$project/$task.md" ]] && continue
+    compgen -G "$dir/$project/done/*-$task.md" >/dev/null || continue
+    echo "notice	$(name_of "$wt"): its task is archived — 'crux workspace rm $task' once nothing in it is pending"
+  done < <(worktrees)
+}
+
 sync_arrival() {
   local offline lines repo
   offline="$(fetch_all)"
@@ -420,6 +437,7 @@ sync_arrival() {
   lines+="$(tasks_up_to_date)"$'\n'
   lines+="$(profile_up_to_date)"$'\n'
   lines+="$(missing_projects)"$'\n'
+  lines+="$(closed_workspaces)"$'\n'
   lines="$(printf '%s' "$lines" | sed '/^$/d')"
 
   local n_offline=0
