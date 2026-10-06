@@ -8,7 +8,7 @@
 #
 # The standard splits things by who each one belongs to: `project` and
 # `reference` belong to the project and go to git; `user` and `feedback`
-# belong to the person and stay local. The rule was written from day one and
+# belong to the person and go to their profile. The rule was written from day one and
 # nobody checked it, so there was project analysis living on a single machine.
 # This is what makes it verifiable.
 #

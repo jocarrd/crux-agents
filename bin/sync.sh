@@ -12,7 +12,8 @@
 # This covers the case of alternating, which is the everyday one.
 #
 # It works on what is already in the projects root. It does not bring projects
-# that are missing: each machine has its own, and `crux clone` brings one.
+# that are missing: each machine has its own, and `crux clone` brings one. By
+# hand it does say which ones exist on the remote and are not here.
 #
 # On arrival it only advances what can be advanced without deciding anything:
 # a clean branch that is behind its remote. If there are uncommitted changes
@@ -385,6 +386,22 @@ profile_up_to_date() {
   return 0
 }
 
+# Projects on the remote that this machine does not have. Only by hand: it asks
+# the remote once per candidate, too slow for every session start.
+missing_projects() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 || return 0
+  local o p seen=" "
+  while IFS= read -r o; do
+    while IFS= read -r p; do
+      [[ -n "$p" && "$seen" != *" $p "* ]] || continue
+      seen+="$p "
+      [[ -d "$ROOT/$p/$p-docs" ]] && continue
+      echo "notice	$p is on the remote ($o) and not on this machine — 'crux clone $p' if you need it"
+    done < <(projects_with_contract "$o")
+  done < <(search_owners)
+}
+
 sync_arrival() {
   local offline lines repo
   offline="$(fetch_all)"
@@ -402,6 +419,7 @@ sync_arrival() {
   lines+="$(kernel_up_to_date)"$'\n'
   lines+="$(tasks_up_to_date)"$'\n'
   lines+="$(profile_up_to_date)"$'\n'
+  lines+="$(missing_projects)"$'\n'
   lines="$(printf '%s' "$lines" | sed '/^$/d')"
 
   local n_offline=0
@@ -432,6 +450,7 @@ sync_arrival() {
       case "$kind" in
         ok|new|kernel|tasks) ok "$text" ;;
         diverged|dirty|warning)  warn "$text" ;;
+        notice)          info "$text" ;;
         *)               err "$text" ;;
       esac
     done <<< "$lines"

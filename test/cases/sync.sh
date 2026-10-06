@@ -185,8 +185,17 @@ test_sync_does_not_bring_projects_the_machine_does_not_have() {
   _ready_machine
   _fake_gh "other-docs" "other"
 
-  crux sync >/dev/null 2>&1
+  local out
+  out="$(crux sync 2>&1)"
   assert_no_file "$CRUX_PROJECTS_DIR/other" "a project on the remote that is not here stays out"
+  # But silence would leave you believing this machine has everything.
+  assert_contains "$out" "other" "it says the project exists"
+  assert_contains "$out" "crux clone other" "and how to bring it"
+  assert_not_contains "$out" "warn  other" "a missing project is news, not a warning"
+
+  rm -f "$CRUX_STATE_DIR/sync-last"
+  out="$(crux sync --hook </dev/null 2>&1)"
+  assert_not_contains "$out" "crux clone other" "the session hook does not go asking the remote for it"
   teardown
 }
 
