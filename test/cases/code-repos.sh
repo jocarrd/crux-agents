@@ -49,7 +49,9 @@ test_doctor_sends_documentation_in_a_code_repo_to_the_docs_repo() {
   _commit_all "$repo"
 
   out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
-  assert_contains "$out" "web holds documentation (docs/, NOTES.md)" "sees the folder and the loose file"
+  assert_contains "$out" "web holds documentation (" "sees documentation in the code repo"
+  assert_contains "$out" "docs/" "the folder"
+  assert_contains "$out" "NOTES.md" "and the loose file"
   assert_contains "$out" "web/README.md has 80 lines" "and the README that grew"
   teardown
 }

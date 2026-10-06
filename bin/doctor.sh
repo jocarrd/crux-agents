@@ -482,7 +482,7 @@ if [[ "$WRITES_POINTERS" == "true" ]]; then
 
     stray="$(printf '%s\n' "$tracked" | awk -F/ '
       $1 == "docs" { print "docs/"; next }
-      NF == 1 && /\.md$/ && $0 !~ /^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT|LICENSE)\.md$/' | sort -u)"
+      NF == 1 && /\.md$/ && $0 !~ /^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT|LICENSE)\.md$/' | LC_ALL=C sort -u)"
     [[ -n "$stray" ]] && note "$repo holds documentation ($(printf '%s\n' "$stray" | first_names)): it goes in $(basename "$DOCS")/repos/$repo/"
 
     if [[ -f "$dir/README.md" ]]; then
