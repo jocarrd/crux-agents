@@ -143,3 +143,27 @@ test_profile_status_survives_folders_that_git_did_not_bring() {
   bash "$CRUX_HOME/bin/profile.sh" init --no-remote >/dev/null 2>&1
   assert_file "$dir/machines/.gitkeep" "and init leaves its folders tracked so they travel"
 }
+
+test_profile_two_machines_adding_a_preference_do_not_clash() {
+  sandbox >/dev/null
+  mkdir -p "$CLAUDE_CONFIG_DIR"
+  # The profile on a remote, cloned here and on the other machine.
+  local seed="$SB/seed" other="$SB/other" here="$CRUX_PROJECTS_DIR/agent-profile"
+  git init -q --bare -b main "$SB/profile.git"
+  git clone -q "$SB/profile.git" "$seed" 2>/dev/null
+  printf -- '---\n---\n# Profile\n\n## Preferences\n\n- [One](preferences/one.md) — one\n' > "$seed/PROFILE.md"
+  git -C "$seed" add -A && git -C "$seed" commit -qm "profile" && git -C "$seed" push -q origin main
+  git clone -q "$SB/profile.git" "$here" && git clone -q "$SB/profile.git" "$other"
+  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
+
+  # Each one saves a preference at the end of the same section.
+  printf -- '- [There](preferences/there.md) — there\n' >> "$other/PROFILE.md"
+  git -C "$other" commit -qam "pref: there" && git -C "$other" push -q origin main
+  printf -- '- [Here](preferences/here.md) — here\n' >> "$here/PROFILE.md"
+  git -C "$here" commit -qam "pref: here"
+
+  assert_exit 0 "joining both does not stop on a conflict" git -C "$here" pull -q --rebase origin main
+  assert_contains "$(cat "$here/PROFILE.md")" "[There]" "the line from the other machine stays"
+  assert_contains "$(cat "$here/PROFILE.md")" "[Here]" "and so does this one"
+  assert_eq "" "$(git -C "$here" status --porcelain)" "and the repo is not left dirty"
+}
