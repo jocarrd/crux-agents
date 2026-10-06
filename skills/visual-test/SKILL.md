@@ -79,6 +79,6 @@ whatever lives inside a carousel.
 
 ## Related
 
-- `/device-loop` — the real app on a physical device
+- `/device-loop` — the real app on an Android emulator
 - `/render-loop` — iterate on a rendered output
 - `/ui-behaviour` — that controls do something useful

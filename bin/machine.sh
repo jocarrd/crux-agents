@@ -121,7 +121,7 @@ fi
 
 optional pdftoppm "compare PDFs with visual-diff"
 optional docker   "deploy-fallback and the per-workspace databases"
-optional adb      "device-loop, testing on an Android device"
+optional adb      "device-loop, testing on an Android emulator"
 optional rsync    "publish a demo with crux stg"
 
 if has google-chrome || has google-chrome-stable || has chromium; then
