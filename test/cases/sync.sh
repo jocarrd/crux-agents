@@ -398,3 +398,19 @@ test_sync_names_the_copy_left_by_a_task_conflict() {
   assert_not_contains "$out" "alpha/feat.md holds" "and not the task itself"
   teardown
 }
+
+test_sync_names_a_project_materialized_with_an_old_kernel() {
+  sandbox >/dev/null
+  _two_machines
+  mkdir -p "$CRUX_PROJECTS_DIR/old/old-docs" "$CRUX_PROJECTS_DIR/new/new-docs"
+  local current; current="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  echo '{"crux":"0.1.0","project":"old","repos":[]}' > "$CRUX_PROJECTS_DIR/old/old-docs/crux.json"
+  echo "{\"crux\":\"$current\",\"project\":\"new\",\"repos\":[]}" > "$CRUX_PROJECTS_DIR/new/new-docs/crux.json"
+
+  local out
+  out="$(crux sync 2>&1)"
+  assert_contains "$out" "old is materialized with crux 0.1.0" "names the project that fell behind"
+  assert_contains "$out" "crux upgrade" "and how to bring it up"
+  assert_not_contains "$out" "new is materialized" "and not the one up to date"
+  teardown
+}

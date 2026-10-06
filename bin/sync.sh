@@ -432,6 +432,25 @@ task_conflicts() {
   done < <(find "$dir" -mindepth 2 -maxdepth 2 -name '*.conflicto-*.md' 2>/dev/null | sort)
 }
 
+# A project materialized with an old kernel misses the checks and templates
+# released since: weather-app was thirty minors behind and nothing said it.
+# Only by hand, and only when the minor differs: patches do not change what is
+# materialized.
+behind_projects() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  local docs pinned current p
+  current="$(crux_version)"
+  for docs in "$ROOT"/*/*-docs; do
+    [[ -f "$docs/crux.json" ]] || continue
+    pinned="$(json_get "$docs/crux.json" crux 2>/dev/null)" || continue
+    is_semver "$pinned" || continue
+    [[ "${pinned%.*}" == "${current%.*}" ]] && continue
+    version_greater_than "$current" "$pinned" || continue
+    p="$(basename "$(dirname "$docs")")"
+    echo "notice	$p is materialized with crux $pinned and the kernel is $current — 'crux upgrade' in $(basename "$docs")"
+  done
+}
+
 sync_arrival() {
   local offline lines repo
   offline="$(fetch_all)"
@@ -452,6 +471,7 @@ sync_arrival() {
   lines+="$(missing_projects)"$'\n'
   lines+="$(closed_workspaces)"$'\n'
   lines+="$(task_conflicts)"$'\n'
+  lines+="$(behind_projects)"$'\n'
   lines="$(printf '%s' "$lines" | sed '/^$/d')"
 
   local n_offline=0

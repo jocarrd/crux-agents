@@ -1318,13 +1318,21 @@ ignored_files() {
   # live there. What an install can restore, the gate receipt, the local
   # pointer and the environment file crux itself writes are left out. The
   # regenerable folders, at any depth: a monorepo or a server/ has its own.
-  local own="${2:-}"
+  local own="${2:-}" main
+  main="$(main_repo "$1" 2>/dev/null || true)"
   git -C "$1" status --porcelain --ignored=matching 2>/dev/null |
     grep -E '^!! ' |
     grep -vE '^!! (\.crux-ship|\.crux-visual|CLAUDE\.local\.md$)' |
     grep -vE '^!! (.*/)?[^/]*\.tsbuildinfo$' |
-    grep -vE '^!! (.*/)?(node_modules|\.next|\.astro|\.svelte-kit|\.nuxt|\.output|\.vercel|\.wrangler|\.cache|\.parcel-cache|dist|build|target|\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.gradle|\.turbo|\.nx|\.pnpm-store|coverage)/' |
-    { [[ -n "$own" ]] && grep -vxF "!! $own" || cat; } || true
+    grep -vE '^!! (.*/)?(node_modules|\.next|\.astro|\.svelte-kit|\.nuxt|\.output|\.vercel|\.wrangler|\.cache|\.parcel-cache|dist|build|target|\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.gradle|\.turbo|\.nx|\.pnpm-store|coverage|\.expo)/' |
+    { [[ -n "$own" ]] && grep -vxF "!! $own" || cat; } |
+    # A file identical to the main repo's is the copy the workspace was born
+    # with —an env file, typically—: removing it loses nothing.
+    while IFS= read -r line; do
+      f="${line#!! }"
+      [[ -n "$main" && "$main" != "$1" && -f "$1/$f" && -f "$main/$f" ]] && cmp -s "$1/$f" "$main/$f" && continue
+      printf '%s\n' "$line"
+    done || true
 }
 
 clean_workspace() {
