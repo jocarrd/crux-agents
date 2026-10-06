@@ -419,6 +419,19 @@ closed_workspaces() {
   done < <(worktrees)
 }
 
+# A task edited on both machines keeps the most recent version and saves the
+# other alongside. That is decided in a background publish nobody reads, so
+# the copy is named here until someone reviews it.
+task_conflicts() {
+  [[ "$MODE" == "arrive" ]] || return 0
+  local f dir
+  dir="$(task_dir)"
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r f; do
+    echo "notice	task changed on both machines: ${f#"$dir"/} holds the version that lost — merge what is missing and delete it"
+  done < <(find "$dir" -mindepth 2 -maxdepth 2 -name '*.conflicto-*.md' 2>/dev/null | sort)
+}
+
 sync_arrival() {
   local offline lines repo
   offline="$(fetch_all)"
@@ -438,6 +451,7 @@ sync_arrival() {
   lines+="$(profile_up_to_date)"$'\n'
   lines+="$(missing_projects)"$'\n'
   lines+="$(closed_workspaces)"$'\n'
+  lines+="$(task_conflicts)"$'\n'
   lines="$(printf '%s' "$lines" | sed '/^$/d')"
 
   local n_offline=0

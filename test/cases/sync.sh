@@ -382,3 +382,19 @@ test_sync_points_out_a_workspace_whose_task_was_archived() {
   assert_file "$CRUX_PROJECTS_DIR/alpha/app-ws-old/.git" "without removing anything itself"
   teardown
 }
+
+test_sync_names_the_copy_left_by_a_task_conflict() {
+  sandbox >/dev/null
+  _two_machines
+  local tasks
+  tasks="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; task_dir')"
+  mkdir -p "$tasks/alpha"
+  echo "task: feat" > "$tasks/alpha/feat.md"
+  echo "task: feat" > "$tasks/alpha/feat.conflicto-remota.md"
+
+  local out
+  out="$(crux sync 2>&1)"
+  assert_contains "$out" "alpha/feat.conflicto-remota.md" "names the copy that lost"
+  assert_not_contains "$out" "alpha/feat.md holds" "and not the task itself"
+  teardown
+}
