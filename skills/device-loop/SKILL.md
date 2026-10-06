@@ -1,127 +1,154 @@
 ---
 name: device-loop
-description: Bring up and validate a React Native or Expo mobile app on a physical Android device via adb, seeing the real screen with screencap and iterating with Fast Refresh on a development build. Use when the native app has to be genuinely tested, to reproduce a bug that only happens in release, to validate surfaces the browser does not reproduce (GL maps, camera, sensors) or to do a QA pass on a device.
+description: Bring up an Android emulator without Android Studio and without sudo, and validate a React Native or Expo app on it, seeing the real screen with screencap and iterating with Expo Go or a development build. Use when the native app has to be genuinely tested, when a new machine needs the emulator set up, to validate surfaces the browser does not reproduce (notifications, widgets, GL maps, dark mode) or to reproduce a bug that only happens in the built app.
 ---
 
 # device-loop
 
 The goal is for the agent to **see** the real native app and be able to iterate
-on it. The route is a physical Android device over `adb` plus `screencap`.
+on it. The route is an Android emulator, headless, driven over `adb`, with
+`screencap` for the eyes.
 
-To see code changes live you need a **development build** with Metro and Fast
-Refresh. To validate an already-built APK it is enough to install, launch and
-capture.
-
-It is the native sibling of `/visual-test`. Physical device, not emulator; the
-why of that and of each gotcha is in
-`<this-skill-directory>/references/por-que.md`.
+It is the native sibling of `/visual-test`. The why of each step and of each
+gotcha is in `<this-skill-directory>/references/por-que.md`.
 
 ## When to use
 
 - The native app has to be tested, not a browser approximation.
-- Validating surfaces the browser does not faithfully reproduce.
-- Reproducing a bug that only appears in the release APK. Typical case:
-  environment variables that the bundler injects in development but not in
-  release when they are read dynamically.
+- Validating what the browser does not have: notifications, widgets, native
+  maps, dark mode, permissions.
+- Setting up the emulator on a machine that does not have it.
+- Reproducing a bug that only appears in the built app. Typical case:
+  environment variables that the bundler injects in development but not in a
+  build when they are read dynamically.
 
-## 1. adb without sudo
+Before installing anything, look in the project's docs repo: the emulator's
+name, the system image and where it is installed are project data, and so are
+the package name and deep links.
 
-The whole SDK is not needed. Download only the platform-tools to a stable path,
-not to a temporary session directory:
+## 1. Install it, once per machine
 
-```bash
-cd ~ && curl -sSL -o pt.zip \
-  https://dl.google.com/android/repository/platform-tools-latest-linux.zip
-unzip -q -o pt.zip && rm pt.zip
-export PATH="$HOME/platform-tools:$PATH"
-adb version
-```
-
-## 2. Device permissions
-
-It is where the most time is lost the first time.
-
-1. On the phone: Settings, About phone, tap the build number seven times to
-   unlock the developer options.
-2. Enable **USB debugging**. Some manufacturers also require enabling install
-   via USB.
-3. Connect the cable in **file transfer** mode, not charge-only.
-4. Accept on the phone the dialog allowing debugging, ticking "always allow".
-
-If `adb devices` answers `no permissions (missing udev rules)`, the udev rule is
-missing. **The user has to run this in a real terminal**: the agent cannot,
-because `sudo` needs a TTY to ask for the password.
+Everything goes under one folder in your home: no Android Studio, no `sudo`,
+no system packages. Around 4 GB to run apps; 7 GB with what compiling needs.
 
 ```bash
-sudo tee /etc/udev/rules.d/51-android.rules >/dev/null <<'EOF'
-SUBSYSTEM=="usb", ATTR{idVendor}=="XXXX", MODE="0666", GROUP="plugdev"
-EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger
+A=~/.local/android; mkdir -p "$A/sdk/cmdline-tools"
+# JDK 17, portable
+curl -sSL -o /tmp/jdk.tgz \
+  "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
+mkdir -p "$A/jdk" && tar xzf /tmp/jdk.tgz -C "$A/jdk" --strip-components=1
+# command-line tools: the current zip is on developer.android.com/studio,
+# section "Command line tools only"
+curl -sSL -o /tmp/clt.zip "<commandlinetools-linux-…_latest.zip>"
+unzip -q /tmp/clt.zip -d /tmp/clt && mv /tmp/clt/cmdline-tools "$A/sdk/cmdline-tools/latest"
 ```
 
-The `idVendor` comes from `lsusb`. Afterwards you have to **unplug and replug**
-the cable, and restart the server:
+The environment, in every shell that uses it (or in the shell profile):
 
 ```bash
-adb kill-server && adb start-server && adb devices -l
+export JAVA_HOME=~/.local/android/jdk ANDROID_HOME=~/.local/android/sdk
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ```
 
-It must show `device`, not `unauthorized` or `no permissions`.
-
-### Wireless debugging
-
-Without cable or udev, on Android 11 or later. Developer options, wireless
-debugging, with the phone and the PC on the same network:
+The pieces and the virtual device. The image and the API level are the
+project's; these are an example:
 
 ```bash
-PAIR=$(adb mdns services | grep pairing | awk '{print $3}' | head -1)
-adb pair "$PAIR" <6-digit-code>
-adb connect $(adb mdns services | grep connect | awk '{print $3}' | head -1)
+yes | sdkmanager --licenses >/dev/null
+sdkmanager "platform-tools" "emulator" "platforms;android-35" \
+  "system-images;android-35;google_apis;x86_64"
+avdmanager create avd -n <avd-name> -d pixel_7 \
+  -k "system-images;android-35;google_apis;x86_64"
 ```
 
-Two warnings: the error `protocol fault (couldn't read status message): Success`
-usually means it **did** pair — check it in the phone's list of paired devices.
-And if the network has client isolation, mDNS is visible but the TCP connection
-gives "no route to host": then USB it is.
+To compile a development build, add what the project's Gradle asks for (build
+tools, NDK, CMake): the first build says which versions are missing.
+
+### Hardware acceleration
+
+Without it the emulator runs in software and is unusable. Check it:
+
+```bash
+emulator -accel-check     # must say KVM is usable
+```
+
+If `/dev/kvm` is not accessible, the user runs `sudo usermod -aG kvm $USER` in
+a real terminal and logs in again. The agent cannot: `sudo` needs a TTY.
+
+## 2. Start it
+
+```bash
+emulator -avd <avd-name> -no-window -no-audio -gpu swiftshader_indirect >/tmp/emulator.log 2>&1 &
+adb wait-for-device
+until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 2; done
+adb shell input keyevent KEYCODE_WAKEUP && adb shell wm dismiss-keyguard
+# boot_completed arrives while it still says "starting": wait for the launcher
+until adb shell dumpsys window | grep mCurrentFocus | grep -qi launcher; do sleep 2; done
+```
+
+If it never finishes booting, `/tmp/emulator.log` says why. To stop it:
+`adb emu kill`.
 
 ## 3. See the screen
 
 ```bash
-adb exec-out screencap -p > <path>/phone.png
+adb exec-out screencap -p > <path>/screen.png
 ```
 
-And then open the PNG to look at it.
+And then open the PNG to look at it. Do not trust the first capture after
+launching: wait for the app to paint.
 
-**If the capture comes out black**, it is almost always that the focus is on the
-notification shade or on another window, not on the app:
+**If the capture comes out black**, the focus is usually on the notification
+shade or another window:
 
 ```bash
 adb shell dumpsys window | grep mCurrentFocus
 adb shell cmd statusbar collapse
-adb shell input keyevent KEYCODE_HOME
-adb shell monkey -p <package> -c android.intent.category.LAUNCHER 1
 ```
 
-GL views mounted on `TextureView` are captured fine. If the app uses
-`SurfaceView`, that area may come out black even though the rest of the
-interface is visible; it is not an app failure.
+Useful states to validate:
+
+```bash
+adb shell cmd uimode night yes        # dark mode (no to go back)
+adb shell settings put system font_scale 1.3
+```
 
 ## 4. Iterate
 
-### With live reload
+### Expo Go
 
-The preview and production profiles are release builds and do **not** connect to
-Metro. To iterate you need a development build:
+Enough for most of the interface. Metro on the machine, the app in the
+emulator:
 
 ```bash
-eas build -p android --profile development   # once, takes a while
-adb install -r <dev-client>.apk
-pnpm start
+npx expo start --android
 ```
 
-From there the loop is: edit code, wait for Fast Refresh, capture, validate.
-Environment variables are injected by Metro from the local file, not the build
-service's.
+If the app is left on "Cannot connect to Expo CLI" after restarting Metro,
+forward the port and open the URL by hand:
+
+```bash
+adb reverse tcp:<port> tcp:<port>
+adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:<port>"
+```
+
+### Development build
+
+Notifications, widgets and native modules are not in Expo Go: the app is
+compiled. The usual route with Expo:
+
+```bash
+npx expo prebuild -p android --no-install
+(cd android && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64)
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+`prebuild` can rewrite `package.json`: save a copy before and put it back after,
+not with `git checkout`, which also takes uncommitted dependencies.
+
+The development build looks for Metro on 8081. On another port, forward it
+with `adb reverse` and tell the app with its `debug_http_host` preference, or
+use the deep link of the development client if the project has one.
 
 ### Validating a specific APK
 
@@ -133,38 +160,33 @@ adb exec-out screencap -p > shot.png
 
 ## 5. Navigating the app
 
-**`adb shell input tap` does not reach the app on some manufacturer layers.** Do
-not try to navigate with taps or keys: **open the screen by code** (temporarily
-instrument the mount, or use its deep link), capture and revert. A clean mount
-is needed, so force-stop and relaunch:
+Taps and keys reach the app in the emulator. Coordinates change with the
+device, so look at the capture before tapping:
 
 ```bash
-adb shell am force-stop <package>
-adb shell am start -a android.intent.action.VIEW -d "<deep-link>"
+adb shell input tap <x> <y>
+adb shell input text "<text>"
 adb shell input keyevent KEYCODE_BACK
-adb exec-out screencap -p > shot.png
+```
+
+Faster and more stable when it exists: **open the screen by its deep link**.
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d "<deep-link>"
 adb logcat -d -t 200 | grep -iE "ReactNative|Exception|FATAL"
 ```
 
-If the screen is off or locked:
-
-```bash
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell wm dismiss-keyguard
-```
-
-`dismiss-keyguard` only works if the lock is not secure; with a PIN or
-fingerprint, the user unlocks it.
+To reload code that only runs on mounting, close the app with
+`adb shell am kill <package>` from the home screen and open it again. Not with
+`am force-stop`: the app would stop receiving widget and notification events.
 
 ## Anti-patterns
 
 - **Accepting a change without a screenshot that confirms it.** It is the whole
   point of the skill.
-- **Validating in a browser something that behaves differently in the app.**
-- **Trying `sudo` from the agent.** Without a TTY there is no password; ask the
-  user.
-- **Trusting the first capture after launching.** Wait for the focus to be the
-  main activity and for the screen to have painted.
+- **Installing Android Studio, or system packages, to get an emulator.**
+- **Running the emulator without hardware acceleration.** It looks like the app
+  is slow when it is the emulator.
 
 ## Related
 
