@@ -105,3 +105,28 @@ test_memory_search_looks_in_the_profile_and_the_docs() {
   assert_contains "$out" "agent-profile/preferences/watermark.md" "finds it in the profile"
   assert_contains "$out" "alpha-docs/operations/deploy-notes.md" "and in the docs repos"
 }
+
+test_memory_ignores_folders_that_are_someone_elses() {
+  sandbox >/dev/null
+  profile_here >/dev/null
+  local other="$SB/home/Desktop/Novel" scope dir
+  scope="$(printf '%s' "$other" | tr '/.' '-')"
+  dir="$CLAUDE_CONFIG_DIR/projects/$scope/memory"
+  mkdir -p "$dir" "$SB/home/.crux"
+  printf -- '---\nname: novel\ndescription: x\nmetadata:\n  type: project\n---\nbody\n' > "$dir/novel.md"
+  assert_exit 1 "without the setting, another person's memory counts as a leak" \
+    env HOME="$SB/home" bash "$CRUX_HOME/bin/memory.sh" --check
+  echo "CRUX_MEMORY_IGNORE=\"$other\"" > "$SB/home/.crux/config"
+  assert_exit 0 "with it, it is left out" env HOME="$SB/home" bash "$CRUX_HOME/bin/memory.sh" --check
+  assert_contains "$(env HOME="$SB/home" bash "$CRUX_HOME/bin/memory.sh" 2>&1)" "ignored by CRUX_MEMORY_IGNORE" \
+    "and says how many it left out"
+}
+
+test_profile_link_without_profile_removes_the_block() {
+  sandbox >/dev/null
+  profile_here >/dev/null
+  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
+  rm -rf "$CRUX_PROJECTS_DIR/agent-profile"
+  assert_exit 1 "linking without a profile says so" bash "$CRUX_HOME/bin/profile.sh" link
+  assert_not_contains "$(cat "$(claude_md)")" "crux:profile:begin" "and leaves no import pointing to nothing"
+}

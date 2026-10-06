@@ -75,6 +75,24 @@ fi
 
 slug_of() { printf '%s' "$1" | tr '/.' '-'; }
 
+# Folders that are not the profile owner's: on a shared machine another person
+# works with the agent too, and their memories are neither a leak nor go to
+# this profile. Declared per machine, comma-separated paths, in ~/.crux/config:
+#   CRUX_MEMORY_IGNORE="/home/me/Desktop/Novel,/home/me/Other"
+ignored_slugs=()
+IFS=',' read -r -a ignored_paths <<< "$(preference CRUX_MEMORY_IGNORE)"
+for p in "${ignored_paths[@]}"; do
+  p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+  [[ -n "$p" ]] && ignored_slugs+=("$(slug_of "${p/#\~/$HOME}")")
+done
+is_ignored() {
+  local s
+  for s in "${ignored_slugs[@]}"; do
+    [[ "$1" == "$s" || "$1" == "$s"-* ]] && return 0
+  done
+  return 1
+}
+
 project_of_scope() {
   local scope_name="$1" best="" best_len=0 dir name slug
   for dir in "$root"/*/; do
@@ -110,8 +128,10 @@ n_user=0; n_feedback=0; n_scopes=0
 profile=""
 profile="$(profile_dir 2>/dev/null)" || profile=""
 
+n_ignored=0
 while IFS=$'\t' read -r kind scope_name path_value; do
   [[ -n "${kind:-}" ]] || continue
+  if is_ignored "$scope_name"; then n_ignored=$((n_ignored + 1)); continue; fi
   total=$((total + 1))
   [[ "$scopes" == *"|$scope_name|"* ]] || { scopes+="|$scope_name|"; n_scopes=$((n_scopes + 1)); }
   name="$(basename "$path_value" .md)"
@@ -227,6 +247,7 @@ if (( n_personal > 0 )); then
   exit 0
 fi
 
+(( n_ignored > 0 )) && info "ignored by CRUX_MEMORY_IGNORE: $(count "$n_ignored" "memory" "memories") of folders that are someone else's"
 if [[ -n "$profile" ]]; then
   ok "no personal memory outside the profile ($profile)"
 else

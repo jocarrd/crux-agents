@@ -640,7 +640,9 @@ Keys and passwords go nowhere in git; a project's knowledge, to its docs repo.
 loads it into each agent and `crux bootstrap` and `crux sync` bring it like any
 other repo. `crux memory` lists the `user` and `feedback` memories still outside
 it, the session-close hook warns about them and `crux sync --leave` counts them
-as trapped.
+as trapped. On a machine shared with another person, their folders are left
+out with `CRUX_MEMORY_IGNORE` in `~/.crux/config` (comma-separated paths): their
+memories are neither a leak nor go to this profile.
 
 The profile's frontmatter can carry a `reminder:`, a line the agents receive on
 every message (`profile-reminder` hook). The kernel brings no text of its own:

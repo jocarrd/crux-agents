@@ -372,6 +372,9 @@ profile_up_to_date() {
       || echo "failed	profile: could not load it into the agents — 'crux profile link'"
     return 0
   fi
+  # Gone since the last time: the agents stop importing it.
+  grep -qF "crux:profile:begin" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md" 2>/dev/null \
+    && bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
   [[ "$MODE" == "hook" ]] && return 0
   command -v gh >/dev/null 2>&1 || return 0
   local owner; owner="$(default_owner)"

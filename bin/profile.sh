@@ -31,7 +31,13 @@ DIR="$(projects_root)/$NAME"
 
 link() {
   local dir note
-  dir="$(profile_dir)" || die "there is no profile at $DIR — 'crux profile init' or 'crux profile clone'"
+  if ! dir="$(profile_dir)"; then
+    # An import of a profile that is gone would be loaded as nothing, without a
+    # word: the blocks are removed so that what is left says the truth.
+    claude_materialize_profile ""
+    [[ -d "$CODEX_HOME_DIR" ]] && codex_materialize_profile ""
+    die "there is no profile at $DIR — removed its block from the agents; 'crux profile init' or 'crux profile clone'"
+  fi
   note="$(profile_machine_note "$dir")"
   claude_materialize_profile "$dir" "$note"
   ok "Claude: ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md imports $dir/PROFILE.md"

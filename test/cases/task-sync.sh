@@ -453,3 +453,12 @@ test_tasks_with_a_stale_already_fetched_branch_nothing_is_overwritten() {
   assert_file "$(task_record A by-b)" "and A with the one from B"
   teardown
 }
+
+test_task_sync_drops_the_marker_of_a_project_not_on_this_machine() {
+  sandbox >/dev/null
+  mkdir -p "$CRUX_STATE_DIR/task-sync"
+  echo "2026-10-04T16:13:00Z" > "$CRUX_STATE_DIR/task-sync/ghost.pending"
+  assert_eq "" "$(node "$CRUX_HOME/lib/task-sync.mjs" pending 2>&1)" \
+    "a project that is not here is not reported as unpublished"
+  assert_no_file "$CRUX_STATE_DIR/task-sync/ghost.pending" "and its marker is removed"
+}
