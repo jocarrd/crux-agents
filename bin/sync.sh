@@ -433,7 +433,7 @@ task_conflicts() {
 }
 
 # A project materialized with an old kernel misses the checks and templates
-# released since: weather-app was thirty minors behind and nothing said it.
+# released since: a project thirty minors behind went unnoticed.
 # Only by hand, and only when the minor differs: patches do not change what is
 # materialized.
 behind_projects() {
