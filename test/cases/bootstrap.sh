@@ -162,3 +162,63 @@ test_bootstrap_brings_the_profile_and_loads_it() {
     "the profile is not listed as a loose repo"
   teardown
 }
+
+test_bootstrap_finds_projects_in_the_organisations_too() {
+  sandbox >/dev/null
+  _ready_machine
+  # The docs repo of a team project lives in its organisation, not in the
+  # personal account: searching only there left those projects behind.
+  mkdir -p "$SB/bin"
+  cat > "$SB/bin/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth "*) exit 0 ;;
+  "repo list")
+    case "$3" in
+      jocarrd)  printf '%s\n' alpha-docs ;;
+      team-org) printf '%s\n' teamproj-docs alpha-docs ;;
+    esac; exit 0 ;;
+  "api user") echo jocarrd; exit 0 ;;
+  "api user/memberships/orgs") echo team-org; exit 0 ;;
+  "api repos/"*) [[ "$2" == */alpha-docs/* || "$2" == team-org/teamproj-docs/* || "$2" == repos/team-org/teamproj-docs/* ]] && exit 0; exit 1 ;;
+esac
+exit 0
+GH
+  chmod +x "$SB/bin/gh"
+  export PATH="$SB/bin:$PATH"
+
+  local out
+  out="$(crux bootstrap --parent "$CRUX_PROJECTS_DIR" --dry-run 2>&1)"
+
+  assert_contains "$out" "teamproj (team-org)" "finds the project of the organisation and says whose it is"
+  assert_contains "$out" "would fetch 2 projects" "together with the personal one"
+  assert_contains "$out" "only the first one comes" "a name repeated in two owners is not fetched twice"
+  teardown
+}
+
+test_template_for_owner_keeps_the_shape() {
+  sandbox >/dev/null
+  _ready_machine
+  local got
+  got="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; template_for_owner team-org')"
+  assert_contains "$got" "git@github.com:team-org/{repo}.git" "same template, other owner"
+  printf 'CRUX_REMOTE="https://github.com/jocarrd/{repo}.git"\n' > "$CRUX_CONFIG"
+  got="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; template_for_owner team-org')"
+  assert_contains "$got" "https://github.com/team-org/{repo}.git" "https stays https"
+  teardown
+}
+
+test_bootstrap_only_does_not_call_the_rest_loose() {
+  sandbox >/dev/null
+  _ready_machine
+  _fake_gh "alpha-docs beta-docs loose-one" "alpha beta"
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha/alpha-docs" "$CRUX_PROJECTS_DIR/loose-one"
+
+  local out
+  out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --only alpha 2>&1)"
+  assert_not_contains "$out" "beta-docs" "a project left out by --only is not a loose repo"
+
+  out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" 2>&1)"
+  assert_not_contains "$out" "loose-one" "a repo cloned straight under the root is already here"
+  teardown
+}

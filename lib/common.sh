@@ -616,6 +616,30 @@ default_owner() {
   gh api user --jq .login 2>/dev/null || true
 }
 
+search_owners() {
+  # Your account and every organisation you are an active member of. A project
+  # lives where its team does: with only the personal account, the projects
+  # of an organisation stay behind on the day you set up a machine.
+  {
+    default_owner
+    gh api user/memberships/orgs --paginate \
+      --jq '.[] | select(.state == "active") | .organization.login' 2>/dev/null
+  } | sed '/^$/d' | awk '!seen[$0]++'
+}
+
+template_for_owner() {
+  # template_for_owner <owner> — the machine's clone template pointing at
+  # another owner, keeping its shape (ssh or https). Without a GitHub template,
+  # the ssh form, which is what the kernel creates.
+  local owner="$1" tmpl="" cfg="${CRUX_CONFIG:-$HOME/.crux/config}"
+  [[ -f "$cfg" ]] && tmpl="$(grep -E '^CRUX_REMOTE=' "$cfg" | cut -d= -f2- | tr -d '"')"
+  if [[ "$tmpl" =~ ^(.*github\.com[:/])[^/]+/(.*)$ ]]; then
+    printf '%s%s/%s' "${BASH_REMATCH[1]}" "$owner" "${BASH_REMATCH[2]}"
+  else
+    printf 'git@github.com:%s/{repo}.git' "$owner"
+  fi
+}
+
 candidate_projects() {
   # candidate_projects <owner> — the owner's <something>-docs repos, without the suffix.
   gh repo list "$1" --limit 300 --json name --jq '.[].name' 2>/dev/null \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # crux bootstrap — get a new machine ready to work.
 #
-#   crux bootstrap [--owner <owner>] [--parent <dir>] [--only a,b] [--dry-run]
+#   crux bootstrap [--owner <owner>[,<owner>]] [--parent <dir>] [--only a,b] [--dry-run]
 #
 # Checks the machine, discovers all the projects and fetches them. It is
 # `crux clone` repeated, plus the two things you do not have on a blank
@@ -12,7 +12,8 @@
 # hand-written inventory goes stale as soon as you create a project, and this
 # is used precisely on the day you do not remember which ones you had. It is
 # the same criterion `crux clone` already uses for a project's repo list: it
-# comes from the contract.
+# comes from the contract. It searches your account and every organisation
+# you are an active member of, unless --owner says where.
 #
 # What it does NOT do, on purpose: move credentials. SSH keys, tokens and
 # secrets are not copied from one machine to another by a tool. When it
@@ -24,14 +25,14 @@ CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/..
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
 
-OWNER=""
+OWNERS=""
 PARENT="$(projects_root)"
 ONLY=""
 DRY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --owner)   OWNER="$2"; shift 2 ;;
+    --owner)   OWNERS+="${OWNERS:+,}$2"; shift 2 ;;
     --parent)  PARENT="$2"; shift 2 ;;
     --only)    ONLY="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
@@ -59,8 +60,14 @@ command -v gh >/dev/null 2>&1 \
 gh auth status >/dev/null 2>&1 \
   || die "gh not authenticated — 'gh auth login' and come back"
 
-[[ -n "$OWNER" ]] || OWNER="$(default_owner)"
-[[ -n "$OWNER" ]] || die "I do not know which account to search under — pass it with --owner"
+# The first owner is yours: the profile and the loose repos are looked for there.
+if [[ -n "$OWNERS" ]]; then
+  mapfile -t owners < <(echo "$OWNERS" | tr ',' '\n' | sed '/^$/d' | awk '!seen[$0]++')
+else
+  mapfile -t owners < <(search_owners)
+fi
+[[ ${#owners[@]} -gt 0 ]] || die "I do not know which account to search under — pass it with --owner"
+OWNER="${owners[0]}"
 
 # --- 3. Which projects exist ----------------------------------------------------
 #
@@ -68,29 +75,39 @@ gh auth status >/dev/null 2>&1 \
 # part matters: without checking it, any repo ending in -docs would count as a project.
 
 echo
-echo "2. projects of $OWNER"
+echo "2. projects of ${owners[*]}"
 echo
 
 all_repos="$(gh repo list "$OWNER" --limit 300 --json name --jq '.[].name' 2>/dev/null | sort -u)"
-candidates="$(candidate_projects "$OWNER")"
+filter=""
+[[ -n "$ONLY" ]] && filter="$(echo "$ONLY" | tr ',' '\n' | sed '/^$/d' | sort -u)"
 
-if [[ -n "$ONLY" ]]; then
-  filter="$(echo "$ONLY" | tr ',' '\n' | sed '/^$/d' | sort -u)"
-  candidates="$(comm -12 <(echo "$candidates") <(echo "$filter"))"
-fi
-
-[[ -n "$candidates" ]] || die "no *-docs repo under $OWNER"
-
+# Both live under $PARENT/<project>: two owners with the same project name
+# cannot share the machine, and the first one found keeps it.
 projects=()
-while IFS= read -r p; do
-  [[ -n "$p" ]] || continue
-  if has_contract "$OWNER" "$p"; then
-    projects+=("$p")
-    ok "$p"
-  else
-    info "$p-docs has no contract — not a crux project, skipped"
-  fi
-done <<< "$candidates"
+declare -A owner_of=()
+any_candidate=0
+for o in "${owners[@]}"; do
+  candidates="$(candidate_projects "$o")"
+  [[ -n "$filter" ]] && candidates="$(comm -12 <(echo "$candidates") <(echo "$filter"))"
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    any_candidate=1
+    if [[ -n "${owner_of[$p]:-}" ]]; then
+      warn "$o/$p-docs has the same name as ${owner_of[$p]}/$p-docs — only the first one comes"
+      continue
+    fi
+    label="$p"; [[ "$o" == "$OWNER" ]] || label="$p ($o)"
+    if has_contract "$o" "$p"; then
+      projects+=("$p"); owner_of[$p]="$o"
+      ok "$label"
+    else
+      info "$label: $p-docs has no contract — not a crux project, skipped"
+    fi
+  done <<< "$candidates"
+done
+
+[[ $any_candidate -eq 1 ]] || die "no *-docs repo under ${owners[*]}"
 
 [[ ${#projects[@]} -gt 0 ]] || die "none carries a contract"
 
@@ -132,7 +149,10 @@ fetched=(); failed_items=()
 for p in "${projects[@]}"; do
   echo
   echo "── $p"
-  if bash "$CRUX_HOME/bin/clone.sh" "$p" --parent "$PARENT"; then
+  # Your own projects use the machine template as is, whatever host it points at.
+  from=()
+  [[ "${owner_of[$p]}" == "$OWNER" ]] || from=(--from "$(template_for_owner "${owner_of[$p]}")")
+  if bash "$CRUX_HOME/bin/clone.sh" "$p" --parent "$PARENT" "${from[@]}"; then
     fetched+=("$p")
   else
     failed_items+=("$p")
@@ -172,12 +192,14 @@ bring_profile
 # A remote repo that belongs to no project is not fetched by this, and keeping
 # quiet about it would be worse than not fetching it: you leave believing
 # everything is there.
+# With --only the rest was left out on purpose, and listing it would be noise.
 standalone_items=()
+[[ -n "$ONLY" ]] && all_repos=""
 while IFS= read -r r; do
   [[ -n "$r" ]] || continue
   [[ "$r" == "$PROFILE_NAME" ]] && continue
   found=0
-  for d in "$PARENT"/*/"$r"; do
+  for d in "$PARENT/$r" "$PARENT"/*/"$r"; do
     [[ -d "$d" ]] && { found=1; break; }
   done
   [[ $found -eq 0 ]] && standalone_items+=("$r")
