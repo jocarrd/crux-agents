@@ -313,3 +313,44 @@ SH
     "and registers the hooks of the new kernel, not of the one running the sync"
   teardown
 }
+
+_workspace_on_both() {
+  # The ws/feat branch, checked out in a worktree here and pushed; OTHER is
+  # left on that branch, as when the task is resumed on the other machine.
+  _two_machines
+  local app="$CRUX_PROJECTS_DIR/alpha/app"
+  git -C "$app" worktree add -q -b ws/feat "$CRUX_PROJECTS_DIR/alpha/app-ws-feat" 2>/dev/null
+  git -C "$CRUX_PROJECTS_DIR/alpha/app-ws-feat" push -q -u origin ws/feat 2>/dev/null
+  git -C "$OTHER" fetch -q origin
+  git -C "$OTHER" checkout -q -b ws/feat origin/ws/feat
+  echo "from-there" > "$OTHER/from-there"
+  git -C "$OTHER" add from-there && git -C "$OTHER" commit -q -m "from there"
+  git -C "$OTHER" push -q origin ws/feat
+}
+
+test_sync_advances_a_workspace_the_other_machine_moved_on() {
+  sandbox >/dev/null
+  _workspace_on_both
+
+  local out
+  out="$(crux sync 2>&1)"
+
+  # Left behind, the next commit here diverges and it only shows on pushing.
+  assert_file "$CRUX_PROJECTS_DIR/alpha/app-ws-feat/from-there" "the workspace gets what was done on the other machine"
+  assert_contains "$out" "alpha/app-ws-feat" "and it says which one"
+  teardown
+}
+
+test_sync_leaves_a_dirty_workspace_alone_and_says_so() {
+  sandbox >/dev/null
+  _workspace_on_both
+  local ws="$CRUX_PROJECTS_DIR/alpha/app-ws-feat"
+  echo "half" > "$ws/half" && git -C "$ws" add half
+
+  local out
+  out="$(crux sync 2>&1)"
+
+  assert_no_file "$ws/from-there" "it does not advance over uncommitted work"
+  assert_contains "$out" "alpha/app-ws-feat" "but it says the workspace is behind"
+  teardown
+}

@@ -53,8 +53,8 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
 
 # The repos in the root and those inside each project. Worktrees are returned
-# separately: on arrival they are left alone, because their branch is work in
-# progress; on leaving they count like any other.
+# separately: they share their main repo's fetch, so on arrival they are only
+# advanced, under the same rule as any branch.
 main_repos() {
   local d
   for d in "$ROOT"/*/ "$ROOT"/*/*/; do
@@ -393,6 +393,11 @@ sync_arrival() {
     lines+="$(advance "$repo")"$'\n'
     lines+="$(advance_the_rest "$repo")"$'\n'
   done < <(main_repos)
+  # A task resumed on the other machine moves its branch on there: left
+  # behind here, the next commit diverges and it only shows on pushing.
+  while IFS= read -r repo; do
+    lines+="$(advance "$repo")"$'\n'
+  done < <(worktrees)
   lines+="$(fetch_new_repos)"$'\n'
   lines+="$(kernel_up_to_date)"$'\n'
   lines+="$(tasks_up_to_date)"$'\n'
