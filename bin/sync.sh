@@ -327,8 +327,10 @@ kernel_up_to_date() {
   # In dev mode the kernel already is the clone: reinstalling would switch it to release.
   grep -qE '^CRUX_MODE="?dev' "${CRUX_CONFIG:-$HOME/.crux/config}" 2>/dev/null && return 0
 
+  # This process exports its own CRUX_HOME; inherited, the new hooks would point at the old kernel.
   if ( cd "$HOME" && bash "$clone/install.sh" ) >/dev/null 2>&1 \
-     && ( cd "$HOME" && bash "$HOME/.crux/kernel/$new_one/bin/hooks.sh" install ) >/dev/null 2>&1; then
+     && ( cd "$HOME" && CRUX_HOME="$HOME/.crux/kernel/$new_one" \
+          bash "$HOME/.crux/kernel/$new_one/bin/hooks.sh" install ) >/dev/null 2>&1; then
     echo "kernel	crux $current → $new_one, with its hooks"
   else
     echo "failed	kernel: could not install crux $new_one — run '$clone/install.sh' by hand"

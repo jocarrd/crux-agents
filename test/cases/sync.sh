@@ -288,3 +288,28 @@ test_sync_says_why_it_cannot_advance() {
   assert_eq "mine" "$(cat "$CRUX_PROJECTS_DIR/alpha/app/clashes")" "and does not overwrite the local file"
   teardown
 }
+
+test_sync_installs_the_hooks_of_the_new_kernel() {
+  sandbox >/dev/null
+  _no_gh
+  local home="$SB/home-upgrade" clone="$CRUX_PROJECTS_DIR/crux"
+  mkdir -p "$home/.crux" "$clone"
+  printf 'CRUX_MODE="release"\n' > "$home/.crux/config"
+  echo "99.0.0" > "$clone/VERSION"
+  # A stand-in installer: the new kernel's hooks.sh writes down which kernel it believes it is.
+  cat > "$clone/install.sh" <<'SH'
+mkdir -p "$HOME/.crux/kernel/99.0.0/bin"
+printf 'echo "$CRUX_HOME" > "$HOME/hooks-from"\n' > "$HOME/.crux/kernel/99.0.0/bin/hooks.sh"
+SH
+  git -C "$clone" init -q -b main
+  git -C "$clone" add -A && git -C "$clone" commit -q -m "release"
+  git -C "$clone" tag v99.0.0
+
+  local out
+  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 bash "$CRUX_HOME/bin/sync.sh" 2>&1)"
+
+  assert_contains "$out" "99.0.0, with its hooks" "it installs the published version"
+  assert_eq "$home/.crux/kernel/99.0.0" "$(cat "$home/hooks-from" 2>/dev/null)" \
+    "and registers the hooks of the new kernel, not of the one running the sync"
+  teardown
+}
