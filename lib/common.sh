@@ -334,7 +334,11 @@ profile_field() {
   awk -v key="$2" '
     NR == 1 { if ($0 != "---") exit; next }
     $0 == "---" { exit }
-    index($0, key ":") == 1 { sub("^" key ":[ \t]*", ""); gsub(/^"|"$/, ""); print; exit }
+    index($0, key ":") == 1 {
+      sub("^" key ":[ \t]*", "")
+      if ($0 ~ /^".*"$/) { $0 = substr($0, 2, length($0) - 2); gsub(/\\"/, "\"") }
+      print; exit
+    }
   ' "$1/PROFILE.md"
 }
 

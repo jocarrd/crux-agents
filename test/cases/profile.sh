@@ -130,3 +130,16 @@ test_profile_link_without_profile_removes_the_block() {
   assert_exit 1 "linking without a profile says so" bash "$CRUX_HOME/bin/profile.sh" link
   assert_not_contains "$(cat "$(claude_md)")" "crux:profile:begin" "and leaves no import pointing to nothing"
 }
+
+test_profile_status_survives_folders_that_git_did_not_bring() {
+  sandbox >/dev/null
+  local dir="$CRUX_PROJECTS_DIR/agent-profile"
+  mkdir -p "$dir"
+  printf -- '---\n---\n# P\n' > "$dir/PROFILE.md"
+  local out; out="$(bash "$CRUX_HOME/bin/profile.sh" 2>&1)"
+  assert_contains "$out" "machines: 0" "a cloned profile without its empty folders is still reported"
+  bash "$CRUX_HOME/bin/profile.sh" init --no-remote >/dev/null 2>&1
+  rm -rf "$dir"
+  bash "$CRUX_HOME/bin/profile.sh" init --no-remote >/dev/null 2>&1
+  assert_file "$dir/machines/.gitkeep" "and init leaves its folders tracked so they travel"
+}

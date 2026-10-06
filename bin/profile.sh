@@ -65,7 +65,9 @@ status() {
   [[ -n "$reminder" ]] && info "reminder on every message: $reminder" || info "no reminder on every message (reminder: in PROFILE.md)"
   local sub n
   for sub in preferences about machines; do
-    n="$(find "$dir/$sub" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l)"
+    # git does not keep empty folders: a cloned profile may not have them yet.
+    n=0
+    [[ -d "$dir/$sub" ]] && n="$(find "$dir/$sub" -maxdepth 1 -name '*.md' | wc -l)"
     info "$sub: $n"
   done
   local note; note="$(profile_machine_note "$dir")"
@@ -84,6 +86,8 @@ status() {
 
 skeleton() {
   mkdir -p "$DIR/preferences" "$DIR/about" "$DIR/machines"
+  # Empty folders do not travel in git; the other machine would get none.
+  touch "$DIR/preferences/.gitkeep" "$DIR/about/.gitkeep" "$DIR/machines/.gitkeep"
   [[ -f "$DIR/PROFILE.md" ]] || cat > "$DIR/PROFILE.md" <<'EOF'
 ---
 # reminder: a line the agents get on every message, in your words (optional)
