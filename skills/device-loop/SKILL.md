@@ -18,13 +18,10 @@ gotcha is in `<this-skill-directory>/references/por-que.md`.
 - Validating what the browser does not have: notifications, widgets, native
   maps, dark mode, permissions.
 - Setting up the emulator on a machine that does not have it.
-- Reproducing a bug that only appears in the built app. Typical case:
-  environment variables that the bundler injects in development but not in a
-  build when they are read dynamically.
+- Reproducing a bug that only appears in the built app.
 
-Before installing anything, look in the project's docs repo: the emulator's
-name, the system image and where it is installed are project data, and so are
-the package name and deep links.
+Look first in the project's docs repo: the emulator's name, its image, the
+package and the deep links are project data.
 
 ## 1. Install it, once per machine
 
