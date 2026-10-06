@@ -2264,3 +2264,9 @@ test_install_keeps_the_settings_the_person_added() {
   assert_contains "$config" "CRUX_PROFILE_REPO=my-profile" "and every other one"
   assert_eq "1" "$(grep -c '^CRUX_MODE=' "$home/.crux/config")" "without duplicating its own"
 }
+
+test_version_also_answers_to_the_usual_flag() {
+  sandbox >/dev/null
+  assert_contains "$(crux --version 2>&1)" "crux $(tr -d '[:space:]' < "$CRUX_HOME/VERSION")" "--version prints the version"
+  teardown
+}
