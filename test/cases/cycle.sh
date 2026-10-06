@@ -2007,3 +2007,34 @@ test_finish_does_not_warn_about_plan_if_saved() {
   assert_not_contains "$out" "has no plan" "with a saved plan it does not warn"
   assert_contains "$out" "proposal opened" "and the proposal opens"
 }
+
+# A finish cut off after pushing the branch and before opening the proposal
+# left the branch on the remote, and the second attempt died saying there was
+# nothing to propose: the branch's own remote copy counted as "already there".
+test_finish_can_be_repeated_after_the_branch_was_pushed() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/again"
+  mkdir -p "$root/app" "$root/again-docs"
+  git -C "$root/app" init -q -b main
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"again","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/again-docs/crux.json"
+  git init -q --bare "$SB/again.git"
+  git -C "$root/app" remote add origin "$SB/again.git"
+  git -C "$root/app" push -q origin main
+
+  bash "$CRUX_HOME/bin/workspace.sh" new r --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-r"
+  echo change > "$ws/new.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "a step" >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  git -C "$ws" push -q origin ws/r
+
+  local out
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish r 2>&1)"
+  assert_not_contains "$out" "nothing to propose" "the pushed branch still has its commit to propose"
+  assert_contains "$out" "open the proposal" "and it gets to the proposal"
+}
