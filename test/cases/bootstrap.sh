@@ -109,3 +109,56 @@ test_bootstrap_says_which_repos_are_left_out() {
   assert_contains "$out" "loose-two" "and the other one"
   teardown
 }
+
+_fake_gh_with_profile() {
+  # The account has a project and the profile; `gh repo clone` clones a local remote.
+  git init -q --bare -b main "$SB/agent-profile.git"
+  git clone -q "$SB/agent-profile.git" "$SB/profile-seed" 2>/dev/null
+  printf -- '---\nreminder: "Answer briefly."\n---\n# Profile\n' > "$SB/profile-seed/PROFILE.md"
+  git -C "$SB/profile-seed" add -A && git -C "$SB/profile-seed" commit -q -m "profile"
+  git -C "$SB/profile-seed" push -q origin main
+  mkdir -p "$SB/bin"
+  cat > "$SB/bin/gh" <<EOF
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "auth "*) exit 0 ;;
+  "repo list") printf '%s\n' alpha-docs agent-profile ; exit 0 ;;
+  "repo view") exit 0 ;;
+  "repo clone") git clone -q "$SB/agent-profile.git" "\$4"; exit \$? ;;
+  "api user") echo jocarrd; exit 0 ;;
+  "api "*) [[ "\$2" == *"/alpha-docs/"* ]] && exit 0; exit 1 ;;
+esac
+exit 0
+EOF
+  chmod +x "$SB/bin/gh"
+  export PATH="$SB/bin:$PATH"
+}
+
+test_bootstrap_dry_run_announces_the_profile_without_bringing_it() {
+  sandbox >/dev/null
+  _ready_machine
+  _fake_gh_with_profile
+
+  local out
+  out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --dry-run 2>&1)"
+
+  assert_contains "$out" "would clone the profile jocarrd/agent-profile" "it says it would bring the profile"
+  assert_no_file "$CRUX_PROJECTS_DIR/agent-profile/PROFILE.md" "and does not bring it"
+  teardown
+}
+
+test_bootstrap_brings_the_profile_and_loads_it() {
+  sandbox >/dev/null
+  _ready_machine
+  _fake_gh_with_profile
+
+  local out
+  out="$(crux bootstrap --owner jocarrd --parent "$CRUX_PROJECTS_DIR" --only alpha 2>&1)"
+
+  assert_file "$CRUX_PROJECTS_DIR/agent-profile/PROFILE.md" "it clones the profile"
+  assert_contains "$(cat "$CLAUDE_CONFIG_DIR/CLAUDE.md" 2>/dev/null)" "@$CRUX_PROJECTS_DIR/agent-profile/PROFILE.md" \
+    "and Claude loads it"
+  assert_not_contains "$(printf '%s' "$out" | grep -A1 'belong to no project')" "agent-profile" \
+    "the profile is not listed as a loose repo"
+  teardown
+}
