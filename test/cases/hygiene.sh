@@ -459,3 +459,14 @@ test_the_wait_guard_lets_short_or_decided_commands_through() {
   assert_eq "0" "$(_wait_guard "crux ship run -- git diff --check origin/main")" "a gate that runs an instant check"
   assert_eq "0" "$(_wait_guard "npx eas-cli build:list --platform android")" "listing builds is not building"
 }
+
+test_hooks_install_recognises_hooks_by_file_name_not_path() {
+  # A workspace called wait-guard put that word in every hook path, and
+  # installing the wait guard replaced all the others with it.
+  sandbox >/dev/null
+  printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/opt/wait-guard-tools/mine.sh"}]}]}}\n' > "$CLAUDE_SETTINGS"
+  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  local settings; settings="$(cat "$CLAUDE_SETTINGS")"
+  assert_contains "$settings" "/opt/wait-guard-tools/mine.sh" "a hook of the person whose path says wait-guard survives"
+  assert_contains "$settings" "destructive-guard.sh" "and the other guards are installed beside it"
+}
