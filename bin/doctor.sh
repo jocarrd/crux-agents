@@ -112,6 +112,27 @@ origin_docs_early="$(git -C "$DOCS" remote get-url origin 2>/dev/null || true)"
 declared=()
 while IFS= read -r r; do [[ -n "$r" ]] && declared+=("$r"); done < <(json_get "$CONFIG" repos 2>/dev/null || true)
 
+# Archived repos are known but not active: neither "declared and missing" nor
+# "on disk and not declared". Their entries say since when and why.
+archived=()
+while IFS=$'\t' read -r kind name detail; do
+  case "$kind" in
+    ok)    archived+=("$name") ;;
+    bad)   fail "archived repo $name: $detail" ;;
+  esac
+done < <(node -e '
+  const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  const active = new Set(c.repos || []);
+  for (const [name, entry] of Object.entries(c.archived || {})) {
+    const problems = [];
+    if (active.has(name)) problems.push("it is also in repos: archived or active, not both");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test((entry && entry.since) || "")) problems.push("since must be a date (YYYY-MM-DD)");
+    if (!((entry && entry.reason) || "").trim()) problems.push("reason is missing: say why it is out of production");
+    console.log(problems.length ? `bad\t${name}\t${problems.join("; ")}` : `ok\t${name}\t`);
+  }
+' "$CONFIG" 2>/dev/null)
+is_archived() { local a; for a in ${archived[@]+"${archived[@]}"}; do [[ "$a" == "$1" ]] && return 0; done; return 1; }
+
 for repo in ${declared[@]+"${declared[@]}"}; do
   [[ -d "$DOCS/repos/$repo" ]] || fail "declared repo without a doc folder: repos/$repo/"
   [[ -f "$DOCS/repos/$repo/README.md" ]] || note "repos/$repo/ has no README.md"
@@ -124,6 +145,7 @@ if [[ -d "$DOCS/repos" ]]; then
     name="$(basename "$dir")"
     found=0
     for repo in ${declared[@]+"${declared[@]}"}; do [[ "$repo" == "$name" ]] && found=1; done
+    is_archived "$name" && found=1
     [[ $found -eq 1 ]] || note "repos/$name/ is not declared in crux.json"
   done
 fi
@@ -143,6 +165,10 @@ for dir in "$ROOT"/*/; do
   is_worktree "$dir" && continue
   found=0
   for repo in ${declared[@]+"${declared[@]}"}; do [[ "$repo" == "$name" ]] && found=1; done
+  if is_archived "$name"; then
+    info "$name/ is archived and still cloned here: it can be deleted"
+    continue
+  fi
   [[ $found -eq 1 ]] || note "$name/ is on disk and not declared ('crux add-repo $name')"
 done
 # The repo that exists on the remote and nobody cloned here: the loop above
@@ -158,7 +184,7 @@ if [[ "$origin_docs_early" == *github.com* ]] && command -v gh >/dev/null && gh 
     shopt -s nocasematch
     if [[ "$remote" == "$PROJECT" || "$remote" == "$PROJECT-"* ]]; then
       found=0
-      for repo in ${declared[@]+"${declared[@]}"}; do
+      for repo in ${declared[@]+"${declared[@]}"} ${archived[@]+"${archived[@]}"}; do
         [[ "$repo" == "$remote" ]] && found=1   # nocasematch, above
       done
       [[ $found -eq 1 ]] || note "$remote is on the remote and not declared ('crux add-repo $remote')"
@@ -167,7 +193,19 @@ if [[ "$origin_docs_early" == *github.com* ]] && command -v gh >/dev/null && gh 
   done < <(gh repo list "$owner" --limit 200 --json name --jq '.[].name' 2>/dev/null || true)
 fi
 
-section_ok "repos: ${#declared[@]} declared"
+# Archived in the contract and still writable on GitHub: its workflows still
+# run on a merge, which is how a retired service got deployed again.
+if [[ ${#archived[@]} -gt 0 ]] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  for name in "${archived[@]}"; do
+    url="$(remote_url "$CONFIG" "$name" 2>/dev/null || true)"
+    [[ "$url" =~ github\.com[:/]([^/]+)/([^/]+)$ ]] || continue
+    slug="${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+    state="$(gh api "repos/$slug" --jq .archived 2>/dev/null || true)"
+    [[ "$state" == "false" ]] && note "$name is archived in crux.json but not on GitHub: its workflows still run ('gh repo archive $slug')"
+  done
+fi
+
+section_ok "repos: ${#declared[@]} declared$([[ ${#archived[@]} -gt 0 ]] && echo ", ${#archived[@]} archived")"
 
 # --- 4. Profile rules --------------------------------------------------------
 

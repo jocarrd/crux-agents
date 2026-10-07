@@ -1,0 +1,6 @@
+# Files that grow by appending independent entries: when two machines add one
+# at the same place, git keeps both instead of stopping on a conflict. doctor
+# still catches two decisions with the same number.
+decisions/index.md merge=union
+repos/*/decisions.md merge=union
+repos/*/notes.md merge=union

@@ -125,6 +125,7 @@ cmd_new() {
 
   repo="$(cd "$repo" && git rev-parse --show-toplevel 2>/dev/null)" \
     || die "not a git repo: $repo"
+  refuse_if_archived "$repo"
   local repo_name; repo_name="$(basename "$repo")"
   local parent; parent="$(dirname "$repo")"
   local path="$parent/${repo_name}-ws-${name}"
