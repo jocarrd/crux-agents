@@ -456,4 +456,6 @@ test_the_wait_guard_lets_short_or_decided_commands_through() {
   assert_eq "0" "$(_wait_guard "eas build --platform android --no-wait")" "a cloud build that is not waited for"
   assert_eq "0" "$(_wait_guard "sleep 5")" "a short pause"
   assert_eq "0" "$(_wait_guard "git commit -m \"test/run.sh passed\"")" "the words inside a message"
+  assert_eq "0" "$(_wait_guard "crux ship run -- git diff --check origin/main")" "a gate that runs an instant check"
+  assert_eq "0" "$(_wait_guard "npx eas-cli build:list --platform android")" "listing builds is not building"
 }
