@@ -32,13 +32,14 @@ name="$(printf '%s' "$input" | node -e '
     const LONG = [
       [/(^|[\s;&|(\/])test\/run\.sh(?=\s*($|[;&|)<>]))/, "the whole test suite"],
       [/(^|[\s;&|(\/])test\/e2e\.sh\b/, "the end-to-end battery"],
-      [/\bcrux\s+ship\s+run\b/, "the quality gate"],
+      // The gate is as long as the command it runs: a git diff is instant.
+      [/\bcrux\s+ship\s+run\s+--\s+(?!(git|true|echo|test|ls|cat)\b)/, "the quality gate"],
       [/\bgh\s+(pr\s+checks|run\s+watch)\b[^;&|\n]*--watch|\bgh\s+run\s+watch\b/, "watching CI"],
       [/\buntil\b[\s\S]*?\bdo\b[\s\S]*?\bsleep\b/, "a loop that waits"],
       [/\bsleep\s+([1-9]\d{2,})\b/, "a long sleep"],
       [/\bdocker\s+(compose\s+)?build\b|\bdocker\s+buildx\s+build\b/, "an image build"],
       [/\bgradlew\b[^;&|\n]*\b(assemble|bundle|build)/, "an Android build"],
-      [/\beas(-cli)?\s+build\b(?![^;&|\n]*--no-wait)/, "a cloud build that is waited for"],
+      [/\beas(-cli)?\s+build(?![:\w-])(?![^;&|\n]*--no-wait)/, "a cloud build that is waited for"],
     ];
     for (const [rx, what] of LONG) if (rx.test(runnable)) { process.stdout.write(what); break; }
   });

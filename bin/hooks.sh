@@ -161,10 +161,13 @@ hook_up() {
     s.hooks = s.hooks || {};
     const groups = (s.hooks[event] = s.hooks[event] || []);
     const previous = new RegExp(pattern);
+    // Only the file names: the kernel path can contain a hook name, as in a
+    // workspace called wait-guard, and then every hook matched.
+    const names = (c) => (c || "").split(/\s+/).map((t) => t.split("/").pop()).join(" ");
     let replaced = 0;
     for (const g of groups) {
       g.hooks = (g.hooks || []).map((h) => {
-        if (!previous.test(h.command || "")) return h;
+        if (!previous.test(names(h.command))) return h;
         replaced++;
         return { ...h, command: cmd };
       });
@@ -212,7 +215,7 @@ codex_hooks() {
     const isCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder|contexto\.sh/;
     for (const [ev, groups] of Object.entries(s.hooks)) {
       s.hooks[ev] = groups
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isCrux.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isCrux.test((h.command || "").split(/\s+/).map((t) => t.split("/").pop()).join(" "))) }))
         .filter((g) => g.hooks.length);
       if (!s.hooks[ev].length) delete s.hooks[ev];
     }
@@ -451,7 +454,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [event, groups] of Object.entries(s.hooks || {})) {
       s.hooks[event] = groups
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder/.test((h.command || "").split(/\s+/).map((t) => t.split("/").pop()).join(" "))) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[event].length) delete s.hooks[event];
     }
