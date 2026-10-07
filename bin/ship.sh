@@ -47,6 +47,11 @@ cmd_run() {
 
   # The receipt records the command as declared, not the wrapper.
   local label="${LABEL:-$*}"
+  # Running the same command again replaces its earlier result: the fix of a
+  # red run is to run it green, and the old line kept the gate shut.
+  awk -v l="$label" '{ c = $0; if ($1 == "run") { sub(/^run [^ ]+ [^ ]+ /, "", c); if (c == l) next } print }' \
+    "$RECEIPT" > "$RECEIPT.tmp" \
+    && mv "$RECEIPT.tmp" "$RECEIPT"
   printf 'run %s %s %s\n' "$rc" "$((end - start))" "$label" >> "$RECEIPT"
   if [[ $rc -eq 0 ]]; then ok "$label — $((end - start))s"; else err "$label — exit $rc"; fi
   return $rc

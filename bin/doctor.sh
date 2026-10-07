@@ -449,6 +449,69 @@ if json_has "$DOCS/crux.json" 'mcp && Object.keys(root.mcp).length'; then
   section_ok "MCP servers declared and written where they belong"
 fi
 
+# --- 15. What lives in your own code repos ----------------------------------
+#
+# In your repos the documentation lives in the docs repo; in a client's, their
+# code is theirs and nothing here applies. Two things drift without anyone
+# noticing: documentation written next to the code, and variables the code
+# reads that the example file does not list, so on another machine nobody
+# knows what to fill in.
+
+# The system's, the bundler's own (Vite) and the debug switches of libraries.
+ENV_IGNORED=" NODE_ENV CI HOME PATH PWD USER TZ LANG TERM SHELL TMPDIR PROD DEV MODE SSR BASE_URL DEBUG NODE_DEBUG "
+# Bundled or third-party code reads variables nobody has to set.
+ENV_SKIP=(':!*.md' ':!*.min.js' ':!**/vendor/**' ':!**/node_modules/**' ':!**/dist/**' ':!**/build/**')
+env_refs() {
+  {
+    git -C "$1" grep -hoE '(process\.env|import\.meta\.env)\.[A-Z][A-Z0-9_]+' -- "${ENV_SKIP[@]}" 2>/dev/null \
+      | sed -E 's/.*\.//'
+    git -C "$1" grep -hoE "os\.(environ|getenv)[^A-Z]{1,8}[A-Z][A-Z0-9_]+" -- '*.py' 2>/dev/null \
+      | grep -oE '[A-Z][A-Z0-9_]+$'
+    git -C "$1" grep -hoE '\$\{[A-Z][A-Z0-9_]+' -- 'docker-compose*.yml' 'compose*.yml' 2>/dev/null \
+      | sed 's/^..//'
+  } | sort -u | while IFS= read -r v; do [[ "$ENV_IGNORED" == *" $v "* ]] || echo "$v"; done
+}
+first_names() { head -6 | paste -sd, - | sed 's/,/, /g'; }
+
+section
+if [[ "$WRITES_POINTERS" == "true" ]]; then
+  for repo in ${declared[@]+"${declared[@]}"}; do
+    dir="$ROOT/$repo"
+    git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || continue
+    tracked="$(git -C "$dir" ls-files 2>/dev/null)"
+
+    stray="$(printf '%s\n' "$tracked" | awk -F/ '
+      $1 == "docs" { print "docs/"; next }
+      NF == 1 && /\.md$/ && $0 !~ /^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT|LICENSE)\.md$/' | LC_ALL=C sort -u)"
+    [[ -n "$stray" ]] && note "$repo holds documentation ($(printf '%s\n' "$stray" | first_names)): it goes in $(basename "$DOCS")/repos/$repo/"
+
+    if [[ -f "$dir/README.md" ]]; then
+      lines="$(wc -l < "$dir/README.md" | tr -d ' ')"
+      (( lines > 60 )) && note "$repo/README.md has $lines lines: say what it is and where the docs are, and leave the rest to $(basename "$DOCS")/repos/$repo/"
+    fi
+
+    example=""
+    for f in .env.example .env.sample .env.template; do
+      # Not through a pipe: with pipefail, grep -q closing it early on a long
+      # listing reads as not found.
+      grep -qx -- "$f" <<< "$tracked" && { example="$f"; break; }
+    done
+    refs="$(env_refs "$dir")"
+    local_env="$(cd "$dir" && ls -A .env .env.local .env.development 2>/dev/null | head -1)"
+    if [[ -z "$example" ]]; then
+      if [[ -n "$refs" ]]; then
+        note "$repo reads environment variables and has no .env.example ($(printf '%s\n' "$refs" | first_names)): names without values, committed"
+      elif [[ -n "$local_env" ]]; then
+        note "$repo has $local_env but no .env.example: names without values, committed"
+      fi
+    elif [[ -n "$refs" ]]; then
+      missing="$(comm -23 <(printf '%s\n' "$refs") <(grep -oE '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*' "$dir/$example" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//' | sort -u))"
+      [[ -n "$missing" ]] && note "$repo/$example lacks what the code reads: $(printf '%s\n' "$missing" | first_names)"
+    fi
+  done
+  [[ $WARNS -eq $SECTION_WARNS ]] && section_ok "code repos: documentation in the docs repo, environment listed in its example"
+fi
+
 # --- Summary -----------------------------------------------------------------
 
 echo

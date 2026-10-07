@@ -22,6 +22,7 @@ TASK_CONTEXT="$CRUX_HOME/adapters/claude/hooks/task-context.sh"
 WORKTREE_GUARD="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
 DESTRUCTIVE_GUARD="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
 PROPOSAL_GUARD="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
+WAIT_GUARD="$CRUX_HOME/adapters/claude/hooks/wait-guard.sh"
 SESSION_SYNC="$CRUX_HOME/adapters/claude/hooks/session-sync.sh"
 SESSION_IDLE="$CRUX_HOME/adapters/claude/hooks/session-idle.sh"
 PROFILE_REMINDER="$CRUX_HOME/adapters/claude/hooks/profile-reminder.sh"
@@ -208,7 +209,7 @@ codex_hooks() {
     const [file, action, ctx, sync, idle, cycle, task, destr, wt, prop, doc, lang] = process.argv.slice(1);
     const s = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
     s.hooks = s.hooks || {};
-    const isCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|profile-reminder|contexto\.sh/;
+    const isCrux = /doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder|contexto\.sh/;
     for (const [ev, groups] of Object.entries(s.hooks)) {
       s.hooks[ev] = groups
         .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isCrux.test(h.command || "")) }))
@@ -244,11 +245,12 @@ cmd_install() {
   [[ -f "$WORKTREE_GUARD" ]] || die "missing $WORKTREE_GUARD"
   [[ -f "$DESTRUCTIVE_GUARD" ]] || die "missing $DESTRUCTIVE_GUARD"
   [[ -f "$PROPOSAL_GUARD" ]] || die "missing $PROPOSAL_GUARD"
+  [[ -f "$WAIT_GUARD" ]] || die "missing $WAIT_GUARD"
   [[ -f "$SESSION_SYNC" ]] || die "missing $SESSION_SYNC"
   [[ -f "$SESSION_IDLE" ]] || die "missing $SESSION_IDLE"
   [[ -f "$PROFILE_REMINDER" ]] || die "missing $PROFILE_REMINDER"
   [[ -f "$COMMIT_MSG" ]] || die "missing $COMMIT_MSG"
-  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$DESTRUCTIVE_GUARD" "$PROPOSAL_GUARD" "$SESSION_SYNC" "$SESSION_IDLE" "$PROFILE_REMINDER" "$COMMIT_MSG"
+  chmod +x "$DOC_SYNC" "$CYCLE_GUARD" "$MEMORY_GUARD" "$TASK_CONTEXT" "$WORKTREE_GUARD" "$DESTRUCTIVE_GUARD" "$PROPOSAL_GUARD" "$WAIT_GUARD" "$SESSION_SYNC" "$SESSION_IDLE" "$PROFILE_REMINDER" "$COMMIT_MSG"
 
   mkdir -p "$(dirname "$SETTINGS")"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -274,6 +276,9 @@ cmd_install() {
 
   hook_up PreToolUse "$PROPOSAL_GUARD" 'proposal-guard' Bash
   ok "hook that stops opening a proposal by hand without the gate receipt"
+
+  hook_up PreToolUse "$WAIT_GUARD" 'wait-guard' Bash
+  ok "hook that sends what takes minutes to the background"
 
   hook_up SessionStart "$SESSION_SYNC" 'session-sync'
   ok "hook that syncs the machine with the remote when opening a session"
@@ -446,7 +451,7 @@ cmd_remove() {
     const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     for (const [event, groups] of Object.entries(s.hooks || {})) {
       s.hooks[event] = groups
-        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|session-sync|session-idle|profile-reminder/.test(h.command || "")) }))
+        .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !/doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder/.test(h.command || "")) }))
         .filter((g) => (g.hooks || []).length);
       if (!s.hooks[event].length) delete s.hooks[event];
     }

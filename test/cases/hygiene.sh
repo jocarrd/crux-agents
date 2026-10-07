@@ -428,3 +428,32 @@ test_no_skill_sends_a_command_the_guard_blocks() {
   done
   assert_eq "" "$bad_items" "no command block of a skill clashes with the guard"
 }
+
+_wait_guard() {
+  # _wait_guard <command> [background] — the hook's exit code
+  local bg="${2:-false}"
+  printf '{"tool_name":"Bash","tool_input":{"command":%s,"run_in_background":%s}}' \
+    "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" "$bg" \
+    | bash "$CRUX_HOME/adapters/claude/hooks/wait-guard.sh" >/dev/null 2>&1
+  echo $?
+}
+
+test_the_wait_guard_sends_long_commands_to_the_background() {
+  assert_eq "2" "$(_wait_guard "./test/run.sh")" "the whole suite"
+  assert_eq "2" "$(_wait_guard "cd x && ./test/run.sh > out.txt 2>&1")" "the suite with its output redirected"
+  assert_eq "2" "$(_wait_guard "crux ship run -- npm run check")" "the gate"
+  assert_eq "2" "$(_wait_guard "gh pr checks 12 --watch")" "watching CI"
+  assert_eq "2" "$(_wait_guard "until grep -q done log; do sleep 10; done")" "a waiting loop"
+  assert_eq "2" "$(_wait_guard "docker build -t x .")" "an image build"
+  assert_eq "2" "$(_wait_guard "(cd android && ./gradlew assembleDebug)")" "an Android build"
+  assert_eq "2" "$(_wait_guard "npx eas-cli build --platform android")" "a waited cloud build"
+}
+
+test_the_wait_guard_lets_short_or_decided_commands_through() {
+  assert_eq "0" "$(_wait_guard "./test/run.sh doctor")" "a filtered run of the suite"
+  assert_eq "0" "$(_wait_guard "./test/run.sh" true)" "the suite in the background"
+  assert_eq "0" "$(_wait_guard "CRUX_WAIT=1 ./test/run.sh")" "waiting, said out loud"
+  assert_eq "0" "$(_wait_guard "eas build --platform android --no-wait")" "a cloud build that is not waited for"
+  assert_eq "0" "$(_wait_guard "sleep 5")" "a short pause"
+  assert_eq "0" "$(_wait_guard "git commit -m \"test/run.sh passed\"")" "the words inside a message"
+}

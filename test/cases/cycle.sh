@@ -2038,3 +2038,46 @@ test_finish_can_be_repeated_after_the_branch_was_pushed() {
   assert_not_contains "$out" "nothing to propose" "the pushed branch still has its commit to propose"
   assert_contains "$out" "open the proposal" "and it gets to the proposal"
 }
+
+test_ship_a_command_run_again_replaces_its_red_result() {
+  sandbox >/dev/null
+  local repo="$SB/repo" out
+  mkdir -p "$repo" && git init -q -b main "$repo"
+  echo x > "$repo/f" && git -C "$repo" add -A && git -C "$repo" commit -qm "chore: init"
+  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f ok >/dev/null 2>&1 ) || true
+  touch "$repo/ok"
+  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f ok >/dev/null 2>&1 )
+
+  out="$(cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  assert_contains "$out" "gate closed" "the green run replaces the red one of the same command"
+
+  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f missing >/dev/null 2>&1 ) || true
+  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f ok >/dev/null 2>&1 )
+  out="$(cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  assert_contains "$out" "does not close" "a different command in red still keeps it shut"
+  teardown
+}
+
+test_a_copy_identical_to_the_main_repo_does_not_hold_a_workspace() {
+  # The env file the workspace was born with, and Expo's cache, made rm refuse
+  # as if they were work: neither loses anything when removed.
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_two_repos)"
+  printf '.env.local\n.expo/\nnotes.txt\n' > "$root/app/.gitignore"
+  git -C "$root/app" add -A; git -C "$root/app" commit -qm ignore
+  echo "KEY=1" > "$root/app/.env.local"
+
+  bash "$CRUX_HOME/bin/workspace.sh" new copy --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-copy" rc=0
+  cp "$root/app/.env.local" "$ws/.env.local"
+  mkdir -p "$ws/.expo" && echo x > "$ws/.expo/devices.json"
+  echo "mine" > "$ws/notes.txt"
+  bash "$CRUX_HOME/bin/workspace.sh" rm copy >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "a file that only exists here still holds it"
+
+  rm "$ws/notes.txt"; rc=0
+  bash "$CRUX_HOME/bin/workspace.sh" rm copy >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "the identical copy and the cache do not"
+  assert_no_file "$ws/.env.local" "and the worktree is gone"
+}
