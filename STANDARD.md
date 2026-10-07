@@ -80,6 +80,7 @@ the root:
 | `project` | Project name, same as the parent folder |
 | `profile` | Applied profile (see next section) |
 | `repos` | The project's code repos, siblings of the docs repo |
+| `archived` | Repos out of production but kept: `{"<repo>": {"since": "YYYY-MM-DD", "reason": "…"}}`. They leave `repos`, so nothing treats them as active; `crux archive` and `crux unarchive` move them. The contract is what counts, whatever the git provider allows |
 | `sections` | Active optional folders |
 | `quality` | How tests are run here (optional, see below) |
 | `conventions` | Mechanically checkable style rules (optional, see below) |
@@ -1038,6 +1039,8 @@ the session. See ADR-012.
 | `crux bootstrap` | — | Gets a new machine ready: verifies, discovers the projects and brings them in |
 | `crux adopt` | — | Registers a docs repo that already exists |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registers a new repo in the project |
+| `crux archive <repo> --reason "…"` | — | Marks a repo as archived: contract, docs notice, read-only on GitHub, local clone refuses to push |
+| `crux unarchive <repo>` | — | Brings an archived repo back |
 | `crux review` | `/review-pr` | Gathers the material for reviewing a proposal, with its risk |
 | `crux checks [n]` | `/flow` | Waits for a proposal's CI and fetches the log of what fails |
 | `crux merge <n>` | — | Merges a proposal, saying beforehand which one and from which repo |

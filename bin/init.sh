@@ -129,6 +129,7 @@ while IFS= read -r src; do
   rel="${src#"$CRUX_HOME/templates/docs-repo/"}"
   dst="$DOCS/$rel"
   [[ "$rel" == "gitignore" ]] && dst="$DOCS/.gitignore"
+  [[ "$rel" == "gitattributes" ]] && dst="$DOCS/.gitattributes"
   render_template "$src" "$dst" "${VARS[@]}"
 done < <(find "$CRUX_HOME/templates/docs-repo" -type f | sort)
 

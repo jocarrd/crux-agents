@@ -67,6 +67,7 @@ while IFS= read -r src; do
   rel="${src#"$CRUX_HOME/templates/docs-repo/"}"
   dst="$DOCS/$rel"
   [[ "$rel" == "gitignore" ]] && dst="$DOCS/.gitignore"
+  [[ "$rel" == "gitattributes" ]] && dst="$DOCS/.gitattributes"
 
   if [[ -e "$dst" && $FORCE -eq 0 ]]; then
     continue

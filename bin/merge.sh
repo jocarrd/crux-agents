@@ -23,6 +23,7 @@ gh auth status >/dev/null 2>&1 || die "gh is not authenticated"
 
 REPO_DIR="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -n "$REPO_DIR" ]] || die "this is not a git repository"
+refuse_if_archived "$REPO_DIR"
 
 origin="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
 [[ -n "$origin" ]] || die "the repository has no origin: I do not know where to look"

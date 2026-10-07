@@ -310,6 +310,8 @@ installed by `crux hooks install`:
 | `crux bootstrap` | Gets a new machine ready: verifies, discovers all the projects and brings them |
 | `crux adopt` | Registers a docs repo that already exists under the standard |
 | `crux add-repo <repo>` | Registers a new repo in an adopted project |
+| `crux archive <repo> --reason "…"` | Marks a repo as archived, out of production but kept |
+| `crux unarchive <repo>` | Brings an archived repo back |
 | `crux link` | Creates and verifies the pointers of the project's code repos |
 | `crux workspace` | Isolated spaces with worktree, ports and database, with proposal, merge and pickup |
 | `crux task` | Each space's task record: steps with evidence, next step and state, outside the repos |

@@ -113,6 +113,36 @@ main_repo() {
   dirname "$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)"
 }
 
+archived_entry() {
+  # archived_entry <repo or workspace path> — "since<TAB>reason" if its project
+  # archived it, nothing otherwise. A workspace answers for its main repo.
+  local repo="$1" common main root project config
+  common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  main="$(dirname "$common")"
+  root="$(dirname "$main")"
+  project="$(basename "$root")"
+  config="$root/$project-docs/crux.json"
+  [[ -f "$config" ]] || return 0
+  node -e '
+    const [file, name] = process.argv.slice(1);
+    let entry;
+    try { entry = (JSON.parse(require("fs").readFileSync(file, "utf8")).archived || {})[name]; } catch {}
+    if (entry) process.stdout.write(`${entry.since || ""}\t${entry.reason || ""}`);
+  ' "$config" "$(basename "$main")"
+}
+
+refuse_if_archived() {
+  # refuse_if_archived <repo path> — stops a command meant for active repos.
+  local entry since reason name
+  entry="$(archived_entry "$1")"
+  [[ -n "$entry" ]] || return 0
+  IFS=$'\t' read -r since reason <<< "$entry"
+  name="$(basename "$(dirname "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)")")"
+  err "$name is archived since $since: $reason"
+  info "if it is coming back to life: crux unarchive $name, from its docs repo"
+  exit 1
+}
+
 version_greater_than() {
   # version_greater_than <a> <b>. Compared as text, 0.9.0 comes out greater than
   # 0.10.0. What is not semver is not compared: 'sort -V' would put "?" above
