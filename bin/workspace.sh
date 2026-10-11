@@ -641,6 +641,21 @@ cmd_finish() {
   fi
   rm -f "$body_tmp"
 
+  # An origin left on a repo's old owner still pushes through the redirect, and
+  # then gh takes that owner for a fork: the branch was up and the proposal
+  # failed with a GraphQL error that did not name the cause.
+  if [[ -n "$docs_fin" && -f "$docs_fin/crux.json" ]]; then
+    local origin_url declared_url
+    origin_url="$(git -C "$path" remote get-url origin 2>/dev/null || true)"
+    declared_url="$(remote_url "$docs_fin/crux.json" "$(basename "$repo")" 2>/dev/null || true)"
+    if [[ -n "$origin_url" && -n "$declared_url" ]] &&
+       [[ "$(normalize_git_url "$origin_url")" != "$(normalize_git_url "$declared_url")" ]]; then
+      err "origin is $origin_url and crux.json declares $declared_url"
+      info "if the repo moved, align it and finish again: git -C $repo remote set-url origin $declared_url"
+      exit 1
+    fi
+  fi
+
   git -C "$path" push -q -u origin "$branch" || die "could not push $branch"
   ok "$branch pushed ($(count "$commits" commit commits))"
 
