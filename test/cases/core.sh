@@ -1574,6 +1574,21 @@ test_install_deduces_the_root_from_the_clone_not_the_kernels_directory() {
     "the root is the clone's directory, not the kernels' one"
 }
 
+test_install_deduces_the_root_from_a_clone_inside_its_own_project() {
+  sandbox >/dev/null
+  local matches="$SB/home-root-project"; mkdir -p "$matches"
+  # The kernel as a project: <root>/crux/crux, next to <root>/crux/crux-docs.
+  local root="$SB/projects-root"; local kernel="$root/crux/crux"
+  mkdir -p "$kernel" "$root/crux/crux-docs"
+  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+    | ( cd "$kernel" && tar xf - )
+
+  env HOME="$matches" bash "$kernel/install.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$matches/.crux/config")" "CRUX_PROJECTS_DIR=\"$root\"" \
+    "the root is above the kernel's project folder, not the project folder itself"
+}
+
 # Keeping the root fixes the new case but not the machine that already has the
 # bad value written, which is exactly the one suffering the failure.
 test_install_fixes_the_root_inherited_from_the_kernels_directory() {

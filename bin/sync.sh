@@ -364,8 +364,8 @@ moved_remotes() {
 # The kernel is updated from its clone, and only to a published version: the
 # main branch's VERSION may be ahead of the latest tag.
 kernel_up_to_date() {
-  local clone="$ROOT/crux" new_one current
-  [[ -f "$clone/install.sh" && -f "$clone/VERSION" ]] || return 0
+  local clone new_one current
+  clone="$(kernel_clone "$ROOT")" || return 0
   new_one="$(tr -d '[:space:]' < "$clone/VERSION")"
   current="$(crux_version)"
   is_semver "$new_one" || return 0

@@ -76,6 +76,8 @@ to repeat it in every new project. This does four things:
 1. Records where the kernel lives and **what the projects root is** in
    `~/.crux/config`. By default the root is the directory where you cloned the
    kernel: if you put it in `/opt/dev/crux`, your projects go in `/opt/dev`.
+   A clone inside its own project folder, `/opt/dev/crux/crux`, also gives
+   `/opt/dev`.
    The installer says so out loud, and it is changed with `--projects-dir`.
 2. Puts the `crux` command in `~/.local/bin`.
 3. Links the skills for Claude Code and generates the prompts for Codex.

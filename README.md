@@ -33,6 +33,10 @@ kernel's parent directory. If you put it in `/opt/dev/crux`, your projects go
 in `/opt/dev`. You can change it with `--projects-dir <path>`, although it is
 better for the kernel to live next to them.
 
+If you work on the kernel itself with its own docs repo, clone it inside a
+project folder like any other code: `~/Proyectos/crux/crux`, next to
+`~/Proyectos/crux/crux-docs`. The root is then the folder above the project.
+
 ### 2. What it leaves installed
 
 | What | Where | What for |
