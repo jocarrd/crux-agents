@@ -30,7 +30,9 @@ name="$(printf '%s' "$input" | node -e '
       .replace(/<<-?\s*([\x27"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2(?=\s|$)/g, " ")
       .replace(/"(?:[^"\\]|\\.)*"|\x27[^\x27]*\x27/g, " \"\" ");
     const LONG = [
-      [/(^|[\s;&|(\/])test\/run\.sh(?=\s*($|[;&|)<>]))/, "the whole test suite"],
+      // Only where it runs: as the command, or as what bash runs. As an argument
+      // of grep or sed it is being read, and reading it was stopped too.
+      [/(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~\/-]*\/)?test\/run\.sh(?=\s*($|[;&|)<>]))/, "the whole test suite"],
       [/(^|[\s;&|(\/])test\/e2e\.sh\b/, "the end-to-end battery"],
       // The gate is as long as the command it runs: a git diff is instant.
       [/\bcrux\s+ship\s+run\s+--\s+(?!(git|true|echo|test|ls|cat)\b)/, "the quality gate"],

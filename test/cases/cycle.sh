@@ -819,6 +819,37 @@ test_finish_survives_main_branch_not_named_main() {
   assert_contains "$out" "open the proposal" "and reaches the end of the command"
 }
 
+test_finish_stops_before_pushing_if_origin_is_not_the_declared_remote() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/moved"
+  mkdir -p "$root/app" "$root/moved-docs"
+  git -C "$root/app" init -q -b main
+  git -C "$root/app" config user.email t@t
+  git -C "$root/app" config user.name t
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  printf '{"crux":"0.1.0","project":"moved","profile":"multi-repo","repos":["app"],"sections":[],"remote":{"repos":{"app":"git@github.com:new-owner/app.git"}}}\n' \
+    > "$root/moved-docs/crux.json"
+  git init -q --bare "$SB/remote.git"
+  git -C "$root/app" remote add origin "$SB/remote.git"
+  git -C "$root/app" push -q origin main
+
+  bash "$CRUX_HOME/bin/workspace.sh" new m --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-m"
+  echo change > "$ws/new.txt"
+  git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
+  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "a step" >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
+    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+
+  local out rc
+  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish m 2>&1)"; rc=$?
+  assert_eq "$rc" "1" "it stops instead of opening a proposal against the old owner"
+  assert_contains "$out" "crux.json declares git@github.com:new-owner/app.git" "and names the cause"
+  assert_contains "$out" "remote set-url origin git@github.com:new-owner/app.git" "with the command that aligns it"
+  assert_eq "" "$(git -C "$SB/remote.git" branch --list ws/m)" "the branch is not pushed to the old place"
+}
+
 test_finish_warns_if_task_closes_without_steps() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
