@@ -410,7 +410,9 @@ analysis, the suite, the end-to-end battery and a clean installation.
 consume the kernel are still conformant.
 
 Start with [`AGENTS.md`](AGENTS.md) before changing anything, and read
-[`decisions/`](decisions/index.md) before reopening a design question.
+[`decisions/`](decisions/index.md) before reopening a design question. How
+to send a change is in [`CONTRIBUTING.md`](CONTRIBUTING.md); security issues
+are reported privately, as [`SECURITY.md`](SECURITY.md) explains.
 
 ## License
 
