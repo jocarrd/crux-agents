@@ -414,3 +414,32 @@ test_sync_names_a_project_materialized_with_an_old_kernel() {
   assert_not_contains "$out" "new is materialized" "and not the one up to date"
   teardown
 }
+
+test_sync_names_a_repo_whose_origin_is_not_the_one_the_contract_declares() {
+  sandbox >/dev/null
+  _two_machines
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha/alpha-docs"
+  echo '{"crux":"0.60.0","project":"alpha","repos":["app"],"remote":{"repos":{"app":"git@github.com:new-owner/app.git"}}}' \
+    > "$CRUX_PROJECTS_DIR/alpha/alpha-docs/crux.json"
+
+  local out rc
+  out="$(crux sync 2>&1)"; rc=$?
+  assert_contains "$out" "alpha/app: origin is $SB/remote.git and crux.json declares git@github.com:new-owner/app.git" \
+    "a repo moved to another owner is named, because its old URL keeps answering"
+  assert_contains "$out" "remote set-url origin git@github.com:new-owner/app.git" "with the command that aligns it"
+  assert_eq "1" "$rc" "it asks for a decision, so it does not end as if everything were fine"
+  teardown
+}
+
+test_sync_says_nothing_of_an_origin_that_matches_the_contract() {
+  sandbox >/dev/null
+  _two_machines
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha/alpha-docs"
+  echo "{\"crux\":\"0.60.0\",\"project\":\"alpha\",\"repos\":[\"app\"],\"remote\":{\"repos\":{\"app\":\"$SB/remote.git\"}}}" \
+    > "$CRUX_PROJECTS_DIR/alpha/alpha-docs/crux.json"
+
+  local out
+  out="$(crux sync 2>&1)"
+  assert_not_contains "$out" "origin is" "an origin that is where the contract says is not news"
+  teardown
+}

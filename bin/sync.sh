@@ -314,6 +314,28 @@ fetch_new_repos() {
   done
 }
 
+# A repo moved to another owner keeps answering at its old URL through the
+# provider's redirect, so fetch and push say nothing. What breaks is opening a
+# proposal, which takes the old owner for a fork. The contract that declares
+# the new place arrives with this same sync, after the doctor of the bootstrap
+# has already compared against the old one.
+moved_remotes() {
+  local docs p repo real declared
+  for docs in "$ROOT"/*/*-docs; do
+    [[ -f "$docs/crux.json" ]] || continue
+    valid_json "$docs/crux.json" >/dev/null || continue
+    p="$(basename "$(dirname "$docs")")"
+    while IFS= read -r repo; do
+      valid_name "$repo" 2>/dev/null || continue
+      [[ -e "$ROOT/$p/$repo/.git" ]] || continue
+      real="$(git -C "$ROOT/$p/$repo" remote get-url origin 2>/dev/null)" || continue
+      declared="$(remote_url "$docs/crux.json" "$repo" 2>/dev/null)" || continue
+      [[ "$(normalize_git_url "$real")" == "$(normalize_git_url "$declared")" ]] && continue
+      echo "warning	$p/$repo: origin is $real and crux.json declares $declared — git -C $ROOT/$p/$repo remote set-url origin $declared"
+    done < <(json_get "$docs/crux.json" repos 2>/dev/null || true)
+  done
+}
+
 # The kernel is updated from its clone, and only to a published version: the
 # main branch's VERSION may be ahead of the latest tag.
 kernel_up_to_date() {
@@ -465,6 +487,7 @@ sync_arrival() {
     lines+="$(advance "$repo")"$'\n'
   done < <(worktrees)
   lines+="$(fetch_new_repos)"$'\n'
+  lines+="$(moved_remotes)"$'\n'
   lines+="$(kernel_up_to_date)"$'\n'
   lines+="$(tasks_up_to_date)"$'\n'
   lines+="$(profile_up_to_date)"$'\n'
