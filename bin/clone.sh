@@ -76,7 +76,23 @@ PROFILE="$(json_get "$CONFIG" profile 2>/dev/null || echo "?")"
 
 # --- 2. The repos the contract declares -------------------------------------
 
-cloned=0; failed_items=(); without_remote=()
+cloned=0; failed_items=(); without_remote=(); elsewhere=()
+
+# A machine set up before the project existed keeps its repos wherever they
+# were cloned back then. Cloning again leaves two copies of the same repo, and
+# sync keeps advancing the old one, which is the one with the local files.
+clone_elsewhere() {
+  local wanted d
+  wanted="$(normalize_git_url "$1")"
+  for d in "$PARENT"/*/ "$PARENT"/*/*/; do
+    d="${d%/}"
+    [[ -d "$d/.git" ]] || continue
+    [[ "$(normalize_git_url "$(git -C "$d" remote get-url origin 2>/dev/null)")" == "$wanted" ]] || continue
+    echo "$d"
+    return 0
+  done
+  return 1
+}
 while IFS= read -r repo; do
   [[ -n "$repo" ]] || continue
   # The name comes from crux.json and is concatenated into a path. valid_name
@@ -92,6 +108,10 @@ while IFS= read -r repo; do
     without_remote+=("$repo")
     continue
   fi
+  if existing="$(clone_elsewhere "$url")"; then
+    elsewhere+=("$repo is already at $existing — move it: mv $existing $ROOT/$repo")
+    continue
+  fi
   if git clone -q "$url" "$ROOT/$repo" 2>/dev/null; then
     ok "$repo"
     cloned=$((cloned + 1))
@@ -104,6 +124,12 @@ if [[ ${#without_remote[@]} -gt 0 ]]; then
   echo
   warn "no remote declared: ${without_remote[*]}"
   info "add \"remote\" to $PROJECT-docs/crux.json, or an override in remote.repos"
+fi
+
+if [[ ${#elsewhere[@]} -gt 0 ]]; then
+  echo
+  warn "already cloned outside the project, not cloned again:"
+  for f in "${elsewhere[@]}"; do info "$f"; done
 fi
 
 if [[ ${#failed_items[@]} -gt 0 ]]; then

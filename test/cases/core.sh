@@ -721,6 +721,24 @@ test_clone_does_not_guess_where_to_fetch_things_from() {
   assert_contains "$out" "no crux.json" "without a contract it does not know which repos the project brings"
 }
 
+test_clone_does_not_clone_again_a_repo_already_cloned_elsewhere() {
+  sandbox >/dev/null
+  local parent="$SB/root"
+  git init -q --bare "$SB/app.git"
+  git init -q --bare "$SB/other.git"
+  git clone -q "$SB/app.git" "$parent/app" 2>/dev/null
+  mkdir -p "$parent/x/x-docs"; git init -q "$parent/x/x-docs"
+  printf '{"crux":"0.1.0","project":"x","profile":"multi-repo","repos":["app","other"],"sections":[],"remote":{"repos":{"app":"%s","other":"%s"}}}\n' \
+    "$SB/app.git" "$SB/other.git" > "$parent/x/x-docs/crux.json"
+
+  local out
+  out="$(bash "$CRUX_HOME/bin/clone.sh" x --parent "$parent" 2>&1)"
+  assert_no_file "$parent/x/app/.git/HEAD" "a repo already on the machine is not cloned a second time"
+  assert_contains "$out" "app is already at $parent/app — move it: mv $parent/app $parent/x/app" \
+    "it says where the copy is and how to put it in its place"
+  assert_file "$parent/x/other/.git/HEAD" "a repo that is nowhere is still cloned"
+}
+
 test_the_remote_allows_a_per_repo_override() {
   sandbox >/dev/null
   local cfg="$SB/crux.json"
