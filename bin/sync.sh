@@ -245,6 +245,25 @@ fetch_all() {
     echo "$repo"' _ {}
 }
 
+# True if every uncommitted change is inside the block crux link generates in
+# the pointers. An older kernel leaves that block rewritten and uncommitted, the
+# remote brings it regenerated, and sync used to stop there as if it were work.
+# Anything written outside the block is someone's, and still stops it.
+only_generated_changes() {
+  local repo="$1" f
+  while IFS= read -r f; do
+    [[ "$f" == "AGENTS.md" || "$f" == "CLAUDE.md" ]] || return 1
+    node -e '
+      const fs = require("fs");
+      const strip = (t) => t.replace(/<!-- crux:begin[\s\S]*?crux:end -->/, "");
+      const [head, file] = process.argv.slice(1);
+      const now = fs.readFileSync(file, "utf8");
+      if (!/<!-- crux:begin[\s\S]*?crux:end -->/.test(now)) process.exit(1);
+      process.exit(strip(fs.readFileSync(head, "utf8")) === strip(now) ? 0 : 1);
+    ' <(git -C "$repo" show "HEAD:$f" 2>/dev/null) "$repo/$f" || return 1
+  done < <(git -C "$repo" diff --name-only HEAD)
+}
+
 # Advances the current branch if it is behind and there is nothing to decide.
 advance() {
   local repo="$1" name up behind ahead
@@ -255,13 +274,19 @@ advance() {
   [[ "$behind" -gt 0 ]] || return 0
   ahead="$(git -C "$repo" rev-list --count "$up..HEAD" 2>/dev/null || echo 0)"
 
+  local restored=""
+  if [[ "$ahead" -eq 0 && -n "$(git -C "$repo" status --porcelain --untracked-files=no 2>/dev/null)" ]] &&
+     only_generated_changes "$repo"; then
+    git -C "$repo" diff --name-only -z HEAD | xargs -0 git -C "$repo" checkout -q HEAD -- && restored=" (the crux block of the pointers was discarded: it comes regenerated)"
+  fi
+
   if [[ "$ahead" -gt 0 ]]; then
     echo "diverged	$name: the local branch and $up have diverged ($ahead here, $behind there) — you decide how to join them"
   elif [[ -n "$(git -C "$repo" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
     echo "dirty	$name: is $(count "$behind" commit commits) behind, but has uncommitted changes — I leave it alone"
   # In C: the message is compared, and git translates it to the system language.
   elif output="$(LC_ALL=C git -C "$repo" merge -q --ff-only "$up" 2>&1)"; then
-    echo "ok	$name: $(count "$behind" "new commit" "new commits")"
+    echo "ok	$name: $(count "$behind" "new commit" "new commits")$restored"
   elif [[ "$output" == *"untracked working tree files would be overwritten"* ]]; then
     echo "dirty	$name: an untracked file here clashes with one that is arriving — move it and retry: $(printf '%s\n' "$output" | sed -n 's/^[[:space:]]\{1,\}//p' | head -3 | tr '\n' ' ')"
   else
