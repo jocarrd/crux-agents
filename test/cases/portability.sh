@@ -51,3 +51,34 @@ test_init_leaves_no_orphan_runbook() {
   assert_not_contains "$out" "nobody links to operations/runbook" \
     "a freshly created project does not carry the orphan runbook warning"
 }
+
+test_with_timeout_works_without_the_timeout_command() {
+  # macOS has neither 'timeout' nor 'gtimeout'. Without them, the perl fallback
+  # has to keep the exit codes callers rely on: 124 when time runs out, and the
+  # command's own code otherwise.
+  sandbox >/dev/null
+  local bin="$SB/no-timeout-bin" tool
+  mkdir -p "$bin"
+  for tool in bash perl sleep node git; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
+  local rc
+  rc=0; env PATH="$bin" bash -c 'source "$1/lib/common.sh"; with_timeout 1 sleep 5' _ "$CRUX_HOME" || rc=$?
+  assert_eq "124" "$rc" "a command that runs over its time ends with 124"
+  rc=0; env PATH="$bin" bash -c 'source "$1/lib/common.sh"; with_timeout 5 bash -c "exit 3"' _ "$CRUX_HOME" || rc=$?
+  assert_eq "3" "$rc" "a command that finishes in time keeps its exit code"
+}
+
+test_registry_lock_works_with_a_flock_without_wait() {
+  # BusyBox's flock has no -w. The registry has to fall back to its directory
+  # lock instead of reporting that another crux holds it.
+  sandbox >/dev/null
+  local bin="$SB/busybox-bin"
+  mkdir -p "$bin"
+  printf '#!/bin/sh\ncase "$1" in -w) echo "unrecognized option: w" >&2; exit 1;; esac\nexit 0\n' > "$bin/flock"
+  chmod +x "$bin/flock"
+  local out rc=0
+  out="$(env PATH="$bin:$PATH" CRUX_REGISTRY="$SB/workspaces.json" bash -c '
+    source "$1/lib/common.sh"; source "$1/lib/registry.sh"
+    with_lock 10 && echo locked; unlock' _ "$CRUX_HOME" 2>&1)" || rc=$?
+  assert_eq "0" "$rc" "taking the registry lock does not fail"
+  assert_contains "$out" "locked" "the lock is taken through the directory"
+}

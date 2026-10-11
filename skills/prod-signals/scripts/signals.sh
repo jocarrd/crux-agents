@@ -75,7 +75,7 @@ while IFS=$'\t' read -r name command; do
   output_rc=0
   # </dev/null: an ssh would read the loop input and swallow the sources
   # still to be read.
-  output="$(timeout "$LIMIT" bash -c "$command" </dev/null 2>&1)" || output_rc=$?
+  output="$(with_timeout "$LIMIT" bash -c "$command" </dev/null 2>&1)" || output_rc=$?
   if [[ $output_rc -eq 124 ]]; then
     err "$name did not respond in ${LIMIT}s"; failed=$((failed + 1)); continue
   fi

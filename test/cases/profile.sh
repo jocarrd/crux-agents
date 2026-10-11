@@ -167,3 +167,21 @@ test_profile_two_machines_adding_a_preference_do_not_clash() {
   assert_contains "$(cat "$here/PROFILE.md")" "[Here]" "and so does this one"
   assert_eq "" "$(git -C "$here" status --porcelain)" "and the repo is not left dirty"
 }
+
+test_profile_works_with_a_remote_that_is_not_github() {
+  # Without gh, or with a remote outside GitHub, the profile goes where the
+  # CRUX_REMOTE template says, like the projects crux init creates.
+  sandbox >/dev/null
+  local remotes="$SB/remotes" cfg="$SB/crux-config"
+  mkdir -p "$remotes" && git init -q --bare -b main "$remotes/agent-profile.git"
+  echo "CRUX_REMOTE=\"$remotes/{repo}.git\"" > "$cfg"
+
+  local out; out="$(CRUX_CONFIG="$cfg" bash "$CRUX_HOME/bin/profile.sh" init 2>&1)"
+  assert_not_contains "$out" "error" "init does not ask for gh"
+  assert_contains "$(git -C "$remotes/agent-profile.git" log --oneline main 2>&1)" "skeleton" \
+    "the profile reaches the remote of the template"
+
+  rm -rf "$CRUX_PROJECTS_DIR/agent-profile"
+  out="$(CRUX_CONFIG="$cfg" bash "$CRUX_HOME/bin/profile.sh" clone 2>&1)"
+  assert_file "$CRUX_PROJECTS_DIR/agent-profile/PROFILE.md" "clone brings it back from that remote"
+}

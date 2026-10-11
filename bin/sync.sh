@@ -35,6 +35,8 @@ set -uo pipefail
 CRUX_HOME="${CRUX_HOME:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}"
 export CRUX_HOME
 source "$CRUX_HOME/lib/common.sh"
+# The checks and fetches run in parallel under xargs, in shells of their own.
+export -f with_timeout
 
 MODE="arrive"
 case "${1:-}" in
@@ -88,7 +90,7 @@ missing_remotes() {
   done | xargs -P 16 -I{} bash -c '
     r="$(git -C "$1" config "branch.$(git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null).remote" 2>/dev/null)"
     [ -n "$r" ] || r="$(git -C "$1" remote | grep -x origin || git -C "$1" remote | head -1)"
-    output="$(LC_ALL=C timeout 20 git -C "$1" ls-remote -q "$r" 2>&1 >/dev/null)" && exit 0
+    output="$(LC_ALL=C with_timeout 20 git -C "$1" ls-remote -q "$r" 2>&1 >/dev/null)" && exit 0
     if printf "%s" "$output" | grep -qiE "repository not found|does not appear to be a git repository|repository .* does not exist"; then
       printf "x\t%s\n" "$1"
     else
@@ -239,9 +241,9 @@ fetch_all() {
     repo="$1"
     remote="$(git -C "$repo" config "branch.$(git -C "$repo" symbolic-ref -q --short HEAD 2>/dev/null).remote" 2>/dev/null)"
     [ -n "$remote" ] || remote="$(git -C "$repo" remote | grep -x origin || git -C "$repo" remote | head -1)"
-    timeout 30 git -C "$repo" fetch -q --all --prune --tags >/dev/null 2>&1 && exit 0
+    with_timeout 30 git -C "$repo" fetch -q --all --prune --tags >/dev/null 2>&1 && exit 0
     # With --all, one failing secondary remote is enough to fail everything.
-    [ -n "$remote" ] && timeout 30 git -C "$repo" fetch -q --prune --tags "$remote" >/dev/null 2>&1 && exit 0
+    [ -n "$remote" ] && with_timeout 30 git -C "$repo" fetch -q --prune --tags "$remote" >/dev/null 2>&1 && exit 0
     echo "$repo"' _ {}
 }
 

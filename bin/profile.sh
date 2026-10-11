@@ -141,6 +141,19 @@ What does not go here: a project's knowledge (its `-docs` repo) and keys (each m
 EOF
 }
 
+remote_template() {
+  local cfg="${CRUX_CONFIG:-$HOME/.crux/config}"
+  [[ -f "$cfg" ]] && grep -E '^CRUX_REMOTE=' "$cfg" | tail -1 | cut -d= -f2- | tr -d '"' || true
+}
+
+# gh only covers GitHub. Elsewhere —GitLab, a server of your own, a bare repo on
+# disk— the URL comes from the same template crux init uses, and creating the
+# repo on the provider is left to the person, as init does.
+uses_gh() {
+  local template; template="$(remote_template)"
+  command -v gh >/dev/null 2>&1 && [[ -z "$template" || "$template" == *github.com* ]]
+}
+
 init() {
   local remote=1 owner=""
   while [[ $# -gt 0 ]]; do
@@ -161,8 +174,20 @@ init() {
     git -C "$DIR" add -A
     git -C "$DIR" commit -qm "chore: agent profile skeleton"
   fi
+  if (( remote )) && ! git -C "$DIR" remote get-url origin >/dev/null 2>&1 && ! uses_gh; then
+    local template; template="$(remote_template)"
+    [[ -n "$template" ]] \
+      || die "no remote: set CRUX_REMOTE in ~/.crux/config, install gh for GitHub, or pass --no-remote"
+    local url="${template//\{repo\}/$NAME}"
+    git -C "$DIR" remote add origin "$url"
+    if git -C "$DIR" push -q -u origin HEAD 2>/dev/null; then
+      ok "pushed to $url"
+    else
+      warn "the remote repo does not exist yet: create it on your provider as **private**"
+      info "cd $DIR && git push -u origin HEAD"
+    fi
+  fi
   if (( remote )) && ! git -C "$DIR" remote get-url origin >/dev/null 2>&1; then
-    command -v gh >/dev/null 2>&1 || die "gh is needed to create the repo on the remote (or --no-remote)"
     [[ -n "$owner" ]] || owner="$(default_owner)"
     [[ -n "$owner" ]] || die "I do not know which account to create it under — pass it with --owner"
     # Private: it says how the person works and who they are.
@@ -177,7 +202,18 @@ clone() {
   local owner=""
   [[ "${1:-}" == "--owner" ]] && owner="${2:-}"
   if [[ -d "$DIR/.git" ]]; then ok "the profile is already here: $DIR"; link; return 0; fi
-  command -v gh >/dev/null 2>&1 || die "gh is needed to look for the profile on the remote"
+  if ! uses_gh; then
+    local template; template="$(remote_template)"
+    [[ -n "$template" ]] || die "no remote: set CRUX_REMOTE in ~/.crux/config, or install gh for GitHub"
+    local url="${template//\{repo\}/$NAME}"
+    if ! git clone -q "$url" "$DIR" 2>/dev/null; then
+      warn "$url could not be cloned — 'crux profile init' creates it"
+      return 0
+    fi
+    ok "profile cloned in $DIR"
+    link
+    return 0
+  fi
   [[ -n "$owner" ]] || owner="$(default_owner)"
   [[ -n "$owner" ]] || die "I do not know which account to look under — pass it with --owner"
   if ! gh repo view "$owner/$NAME" >/dev/null 2>&1; then

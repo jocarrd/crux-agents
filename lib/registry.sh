@@ -13,6 +13,9 @@
 REGISTRY="${CRUX_REGISTRY:-$HOME/.crux/workspaces.json}"
 LOCK="$(dirname "$REGISTRY")/.workspaces.lock"
 FLOCK="$(command -v flock 2>/dev/null || true)"
+# BusyBox ships a flock without -w, and calling it with -w fails at once: crux
+# read that as a held registry. Without -w the directory lock below is enough.
+if [[ -n "$FLOCK" ]] && ! "$FLOCK" -w 0 /dev/null true 2>/dev/null; then FLOCK=""; fi
 MY_LOCK=0
 
 registry_init() {

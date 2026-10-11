@@ -151,6 +151,29 @@ version_greater_than() {
   [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
 }
 
+with_timeout() {
+  # with_timeout <seconds> <command...>. macOS has no 'timeout' (coreutils
+  # installs it as 'gtimeout'), and calling it there returns 127, which a
+  # caller reads as "the remote did not answer". perl ships with macOS; the
+  # fallback keeps 124 on expiry, which is what callers test for.
+  local seconds="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$seconds" "$@"
+  else
+    perl -e '
+      my $seconds = shift;
+      my $pid = fork() // exit 125;
+      if ($pid == 0) { exec { $ARGV[0] } @ARGV or exit 127 }
+      local $SIG{ALRM} = sub { kill "TERM", $pid; waitpid $pid, 0; exit 124 };
+      alarm $seconds;
+      waitpid $pid, 0;
+      exit($? & 127 ? 128 + ($? & 127) : $? >> 8);
+    ' "$seconds" "$@"
+  fi
+}
+
 # --- Reading crux.json --------------------------------------------------------
 #
 # node is used (present on any machine where these repos are worked on)

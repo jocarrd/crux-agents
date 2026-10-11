@@ -158,7 +158,7 @@ if [[ -f "$checks_file" ]]; then
   while IFS=$'\t' read -r check_name check_cmd check_fix; do
     [[ -n "$check_name" ]] || continue
     check_cmd="$(printf '%s' "$check_cmd" | base64 -d)"
-    check_out="$(timeout "${CRUX_MACHINE_CHECK_TIMEOUT:-20}" bash -c "$check_cmd" 2>&1 < /dev/null)"
+    check_out="$(with_timeout "${CRUX_MACHINE_CHECK_TIMEOUT:-20}" bash -c "$check_cmd" 2>&1 < /dev/null)"
     check_rc=$?
     if [[ $check_rc -eq 0 ]]; then
       ok "$check_name"

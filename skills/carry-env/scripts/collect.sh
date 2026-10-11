@@ -97,7 +97,9 @@ plain_name() {
   echo ".env.${repo}${suffix}${variant}"
 }
 
-mapfile -t FILES < <(search)
+# Not mapfile: it is bash 4, and macOS ships 3.2.
+FILES=()
+while IFS= read -r f; do FILES+=("$f"); done < <(search)
 [[ ${#FILES[@]} -gt 0 ]] || { echo "no env file under $PROJECT"; exit 1; }
 
 rm -rf "$OUTPUT"; mkdir -p "$OUTPUT"; chmod 700 "$OUTPUT"
