@@ -59,6 +59,50 @@ repo:
 Everything is plain markdown in git: versioned, on your own remote, readable by
 you and by any agent, and nothing extra to pay for or maintain.
 
+### The words used below
+
+| Term | What it is |
+| ---- | ---------- |
+| **Kernel** | This repo, installed on each machine. It holds no project's knowledge, only the rules and the tooling |
+| **Docs repo** | `<project>-docs`: a git repo holding only a project's documentation, as a sibling of its code repos |
+| **Contract** | The `crux.json` in a docs repo: the project's name, its code repos, its remote and the kernel version it follows |
+| **Profile** | A policy a project declares: `multi-repo` for your own code, `client-repo` when the code is someone else's |
+| **Pointer** | A short, generated `AGENTS.md` / `CLAUDE.md` in each code repo that sends the agent to the docs repo |
+| **Person's profile** | `agent-profile`: your preferences and context, loaded by every agent on every machine |
+| **Skill** | A procedure in markdown (`skills/<name>/SKILL.md`) the agent follows when invoked as `/<name>` |
+| **Hook** | A script the agent or git runs on its own before or after an action; the ones here block or remind |
+| **Workspace** | An isolated space for one task: branch, git worktree, ports and database of its own |
+| **Task record** | The file where a task keeps its goal, plan, steps with evidence, next step and decisions |
+| **Gate** | `/ship`: the checks a change passes before it is committed |
+| **Receipt** | What the gate leaves behind: which checks ran, on which commit, with what result. Opening a proposal requires it |
+| **Proposal** | A pull request (or merge request), opened by `crux workspace finish` |
+| **Adapter** | How the kernel is exposed to one agent or tool: `claude/`, `codex/`, `git/` |
+
+### What a session looks like
+
+1. **You open the agent in a project.** A hook brings the machine up to date
+   with your remote and lists the open tasks, without pushing you to resume
+   any. The agent has already loaded your profile and the project's index.
+2. **You ask for something.** If it is a development task, the agent opens a
+   workspace for it; if you are on the main branch, a hook reminds it once.
+   It reads the project's conventions, in the docs repo, before writing code.
+3. **It works and records.** Each step goes into the task record with what
+   proves it. A decision with a reason is noted as one. If it tries something
+   destructive, or runs the whole suite in the foreground, a hook stops it.
+4. **It passes the gate.** `/ship` runs the tests the diff touches, reads the
+   whole diff, checks the project's conventions, runs the whole suite and
+   leaves a receipt.
+5. **It proposes.** `crux workspace finish` pushes the branch and opens the
+   proposal with a description taken from the task record. Then the CI, and an
+   independent review.
+6. **You merge.** The space is closed, the task archived, and its decisions are
+   committed to the docs repo, where the next session will find them.
+7. **You close the session.** If the session learned something that only lives
+   in the conversation or in the agent's local memory, a gate asks where it
+   goes before letting it end.
+
+Tomorrow, on another machine, `crux sync` brings all of it back.
+
 ## Quick start
 
 ```bash
