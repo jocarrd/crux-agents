@@ -325,6 +325,28 @@ profile_forbid() {
 # commands that walk every project do not fail: they report zero, which is
 # worse because it looks like data.
 
+# The kernel clone lives at <root>/crux, or inside a project of its own,
+# <root>/crux/crux, next to its docs repo like any other project's code. The
+# second layout made the root come out one level too deep.
+root_of_kernel_clone() {
+  local clone="$1" parent
+  parent="$(dirname "$clone")"
+  if [[ "$(basename "$parent")" == "$(basename "$clone")" ]]; then
+    dirname "$parent"
+  else
+    echo "$parent"
+  fi
+}
+
+kernel_clone() {
+  # kernel_clone <root> — the clone the kernel is updated from, in either layout.
+  local c
+  for c in "$1/crux/crux" "$1/crux"; do
+    [[ -f "$c/install.sh" && -f "$c/VERSION" ]] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
 projects_root() {
   if [[ -n "${CRUX_PROJECTS_DIR:-}" ]]; then
     echo "$CRUX_PROJECTS_DIR"; return
@@ -336,7 +358,7 @@ projects_root() {
   fi
   local home
   home="$(crux_home)"
-  [[ -n "$home" && -d "$(dirname "$home")" ]] && { dirname "$home"; return; }
+  [[ -n "$home" && -d "$(dirname "$home")" ]] && { root_of_kernel_clone "$home"; return; }
   echo "$HOME/Proyectos"
 }
 

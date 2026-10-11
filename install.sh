@@ -98,7 +98,7 @@ if [[ -z "$PROJECTS_ROOT" && -f "$HOME/.crux/config" ]]; then
     ROOT_ORIGIN_TEXT="kept from the previous install"
   fi
 fi
-EFFECTIVE_ROOT="${PROJECTS_ROOT:-$(dirname "$ORIGIN")}"
+EFFECTIVE_ROOT="${PROJECTS_ROOT:-$(root_of_kernel_clone "$ORIGIN")}"
 
 if [[ "$CRUX_DRY_RUN" == "0" ]]; then
   mkdir -p "$HOME/.crux"

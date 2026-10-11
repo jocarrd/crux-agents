@@ -323,6 +323,28 @@ SH
   teardown
 }
 
+test_sync_updates_the_kernel_from_a_clone_inside_its_own_project() {
+  sandbox >/dev/null
+  _no_gh
+  local home="$SB/home-project" clone="$CRUX_PROJECTS_DIR/crux/crux"
+  mkdir -p "$home/.crux" "$clone" "$CRUX_PROJECTS_DIR/crux/crux-docs"
+  printf 'CRUX_MODE="release"\n' > "$home/.crux/config"
+  echo "99.0.0" > "$clone/VERSION"
+  cat > "$clone/install.sh" <<'SH'
+mkdir -p "$HOME/.crux/kernel/99.0.0/bin"
+printf 'true\n' > "$HOME/.crux/kernel/99.0.0/bin/hooks.sh"
+SH
+  git -C "$clone" init -q -b main
+  git -C "$clone" add -A && git -C "$clone" commit -q -m "release"
+  git -C "$clone" tag v99.0.0
+
+  local out
+  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 bash "$CRUX_HOME/bin/sync.sh" 2>&1)"
+  assert_contains "$out" "99.0.0, with its hooks" \
+    "the kernel cloned next to its docs repo, like any project's code, is still the one it updates from"
+  teardown
+}
+
 _workspace_on_both() {
   # The ws/feat branch, checked out in a worktree here and pushed; OTHER is
   # left on that branch, as when the task is resumed on the other machine.
