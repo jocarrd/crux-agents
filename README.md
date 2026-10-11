@@ -4,174 +4,326 @@
 
 # crux
 
+**A kernel for working with coding agents across many projects.** It decides
+where each kind of knowledge lives, which steps a task follows from start to
+merge, and what has to be checked before anything is called done. The agent
+works inside that frame and cannot step out of it on its own.
+
 The *crux* is the key move of a climbing route: the point on which everything
 else depends.
 
-This repo is the **kernel of the agent workflow system**. It contains the
-documentation standard, the cross-cutting skills, the templates and the
-tooling that every project uses. It is installed once per machine and from it
-each project's documentation repos are launched and maintained.
-
-It is not a project's documentation repo. It is what produces them.
+It works with Claude Code and Codex, needs only `bash`, `git` and `node`, and
+installs once per machine.
 
 ---
 
-## Installation
+## Why it exists
 
-You need `bash`, `git` and `node`, and nothing else. The code stays within what
-bash 3.2 understands, which is what macOS ships with.
+Working with agents on several projects at once, the same four problems kept
+coming back:
 
-### 1. Clone and run the installer
+- **They forgot.** What you explained in one session was gone in the next, and
+  everything learned on the laptop was missing on the desktop: measured before
+  switching computers, 55 memories on one machine and none on the other.
+- **They skipped the rules.** Commits in English, tests before pushing, one
+  task per branch: written in each repo's `CLAUDE.md`, and skipped anyway,
+  because nothing stopped it.
+- **Parallel work collided.** Two sessions on the same repo mixed their changes
+  into one commit; two dev servers fought over the same port and database.
+- **"Done" was not verified.** Tests passed, nobody had looked at the screen,
+  and the agent wrote in the commit that it was checked.
+
+crux answers each one with something that does not depend on anyone
+remembering: a place in git for every kind of memory, an isolated space per
+task, quality gates that leave a receipt, and hooks that block what skips the
+method.
+
+## How it works
+
+<p align="center"><img src="assets/diagrams/memory.png" alt="Where each kind of memory lives: the project in its docs repo, you in your profile repo, the rules in crux; and what each machine holds" width="900"></p>
+
+Knowledge is split by **who it belongs to**, and each kind gets its own git
+repo:
+
+- **The project** — `<project>-docs`, one per project, next to its code repos.
+  Decisions as ADRs, conventions, runbooks, notes per repo, and the tasks in
+  progress on a `crux/tasks` branch that `main` never sees. Each code repo gets
+  a small generated `AGENTS.md` / `CLAUDE.md` that points the agent here.
+- **You** — `agent-profile`, one per person. How you want agents to work, who
+  you are, what only holds on one machine. Every agent you use loads it, so
+  your preferences follow you across machines and across agents.
+- **The rules** — this repo. The standard every project meets, the
+  cross-cutting skills and the hooks. Installed once per machine as a fixed
+  version, so tinkering with it never changes how your projects behave.
+
+Everything is plain markdown in git: versioned, on your own remote, readable by
+you and by any agent, and nothing extra to pay for or maintain.
+
+## Quick start
 
 ```bash
+# once per machine
 git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh
+~/Proyectos/crux/install.sh --remote 'git@github.com:<you>/{repo}.git'
+
+# a new project: creates <project>-docs on your remote, from the templates
+crux init shop --repos shop-web,shop-api
+
+# your profile: a private repo that every agent loads
+crux profile init
+
+# a task
+crux workspace new checkout-flow --goal "Pay with a saved card"
+#   ...work; then, inside the agent:  /ship
+crux workspace finish checkout-flow   # pushes the branch, opens the proposal
+
+# a machine with nothing on it
+crux bootstrap
 ```
 
-Where you clone it decides where your projects will live: the root is the
-kernel's parent directory. If you put it in `/opt/dev/crux`, your projects go
-in `/opt/dev`. You can change it with `--projects-dir <path>`, although it is
-better for the kernel to live next to them.
+Where you clone the kernel decides where projects live: the root is the
+clone's parent directory (`~/Proyectos` above). `crux doctor --machine` tells
+you whether the machine is missing anything the skills need.
 
-If you work on the kernel itself with its own docs repo, clone it inside a
-project folder like any other code: `~/Proyectos/crux/crux`, next to
-`~/Proyectos/crux/crux-docs`. The root is then the folder above the project.
+## A task, from start to merge
 
-### 2. What it leaves installed
+<p align="center"><img src="assets/diagrams/cycle.png" alt="The cycle of a task: workspace new, develop, /ship, workspace finish, checks and /review-pr, merge and rm; and the hooks that stop the agent" width="900"></p>
+
+`/flow` is the default entry point for any development task: it chains the
+steps in this order and explains why.
+
+**Each task gets its own space.** `crux workspace new` creates a branch, a git
+worktree, its own ports and database name, and a task record. Several tasks on
+the same repo run in parallel without touching each other's files.
+
+**The task record is how work is resumed without rebuilding it.** It lives in
+`~/.crux/tasks/<project>/<task>.md`: goal, scope, plan, steps with their
+evidence, next step and decisions. The commands write it; you do not edit it by
+hand.
+
+```bash
+crux task add "card registration" "payment" "receipt email"
+crux task done T1 "green e2e test, screenshot of the dialog"
+crux task note "Receipts still go by email" --why "the provider has no webhook for it"
+crux task next "try the payment in Safari"
+crux task                              # state, steps and next step
+```
+
+A note with `--why` is a **decision**: when the task is archived, crux moves it
+to `repos/<repo>/notes.md` in the docs repo and commits it, because the next
+session will not read a closed task.
+
+| Moment | What happens to the record | State |
+| ------ | -------------------------- | ----- |
+| `crux workspace new` | It is created; `--task` adds another repo to the same task | `open` |
+| `crux task plan <file>` | The approved plan is written down | `planned` |
+| `crux task done` | The step is marked with what proves it | `in-progress` |
+| `crux ship seal` | The gate's receipt is recorded as evidence | `verified` |
+| `crux workspace finish` | The proposal's description comes from here | `proposed` |
+| `crux merge` | The merge is noted | `merged` |
+| `crux workspace rm` | Archived in `done/`; decisions go to the docs repo | `closed` |
+
+When you are waiting on someone else, the task **waits** without holding a
+space:
+
+```bash
+crux task wait --on "the client" --ask "shall we point the domain at the new server?"
+```
+
+It notes who, what and since when, removes the space and the branch if they
+hold nothing of their own, and reminds you to follow up after a week.
+`crux workspace resume` picks it up again.
+
+**Two reviews, two questions.** `/ship` is the author's gate before committing:
+tests, the whole diff read, correctness, regression, and a receipt of what ran.
+`crux workspace finish` refuses to open a proposal without it. `/review-pr`
+comes after, from an independent context, and asks whether what is proposed is
+correct and complete: whoever has just defended each decision is in no position
+to refute it.
+
+## Switching machines
+
+<p align="center"><img src="assets/diagrams/machines.png" alt="Switching machines: crux sync --leave on the machine you leave, your git remote in between, crux bootstrap or crux sync on the one you arrive at" width="900"></p>
+
+```bash
+crux sync --leave        # leaving: fails if anything would stay only here
+crux bootstrap           # a blank machine: discovers every project and brings it
+crux sync                # a machine you used before: brings it up to date
+```
+
+**`--leave`** lists what would not reach the other machine: uncommitted
+changes, unpushed commits, branches on no remote, commits on a detached HEAD,
+repos whose remote no longer exists and tasks not yet published. Stashes show
+up as a warning, because they do not travel.
+
+**`bootstrap`** verifies the machine first, then asks your remote which
+projects exist —the `*-docs` repos that carry a `crux.json`— and brings each
+one with its code repos, pointers and hooks. The list comes from the remote,
+not from a file you would have to keep up to date.
+
+**`sync`** walks what is already on disk, fetches and fast-forwards every clean
+branch that is behind, brings the tasks from the other machine, clones repos a
+project gained elsewhere, and installs the latest published kernel. It names a
+repo whose `origin` no longer matches the contract, for instance after moving
+it to an organization. It never touches a branch with uncommitted changes or
+one that diverged: joining them is a decision, and a script does not make it.
+A session-start hook runs it at most once every ten minutes and only speaks if
+something changed.
+
+**What does not travel:** credentials. SSH keys, tokens and `.env` files are
+not copied by a tool; the `carry-env` skill moves them deliberately, and
+`bootstrap` ends by saying what each project needs.
+
+## What holds it up when nobody remembers
+
+A rule written in a file is advice. These are installed by
+`crux hooks install` and act whether or not anyone remembers them:
+
+| Guard | What it does |
+| ----- | ------------ |
+| Destructive guard | Stops `git reset --hard`, `push --force`, `clean -fd`, discarding the tree, `rm -r` on `/`, `~`, `.` or `*`, `pkill`/`killall`, and reading private keys. A person who really wants it runs it themselves |
+| `pre-push` | Pushing to the main branch of a code repo without a proposal |
+| `commit-msg` | Commit messages outside the project's language, and tool signatures in them |
+| Proposal guard | Opening a proposal by hand, skipping the receipt `finish` demands |
+| Wait guard | Running a long suite, a build or a CI watch in the foreground while other work waits |
+| Worktree guard | Deleting a registered space by hand and leaving the registry lying |
+| Cycle reminder | Starting to work on the main branch of a managed repo, once per session |
+| Task context | Resuming a space without knowing where its task was left |
+| Session sync | Opening a session on a machine that is behind the remote |
+| Documentation gate | Closing a session whose findings never reached the docs repo |
+| Memory gate | Closing a session with project knowledge only in the agent's local memory |
+| Profile reminder | Losing the person's own standing reminder in a long session |
+
+## Commands
+
+| Command | What it does |
+| ------- | ------------ |
+| `crux init <project>` | Creates `<project>-docs` from the templates, on your remote |
+| `crux clone <project>` | Brings a whole project onto this machine |
+| `crux bootstrap` | Gets a blank machine ready: verifies, discovers every project and brings it |
+| `crux adopt` | Puts an existing docs repo under the standard |
+| `crux add-repo <repo>` | Registers a new code repo in a project |
+| `crux archive <repo>` / `unarchive` | Retires a repo from production while keeping it, or brings it back |
+| `crux link` | Creates and verifies the pointers in the code repos |
+| `crux workspace` | Isolated spaces with worktree, ports and database; `finish`, `resume`, `rm`, `gc` |
+| `crux task` | The task record: steps with evidence, next step, decisions, waiting |
+| `crux ship` | The quality gate: runs the checks and leaves a receipt |
+| `crux visual` | Records the approved before/after of a visual change for the proposal |
+| `crux review` | Gathers what a review needs: commits, diff, checks, risk, specialists |
+| `crux checks [n]` | Waits for a proposal's CI and brings only the end of what fails |
+| `crux merge <n>` | Merges a proposal after saying which one and in which repository |
+| `crux doctor` | Checks a docs repo against the standard; `--machine` checks the machine |
+| `crux hooks` | Installs the guards into the agent and into git |
+| `crux mcp` | Writes the MCP servers a project declares and checks they respond |
+| `crux stg` | Publishes a built folder to a keyed staging |
+| `crux usage` | Which skills are actually used |
+| `crux skill test <skill>` | Runs a skill's scenarios and flags what changed against another version |
+| `crux memory` | Agent memories still only local, and where each one belongs |
+| `crux profile` | The person's profile repo: `init`, `link`, `clone` |
+| `crux status` | What is open right now across all projects |
+| `crux sync` | Up to date on arrival; `--leave` checks nothing stays trapped |
+| `crux upgrade` | Re-materializes a project at the current kernel version |
+| `crux release <ver>` | Publishes a kernel version, first checking that projects stay conformant |
+
+Every command accepts `--help`. The complete guide, from simple to deep, is
+[`GUIA.md`](GUIA.md); the full standard is [`STANDARD.md`](STANDARD.md).
+
+## Skills
+
+45 cross-cutting procedures in plain markdown (`skills/<name>/SKILL.md`), each
+invoked as `/<name>`: the cycle (`flow`, `workspace`, `ship`, `review-pr`,
+`end-session`), debugging and testing (`root-cause`, `write-tests`, `e2e`,
+`bug-hunt`), interfaces (`visual-test`, `before-after`, `ui-tells`),
+documentation (`adr`, `promote-to-docs`, `runbook`) and more. A project adds
+its own in its docs repo; when one of its skills turns out to be a general
+pattern, it moves here and the project keeps a thin adapter with its own data.
+
+## The contract
+
+Each docs repo declares in a `crux.json` what it is and which kernel it
+follows:
+
+```json
+{
+  "crux": "0.69.0",
+  "project": "shop",
+  "profile": "multi-repo",
+  "language": "en",
+  "branch": "main",
+  "repos": ["shop-web", "shop-api"],
+  "remote": { "url": "git@github.com:you/{repo}.git", "visibility": "private" }
+}
+```
+
+`crux doctor` checks the docs repo against it and warns when the declared
+version falls behind the installed one. A **profile** sets policy:
+`multi-repo` for your own projects, `client-repo` when the code belongs to a
+client and nothing of yours may be written into it. A project can override
+single fields with a `profile.json` in its docs repo.
+
+## Supported agents
+
+Knowledge is written once, in neutral markdown, and the installer exposes it to
+each agent:
+
+| Piece | Claude Code | Codex |
+| ----- | ----------- | ----- |
+| Skill | symlink in `~/.claude/skills/` | prompt in `~/.codex/prompts/` |
+| Your profile | imported from `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
+| Project context | `CLAUDE.md` | `AGENTS.md` |
+| Repo pointer | `CLAUDE.md` with `@-import` | `AGENTS.md` with a path |
+
+That is why no skill names the tools of a specific agent: it describes the
+action, not who runs it.
+
+## Installation in detail
+
+### What it leaves installed
 
 | What | Where | What for |
 | ---- | ----- | -------- |
-| The kernel version | `~/.crux/kernel/<version>/` | It is the copy your projects run |
-| The command | `~/.local/bin/crux` → that copy | Use `crux` from any directory |
-| The skills | `~/.claude/skills/` and `~/.codex/prompts/` | Invoke them with `/<name>` |
-| Machine config | `~/.crux/config` | Where the kernel lives, the projects root and your preferences |
+| The kernel version | `~/.crux/kernel/<version>/` | The copy your projects run |
+| The command | `~/.local/bin/crux` | `crux` from any directory |
+| The skills | `~/.claude/skills/`, `~/.codex/prompts/` | `/<name>` in the agent |
+| Machine config | `~/.crux/config` | Where the kernel and the projects live, and your preferences |
 
-Make sure `~/.local/bin` is in your `PATH`. To check whether the machine is
-missing anything the skills need:
+Make sure `~/.local/bin` is in your `PATH`.
 
-```bash
-crux doctor --machine
-```
+### Release and dev modes
 
-### 3. The two modes
+**Release**, the default, copies the version and everything points at that
+copy, so a half-done branch of the kernel never changes how a project behaves.
+Running `install.sh` again moves to a new version; previous ones stay in
+`~/.crux/kernel/`. **Dev** (`install.sh --dev`) links the working copy directly,
+for the machine where you develop crux.
 
-**Release**, which is the default. The installer copies the version and
-everything points to that copy, so you can tinker with the kernel or leave a
-branch half done without changing the behavior of any project. To move to a new
-version, run `install.sh` again. The previous ones stay in `~/.crux/kernel/` in
-case you need to go back.
+If you work on the kernel with its own docs repo, clone it inside a project
+folder like any other code: `~/Proyectos/crux/crux`, next to
+`~/Proyectos/crux/crux-docs`. The root is then the folder above.
 
-**Dev**, with `install.sh --dev`. It links directly to the working copy, so any
-change in the kernel is immediate in every project. It is meant for the machine
-where you develop crux. It refuses to run from a worktree, because closing it
-would leave the machine without skills.
+### Preferences
 
-```bash
-grep CRUX_MODE ~/.crux/config    # which one you are in
-```
+In `~/.crux/config`. They belong to the machine, not to the project:
 
-### 4. Bringing a project that already exists
-
-```bash
-crux clone <project>     # docs repo + code repos + pointers
-```
-
-### 5. Starting on a machine with nothing on it
-
-```bash
-crux bootstrap           # verifies the machine, discovers the projects and brings them
-crux bootstrap --dry-run # what it would bring, without touching the disk
-```
-
-The list of projects comes from the remote —the `*-docs` repos that carry a
-contract— and not from an inventory in a file, which goes stale as soon as you
-create a project and is consulted precisely on the day you do not remember
-which ones you had.
-
-It moves no credentials: SSH keys, tokens and secrets are not copied from one
-machine to another by a tool. When it finishes it says what each project needs
-and in which document it is described.
-
-If the project is already on disk but does not yet follow the standard, run
-`crux adopt` in its docs repo and then `crux upgrade`, which materializes the
-missing pieces.
-
-### 6. Alternating between two machines
-
-```bash
-crux sync                # on arrival: what is on this machine, up to date, and the kernel
-crux sync --leave        # on leaving: fails if something would be left only here
-```
-
-`bootstrap` and `clone` bring what is missing, but do not update what is
-already there. On returning to a computer after a while, they said "done" and
-left the code as you left it the last time you used it. `sync` covers that
-case.
-
-On arrival it walks what is already in the projects root —docs repos, code
-repos and loose repos—, fetches their remotes and fast-forwards every clean
-branch that is behind, including those not in use, such as `main` while you
-work on another. Two syncs do not run at once: the second waits, or backs off
-if it is the hook's. It does not bring projects this machine does not have:
-each one has its own, and `crux clone` exists to bring one. If a project here
-declares a repo that was added from the other machine, that one it does clone,
-because it belongs to the same project. It also installs the latest published
-version of the kernel with its hooks. If a branch has uncommitted changes or has
-diverged from its remote, it says so and does not touch it: joining them is a
-decision and a script does not make it.
-
-`crux hooks install` hooks the same thing into the agent's session start. At
-most once every ten minutes, so that several sessions open at once do not
-repeat the round. It only speaks if something changed or there is something to
-decide.
-
-`--leave` lists what would not reach the other machine: uncommitted changes,
-unpushed commits, branches that are on no remote, commits made on a detached
-HEAD and repos whose remote no longer exists. That last one is the only thing
-that needs the network: with the remote deleted, git still believes everything
-is pushed. Stashes show up as a warning, because they do not travel. Branches
-that tracked a branch since deleted from the remote, which are almost always
-squash-merged proposals, do not block.
-
-The first time on a machine with a kernel older than this command, `sync` does
-not exist yet: update the kernel clone (`git -C ~/Proyectos/crux pull`), run
-its `install.sh` and `crux hooks install`, and launch `crux sync`. From then on
-the hook does it.
-
-Tasks travel too: `sync` brings those from the other machine and publishes
-what was left pending here, and `--leave` fails if any could not be published.
-When opening or resuming a session, the hook shows the open tasks as a
-reminder, without pushing you to resume them; also on returning to a session
-that had been idle for more than three hours (`CRUX_TASKS_IDLE_HOURS`). Those
-whose proposal was merged outside `crux merge` close themselves instead of
-showing up in every reminder.
-
-It does not sync credentials, which are carried with `carry-env`, nor the
-agent's personal memories, which belong to each machine.
+| Key | Default | What it does |
+| --- | ------- | ------------ |
+| `CRUX_REMOTE` | — | Remote template for the projects you create |
+| `CRUX_PROJECTS_DIR` | the parent of the kernel clone | Where projects live |
+| `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Closes the space on merge |
+| `CRUX_RM_DELETE_BRANCH` | `false` | Also deletes the local branch on close, once integrated |
+| `CRUX_UNMANAGED` | — | Paths under the root that are not yours, separated by `:` |
+| `CRUX_TASKS_IDLE_HOURS` | `3` | After this long idle, a session catches up as if it had just opened |
+| `CRUX_TASKS_RETENTION_DAYS` | `180` | How long archived tasks are kept |
 
 ### When something does not go as expected
 
 | Symptom | What is happening and what to do |
 | ------- | -------------------------------- |
-| **A project's code was not cloned** | `client-repo` profile: the code lives on the client's remote and `crux clone` does not bring it. Clone it yourself as a sibling of the docs repo (`git clone` in `~/Proyectos/<project>/`). |
-| **A repo is in another account or organization** | Declare the override in `crux.json` → `remote.repos["<repo>"]` with its URL. Without that, `clone` does not know where to fetch it from and `doctor` warns about it. |
-| **`crux init` does not know where to push** | The remote template is missing. Pass it with `--remote 'git@github.com:<org>/{repo}.git'`, set it in `~/.crux/config` (`CRUX_REMOTE`), or create only locally with `--no-remote`. |
-| **You want the docs repo in an organization** | Declare the org in the remote template (`…:<org>/{repo}.git`): `crux init` creates the repo there, not in your personal account. You need write permission in the org. |
-| **`bootstrap` finds no projects** | The list comes from the `*-docs` repos with `crux.json`. If `gh` is missing or you are not authenticated, it cannot discover them: `gh auth login` and repeat. |
-
-### Preferences
-
-They go in `~/.crux/config`. They belong to the machine and not to the project,
-so each person can close their cycle their own way without changing the
-contract the others share.
-
-| Key | Default | What it does |
-| --- | ------- | ------------ |
-| `CRUX_REMOTE` | — | Remote template for the projects you create |
-| `CRUX_PROJECTS_DIR` | the parent of the kernel clone | Where the projects live |
-| `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Closes the space on merge; `false` leaves it alive |
-| `CRUX_RM_DELETE_BRANCH` | `false` | Also deletes the local branch when closing the space, as long as it is already integrated |
-| `CRUX_UNMANAGED` | — | Paths or patterns separated by `:` that live under the root without being yours, such as someone else's clone: the cycle reminder ignores them |
+| A project's code was not cloned | `client-repo` profile: the code lives on the client's remote. Clone it yourself next to the docs repo. |
+| A repo lives in another account | Declare it in `crux.json` → `remote.repos["<repo>"]`. Without it, `clone` does not know where to fetch it from. |
+| `crux init` does not know where to push | No remote template: pass `--remote 'git@github.com:<org>/{repo}.git'`, set `CRUX_REMOTE`, or use `--no-remote`. |
+| `bootstrap` finds no projects | Discovery needs `gh`: run `gh auth login` and repeat. |
+| `sync` names a repo whose origin differs from the contract | The repo moved. Run the `git remote set-url` it prints. |
 
 ### Uninstalling
 
@@ -180,262 +332,42 @@ rm -rf ~/.crux ~/.local/bin/crux
 find ~/.claude/skills ~/.codex/prompts -maxdepth 1 -type l ! -exec test -e {} \; -delete
 ```
 
-The docs repos and the code repos are not touched.
+Docs repos and code repos are not touched.
 
-## The work cycle
-
-A development task enters through an isolated space and leaves as a reviewed
-proposal. `/flow` is the default entry point: it chains the skills in this
-order and explains why it is that one and not another.
-
-```mermaid
-flowchart TD
-    A["crux workspace new &lt;task&gt;<br/>branch, worktree, runtime and task record"] --> B["develop<br/>noting steps and evidence with crux task"]
-    B --> C{"/ship<br/>the author's gate"}
-    C -- "some gate red" --> B
-    C -- "green: commit" --> D["crux workspace finish &lt;task&gt;<br/>pushes the branch and opens the proposal<br/>with the description taken from the task"]
-    D --> CI{"crux checks --wait<br/>the CI, with the log of what fails"}
-    CI -- "red: up to three attempts" --> B
-    CI -- "green" --> E{"/review-pr<br/>risk and specialists the diff calls for"}
-    E -- "confirmed findings" --> B
-    E -- "clean" --> F["crux workspace merge &lt;task&gt; --yes<br/>the decision is still a person's"]
-    F --> W{"/deploy-watch<br/>the new version, seen in production"}
-    W -- "fails: revert" --> B
-    W -- "responds" --> G["/end-session<br/>what must survive goes to git"]
-```
-
-The two review steps answer different questions, which is why they do not
-overlap. `/ship` asks whether what you did is ready: tests, diff read,
-correctness, regression. It is passed by whoever wrote the change, before
-committing.
-
-`/review-pr` asks whether what is proposed is correct and complete, and it is
-done from an independent context. Whoever has just defended each decision is
-not in a position to refute them, and there is a gap that is only visible from
-outside: fixing a problem through the door where it was found and leaving it
-open through another.
-
-### The task: resuming without reconstructing
-
-Each workspace has a task with its record in
-`~/.crux/tasks/<project>/<task>.md`: goal, scope, plan, steps with their
-evidence, next step, decisions taken along the way and what was verified.
-
-```bash
-crux workspace new passkeys --goal "Sign in with a passkey, no password"
-crux task add "passkey registration" "login" "account recovery"
-crux task done T1 "green e2e test of the registration, screenshot of the dialog"
-crux task note "Recovery still goes by email" --why "the provider does not support backup passkeys" \
-  --where "src/auth/recovery.ts" --learned "Safari requires a user gesture to create the passkey"
-crux task next "try the login in Safari"
-crux task                          # state, steps and next step
-```
-
-A note with `--why` is a **decision**: when the task is archived, crux moves it
-to `repos/<repo>/notes.md` in the docs repo and commits it, because the task
-record is local and the next session does not read it. Notes without a why are
-deviations from the plan and stay in the task. They are noted at the time, not
-at close.
-
-The commands write it, you do not have to edit it by hand:
-
-| Moment | What happens in the record | State |
-| ------ | ----------------------------------- | ----- |
-| `crux workspace new` | It is created; with `--task` another repo joins the same task | `open` |
-| `crux task plan <file>` | The approved plan is written down | `planned` |
-| `crux task done` | The step is marked with what proves it | `in-progress` |
-| `crux ship seal` | The gate's receipt is dumped as evidence | `verified` |
-| `crux workspace finish` | The proposal's description comes from here | `proposed` |
-| `crux workspace merge --yes` | The merge is noted | `merged` |
-| `crux workspace rm` | When its last space closes, if merged, it is archived in `done/` | `closed` |
-
-When another person's answer is missing, the task **waits** without taking up
-space:
-
-```bash
-crux task wait --on "Alex" --ask "shall we point the domain at the new server?" --ref "email of 3 Oct"
-```
-
-It notes who, what and since when; it removes the space and the branch if they
-hold nothing of their own, and the reminder shows it separately ("waiting on
-Alex, 4 days ago"), with a nudge to follow up at 7. `crux workspace resume`
-picks it up again.
-
-**It does not pile up.** Archived tasks drop out of the lists and expire after
-180 days with `crux workspace gc --yes` (`CRUX_TASKS_RETENTION_DAYS` to change
-it).
-
-When resuming a space —another session, after a restart or the next day— a
-hook brings the state and the next step in two lines. `crux workspace list`
-shows the same for each space.
-
-**It lives outside the code repos on purpose.** A client's repo cannot be
-written to, and a multi-repo task would be split. Nor does it go on `main` of
-the docs repo, which is what is read as truth: a half-finished plan would be
-read as a decision. What deserves to outlive the task is promoted there on
-close.
-
-**And yet it travels.** It is replicated on the docs repo's `crux/tasks`
-branch, which `main` does not see: it publishes itself after each write and
-`crux sync` brings it on arriving at another machine. There,
-`crux workspace resume <task>` opens the space from the remote branch and
-joins it to the task with its plan and its next step. See ADR-016.
-
-**It costs little.** A full cycle with the record takes 0.9 s of machine time
-against 0.35 s without it; opening the task with its goal and its plan are two
-calls, and the hook adds about 60 tokens once per session.
-
-### What holds it up when nobody remembers
-
-These guards enforce the cycle without depending on anyone's memory. They are
-installed by `crux hooks install`:
-
-| Guard | What it prevents |
-| ----- | ---------------- |
-| `pre-push` on the main branch | Pushing to the main branch of a code repo or of the kernel without going through a proposal. The docs repo is pushed directly, as its rule says |
-| `commit-msg` | Commit messages outside the standard's language |
-| `.crux-ship` | Opening a proposal from a commit that has not passed `/ship` |
-| `.crux-visual` | Publishing in the proposal screenshots approved on another commit |
-| Task hook on resume | Continuing a half-done task without knowing where it was left |
-| Worktree guard | Deleting a registered space by hand (`git worktree remove`, `rm -rf`) and leaving the registry lying |
-| Destructive guard | `git reset --hard`, `push --force`, `clean -fd`, discarding the tree, `rm -r` on `/`, `~`, `.` or `*`, `pkill`/`killall`, and reading private keys or credentials. Whoever really wants it runs it with `! <command>` |
-| Proposal guard | Hand-opening with `gh pr create` a proposal in a crux project, skipping the receipt that `crux workspace finish` demands |
-| Plan warning in `finish` | Nothing: it warns when a proposal goes past 100 written lines and its task has no saved plan (`crux task plan`) |
-| Self-repairing registry | Entries of spaces whose folder and branch no longer exist; `new`, `list` and `status` remove them |
-| `crux doctor` at close | Closing the session with the project outside the standard |
-| `crux memory` at close | Closing the session with project knowledge only on this machine |
-
-## Commands
-
-| Command | What it does |
-| ------- | ------------ |
-| `crux init <project>` | Creates `~/Proyectos/<project>/<project>-docs` from the templates |
-| `crux clone <project>` | Brings a whole project onto a new machine |
-| `crux bootstrap` | Gets a new machine ready: verifies, discovers all the projects and brings them |
-| `crux adopt` | Registers a docs repo that already exists under the standard |
-| `crux add-repo <repo>` | Registers a new repo in an adopted project |
-| `crux archive <repo> --reason "…"` | Marks a repo as archived, out of production but kept |
-| `crux unarchive <repo>` | Brings an archived repo back |
-| `crux link` | Creates and verifies the pointers of the project's code repos |
-| `crux workspace` | Isolated spaces with worktree, ports and database, with proposal, merge and pickup |
-| `crux task` | Each space's task record: steps with evidence, next step and state, outside the repos |
-| `crux ship` | The quality gate: runs the checks and leaves a receipt of what was run and with what result. `workspace finish` demands it. |
-| `crux visual` | The approved visual review: notes the decision-maker's yes on the commit and `workspace finish` puts the before and after in the proposal. |
-| `crux review` | Gathers the material to review a proposal: commits, diff, checks, signals, risk and specialists |
-| `crux checks [n]` | Waits for a proposal's CI and brings only the end of the log of what fails |
-| `crux merge <n>` | Merges a proposal after saying which one it is and from which repository |
-| `crux doctor` | Verifies a docs repo's conformance with the standard |
-| `crux doctor --machine` | Verifies that the machine has what the skills need |
-| `crux hooks` | Hooks the standard into the cycle, the session close and the commit |
-| `crux mcp` | Writes into each repo the MCP servers the project declares, and says whether they respond |
-| `crux stg` | Publishes a built folder to a keyed staging, to show work without publishing it |
-| `crux usage` | Which skills are actually used |
-| `crux skill test <skill> [--against <ref>]` | Runs a skill's scenarios and flags what changes compared with another version |
-| `crux memory` | Agent memories that are still only local: the project's go to its docs repo, the person's to the profile; `search <text>` looks in both |
-| `crux profile` | The person's profile: preferences, who they are and what holds on each machine, in a repo of its own that every agent loads |
-| `crux status` | What is open right now across all projects |
-| `crux sync` | Up to date with the remote on arriving at a machine; `--leave` checks that you leave nothing trapped when you go |
-| `crux upgrade` | Re-materializes the kernel in a project at the current version |
-| `crux release <ver>` | Publishes a version, first checking that the projects remain conformant |
-
-Any of them accepts `--help`, and all of them also exist as skills:
-`/crux-init`, `/crux-doctor`, etc.
-
-Complete guide, from simple to deep: `GUIA.md`. If you are going to work on
-this repo, start with `AGENTS.md`.
-
-## The three layers
-
-| Layer | What it is | Where it lives |
-| ----- | ---------- | -------------- |
-| **Kernel** | Standard, cross-cutting skills, templates, tooling | this repo |
-| **Project** | The project's documentation and its own skills | `<project>-docs/` |
-| **Repo** | Context pointers, generated | each code repo |
-
-Each docs repo declares its contract with the kernel in a `crux.json`:
-
-```json
-{
-  "crux": "0.13.1",
-  "project": "acme",
-  "profile": "multi-repo",
-  "branch": "main",
-  "repos": ["Acme", "acme-engine", "acme-cms"],
-  "sections": ["architecture", "conventions", "operations", "topics"]
-}
-```
-
-`crux doctor` warns when the declared version and the installed one stop
-matching.
-
-## Supported agents
-
-Knowledge is written once in neutral markdown and the installer materializes it
-for each agent:
-
-| Piece | Claude Code | Codex |
-| ----- | ----------- | ----- |
-| Skill | symlink in `~/.claude/skills/` | stub in `~/.codex/prompts/` |
-| Global context | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
-| Project context | `CLAUDE.md` (symlink) | `AGENTS.md` (canonical) |
-| Repo pointer | `CLAUDE.md` with `@-import` | `AGENTS.md` with path |
-
-That is where the rule comes from that no skill mention the tools of a specific
-agent: they describe the action, not who runs it.
-
-## Structure
+## Working on crux
 
 ```
 crux/
-├── AGENTS.md        context for working on the kernel (CLAUDE.md → symlink)
-├── STANDARD.md      the complete standard, and the skill catalog
-├── GUIA.md          how everything works, from start to finish
-├── VERSION
+├── AGENTS.md        how to work on the kernel (CLAUDE.md → symlink)
+├── STANDARD.md      the standard, and the skill catalog
+├── GUIA.md          how everything works, in eight levels
 ├── install.sh       once per machine
 ├── bin/             one file per command
-├── lib/             path verifiers and common utilities
-├── templates/       docs-repo/ and code-repo/
+├── lib/             shared utilities and verifiers
+├── templates/       what is materialized in docs repos and code repos
 ├── profiles/        multi-repo, client-repo
-├── adapters/        claude/, codex/
+├── adapters/        claude/, codex/, git/
 ├── skills/          the cross-cutting skills
-└── test/            suite and end-to-end battery
+├── decisions/       why the kernel is the way it is (ADRs)
+└── test/            the suite and the end-to-end battery
 ```
-
-## Tests
 
 ```bash
-./test/run.sh            # all the cases
-./test/run.sh doctor     # only those matching the pattern
-./test/e2e.sh            # the whole cycle against a local remote
+./test/run.sh            # every case, each in an isolated sandbox
+./test/run.sh sync       # only those matching the pattern
+./test/e2e.sh            # the whole journey against a local remote
 ```
 
-Each case runs in an isolated sandbox with the agent directories redirected, so
-the suite does not touch `~/.claude`, `~/.codex` or `~/Proyectos`.
+The suite never touches `~/.claude`, `~/.codex` or your projects root. Two
+cases guard the kernel itself: no skill may tie itself to one agent, and no
+project's name may appear in it. On every push and proposal, CI runs static
+analysis, the suite, the end-to-end battery and a clean installation.
+`crux release` publishes a version only after checking that the projects that
+consume the kernel are still conformant.
 
-The suite tests individual pieces and `e2e.sh` tests the complete journey:
-creating the project, registering a repo, installing the guards, checking that
-a direct push is blocked, opening a space, passing the gate, proposing and
-recovering the project on another machine. The failures that have cost the most
-showed up there and not in the suite, because they only appear when the pieces
-are used in sequence.
+Start with [`AGENTS.md`](AGENTS.md) before changing anything, and read
+[`decisions/`](decisions/index.md) before reopening a design question.
 
-Two cases watch over the kernel itself: that no skill ties itself to a specific
-agent and that the name of no project appears. They are what stop crux from
-coupling itself again to what it documents.
+## License
 
-## Governance
-
-On every push and every proposal, the CI runs static analysis, the suite, the
-end-to-end battery and a clean installation.
-
-`crux hooks install` closes the main branch so that work enters through a
-proposal, and reminds you of the cycle when starting on it. The latter is there
-because we measured that describing it in a skill was not enough.
-
-`crux release <ver>` publishes a version and first checks that the projects
-that consume the kernel remain conformant. That is the difference from a
-`git tag`: changing the standard and breaking whoever uses it without noticing
-is exactly what a release must prevent. The number is bumped in `VERSION` per
-proposal, like any other change; the command only tags.
-
-Projects that consume it today: `acme-docs`, `client-docs`.
+[MIT](LICENSE).
