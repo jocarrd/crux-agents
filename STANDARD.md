@@ -61,11 +61,11 @@ the root:
 ```json
 {
   "crux": "0.1.0",
-  "project": "acme",
+  "project": "example-project",
   "profile": "multi-repo",
   "language": "es",
   "branch": "main",
-  "repos": ["Acme", "acme-engine", "acme-cms"],
+  "repos": ["web", "api", "cms"],
   "sections": ["architecture", "conventions", "operations", "topics"]
 }
 ```
@@ -97,7 +97,7 @@ URLs are composed:
 
 ```json
 "remote": {
-  "url": "git@github.com:jocarrd/{repo}.git",
+  "url": "git@github.com:your-user/{repo}.git",
   "repos": {
     "codigo-del-cliente": "https://otro-host.com/su-org/codigo-del-cliente.git"
   }
@@ -418,9 +418,9 @@ Cross-repo categories that are **not** universal but do cross several repos of
 **this** project. The name is decided by each project:
 
 ```
-acme-docs/topics/editorial/          blog voice, SEO, visual identity
-cocina-sencilla-docs/topics/recipes/  formats, photography, culinary voice
-saas-foo-docs/topics/pricing/         policy, discounts, plans
+example-project-docs/topics/editorial/ blog voice, SEO, visual identity
+recipes-site-docs/topics/recipes/      formats, photography, culinary voice
+saas-foo-docs/topics/pricing/          policy, discounts, plans
 ```
 
 **Where a new doc goes, in three questions:**
@@ -545,7 +545,7 @@ lying. A path in backticks the agent resolves just the same and never breaks.
   is finding a decision without reading them all.
 - A single template for both levels, defined in `decisions/README.md`.
 - Numbering is local to each ledger. To cite across ledgers, the path prefix:
-  `decisions/ADR-013` or `repos/demo-co/ADR-007`.
+  `decisions/ADR-013` or `repos/api/ADR-007`.
 - **Seven statuses and no more**: `Open`, `Proposed`, `Accepted`, `Inherited`,
   `Superseded by <ref>`, `Amended by <ref>`, `Deprecated`. The field carries the
   status and its references, nothing else; the reason for the change lives in

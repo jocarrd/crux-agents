@@ -266,8 +266,8 @@
   are the ones created by the promotion mechanism itself**. The procedure is
   moved up to the kernel and an adapter is left below, but if the adapter
   retells the method, the two bid for the same phrase. The standard's canonical
-  example, `device-loop` and `demo-co-device`, gave an **exact tie**;
-  `render-loop` and `pdf-visual-iterate` overlapped 0.49; `oauth-reauthorize`
+  example, `device-loop` and `example-app-device`, gave an **exact tie**;
+  `render-loop` and a client project's adapter of it overlapped 0.49; `oauth-reauthorize`
   and its adapter, 0.46. Since the catalog is global, a project's adapter
   competes in all the others, where it does not apply. That gets worse exactly
   when the system succeeds: each promotion adds a pair, each project drops its
@@ -539,10 +539,10 @@
 - **Context**: the cycle guard only warned in the kernel, in a docs repo or in
   a repo hanging from `<root>/<project>/<repo>` with its docs repo beside it.
   That left out the loose repos at the root, which on the machine where it was
-  measured are five. On 2026-09-17 one of them, `personal-site`, received
+  measured are five. On 2026-09-17 one of them received
   two direct commits to the main branch while another session merged two
   proposals on the same repo: the push was rejected and a rebase was needed.
-  The guard was installed and working; run by hand in `acme/app` it gave the
+  The guard was installed and working; run by hand in a project's code repo it gave the
   warning and in that repo it came out empty.
   With ADR-011 the standard already said what to do without a contract —treat
   it as `light`—, and `review-pr` complied. The guard did not: for it, absence

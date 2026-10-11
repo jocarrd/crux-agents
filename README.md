@@ -107,7 +107,7 @@ Tomorrow, on another machine, `crux sync` brings all of it back.
 
 ```bash
 # once per machine
-git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
+git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh --remote 'git@github.com:<you>/{repo}.git'
 
 # a new project: creates <project>-docs on your remote, from the templates

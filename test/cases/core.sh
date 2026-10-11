@@ -487,9 +487,10 @@ test_no_kernel_skill_names_an_agents_tools() {
 
 test_kernel_names_no_concrete_projects() {
   local hits
-  hits="$(grep -rliE 'acme|demo-co|client|weather-app' \
-    "$CRUX_HOME/skills" "$CRUX_HOME/templates" "$CRUX_HOME/profiles" \
-    "$CRUX_HOME/bin" "$CRUX_HOME/lib" 2>/dev/null | wc -l)"
+  # Todo el repo salvo test/, que necesita los nombres para buscarlos.
+  hits="$(grep -rliE 'acme|demo-co|client|weather-app|personal-site' \
+    --exclude-dir=.git --exclude-dir=test --exclude-dir=node_modules \
+    "$CRUX_HOME" 2>/dev/null | wc -l)"
   assert_eq "0" "$hits" "the kernel is free of project names"
 }
 

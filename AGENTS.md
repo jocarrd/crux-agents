@@ -31,7 +31,8 @@ They are there on purpose and tests fail if they are broken. They are not style.
 
 ### 1. The kernel names no project
 
-Not in the skills, not in the templates, not in the profiles, not in the code.
+Not in the skills, the templates, the profiles, the code or the documentation:
+the test reads the whole repo except `test/`.
 If you need a concrete piece of data —a path, a port, a device, a
 credential—, that data goes in an **adapter** inside the project, and what
 stays here is the procedure.

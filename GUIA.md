@@ -41,10 +41,10 @@ maintained.
 
 ```
         crux  (kernel: rules, templates, skills, tooling)
-          ↑            ↑
-    acme-docs    client-docs        ← projects, consumers
-          ↑            ↑
-     code repos    client repo        ← receive generated pointers
+            ↑                   ↑
+  example-project-docs     client-docs     ← projects, consumers
+            ↑                   ↑
+        code repos         client repo     ← receive generated pointers
 ```
 
 The arrows point **up and only up**. The kernel does not know which projects
@@ -66,7 +66,7 @@ does not belong to the kernel**.
 ### Installation, once per machine
 
 ```bash
-git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
+git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh --remote 'git@github.com:<your-user>/{repo}.git'
 ```
 
@@ -127,8 +127,8 @@ that wrote the change.
 ### The command
 
 ```bash
-crux init cocina-sencilla \
-  --description "Home recipes, well explained." \
+crux init example-project \
+  --description "A web app with its API." \
   --repos "web,api" \
   --profile multi-repo
 ```
@@ -141,8 +141,8 @@ missing.
 **1. It creates the project folder and the remote repo.**
 
 ```
-~/Proyectos/cocina-sencilla/
-└── cocina-sencilla-docs/     ← created on GitHub and cloned
+~/Proyectos/example-project/
+└── example-project-docs/     ← created on GitHub and cloned
 ```
 
 The repo is always called `<project>-docs`. It is not a whim: half the
@@ -151,7 +151,7 @@ convention depends on that name being predictable.
 **2. It materializes the structure from the templates.**
 
 ```
-cocina-sencilla-docs/
+example-project-docs/
 ├── README.md              what the project is and which repos make it up
 ├── AGENTS.md              the canonical index for any agent
 ├── CLAUDE.md              → symlink to AGENTS.md
@@ -177,7 +177,7 @@ bootstrap came out a little different.
 ```json
 {
   "crux": "0.1.0",
-  "project": "cocina-sencilla",
+  "project": "example-project",
   "profile": "multi-repo",
   "repos": ["web", "api"],
   "sections": []
@@ -226,9 +226,9 @@ involve hand-editing a list inside a script.
 Three commands:
 
 ```bash
-git clone git@github.com:jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh --remote 'git@github.com:jocarrd/{repo}.git'
-crux clone acme
+git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
+~/Proyectos/crux/install.sh --remote 'git@github.com:your-user/{repo}.git'
+crux clone example-project
 ```
 
 `crux clone` brings the docs repo, **reads its contract** and clones the repos
@@ -282,7 +282,7 @@ It is the entry door for projects that predate the kernel.
 It is the central piece. Before, the bootstrap script had this written inside:
 
 ```bash
-REPOS=(Acme acme-engine acme-cms acme-radar demo-co ...)
+REPOS=(web api cms worker ...)
 ```
 
 A framework script knowing a project's repos by name. That is why it was not
@@ -299,7 +299,7 @@ The contract declares **how the URLs** of the project's repos are composed:
 
 ```json
 "remote": {
-  "url": "git@github.com:jocarrd/{repo}.git",
+  "url": "git@github.com:your-user/{repo}.git",
   "repos": { "codigo-del-cliente": "https://otro-host.com/su-org/codigo.git" },
   "visibility": "private"
 }
@@ -612,7 +612,7 @@ A real example: `mobile-native-test` described how to test an app on a
 physical Android. With the proper names covered, the whole procedure remained
 —adb, udev permissions, `screencap`, Fast Refresh, the gotcha that on some
 manufacturer layers taps do not reach the app—. That went up as `device-loop`.
-Below it stayed `demo-co-device`: package, deep-link and reference device.
+Below it stayed `example-app-device`: package, deep-link and reference device.
 
 Two guards:
 
@@ -664,7 +664,7 @@ should activate, and serves what is really needed — comparing two wordings and
 seeing whether a change has switched off something that used to activate.
 
 What it found the first time it was run: the canonical promotion example of
-this very guide, `device-loop` and `demo-co-device`, gave an **exact tie**. And
+this very guide, `device-loop` and `example-app-device`, gave an **exact tie**. And
 `flow`, which is the default entry point, listed in its description the steps
 of the others —"pass the quality gate, propose the change and close the
 session"— and so competed with its own pieces.

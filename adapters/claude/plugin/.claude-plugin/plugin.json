@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "description": "Crux in Claude Code: open tasks as a panel above the prompt",
   "author": { "name": "Jorge Carrera Diez" },
+  "homepage": "https://github.com/jocarrd/crux",
+  "repository": "https://github.com/jocarrd/crux",
+  "license": "MIT",
   "types": "./types/index.d.ts"
 }

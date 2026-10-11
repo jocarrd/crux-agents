@@ -41,7 +41,7 @@ main_name="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed
 # machine where it was measured. The standard already says what to do without a
 # contract —a repo without crux.json is treated as 'light'—, so the absence of
 # a docs repo lowers the rigor, it does not erase the repo from the map.
-# Measured on 2026-09-17 in personal-site: with no warning, one session
+# Measured on 2026-09-17 in one of those loose repos: with no warning, one session
 # worked on main while another merged, and the push ended in a rebase.
 
 root="${CRUX_PROJECTS_DIR:-}"

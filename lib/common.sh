@@ -580,7 +580,7 @@ render_template() {
 # of its repos is built, and with that it works the same for GitHub, GitLab
 # —including self-hosted with a port—, Bitbucket or Azure DevOps.
 #
-#   "remote": { "url": "git@github.com:jocarrd/{repo}.git" }
+#   "remote": { "url": "git@github.com:your-user/{repo}.git" }
 #
 # Equivalent shortcut, for convenience:
 #
