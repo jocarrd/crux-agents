@@ -92,6 +92,7 @@ pub fn run(argv: &[String]) -> Res {
                 .stdout(std::process::Stdio::null()),
         );
         if code != 0 {
+            ui::err(format!("gh could not create {slug} on the remote"));
             return exit(code);
         }
         ui::ok(format!(

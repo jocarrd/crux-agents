@@ -1042,6 +1042,7 @@ the session. See ADR-012.
 | ------- | ----- | ------------ |
 | `crux init <project>` | `/crux-init` | Creates the docs repo from the templates |
 | `crux clone <project>` | — | Brings a whole project onto a new machine |
+| `crux setup` | — | Gets a machine ready step by step: account, remote, profile and projects |
 | `crux bootstrap` | — | Gets a new machine ready: verifies, discovers the projects and brings them in |
 | `crux install` | — | Lays out the kernel the binary carries and hooks it into the agents |
 | `crux adopt` | — | Registers a docs repo that already exists |

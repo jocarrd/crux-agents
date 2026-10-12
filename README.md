@@ -108,7 +108,10 @@ Tomorrow, on another machine, `crux sync` brings all of it back.
 ```bash
 # once per machine (it builds crux with Rust's cargo: https://rustup.rs)
 git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh --remote 'git@github.com:<you>/{repo}.git'
+~/Proyectos/crux/install.sh
+
+# then let it walk you through the rest: account, remote, profile, projects
+crux setup
 
 # a new project: creates <project>-docs on your remote, from the templates
 crux init shop --repos shop-web,shop-api
@@ -246,6 +249,7 @@ A rule written in a file is advice. These are installed by
 | ------- | ------------ |
 | `crux init <project>` | Creates `<project>-docs` from the templates, on your remote |
 | `crux clone <project>` | Brings a whole project onto this machine |
+| `crux setup` | Gets this machine ready step by step, asking only what it cannot work out |
 | `crux bootstrap` | Gets a blank machine ready: verifies, discovers every project and brings it |
 | `crux install` | Lays out the kernel the binary carries: with the binary alone, a machine needs nothing else |
 | `crux adopt` | Puts an existing docs repo under the standard |

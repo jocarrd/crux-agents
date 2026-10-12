@@ -21,6 +21,7 @@ pub mod profile;
 pub mod prose;
 pub mod release;
 pub mod review;
+pub mod setup;
 pub mod ship;
 pub mod skill;
 pub mod status;
@@ -48,6 +49,7 @@ pub fn dispatch(argv: &[String]) -> i32 {
         }
         "__fn" => crate::script_api::run(rest),
         "__install" | "install" => install::run(rest),
+        "setup" => setup::run(rest),
         "adopt" => adopt::run(rest),
         "add-repo" => add_repo::run(rest),
         "merge" => merge::run(rest),
@@ -139,6 +141,7 @@ pub(crate) fn help(name: &str) -> bool {
 
 const USAGE: &str = "crux — kernel of the agent work system
 
+  crux setup            gets this machine ready, step by step
   crux init <project>   creates the docs repo of a new project
   crux clone <project>  brings a whole project to this machine
   crux bootstrap        gets a new machine ready: all projects

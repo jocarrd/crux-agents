@@ -303,6 +303,15 @@ env HOME="$M4" "$M4/.local/bin/crux" init solo --no-remote --parent "$M4/Proyect
 truthy 'env HOME="$M4" "$M4/.local/bin/crux" doctor "$M4/Proyectos/solo/solo-docs" >/dev/null 2>&1' \
   "and with it a new project passes doctor"
 
+step "setup on a machine with nothing, without a terminal: it takes the defaults"
+M5="$HOME/m5"; mkdir -p "$M5/dl" "$M5/.crux"; cp "$BIN" "$M5/dl/crux"
+printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M5/.gitconfig"
+printf 'CRUX_REMOTE="%s/{repo}.git"\n' "$HOME/remotes" > "$M5/.crux/config"
+out="$(cd "$M5/dl" && env HOME="$M5" ./crux setup --projects-dir "$M5/Proyectos" </dev/null 2>&1)"; rc=$?
+truthy '[[ $rc -eq 0 && "$out" == *"ready"* ]]' "setup gets to the end without asking"
+truthy '[[ -f "$M5/Proyectos/demo/demo-docs/crux.json" ]]' "and brings the account's project, the default answer"
+truthy '[[ -x "$M5/.local/bin/crux" ]]' "with crux installed from the binary alone"
+
 step "the real agent settings are not touched"
 truthy '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
   "the settings.json of whoever runs it comes out as it went in"

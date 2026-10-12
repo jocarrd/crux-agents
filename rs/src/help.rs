@@ -21,6 +21,7 @@ pub fn text(name: &str) -> Option<&'static str> {
         "profile" => include_str!("help/profile.txt"),
         "release" => include_str!("help/release.txt"),
         "review" => include_str!("help/review.txt"),
+        "setup" => include_str!("help/setup.txt"),
         "ship" => include_str!("help/ship.txt"),
         "skill" => include_str!("help/skill.txt"),
         "status" => include_str!("help/status.txt"),

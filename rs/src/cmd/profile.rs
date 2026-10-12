@@ -238,6 +238,7 @@ fn init(argv: &[String]) -> Res {
                 .stdout(std::process::Stdio::null()),
         );
         if code != 0 {
+            ui::err(format!("gh could not create {owner}/{name}: the skeleton stays in {}", dir.display()));
             return crate::error::exit(code);
         }
         ui::ok(format!("private repo {owner}/{name}"));

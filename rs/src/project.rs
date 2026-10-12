@@ -221,9 +221,12 @@ pub fn default_owner() -> String {
 
 /// The machine's clone template pointing at another owner, keeping its shape.
 pub fn template_for_owner(owner: &str) -> String {
-    let tmpl = remote_template().unwrap_or_default();
+    template_with_owner(&remote_template().unwrap_or_default(), owner)
+}
+
+pub fn template_with_owner(tmpl: &str, owner: &str) -> String {
     let re = crate::regex!(r"^(.*github\.com[:/])[^/]+/(.*)$");
-    match re.captures(&tmpl) {
+    match re.captures(tmpl) {
         Some(c) => format!("{}{}/{}", &c[1], owner, &c[2]),
         None => format!("git@github.com:{owner}/{{repo}}.git"),
     }
