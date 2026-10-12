@@ -2434,3 +2434,14 @@ test_doctor_names_a_project_hook_git_would_never_run() {
   printf '#!/bin/sh\nexit 0\n' > "$docs/repos/api/git-hooks/precommit"
   assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "precommit" "doctor names the file git would ignore"
 }
+
+test_hooks_status_keeps_its_columns_with_long_repo_names() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omicron --repos "api,a-repository-with-a-long-name")"
+  git init -q "$CRUX_PROJECTS_DIR/omicron/api"
+  git init -q "$CRUX_PROJECTS_DIR/omicron/a-repository-with-a-long-name"
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  local cols
+  cols="$(cd "$docs" && "$CRUX_HOME/bin/crux" hooks status 2>&1 | sed -n "/in the order they run/,\$p" | grep " commit-msg " | awk '{print index($0, " commit-msg ")}' | sort -u | wc -l)"
+  assert_eq "1" "$cols" "the hook names start in one column"
+}

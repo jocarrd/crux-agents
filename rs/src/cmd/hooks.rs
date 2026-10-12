@@ -367,15 +367,16 @@ fn status(p: &Paths) -> Res {
                     .filter(|k| h.join(format!("{name}.{k}")).exists())
                     .collect();
                 if !layers.is_empty() {
-                    rows.push(format!("{repo:<24} {name:<14} {}", layers.join(" → ")));
+                    rows.push((repo.clone(), name, layers.join(" → ")));
                 }
             }
         }
         if !rows.is_empty() {
             println!();
             println!("git hooks of the code repos, in the order they run");
-            for r in rows {
-                ui::info(r);
+            let width = rows.iter().map(|(r, _, _)| r.len()).max().unwrap_or(0);
+            for (repo, name, layers) in rows {
+                ui::info(format!("{repo:<width$}  {name:<14} {layers}"));
             }
         }
     }
