@@ -84,6 +84,11 @@ performs.
 `2>/dev/null` is fine for asking whether something exists. It is not fine for
 reading something that has to be there.
 
+In the binary, a file that is read and written back goes through
+`files::read_if_exists`, which returns the error; an optional one goes through
+`files::read_optional` or `files::read_or_empty`, which say on stderr when the
+file is there and cannot be read.
+
 The same holds for a write: one whose error is thrown away is followed by a
 message saying it was done. `files::write` returns the error with the path;
 `files::touch_marker` is only for a file that throttles a reminder.

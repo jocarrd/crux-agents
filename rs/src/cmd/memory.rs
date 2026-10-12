@@ -87,7 +87,7 @@ fn search(argv: &[String]) -> Res {
     let mut found = vec![];
     for place in places {
         for f in markdown_under(&place) {
-            let Ok(text) = std::fs::read_to_string(&f) else { continue };
+            let Some(text) = crate::files::read_optional(&f) else { continue };
             for (n, l) in text.lines().enumerate().filter(|(_, l)| l.to_lowercase().contains(&query)).take(3) {
                 let shown = f.strip_prefix(&root).map(Path::to_path_buf).unwrap_or(f.clone());
                 found.push(format!("{}:{}:{l}", shown.display(), n + 1));

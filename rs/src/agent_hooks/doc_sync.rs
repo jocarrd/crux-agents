@@ -135,7 +135,7 @@ fn walk_text(dir: &Path) -> Vec<String> {
             let p = e.path();
             if p.is_dir() {
                 stack.push(p);
-            } else if let Ok(t) = std::fs::read_to_string(&p) {
+            } else if let Some(t) = crate::files::read_optional(&p) {
                 out.push(t);
             }
         }

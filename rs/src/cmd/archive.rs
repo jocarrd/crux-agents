@@ -128,7 +128,7 @@ pub fn run(argv: &[String]) -> Res {
         }
         ui::ok(format!("{repo} archived in crux.json (since {today})"));
 
-        if let Ok(text) = fs::read_to_string(&readme) {
+        if let Some(text) = crate::files::read_optional(&readme) {
             if !text.contains(banner_start(&lang)) {
                 let line = if lang == "es" {
                     format!("> **Archivado el {today}.** {reason} — `crux unarchive {repo}` lo devuelve.")
@@ -187,7 +187,7 @@ pub fn run(argv: &[String]) -> Res {
     }
     ui::ok(format!("{repo} is an active repo again in crux.json"));
 
-    if let Ok(text) = fs::read_to_string(&readme) {
+    if let Some(text) = crate::files::read_optional(&readme) {
         let start = banner_start(&lang);
         if text.contains(start) {
             let mut out = vec![];

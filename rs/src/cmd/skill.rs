@@ -332,7 +332,7 @@ pub fn scenarios_report(argv: &[String]) -> Res {
     skills.sort();
     for s in skills {
         let Some(file) = scenarios_of(&dir.join(&s)) else { continue };
-        let Ok(text) = std::fs::read_to_string(file) else { continue };
+        let Some(text) = crate::files::read_optional(&file) else { continue };
         for e in read_scenarios(&text)? {
             n += 1;
             for r in e.must.iter().chain(e.must_not.iter()) {

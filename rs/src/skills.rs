@@ -121,7 +121,7 @@ pub fn prune() {
             }
         }
         let stub = env::codex_prompts_dir().join(format!("{name}.md"));
-        if let Ok(text) = fs::read_to_string(&stub) {
+        if let Some(text) = crate::files::read_optional(&stub) {
             if let Some(target) = text.lines().find(|l| l.ends_with("/SKILL.md")) {
                 if !Path::new(target).is_file() {
                     if env::dry_run() {

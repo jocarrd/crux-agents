@@ -609,6 +609,15 @@ test_no_command_ends_the_process_on_its_own() {
   assert_eq "0" "$hits" "only main ends the process"
 }
 
+test_doctor_says_when_a_file_cannot_be_read() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project upsilon)"
+  chmod 000 "$docs/AGENTS.md"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
+  chmod 644 "$docs/AGENTS.md"
+  assert_contains "$out" "cannot read $docs/AGENTS.md" "the finding comes with the reason"
+}
+
 test_doctor_detects_duplicate_adrs() {
   sandbox >/dev/null
   local docs; docs="$(new_project sigma)"

@@ -659,7 +659,7 @@ fn stray_documentation(t: &mut Tally, c: &Checkup, repo: &str, dir: &Path, track
         let list: Vec<String> = stray.into_iter().collect();
         t.note(format!("{repo} holds documentation ({}): it goes in {docs_name}/repos/{repo}/", first_names(&list)));
     }
-    if let Ok(text) = std::fs::read_to_string(dir.join(names::README)) {
+    if let Some(text) = crate::files::read_optional(&dir.join(names::README)) {
         let lines = text.matches('\n').count();
         if lines > 60 {
             t.note(format!("{repo}/README.md has {lines} lines: say what it is and where the docs are, and leave the rest to {docs_name}/repos/{repo}/"));

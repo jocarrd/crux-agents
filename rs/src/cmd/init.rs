@@ -166,7 +166,7 @@ pub fn run(argv: &[String]) -> Res {
         }
         // The index row: the description that ends up in each repo's pointer
         // comes from there, so an empty table leaves the pointers mute.
-        if let Ok(text) = std::fs::read_to_string(&index) {
+        if let Some(text) = crate::files::read_optional(&index) {
             let mut lines: Vec<String> = text.split('\n').map(String::from).collect();
             let row = format!("| `{repo}/` | `{project_name}/{repo}` | What this repo does, in one line |");
             if let Some(e) = lines.iter().position(|l| empty_row.is_match(l)) {

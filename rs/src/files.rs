@@ -103,8 +103,23 @@ pub fn read_if_exists(path: &Path) -> Result<String, String> {
     }
 }
 
+/// None when the file is not there. One that exists and cannot be read is
+/// said on stderr, which agent hooks keep out of the agent's context: skipped
+/// in silence, it turns into a report that is wrong without saying why.
+pub fn read_optional(path: &Path) -> Option<String> {
+    match fs::read_to_string(path) {
+        Ok(t) => Some(t),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            let p = crate::ui::palette();
+            eprintln!("{}warn{}  cannot read {}: {e}", p.yellow, p.off, path.display());
+            None
+        }
+    }
+}
+
 pub fn read_or_empty(path: &Path) -> String {
-    fs::read_to_string(path).unwrap_or_default()
+    read_optional(path).unwrap_or_default()
 }
 
 /// A shell pattern: `*` (slashes included, as in `case`), `?` and `[...]`.

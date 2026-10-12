@@ -40,7 +40,7 @@ fn write_profile_rules(profile: &str, docs: &Path, tree: &Path) -> Result<(), St
     }
     block.push_str("\n<!-- crux:end -->");
     let target = tree.join(names::AGENTS);
-    let Ok(current) = std::fs::read_to_string(&target) else { return Ok(()) };
+    let Some(current) = crate::files::read_optional(&target) else { return Ok(()) };
     let re = crate::regex!(r"<!-- crux:begin (?:perfil|profile)[\s\S]*?crux:end -->");
     if let Some(m) = re.find(&current) {
         if m.as_str() != block {
@@ -242,7 +242,7 @@ pub fn run(argv: &[String]) -> Res {
     // AGENTS.md marks the spot: a list kept by hand goes stale as the kernel
     // grows, and an index that lies is worse than none.
     let index = tree.join(names::AGENTS);
-    if let Ok(src) = std::fs::read_to_string(&index) {
+    if let Some(src) = crate::files::read_optional(&index) {
         if src.contains("<!-- crux:skills -->") {
             let lines: Vec<String> = project::subdirs(&home.join("skills"))
                 .iter()
