@@ -221,6 +221,9 @@ pub fn run(argv: &[String]) -> Res {
     }
 
     skills::materialize(&kernel.join("skills"), "kernel");
+    // A skill the kernel retired or renamed leaves a link to nothing behind,
+    // and the agent keeps offering it.
+    skills::prune();
     ui::ok("kernel skills materialized (Claude + Codex)");
     if !dev && !dry {
         let settings =

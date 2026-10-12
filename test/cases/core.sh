@@ -1575,6 +1575,19 @@ test_install_leaves_one_copy_per_version() {
   assert_contains "$(cat "$matches/.crux/config")" 'CRUX_MODE="release"' "the mode is recorded"
 }
 
+test_install_removes_the_links_of_skills_that_no_longer_exist() {
+  sandbox >/dev/null
+  local matches="$SB/home"; mkdir -p "$matches" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
+  # A skill the kernel retired or renamed: its link and its Codex stub point at
+  # nothing, and the agent would offer it all the same.
+  ln -s "$SB/gone/skills/retired" "$CLAUDE_SKILLS_DIR/retired"
+  printf 'Read and follow:\n%s/gone/skills/retired/SKILL.md\n' "$SB" > "$CODEX_PROMPTS_DIR/retired.md"
+  env HOME="$matches" bash "$CRUX_HOME/install.sh" --projects-dir "$matches/projects" >/dev/null 2>&1
+  assert_eq "1" "$([[ -L "$CLAUDE_SKILLS_DIR/retired" ]] && echo 0 || echo 1)" "the broken link is removed"
+  assert_eq "1" "$([[ -e "$CODEX_PROMPTS_DIR/retired.md" ]] && echo 0 || echo 1)" "and so is the Codex stub"
+  assert_contains "$(readlink "$CLAUDE_SKILLS_DIR/ship")" ".crux/kernel" "the living skills stay"
+}
+
 test_install_dev_links_to_the_working_copy() {
   sandbox >/dev/null
   local matches="$SB/home2"; mkdir -p "$matches"
