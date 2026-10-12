@@ -1,9 +1,11 @@
 name: ci
 
+# Run by hand while the repo is private: its minutes are billed, macOS at ten
+# times the rate, and the local gate (`crux ship`) runs the same suite before
+# every proposal. The push and pull_request triggers come back when the repo
+# goes public.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 # A new run cancels the previous one on the same branch: nobody looks at the
 # result of a commit that is no longer HEAD.
