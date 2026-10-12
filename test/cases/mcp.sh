@@ -7,18 +7,12 @@
 
 mcp_declares() {
   # mcp_declares <docs> <mcp block json> — injects it into the contract
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    const c = JSON.parse(fs.readFileSync(f, "utf8"));
-    c.mcp = JSON.parse(process.argv[2]);
-    fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
-  ' "$1/crux.json" "$2"
+  json_set "$1/crux.json" mcp "$2"
 }
 
 mcp_run() {
   # mcp_run <docs> <action>
-  (cd "$1" && bash "$CRUX_HOME/bin/mcp.sh" "$2" 2>&1)
+  (cd "$1" && "$CRUX_HOME/bin/crux" mcp "$2" 2>&1)
 }
 
 test_mcp_writes_only_in_docs_repo_by_default() {
@@ -67,7 +61,7 @@ test_mcp_does_not_write_invalid_contract() {
   mcp_declares "$docs" '{"malo":{"transport":"grpc","url":"https://e.example/mcp"}}'
 
   assert_exit 1 "install fails with a transport the client does not understand" \
-    bash -c "cd '$docs' && bash '$CRUX_HOME/bin/mcp.sh' install"
+    bash -c "cd '$docs' && '$CRUX_HOME/bin/crux' mcp install"
   assert_no_file "$docs/.mcp.json" "and does not leave the file half-written"
 }
 
@@ -87,13 +81,7 @@ test_mcp_remove_respects_foreign_entries() {
   mcp_declares "$docs" '{"ours":{"transport":"http","url":"https://e.example/mcp"}}'
   mcp_run "$docs" install >/dev/null
 
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8"));
-    j.mcpServers.foreign = { type: "http", url: "https://otro.example/mcp" };
-    fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
-  ' "$docs/.mcp.json"
+  json_set "$docs/.mcp.json" mcpServers.foreign '{"type":"http","url":"https://otro.example/mcp"}'
 
   mcp_run "$docs" remove >/dev/null
   local left; left="$(cat "$docs/.mcp.json")"
@@ -116,10 +104,10 @@ test_doctor_fails_on_misdeclared_mcp() {
   local docs; docs="$(new_project theta)"
   mcp_declares "$docs" '{"roto":{"transport":"http"}}'
 
-  local output; output="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local output; output="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$output" "without 'url'" "the doctor names the missing field"
   assert_exit 1 "and does not call the project conformant" \
-    bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+    "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_warns_of_mcp_the_contract_does_not_declare() {
@@ -128,15 +116,9 @@ test_doctor_warns_of_mcp_the_contract_does_not_declare() {
   mcp_declares "$docs" '{"declared":{"transport":"http","url":"https://e.example/mcp"}}'
   mcp_run "$docs" install >/dev/null
 
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8"));
-    j.mcpServers.smuggled = { type: "http", url: "https://otro.example/mcp" };
-    fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
-  ' "$docs/.mcp.json"
+  json_set "$docs/.mcp.json" mcpServers.smuggled '{"type":"http","url":"https://otro.example/mcp"}'
 
-  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "which the contract does not declare" \
+  assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "which the contract does not declare" \
     "the drift between the file and the contract shows"
 }
 
@@ -148,7 +130,7 @@ test_check_secrets_also_scans_mcp_json() {
   "headers": { "Authorization": "Bearer ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789" } } } }
 JSON
 
-  assert_contains "$(node "$CRUX_HOME/lib/check-secrets.mjs" "$docs")" "GitHub token" \
+  assert_contains "$("$CRUX_HOME/bin/crux" __check secrets "$docs")" "GitHub token" \
     "a token in the .mcp.json does not slip through for not being markdown"
 }
 
@@ -163,14 +145,8 @@ test_mcp_does_not_run_code_hidden_in_a_name() {
   # remote. If the name ends up inside an expression that gets evaluated,
   # opening the project and asking for the status is enough to run code as
   # the user.
-  node -e '
-    const fs = require("fs");
-    const [f, marker] = process.argv.slice(1);
-    const c = JSON.parse(fs.readFileSync(f, "utf8"));
-    const name = `x"];require("fs").writeFileSync(${JSON.stringify(marker)},"1");root.mcp["x`;
-    c.mcp = { [name]: { transport: "stdio", command: "node" } };
-    fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
-  ' "$docs/crux.json" "$marker"
+  local name; name='x"];require("fs").writeFileSync('"$(json_quote "$marker")"',"1");root.mcp["x'
+  json_set "$docs/crux.json" mcp "{$(json_quote "$name"):{\"transport\":\"stdio\",\"command\":\"node\"}}"
 
   mcp_run "$docs" status >/dev/null 2>&1 || true
   assert_no_file "$marker" "a server name is not evaluated as code"
@@ -207,7 +183,7 @@ test_doctor_warns_when_mcp_json_missing() {
   # Without having run install: on a freshly cloned machine there is no file,
   # and saying "ok" there is the failure that costs most to see, because it
   # looks like it works.
-  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "has no .mcp.json" \
+  assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "has no .mcp.json" \
     "the doctor does not accept a file that does not exist"
 }
 
@@ -217,15 +193,9 @@ test_doctor_sees_hand_edited_mcp_json() {
   mcp_declares "$docs" '{"one":{"transport":"http","url":"https://e.example/mcp"}}'
   mcp_run "$docs" install >/dev/null
 
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8"));
-    j.mcpServers.one.url = "https://hijacked.example/mcp";
-    fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
-  ' "$docs/.mcp.json"
+  json_set "$docs/.mcp.json" mcpServers.one.url '"https://hijacked.example/mcp"'
 
-  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "different from what is declared" \
+  assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "different from what is declared" \
     "a url changed in the file does not pass as conformant"
 }
 

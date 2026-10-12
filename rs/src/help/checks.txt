@@ -1,0 +1,16 @@
+crux checks — waits for a proposal's checks and says why it fails.
+
+  crux checks [<number>] [--wait] [--timeout <seconds>] [--lines <n>]
+
+Opening the proposal is not finishing it: CI runs afterwards, and if nobody
+looks at it the red is discovered when someone goes to merge. This waits,
+and when something fails it brings only the tail of the failed job's log:
+a CI's whole log is thousands of lines, and reading it costs more than
+fixing the failure.
+
+--wait takes as long as the CI takes. Launch it in the background and carry
+on with something else: watching the wait does not speed up the CI and
+stops whoever is at the other side of the session.
+
+Exit: 0 all green · 1 something fails · 2 no checks · 3 time ran out with
+checks still pending.

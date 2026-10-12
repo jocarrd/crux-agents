@@ -1,0 +1,16 @@
+crux profile — the person's memory, in a repo that travels between machines.
+
+  crux profile            where it is, what it holds and whether something is unpublished
+  crux profile init       creates it: skeleton, private repo on the remote, and loads it
+  crux profile link       loads it into each agent on this machine (Claude, Codex)
+  crux profile clone      brings it from the remote if this machine does not have it
+
+A project's knowledge lives in its docs repo. What belongs to the person —how
+they want to work, who they are, what only holds on one machine— had nowhere
+to go but the agent's local memory, which does not travel and which each
+agent keeps in its own way. This is that place (ADR-018).
+
+It lives at <projects root>/agent-profile (another name with
+CRUX_PROFILE_REPO in ~/.crux/config) and `crux sync` treats it like any other
+repo: it brings it up to date on arrival and complains on leaving if
+something is unpublished.

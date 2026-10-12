@@ -1,0 +1,13 @@
+crux skill — test that a skill still does what it has to do.
+
+  crux skill test <skill|path> [--against <ref>] [--runs <n>] [--verbose]
+
+Runs the scenarios in <skill>/tests/escenarios.md: questions with a known
+answer and deterministic checks. Counts the words and, if the adapter
+allows it, the tokens. With --against it compares with the version at that
+git ref and flags as a regression what used to pass and now does not.
+
+Who answers is decided by the adapter, not by this command:
+  CRUX_SKILL_RUNNER  answers the question on stdin following
+                     $CRUX_SKILL_FILE (by default, the Claude adapter)
+  CRUX_SKILL_TOKENS  prints the tokens of $CRUX_SKILL_FILE (optional)

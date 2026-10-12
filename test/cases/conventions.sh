@@ -39,7 +39,7 @@ JSON
 
 conventions_run() {
   # conventions_run <repo> — runs the gate on what is uncommitted
-  (cd "$1" && git add -A && bash "$CRUX_HOME/skills/ship/scripts/conventions.sh" 2>&1)
+  (cd "$1" && git add -A && "$CRUX_HOME/bin/crux" ship conventions 2>&1)
 }
 
 test_conventions_lists_applicable_documents() {
@@ -174,7 +174,7 @@ test_profile_decides_commit_language() {
   git -C "$root/app" init -q; git -C "$root/ci-docs" init -q
   printf '{"crux":"0.1.0","project":"ci","profile":"spanish","repos":["app"],"sections":[]}\n' \
     > "$root/ci-docs/crux.json"
-  ( cd "$root/ci-docs" && env HOME="$matches" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  ( cd "$root/ci-docs" && env HOME="$matches" "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1 )
 
   local f="$SB/msg"
   printf 'feat: añade el aviso cuando la caché no responde\n\nEsto hace que el usuario vea el error real y no una pantalla en blanco.\n' > "$f"
@@ -186,7 +186,7 @@ test_profile_decides_commit_language() {
   git -C "$other_one/app" init -q; git -C "$other_one/en-docs" init -q
   printf '{"crux":"0.1.0","project":"en","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$other_one/en-docs/crux.json"
-  ( cd "$other_one/en-docs" && env HOME="$matches" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  ( cd "$other_one/en-docs" && env HOME="$matches" "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1 )
   assert_exit 1 "and without declaring it English is still required" \
     bash "$other_one/app/.git/hooks/commit-msg" "$f"
 
@@ -195,7 +195,7 @@ test_profile_decides_commit_language() {
   git -C "$own/app" init -q; git -C "$own/es-docs" init -q
   printf '{"crux":"0.1.0","project":"es","profile":"multi-repo","repos":["app"],"sections":[],"commit":{"language":"es"}}\n' \
     > "$own/es-docs/crux.json"
-  ( cd "$own/es-docs" && env HOME="$matches" bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  ( cd "$own/es-docs" && env HOME="$matches" "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1 )
   assert_exit 0 "a contract that declares Spanish lets a Spanish commit through" \
     bash "$own/app/.git/hooks/commit-msg" "$f"
 }
@@ -213,12 +213,12 @@ test_profile_declares_what_cannot_leave_in_a_proposal() {
 
   local b="$SB/body"
   printf 'Fix the calculation for client-name.\n' > "$b"
-  local out; out="$(cd "$root/app" && env HOME="$matches" bash "$CRUX_HOME/bin/ship.sh" body "$b" 2>&1)"
+  local out; out="$(cd "$root/app" && env HOME="$matches" "$CRUX_HOME/bin/crux" ship body "$b" 2>&1)"
   assert_contains "$out" "does not leave here" "the profile pattern is checked, with its reason"
 
   printf 'Fix the drift calculation.\n' > "$b"
   assert_exit 0 "and a clean body passes" \
-    env HOME="$matches" bash -c "cd '$root/app' && bash '$CRUX_HOME/bin/ship.sh' body '$b'"
+    env HOME="$matches" bash -c "cd '$root/app' && '$CRUX_HOME/bin/crux' ship body '$b'"
 }
 
 test_profile_forbid_still_reads_legacy_spanish_keys() {
@@ -234,6 +234,6 @@ test_profile_forbid_still_reads_legacy_spanish_keys() {
 
   local b="$SB/body"
   printf 'Fix the calculation for client-name.\n' > "$b"
-  local out; out="$(cd "$root/app" && env HOME="$matches" bash "$CRUX_HOME/bin/ship.sh" body "$b" 2>&1)"
+  local out; out="$(cd "$root/app" && env HOME="$matches" "$CRUX_HOME/bin/crux" ship body "$b" 2>&1)"
   assert_contains "$out" "does not leave here" "profiles written with patron/motivo are still read"
 }

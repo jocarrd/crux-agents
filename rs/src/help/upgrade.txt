@@ -1,0 +1,8 @@
+crux upgrade — aligns a docs repo with the current kernel version.
+
+Materializes the pieces of the standard that are missing (those a new version
+has added) and updates the version declared in crux.json. It does not
+overwrite existing content unless --force: the documentation belongs to the
+project, the templates only fill gaps.
+
+  crux upgrade [dir] [--force] [--dry-run]

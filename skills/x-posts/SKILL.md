@@ -67,7 +67,7 @@ their own.
 - Short sentences.
 - One or two emojis as a signal at the start of a block; at most one hashtag;
   mentions only with a reason.
-- Run the draft through `/redaccion`.
+- Run the draft through `/prose-check`.
 - No asking for empty engagement ("RT si…", "comenta SÍ").
 
 ## When and how much
@@ -98,7 +98,7 @@ and you can stay for the first hour.
 3. Gather the proof: a number, a screenshot or a real example.
 4. Write two or three hooks and keep the most concrete one.
 5. Write the body and decide where the link goes.
-6. Run `/redaccion` and the checklist below.
+6. Run `/prose-check` and the checklist below.
 7. Show the author the exact text, the image, the reply with the link and the
    time. Wait for the OK.
 8. After publishing, the first hour.

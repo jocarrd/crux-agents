@@ -1,0 +1,5 @@
+crux link — generates and checks the context pointers of the project's code
+repos, and materializes their own skills.
+
+Everything comes from crux.json: no project names or repo lists are
+hardcoded. The profile decides whether anything is written to code repos.

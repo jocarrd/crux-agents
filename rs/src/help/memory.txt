@@ -1,0 +1,16 @@
+crux memory — what the agent knows that the project does not know yet.
+
+  crux memory           the memories by type, and the ones missing from git
+  crux memory --brief   one line with what is missing, to hook into a hook
+  crux memory --check   silent; exits 1 if any should have been promoted
+  crux memory search <t> looks for the text in the profile and every docs repo
+
+The standard splits things by who each one belongs to: `project` and
+`reference` belong to the project and go to git; `user` and `feedback`
+belong to the person and go to their profile. The rule was written from day one and
+nobody checked it, so there was project analysis living on a single machine.
+This is what makes it verifiable.
+
+It does not decide where each memory goes nor move it: that is a decision,
+and decisions are not made by a hook. It says what is missing and which docs
+repo it goes in.

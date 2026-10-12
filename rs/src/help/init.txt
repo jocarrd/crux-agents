@@ -1,0 +1,12 @@
+crux init — creates the docs repo of a new project from the templates.
+
+  crux init <project> [--description "..."] [--repos a,b,c] [--branch <branch>]
+                      [--profile multi-repo] [--visibility private]
+                      [--language es] [--remote <template>] [--no-remote]
+
+The remote is not assumed: it is declared. `--remote` accepts a template with
+{repo} —valid for any provider— and it is written into the contract, which
+is where `crux clone` and `crux doctor` will read it from later.
+
+Deterministic: the result comes from templates/, not from an agent
+reproducing files by hand. Two runs give the same tree.

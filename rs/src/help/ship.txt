@@ -1,0 +1,16 @@
+crux ship — the quality gate, with a receipt.
+
+  crux ship run -- <command...>   runs the command and records its result
+  crux ship seal                  closes the receipt with the HEAD sha
+  crux ship show                  shows the receipt
+  crux ship clear                 discards it and starts over
+  crux ship scope [base]          which gates the diff needs, and which tests
+  crux ship conventions [base]    the project's conventions against the diff
+  crux ship body <file>           checks a proposal's body before it is published
+
+A sha the agent writes after saying it verified only proves someone wrote a
+sha. `run` really executes and records the exit code, so the receipt is
+evidence and not a statement.
+
+The shortcut still exists —`finish --skip-gate`— because sometimes it is
+needed. What cannot happen is for it to be taken silently and leave no trace.

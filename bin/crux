@@ -1,97 +1,18 @@
 #!/usr/bin/env bash
 # crux — kernel of the agent work system.
-# Subcommand dispatcher. See STANDARD.md for the full standard.
-
-set -euo pipefail
-
-SELF="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-CRUX_HOME="$(dirname "$SELF")"
-export CRUX_HOME
-
-# shellcheck source=lib/common.sh
-source "$CRUX_HOME/lib/common.sh"
-
-usage() {
-  cat <<'EOF'
-crux — kernel of the agent work system
-
-  crux init <project>   creates the docs repo of a new project
-  crux clone <project>  brings a whole project to this machine
-  crux bootstrap        gets a new machine ready: all projects
-  crux adopt [dir]      registers a docs repo that already exists
-  crux add-repo <repo>  registers a new repo in the project
-  crux archive <repo>   marks a repo as archived: out of production, kept
-  crux unarchive <repo> brings an archived repo back
-  crux review           gathers the material to review a proposal
-  crux checks [n]       waits for a proposal's CI and fetches the log of what fails
-  crux merge <n>        merges a proposal, stating first which one and from which repo
-  crux link [dir]       generates and verifies the pointers of the code repos
-  crux workspace ...    isolated spaces to work in parallel
-  crux task ...         the task record: steps, next step, evidence
-  crux ship ...         the quality gate, with a receipt of what was run
-  crux visual ...       the approved visual review, with receipt and section in the proposal
-  crux hooks ...        hooks the standard into session end and commit
-  crux mcp ...          the MCP servers the project declares
-  crux stg ...          publishes a built folder to a keyed staging
-  crux usage            which skills are really used
-  crux skill test <sk>  tests a skill with its scenarios and compares it with another version
-  crux memory [--check] agent memories that should be in git
-  crux profile ...      the person's memory: a repo of its own that every agent loads
-  crux status [--check] what is open right now across all projects
-  crux sync [--leave]   brings what is on this machine up to date; nothing trapped when you leave
-  crux doctor [dir]     verifies conformity with the standard
-  crux doctor --machine verifies that this machine can handle everything
-  crux upgrade [dir]    re-materializes the kernel at the current version
-  crux release <ver>    publishes a version, verifying whoever consumes it
-  crux version          kernel version and its path
-
-Without a directory argument, commands operate on the docs repo they find
-walking up from the current directory.
-EOF
-}
-
-cmd="${1:-help}"
-[[ $# -gt 0 ]] && shift || true
-
-# Each script's header already documents its usage: it is printed instead of
-# maintaining a separate help text that ages on its own.
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  for script in "$CRUX_HOME/bin/$cmd.sh" "$CRUX_HOME/bin/$cmd.mjs"; do
-    [[ -f "$script" ]] || continue
-    awk 'NR > 1 { if ($0 !~ /^(#|\/\/)/) exit; sub(/^(# ?|\/\/ ?)/, ""); print }' "$script"
-    exit 0
-  done
-fi
-
-case "$cmd" in
-  init)    exec bash "$CRUX_HOME/bin/init.sh" "$@" ;;
-  clone)   exec bash "$CRUX_HOME/bin/clone.sh" "$@" ;;
-  bootstrap) exec bash "$CRUX_HOME/bin/bootstrap.sh" "$@" ;;
-  adopt)   exec bash "$CRUX_HOME/bin/adopt.sh" "$@" ;;
-  add-repo) exec bash "$CRUX_HOME/bin/add-repo.sh" "$@" ;;
-  archive)  exec bash "$CRUX_HOME/bin/archive.sh" "$@" ;;
-  unarchive) exec bash "$CRUX_HOME/bin/archive.sh" --undo "$@" ;;
-  review)   exec bash "$CRUX_HOME/bin/review.sh" "$@" ;;
-  checks)   exec bash "$CRUX_HOME/bin/checks.sh" "$@" ;;
-  merge)   exec bash "$CRUX_HOME/bin/merge.sh" "$@" ;;
-  link)    exec bash "$CRUX_HOME/bin/link.sh" "$@" ;;
-  workspace) exec bash "$CRUX_HOME/bin/workspace.sh" "$@" ;;
-  task)    exec bash "$CRUX_HOME/bin/task.sh" "$@" ;;
-  ship)    exec bash "$CRUX_HOME/bin/ship.sh" "$@" ;;
-  visual)  exec bash "$CRUX_HOME/bin/visual.sh" "$@" ;;
-  hooks)   exec bash "$CRUX_HOME/bin/hooks.sh" "$@" ;;
-  mcp)     exec bash "$CRUX_HOME/bin/mcp.sh" "$@" ;;
-  stg)     exec bash "$CRUX_HOME/bin/stg.sh" "$@" ;;
-  usage)   exec node "$CRUX_HOME/bin/usage.mjs" "$@" ;;
-  skill)   exec node "$CRUX_HOME/bin/skill.mjs" "$@" ;;
-  memory)  exec bash "$CRUX_HOME/bin/memory.sh" "$@" ;;
-  profile)  exec bash "$CRUX_HOME/bin/profile.sh" "$@" ;;
-  doctor)  exec bash "$CRUX_HOME/bin/doctor.sh" "$@" ;;
-  status)  exec bash "$CRUX_HOME/bin/status.sh" "$@" ;;
-  sync)    exec bash "$CRUX_HOME/bin/sync.sh" "$@" ;;
-  upgrade) exec bash "$CRUX_HOME/bin/upgrade.sh" "$@" ;;
-  release) exec bash "$CRUX_HOME/bin/release.sh" "$@" ;;
-  version|--version|-v) echo "crux $(crux_version) — $CRUX_HOME" ;;
-  help|-h|--help) usage ;;
-  *) err "unknown subcommand: $cmd"; echo; usage; exit 1 ;;
-esac
+#
+# The commands are one binary. This finds the one that belongs to this kernel
+# —installed next to it as bin/crux-core, or built from rs/— and runs it, so a
+# clone of the repo works right after `cargo build`. `crux help` lists the
+# commands.
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+export CRUX_HOME="$here"
+# From a clone, the most recent build: `cargo build` writes debug, and running
+# an older release beside it tests code that is no longer the source.
+built="$here/rs/target/release/crux"
+[[ "$here/rs/target/debug/crux" -nt "$built" ]] && built="$here/rs/target/debug/crux"
+for c in "${CRUX_BIN:-}" "$here/bin/crux-core" "$built"; do
+  [[ -n "$c" && -x "$c" ]] && exec "$c" "$@"
+done
+echo "crux: the binary is missing — build it with: cargo build --release --manifest-path $here/rs/Cargo.toml" >&2
+exit 127

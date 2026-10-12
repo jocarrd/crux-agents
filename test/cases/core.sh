@@ -15,7 +15,7 @@ test_init_creates_a_conformant_structure() {
   assert_not_contains "$(cat "$docs/AGENTS.md")" "{{" "placeholders substituted"
 
   assert_exit 0 "doctor passes on a freshly created project" \
-    bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+    "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_init_is_deterministic() {
@@ -24,19 +24,18 @@ test_init_is_deterministic() {
   a="$(new_project one --repos "api")"
   b="$(new_project two --repos "api")"
 
-  local diff_out
-  diff_out="$(diff \
-    <(cd "$a" && find . -path ./.git -prune -o \( -type f -o -type l \) -print | sort) \
-    <(cd "$b" && find . -path ./.git -prune -o \( -type f -o -type l \) -print | sort) 2>&1)"
-  assert_eq "" "$diff_out" "two inits produce the same file tree"
+  local tree_a tree_b
+  tree_a="$(cd "$a" && find . -path ./.git -prune -o \( -type f -o -type l \) -print | sort)"
+  tree_b="$(cd "$b" && find . -path ./.git -prune -o \( -type f -o -type l \) -print | sort)"
+  assert_eq "$tree_a" "$tree_b" "two inits produce the same file tree"
 }
 
 test_init_rejects_invalid_names() {
   sandbox >/dev/null
   assert_exit 1 "rejects CamelCase" \
-    bash "$CRUX_HOME/bin/init.sh" MyProject --no-remote --parent "$CRUX_PROJECTS_DIR"
+    "$CRUX_HOME/bin/crux" init MyProject --no-remote --parent "$CRUX_PROJECTS_DIR"
   assert_exit 1 "rejects a nonexistent profile" \
-    bash "$CRUX_HOME/bin/init.sh" beta --no-remote --parent "$CRUX_PROJECTS_DIR" --profile invented
+    "$CRUX_HOME/bin/crux" init beta --no-remote --parent "$CRUX_PROJECTS_DIR" --profile invented
 }
 
 test_doctor_fails_without_a_contract() {
@@ -44,9 +43,9 @@ test_doctor_fails_without_a_contract() {
   local docs; docs="$(new_project gamma)"
   rm "$docs/crux.json"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "crux.json is missing" "reports the missing contract"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_detects_a_declared_repo_without_a_doc_folder() {
@@ -54,9 +53,9 @@ test_doctor_detects_a_declared_repo_without_a_doc_folder() {
   local docs; docs="$(new_project delta --repos "api")"
   rm -rf "$docs/repos/api"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "declared repo without a doc folder" "detects the missing folder"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # The auditable part of §7: if the code moved after the documentation, doctor
@@ -73,10 +72,10 @@ test_doctor_measures_drift_between_code_and_documentation() {
   git -C "$repo" add -A
   git -C "$repo" commit -qm "after the docs"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "code ↔ doc drift" "warns about the drift"
   assert_contains "$out" "api" "and says which repo"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # The negative: with no code repo having moved, it does not invent drift.
@@ -87,7 +86,7 @@ test_doctor_does_not_invent_drift_when_there_is_none() {
   # No `|| true`: a commit that cannot be made is reported, not hidden.
   git -C "$docs" commit -qm "documentation up to date" >/dev/null
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "documentation up to date with the code" "says so in the positive"
   assert_not_contains "$out" "code ↔ doc drift" "and raises no warning"
 }
@@ -97,9 +96,9 @@ test_doctor_detects_an_undeclared_folder() {
   local docs; docs="$(new_project epsilon --repos "api")"
   mkdir -p "$docs/repos/ghost"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "is not declared in crux.json" "detects the orphan folder"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # Cloning a repo into the project and forgetting to register it is the real
@@ -112,11 +111,11 @@ test_doctor_says_when_the_contract_is_not_valid_json() {
   local docs; docs="$(new_project broken --repos "api")"
   printf '{ "crux": "0.15.0", "project": ' > "$docs/crux.json"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "is not valid JSON" "says what is really going on"
   assert_not_contains "$out" "missing required field" "and does not blame fields that are there"
   assert_not_contains "$out" "is not declared" "nor invent undeclared repos"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_detects_an_undeclared_repo_on_disk() {
@@ -125,9 +124,9 @@ test_doctor_detects_an_undeclared_repo_on_disk() {
   local root; root="$(dirname "$docs")"
   git init -q "$root/web"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "web/ is on disk and not declared" "detects it"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # A workspace is a worktree sibling of the repo: warning about it would turn
@@ -140,7 +139,7 @@ test_doctor_does_not_mistake_a_workspace_for_an_undeclared_repo() {
   ( cd "$root/api" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init )
   git -C "$root/api" worktree add -q --detach "$root/api-ws-task" 2>/dev/null
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_not_contains "$out" "api-ws-task/ is on disk" "does not warn about the worktree"
 
   git -C "$root/api" worktree remove --force "$root/api-ws-task" 2>/dev/null
@@ -152,7 +151,7 @@ test_doctor_detects_a_diverging_claude_md() {
   rm "$docs/CLAUDE.md"
   echo "manual copy" > "$docs/CLAUDE.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "not a symlink" "detects the two sources that diverge"
 }
 
@@ -161,9 +160,9 @@ test_doctor_detects_broken_markdown_links() {
   local docs; docs="$(new_project eta)"
   echo "See [this](./does-not-exist.md)." >> "$docs/README.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "broken markdown links" "detects the broken link"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_detects_a_skill_without_frontmatter() {
@@ -172,7 +171,7 @@ test_doctor_detects_a_skill_without_frontmatter() {
   mkdir -p "$docs/.claude/skills/project/broken"
   echo "# no frontmatter" > "$docs/.claude/skills/project/broken/SKILL.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "skill without frontmatter" "detects the malformed skill"
 }
 
@@ -182,7 +181,7 @@ test_client_profile_does_not_write_in_the_foreign_repo() {
   local vendor="$CRUX_PROJECTS_DIR/client/vendor"
   mkdir -p "$vendor"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_no_file "$vendor/AGENTS.md" "link creates no pointers with a client profile"
   assert_no_file "$vendor/CLAUDE.md" "link creates no pointers with a client profile"
@@ -196,9 +195,9 @@ test_client_profile_detects_an_intrusion() {
   mkdir -p "$vendor"
   echo "x" > "$vendor/AGENTS.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "should not exist" "detects the write into someone else's code"
-  assert_exit 1 "the intrusion is an error, not a warning" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "the intrusion is an error, not a warning" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # The foreign repo may bring its own AGENTS.md, versioned by the client. It is
@@ -213,12 +212,12 @@ test_client_profile_respects_the_clients_agents() {
   git -C "$vendor" init -q
   git -C "$vendor" add AGENTS.md
   git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add agents"
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_not_contains "$out" "should not exist" "the client's AGENTS.md is not an intrusion"
   assert_contains "$out" "belongs to the client" "reports it as respected"
-  assert_exit 0 "doctor passes with the client's file" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "doctor passes with the client's file" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # But a pointer of ours is one, even if someone committed it into the foreign
@@ -233,9 +232,9 @@ test_client_profile_detects_the_committed_pointer() {
   git -C "$vendor" add AGENTS.md
   git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add pointer"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "should not exist" "the managed block gives the pointer away"
-  assert_exit 1 "still an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "still an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # With nothing the agent loads on its own, working in the client's repo does not
@@ -256,7 +255,7 @@ test_client_profile_writes_the_local_pointer_outside_git() {
   local vendor="$CRUX_PROJECTS_DIR/client5/vendor"
   new_client_repo "$vendor"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_file "$vendor/CLAUDE.local.md" "link writes the local pointer"
   assert_contains "$(cat "$vendor/CLAUDE.local.md")" "@../client5-docs/CLAUDE.md" "the import points to the docs repo"
@@ -274,12 +273,12 @@ test_client_profile_doctor_requires_the_local_pointer() {
   local vendor="$CRUX_PROJECTS_DIR/client6/vendor"
   new_client_repo "$vendor"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "has no CLAUDE.local.md" "detects the missing local pointer"
-  assert_exit 1 "and it is an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "and it is an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
-  assert_exit 0 "with the pointer written doctor passes" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  assert_exit 0 "with the pointer written doctor passes" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_client_profile_doctor_detects_the_unexcluded_pointer() {
@@ -287,12 +286,12 @@ test_client_profile_doctor_detects_the_unexcluded_pointer() {
   local docs; docs="$(new_project client7 --repos "vendor" --profile client-repo)"
   local vendor="$CRUX_PROJECTS_DIR/client7/vendor"
   new_client_repo "$vendor"
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   sed -i '/CLAUDE.local.md/d' "$vendor/.git/info/exclude"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "is not excluded from git" "detects that it could be committed"
-  assert_exit 1 "and it is an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "and it is an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_client_profile_respects_the_clients_own_claude_local() {
@@ -304,10 +303,10 @@ test_client_profile_respects_the_clients_own_claude_local() {
   git -C "$vendor" add CLAUDE.local.md
   git -C "$vendor" -c user.email=t@t -c user.name=t commit -qm "docs: add local"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_eq "# the client's" "$(cat "$vendor/CLAUDE.local.md")" "does not overwrite the client's versioned file"
-  assert_exit 0 "and doctor respects it" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "and doctor respects it" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_link_creates_pointers_with_the_import() {
@@ -316,7 +315,7 @@ test_link_creates_pointers_with_the_import() {
   local repo="$CRUX_PROJECTS_DIR/iota/api"
   mkdir -p "$repo"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_file "$repo/AGENTS.md" "AGENTS.md generated"
   assert_file "$repo/CLAUDE.md" "CLAUDE.md generated"
@@ -330,11 +329,11 @@ test_link_is_idempotent() {
   local repo="$CRUX_PROJECTS_DIR/kappa/api"
   mkdir -p "$repo"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   echo "the repo's own context" >> "$repo/AGENTS.md"
   local before; before="$(cat "$repo/AGENTS.md")"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_eq "$before" "$(cat "$repo/AGENTS.md")" "does not overwrite what the repo already had"
 }
@@ -346,12 +345,12 @@ test_link_does_not_overwrite_a_pointer_that_predates_the_block() {
   mkdir -p "$repo"
   printf '# api\n\nOwn context written by hand.\n' > "$repo/CLAUDE.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/link.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" link "$docs" 2>&1)"
   assert_contains "$out" "predate the managed block" "warns instead of overwriting"
   assert_contains "$(cat "$repo/CLAUDE.md")" "Own context written by hand" \
     "does not touch the file unless asked"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" --refresh >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" --refresh >/dev/null 2>&1
   local now; now="$(cat "$repo/CLAUDE.md")"
   assert_contains "$now" "crux:begin" "with --refresh it inserts the block"
   assert_contains "$now" "Own context written by hand" "and keeps what was there"
@@ -362,17 +361,13 @@ test_link_updates_the_block_without_touching_what_surrounds_it() {
   local docs; docs="$(new_project omega --repos "api")"
   local repo="$CRUX_PROJECTS_DIR/omega/api"
   mkdir -p "$repo"
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   printf '\n## Repo notes\n\nSomething that only matters here.\n' >> "$repo/CLAUDE.md"
   # Simulates the kernel changing the template
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace("## How we work here", "## How we used to work"));
-  ' "$repo/CLAUDE.md"
+  replace_text "$repo/CLAUDE.md" "## How we work here" "## How we used to work"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   local now; now="$(cat "$repo/CLAUDE.md")"
   assert_contains "$now" "## How we work here" "the block goes back to the template"
   assert_contains "$now" "Something that only matters here" "what is outside the block survives"
@@ -387,7 +382,7 @@ test_adopt_registers_an_existing_docs_repo() {
   : > "$docs/decisions/README.md"; : > "$docs/decisions/index.md"
   : > "$docs/repos/README.md"; : > "$docs/repos/service/README.md"
 
-  bash "$CRUX_HOME/bin/adopt.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" adopt "$docs" >/dev/null 2>&1
 
   assert_file "$docs/crux.json" "writes the contract"
   local cfg; cfg="$(cat "$docs/crux.json")"
@@ -403,7 +398,7 @@ test_adopt_says_how_to_restore_what_is_missing() {
   local docs="$CRUX_PROJECTS_DIR/bare/bare-docs"
   mkdir -p "$docs"
 
-  local out; out="$(bash "$CRUX_HOME/bin/adopt.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" adopt "$docs" 2>&1)"
   assert_contains "$out" "missing AGENTS.md" "doctor says what is missing"
   assert_contains "$out" "crux upgrade" "and adopt says what to restore it with"
 }
@@ -411,23 +406,18 @@ test_adopt_says_how_to_restore_what_is_missing() {
 test_adopt_does_not_overwrite_an_already_adopted_project() {
   sandbox >/dev/null
   local docs; docs="$(new_project mu)"
-  assert_exit 1 "refuses to re-adopt" bash "$CRUX_HOME/bin/adopt.sh" "$docs"
+  assert_exit 1 "refuses to re-adopt" "$CRUX_HOME/bin/crux" adopt "$docs"
 }
 
 test_upgrade_updates_the_declared_version() {
   sandbox >/dev/null
   local docs; docs="$(new_project nu)"
-  node -e '
-    const fs = require("fs");
-    const o = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    o.crux = "0.0.1";
-    fs.writeFileSync(process.argv[1], JSON.stringify(o, null, 2));
-  ' "$docs/crux.json"
+  json_set "$docs/crux.json" crux '"0.0.1"'
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "the kernel is" "doctor warns about the version gap"
 
-  bash "$CRUX_HOME/bin/upgrade.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" upgrade "$docs" >/dev/null 2>&1
   assert_contains "$(cat "$docs/crux.json")" "\"crux\": \"$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")\"" \
     "upgrade aligns the version"
 }
@@ -438,8 +428,8 @@ test_upgrade_restores_missing_pieces_without_overwriting_content() {
   echo "the project's own content" > "$docs/README.md"
   rm "$docs/decisions/README.md"
 
-  bash "$CRUX_HOME/bin/upgrade.sh" "$docs" --force >/dev/null 2>&1 || true
-  bash "$CRUX_HOME/bin/upgrade.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" upgrade "$docs" --force >/dev/null 2>&1 || true
+  "$CRUX_HOME/bin/crux" upgrade "$docs" >/dev/null 2>&1
 
   assert_file "$docs/decisions/README.md" "restores the piece that was missing"
 }
@@ -450,7 +440,7 @@ test_json_get_returns_the_whole_array() {
   echo '{"repos": ["one", "two", "three"]}' > "$f"
 
   local count
-  count="$(bash -c 'source "$1/lib/common.sh"; json_get "$2" repos' _ "$CRUX_HOME" "$f" | wc -l)"
+  count="$("$CRUX_BIN" __fn json_get "$f" repos | wc -l)"
   assert_eq "3" "$count" "the last element of the array is not lost"
 }
 
@@ -466,7 +456,7 @@ description: Test procedure.
 # do something
 EOF
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_symlink "$CLAUDE_SKILLS_DIR/do-something" \
     "$docs/.claude/skills/project/do-something" "Claude gets the link to the skill"
@@ -489,7 +479,7 @@ test_kernel_names_no_concrete_projects() {
   local hits
   # Todo el repo salvo test/, que necesita los nombres para buscarlos.
   hits="$(grep -rliE 'acme|demo-co|client|weather-app|personal-site' \
-    --exclude-dir=.git --exclude-dir=test --exclude-dir=node_modules \
+    --exclude-dir=.git --exclude-dir=test --exclude-dir=node_modules --exclude-dir=target \
     "$CRUX_HOME" 2>/dev/null | wc -l)"
   assert_eq "0" "$hits" "the kernel is free of project names"
 }
@@ -499,14 +489,14 @@ test_add_repo_registers_everything_at_once() {
   local docs; docs="$(new_project pi --repos "api")"
   mkdir -p "$CRUX_PROJECTS_DIR/pi/worker"
 
-  bash "$CRUX_HOME/bin/add-repo.sh" worker --description "Processes the queue." "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" add-repo worker --description "Processes the queue." "$docs" >/dev/null 2>&1
 
   assert_file "$docs/repos/worker/README.md" "creates the documentation folder"
   assert_contains "$(cat "$docs/crux.json")" '"worker"' "declares the repo in the contract"
   assert_contains "$(cat "$docs/repos/README.md")" "worker" "registers it in the index"
   assert_contains "$(cat "$docs/repos/worker/README.md")" "Processes the queue." "uses the given description"
   assert_file "$CRUX_PROJECTS_DIR/pi/worker/AGENTS.md" "generates the repo's pointers"
-  assert_exit 0 "the project stays conformant" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "the project stays conformant" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_adopt_does_not_invent_empty_repos_and_keeps_the_remotes() {
@@ -516,10 +506,10 @@ test_adopt_does_not_invent_empty_repos_and_keeps_the_remotes() {
   git -C "$root/old-docs" init -q
   echo "# by hand" > "$root/old-docs/README.md"
 
-  bash "$CRUX_HOME/bin/adopt.sh" "$root/old-docs" >/dev/null 2>&1 || true
+  "$CRUX_HOME/bin/crux" adopt "$root/old-docs" >/dev/null 2>&1 || true
   local cfg="$root/old-docs/crux.json"
-  assert_exit 0 "the contract is valid JSON" node -e 'JSON.parse(require("fs").readFileSync(process.argv[1]))' "$cfg"
-  assert_eq "0" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).repos.length)' "$cfg")" \
+  assert_exit 0 "the contract is valid JSON" "$CRUX_BIN" __fn valid_json "$cfg"
+  assert_eq "[]" "$(json_value "$cfg" repos)" \
     "with no repos, the list is empty and not a blank name"
 
   # A repo with a doc folder and an origin, with no remote in the docs repo.
@@ -527,7 +517,7 @@ test_adopt_does_not_invent_empty_repos_and_keeps_the_remotes() {
   mkdir -p "$root/old-docs/repos/service" "$root/service"
   git -C "$root/service" init -q
   git -C "$root/service" remote add origin "git@example.com:someone/service.git"
-  bash "$CRUX_HOME/bin/adopt.sh" "$root/old-docs" >/dev/null 2>&1 || true
+  "$CRUX_HOME/bin/crux" adopt "$root/old-docs" >/dev/null 2>&1 || true
   assert_contains "$(cat "$cfg")" "someone/service.git" "keeps the repo's remote even if the docs repo has none"
 }
 
@@ -538,12 +528,12 @@ test_add_repo_takes_the_remote_from_origin() {
   git init -q "$repo"
   git -C "$repo" remote add origin "git@example.com:another-account/worker.git"
 
-  bash "$CRUX_HOME/bin/add-repo.sh" worker "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" add-repo worker "$docs" >/dev/null 2>&1
 
   # Without this, clone would not know where to fetch the newly added repo from.
   assert_contains "$(cat "$docs/crux.json")" "another-account/worker.git" "records the remote it already has"
   assert_eq "git@example.com:another-account/worker.git" \
-    "$(source "$CRUX_HOME/lib/common.sh"; remote_url "$docs/crux.json" worker)" \
+    "$("$CRUX_BIN" __fn remote_url "$docs/crux.json" worker)" \
     "and clone knows how to compose it"
 }
 
@@ -551,7 +541,7 @@ test_add_repo_rejects_duplicates() {
   sandbox >/dev/null
   local docs; docs="$(new_project rho --repos "api")"
   assert_exit 1 "does not re-declare an existing repo" \
-    bash "$CRUX_HOME/bin/add-repo.sh" api "$docs"
+    "$CRUX_HOME/bin/crux" add-repo api "$docs"
 }
 
 test_no_command_hides_a_file_it_cannot_read() {
@@ -572,20 +562,14 @@ test_no_command_hides_a_file_it_cannot_read() {
   assert_eq "" "$findings" "no command reads a file while hiding the error"
 }
 
-test_the_library_does_not_override_shell_options() {
-  # A `set -e` inside the library silently kills whoever loads it with other
-  # options. It happened twice: in the suite and in doctor.
-  local out
-  out="$(bash -c '
-    set +e
-    source "$1/lib/common.sh"
-    false
-    echo SURVIVES
-  ' _ "$CRUX_HOME" 2>&1)"
-  assert_contains "$out" "SURVIVES" "loading the library does not enable set -e"
-
-  assert_eq "0" "$(grep -c '^set -' "$CRUX_HOME/lib/common.sh")" \
-    "the library sets no shell options"
+test_no_command_ends_the_process_on_its_own() {
+  # A command returns how it ended instead of calling exit: that is what lets
+  # the registry lock and temporary files be released on the way out, also
+  # when it fails halfway. In the shell version a library that set its own
+  # options killed whoever loaded it, twice, without a word.
+  local hits
+  hits="$(grep -rn 'process::exit' "$CRUX_HOME/rs/src" | grep -v 'rs/src/main.rs' | wc -l | tr -d ' ')"
+  assert_eq "0" "$hits" "only main ends the process"
 }
 
 test_doctor_detects_duplicate_adrs() {
@@ -600,9 +584,9 @@ test_doctor_detects_duplicate_adrs() {
 - **Status**: Accepted
 ADR
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "duplicate ADR" "detects the numbering collision"
-  assert_exit 1 "it is an error, not a warning" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "it is an error, not a warning" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # The fixtures of this case and of the next one are Spanish on purpose: the
@@ -615,15 +599,15 @@ test_doctor_detects_a_description_that_does_not_activate() {
   printf -- '---\nname: mute\ndescription: Ayuda con los despliegues del sistema.\n---\n\n# mute\n\nUsa esto cuando quieras.\n' \
     > "$docs/.claude/skills/project/mute/SKILL.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "does not say when to use it" "detects the mute description"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 
   # The "Usa esto" in the body must not count: if more is read, this detects nothing.
   mkdir -p "$docs/.claude/skills/project/good"
   printf -- '---\nname: good\ndescription: Hace algo concreto. Usa cuando pase X.\n---\n\n# good\n' \
     > "$docs/.claude/skills/project/good/SKILL.md"
-  out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_not_contains "$out" "'good'" "does not flag a description that does trigger"
 }
 
@@ -635,7 +619,7 @@ test_doctor_detects_pointers_that_predate_the_block() {
   printf '# api\n\nOld pointer.\n' > "$repo/CLAUDE.md"
   printf '# api\n\nOld pointer.\n' > "$repo/AGENTS.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "predates the managed block" "warns about the outdated pointers"
 }
 
@@ -647,15 +631,10 @@ test_the_index_description_reaches_the_repo_pointer() {
   assert_contains "$(cat "$docs/repos/README.md")" '`web/`' "init fills in the index table"
 
   # Editing the index is what a human does; the pointer must follow it.
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    fs.writeFileSync(f, fs.readFileSync(f, "utf8")
-      .replace("| `web/` | `psi/web` | What this repo does, in one line |",
-               "| `web/` | `psi/web` | Public front end in Next |"));
-  ' "$docs/repos/README.md"
+  replace_text "$docs/repos/README.md" "| \`web/\` | \`psi/web\` | What this repo does, in one line |" \
+    "| \`web/\` | \`psi/web\` | Public front end in Next |"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   assert_contains "$(head -1 "$CRUX_PROJECTS_DIR/psi/web/CLAUDE.md")" "Public front end in Next" \
     "the pointer picks up the index description"
@@ -678,9 +657,9 @@ test_doctor_detects_a_description_in_another_language() {
   printf -- '---\nname: mixed\ndescription: Purge the cache when the CDN is serving stale content after a deploy that changed the static assets.\n---\n\n# mixed\n' \
     > "$docs/.claude/skills/project/mixed/SKILL.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "seems to be in English" "detects the description in another language"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_the_contract_declares_the_language() {
@@ -698,13 +677,13 @@ test_link_keeps_the_kernel_catalog_in_the_index() {
 
   assert_contains "$(cat "$docs/AGENTS.md")" "crux:skills" "the index is born with the slot"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   local idx; idx="$(cat "$docs/AGENTS.md")"
   assert_contains "$idx" "\`end-session\`" "fills it with the kernel skills"
   assert_contains "$idx" "\`ship\`" "with all of them, not a hand-written list"
 
   # Regenerating does not duplicate: it is what happens when the block is badly substituted.
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   assert_eq "1" "$(grep -c '^<!-- crux:skills -->$' "$docs/AGENTS.md")" "the opening marker is still unique"
 }
 
@@ -712,13 +691,13 @@ test_clone_does_not_guess_where_to_fetch_things_from() {
   sandbox >/dev/null
   # With no template or default value, it stops instead of assuming a provider.
   local out
-  out="$(HOME="$SB/home-no-config" bash "$CRUX_HOME/bin/clone.sh" x --parent "$SB/empty" 2>&1)"
+  out="$(HOME="$SB/home-no-config" "$CRUX_HOME/bin/crux" clone x --parent "$SB/empty" 2>&1)"
   assert_contains "$out" "I do not know where to fetch" "without a remote it does not invent a URL"
 
   # With the docs repo present but no contract, it does not know what else to clone either.
   local withDocs="$SB/with-docs"
   mkdir -p "$withDocs/x/x-docs"; git init -q "$withDocs/x/x-docs"
-  out="$(bash "$CRUX_HOME/bin/clone.sh" x --parent "$withDocs" 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" clone x --parent "$withDocs" 2>&1)"
   assert_contains "$out" "no crux.json" "without a contract it does not know which repos the project brings"
 }
 
@@ -733,7 +712,7 @@ test_clone_does_not_clone_again_a_repo_already_cloned_elsewhere() {
     "$SB/app.git" "$SB/other.git" > "$parent/x/x-docs/crux.json"
 
   local out
-  out="$(bash "$CRUX_HOME/bin/clone.sh" x --parent "$parent" 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" clone x --parent "$parent" 2>&1)"
   assert_no_file "$parent/x/app/.git/HEAD" "a repo already on the machine is not cloned a second time"
   assert_contains "$out" "app is already at $parent/app — move it: mv $parent/app $parent/x/app" \
     "it says where the copy is and how to put it in its place"
@@ -749,8 +728,8 @@ test_the_remote_allows_a_per_repo_override() {
 JSON
 
   local own foreign
-  own="$(bash -c 'source "$1/lib/common.sh"; remote_url "$2" own' _ "$CRUX_HOME" "$cfg")"
-  foreign="$(bash -c 'source "$1/lib/common.sh"; remote_url "$2" foreign' _ "$CRUX_HOME" "$cfg")"
+  own="$("$CRUX_BIN" __fn remote_url "$cfg" own)"
+  foreign="$("$CRUX_BIN" __fn remote_url "$cfg" foreign)"
 
   assert_eq "git@github.com:mine/own.git" "$own" "yours comes from the template"
   assert_eq "https://other-host.com/team/foreign.git" "$foreign" "someone else's, from its override"
@@ -761,7 +740,7 @@ test_the_remote_is_also_composed_with_the_shortcut() {
   local cfg="$SB/shortcut.json"
   printf '{"remote":{"host":"gitlab.company.com","owner":"team/sub","protocol":"ssh"}}\n' > "$cfg"
   local url
-  url="$(bash -c 'source "$1/lib/common.sh"; remote_url "$2" api' _ "$CRUX_HOME" "$cfg")"
+  url="$("$CRUX_BIN" __fn remote_url "$cfg" api)"
   assert_eq "git@gitlab.company.com:team/sub/api.git" "$url" "the shortcut composes the URL"
 }
 
@@ -774,7 +753,7 @@ test_the_deduction_is_not_confused_by_repeated_names() {
   git -C "$repo" remote add origin "git@host.com:demo/demo.git"
 
   local tmpl
-  tmpl="$(bash -c 'source "$1/lib/common.sh"; remote_from_git "$2"' _ "$CRUX_HOME" "$repo")"
+  tmpl="$("$CRUX_BIN" __fn remote_from_git "$repo")"
   assert_eq "git@host.com:demo/{repo}.git" "$tmpl" "it only substitutes the last occurrence"
 }
 
@@ -785,27 +764,21 @@ test_doctor_warns_if_the_declared_remote_is_not_the_real_one() {
   mkdir -p "$repo"; git init -q "$repo"
   git -C "$repo" remote add origin "git@wherever.com:other/api.git"
 
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8"));
-    o.remote = { url: "git@github.com:mine/{repo}.git" };
-    fs.writeFileSync(f, JSON.stringify(o, null, 2));
-  ' "$docs/crux.json"
+  json_set "$docs/crux.json" remote '{"url":"git@github.com:mine/{repo}.git"}'
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "the contract says" "detects the divergence between contract and origin"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_init_does_not_assume_where_to_push_the_repo() {
   sandbox >/dev/null
   local out
-  out="$(HOME="$SB/clean" bash "$CRUX_HOME/bin/init.sh" sigma2 --parent "$CRUX_PROJECTS_DIR" 2>&1)"
+  out="$(HOME="$SB/clean" "$CRUX_HOME/bin/crux" init sigma2 --parent "$CRUX_PROJECTS_DIR" 2>&1)"
   assert_contains "$out" "I do not know where to push" "without --remote it does not pick a provider for you"
 
   # With a remote that is not GitHub: leaves the repo ready and says what is missing.
-  out="$(HOME="$SB/clean" bash "$CRUX_HOME/bin/init.sh" sigma3 --parent "$CRUX_PROJECTS_DIR" \
+  out="$(HOME="$SB/clean" "$CRUX_HOME/bin/crux" init sigma3 --parent "$CRUX_PROJECTS_DIR" \
     --remote 'git@gitlab.company.com:team/{repo}.git' 2>&1)"
   assert_contains "$out" "does not exist yet" "warns that it has to be created on the provider"
 
@@ -818,7 +791,7 @@ test_init_does_not_assume_where_to_push_the_repo() {
 test_init_states_the_visibility_when_it_cannot_apply_it() {
   sandbox >/dev/null
   local out
-  out="$(HOME="$SB/clean2" bash "$CRUX_HOME/bin/init.sh" tau2 --parent "$CRUX_PROJECTS_DIR" \
+  out="$(HOME="$SB/clean2" "$CRUX_HOME/bin/crux" init tau2 --parent "$CRUX_PROJECTS_DIR" \
     --remote 'git@gitlab.company.com:team/{repo}.git' --visibility private 2>&1)"
 
   # Outside GitHub a person creates the repo: if crux does not say so, it gets
@@ -850,18 +823,13 @@ test_link_does_not_fight_the_repos_formatter() {
   local docs; docs="$(new_project nu2 --repos "api")"
   local repo="$CRUX_PROJECTS_DIR/nu2/api"
   mkdir -p "$repo"
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
   # Simulates what a formatter does: aligning the table columns.
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    fs.writeFileSync(f, fs.readFileSync(f, "utf8")
-      .replace(/\| Moment \| What to invoke \|/, "| Moment                      | What to invoke |"));
-  ' "$repo/CLAUDE.md"
+  replace_text "$repo/CLAUDE.md" "| Moment | What to invoke |" "| Moment                      | What to invoke |"
   local formatted; formatted="$(cat "$repo/CLAUDE.md")"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   assert_eq "$formatted" "$(cat "$repo/CLAUDE.md")" \
     "does not revert the formatting: otherwise link and the formatter fight endlessly"
 }
@@ -871,18 +839,18 @@ test_the_projects_root_is_not_assumed() {
   # A kernel installed at a path that is not ~/Proyectos: its parent is the root.
   local root="$SB/dev"
   mkdir -p "$root/crux"
-  cp -r "$CRUX_HOME/lib" "$CRUX_HOME/VERSION" "$root/crux/"
+  cp "$CRUX_HOME/VERSION" "$root/crux/"
 
   local inferred
   inferred="$(env -u CRUX_PROJECTS_DIR CRUX_HOME="$root/crux" HOME="$SB/empty" \
-    bash -c 'source "$1/lib/common.sh"; projects_root' _ "$root/crux")"
+    "$CRUX_BIN" __fn projects_root)"
   assert_eq "$root" "$inferred" "the root comes from where the kernel lives"
 
   # What is declared wins over what is deduced.
   mkdir -p "$SB/other/.crux"
   printf 'CRUX_PROJECTS_DIR="/wherever"\n' > "$SB/other/.crux/config"
   inferred="$(env -u CRUX_PROJECTS_DIR CRUX_HOME="$root/crux" HOME="$SB/other" \
-    bash -c 'source "$1/lib/common.sh"; projects_root' _ "$root/crux")"
+    "$CRUX_BIN" __fn projects_root)"
   assert_eq "/wherever" "$inferred" "what is declared in the config rules"
 }
 
@@ -969,6 +937,7 @@ test_the_documentation_gate_stays_quiet_if_nothing_moved() {
 }
 
 test_the_inventory_tools_respect_the_root() {
+  needs node || return 0
   sandbox >/dev/null
   local root="$SB/my-things"
   mkdir -p "$root/one/one-docs/.claude/skills/project/something"
@@ -985,14 +954,15 @@ test_the_inventory_tools_respect_the_root() {
 test_every_command_is_documented() {
   # Adding a command and forgetting to document it already happened with `clone`,
   # and nobody noticed until it was looked for by hand.
-  local missing_items=0
-  for f in "$CRUX_HOME"/bin/*.sh; do
-    local cmd; cmd="$(basename "$f" .sh)"
+  local missing_items=0 help cmd
+  help="$("$CRUX_HOME/bin/crux" help)"
+  # Every command with its own usage text, which lives next to its code.
+  for cmd in $(grep -oE '^        "[a-z-]+" => r#"' "$CRUX_HOME/rs/src/help.rs" | cut -d'"' -f2); do
     # Those that are not subcommands of the dispatcher
     case "$cmd" in machine|release) continue ;; esac
 
-    grep -q "  $cmd)" "$CRUX_HOME/bin/crux" || { echo "      $cmd is not in the dispatcher"; missing_items=$((missing_items+1)); }
-    grep -q "crux $cmd" "$CRUX_HOME/bin/crux" || { echo "      $cmd is not in the help"; missing_items=$((missing_items+1)); }
+    grep -qE "\"$cmd\" (=>|\|)" "$CRUX_HOME/rs/src/cmd/mod.rs" || { echo "      $cmd is not in the dispatcher"; missing_items=$((missing_items+1)); }
+    grep -q "crux $cmd" <<< "$help" || { echo "      $cmd is not in the help"; missing_items=$((missing_items+1)); }
     grep -q "crux $cmd" "$CRUX_HOME/README.md" || { echo "      $cmd is not in the README"; missing_items=$((missing_items+1)); }
     grep -q "crux $cmd" "$CRUX_HOME/STANDARD.md" || { echo "      $cmd is not in STANDARD.md"; missing_items=$((missing_items+1)); }
   done
@@ -1013,17 +983,17 @@ test_release_requires_the_version_to_come_by_proposal() {
   local out
 
   # release runs from the kernel repository, so the case goes there explicitly.
-  out="$(cd "$CRUX_HOME" && bash "$CRUX_HOME/bin/release.sh" one.two 2>&1)"
+  out="$(cd "$CRUX_HOME" && "$CRUX_HOME/bin/crux" release one.two 2>&1)"
   assert_contains "$out" "must be semver" "requires semver"
 
   # The version number is bumped in VERSION by proposal; release only tags.
   # If VERSION does not match, that proposal is missing.
-  out="$(cd "$CRUX_HOME" && bash "$CRUX_HOME/bin/release.sh" 99.0.0 2>&1)"
+  out="$(cd "$CRUX_HOME" && "$CRUX_HOME/bin/crux" release 99.0.0 2>&1)"
   assert_contains "$out" "bump it to 99.0.0 by proposal" "does not commit the version on its own"
 }
 
 test_release_publishes_the_notes_it_generates() {
-  local src; src="$(cat "$CRUX_HOME/bin/release.sh")"
+  local src; src="$(cat "$CRUX_HOME/rs/src/cmd/release.rs")"
   assert_contains "$src" "gh release create" "the notes do not stay in the tag"
   assert_contains "$src" "gh not authenticated" "and without gh it says so instead of failing"
 }
@@ -1039,11 +1009,11 @@ test_release_verifies_whoever_consumes_the_kernel() {
     > "$docs/crux.json"
 
   local out
-  out="$(cd "$CRUX_HOME" && CRUX_PROJECTS_DIR="$root" bash "$CRUX_HOME/bin/release.sh" 99.0.0 2>&1)"
+  out="$(cd "$CRUX_HOME" && CRUX_PROJECTS_DIR="$root" "$CRUX_HOME/bin/crux" release 99.0.0 2>&1)"
   assert_contains "$out" "stops meeting the standard" "detects the broken consumer"
   assert_contains "$out" "not publishing" "and stops"
   assert_exit 1 "exits with an error" \
-    env CRUX_PROJECTS_DIR="$root" bash -c 'cd "$CRUX_HOME" && exec bash bin/release.sh 99.0.0'
+    env CRUX_PROJECTS_DIR="$root" bash -c 'cd "$CRUX_HOME" && exec bin/crux release 99.0.0'
 }
 
 test_kernel_references_no_skills_that_do_not_exist() {
@@ -1142,26 +1112,26 @@ test_the_machine_detects_that_there_are_no_hooks() {
   sandbox >/dev/null
   local empty="$SB/empty-settings.json"; echo '{}' > "$empty"
   # A broken hook was visible; none at all was not. And that is the case of a new machine.
-  local out; out="$(CLAUDE_SETTINGS="$empty" bash "$CRUX_HOME/bin/machine.sh" 2>&1 || true)"
+  local out; out="$(CLAUDE_SETTINGS="$empty" "$CRUX_HOME/bin/crux" machine 2>&1 || true)"
   assert_contains "$out" "no crux hook installed" "warns about a machine with no hooks"
 
-  out="$(CLAUDE_SETTINGS="$SB/does-not-exist.json" bash "$CRUX_HOME/bin/machine.sh" 2>&1 || true)"
+  out="$(CLAUDE_SETTINGS="$SB/does-not-exist.json" "$CRUX_HOME/bin/crux" machine 2>&1 || true)"
   assert_contains "$out" "no hook is installed" "and about one with no settings at all"
 }
 
 test_code_repos_also_protect_their_main_branch() {
   # The kernel and the docs repo were protected, and not the code repos, which
   # is where almost all the work happens.
-  local src; src="$(cat "$CRUX_HOME/bin/hooks.sh")"
-  assert_contains "$src" 'install_pre_push "$root/$repo"' "pre-push in the code repos too"
+  local src; src="$(cat "$CRUX_HOME/rs/src/cmd/hooks.rs")"
+  assert_contains "$src" 'install_pre_push(&dir)' "pre-push in the code repos too"
 }
 
 test_bringing_a_project_in_leaves_its_hooks_in_place() {
   # A new machine is set up with bootstrap or by cloning project by project. By
   # both routes it ended up without a single hook, and without them nothing is automatic.
-  assert_contains "$(cat "$CRUX_HOME/bin/bootstrap.sh")" "hooks.sh\" install" \
+  assert_contains "$(cat "$CRUX_HOME/rs/src/cmd/bootstrap.rs")" '"hooks", &["install"]' \
     "bootstrap hooks up each project it brings"
-  assert_contains "$(cat "$CRUX_HOME/bin/clone.sh")" "hooks.sh\" install" \
+  assert_contains "$(cat "$CRUX_HOME/rs/src/cmd/clone.rs")" '"hooks", &["install"]' \
     "and clone those of the project it clones"
 }
 
@@ -1171,24 +1141,24 @@ test_add_repo_rejects_a_name_that_escapes_the_folder() {
   local docs; docs="$(new_project traversal --repos "api")"
 
   for bad_one in "../outside" "../../far" "with space" "sub/dir" ".hidden" "/abs"; do
-    assert_exit 1 "rejects '$bad_one'" bash "$CRUX_HOME/bin/add-repo.sh" "$bad_one" "$docs"
+    assert_exit 1 "rejects '$bad_one'" "$CRUX_HOME/bin/crux" add-repo "$bad_one" "$docs"
   done
 
   assert_no_file "$(dirname "$docs")/outside" "creates nothing outside the docs repo"
-  assert_eq "api" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).repos.join(","))' "$docs/crux.json")" \
+  assert_eq '["api"]' "$(json_value "$docs/crux.json" repos)" \
     "the contract is left intact"
 
   assert_exit 0 "and still accepts a valid name" \
-    bash "$CRUX_HOME/bin/add-repo.sh" "web-front" --description "x" "$docs"
+    "$CRUX_HOME/bin/crux" add-repo "web-front" --description "x" "$docs"
   # There are real repos in CamelCase: the validation is against harm, not style.
   assert_exit 0 "accepts CamelCase" \
-    bash "$CRUX_HOME/bin/add-repo.sh" "MyApp" --description "x" "$docs"
+    "$CRUX_HOME/bin/crux" add-repo "MyApp" --description "x" "$docs"
 }
 
 test_add_repo_escapes_the_pipes_in_the_description() {
   sandbox >/dev/null
   local docs; docs="$(new_project pipes)"
-  bash "$CRUX_HOME/bin/add-repo.sh" web --description "front | back" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" add-repo web --description "front | back" "$docs" >/dev/null 2>&1
 
   local row; row="$(grep '^| `web/`' "$docs/repos/README.md")"
   assert_contains "$row" '\|' "the pipe is escaped"
@@ -1200,16 +1170,12 @@ test_add_repo_escapes_the_pipes_in_the_description() {
 test_doctor_does_not_invent_a_repo_when_there_is_none() {
   sandbox >/dev/null
   local docs; docs="$(new_project norepos)"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.repos = [];
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json"
+  json_set "$docs/crux.json" repos '[]'
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_not_contains "$out" "/ has no AGENTS.md" "does not warn about a repo that does not exist"
   assert_contains "$out" "repos: 0 declared" "and counts zero"
-  assert_exit 0 "no errors" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "no errors" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_does_not_warn_about_a_patch_difference() {
@@ -1218,13 +1184,9 @@ test_doctor_does_not_warn_about_a_patch_difference() {
   local kernel; kernel="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
   local other_patch="${kernel%.*}.99"
   [[ "$other_patch" == "$kernel" ]] && other_patch="${kernel%.*}.98"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = process.argv[2];
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json" "$other_patch"
+  json_set "$docs/crux.json" crux "$(json_quote "$other_patch")"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_not_contains "$out" "crux upgrade" "one patch of difference does not send you to upgrade"
   assert_not_contains "$out" "is ahead of the kernel" "nor in the opposite direction"
 }
@@ -1233,13 +1195,9 @@ test_doctor_warns_about_a_series_jump() {
   sandbox >/dev/null
   local docs; docs="$(new_project ofseries)"
   local kernel; kernel="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = process.argv[2];
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json" "${kernel%%.*}.0.0"
+  json_set "$docs/crux.json" crux "$(json_quote "${kernel%%.*}.0.0")"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "crux upgrade" "a minor behind does get a warning"
 }
 
@@ -1247,19 +1205,15 @@ test_doctor_warns_about_a_series_jump() {
 test_upgrade_does_not_downgrade_the_contract_of_a_newer_project() {
   sandbox >/dev/null
   local docs; docs="$(new_project ahead)"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = "99.0.0";
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json"
+  json_set "$docs/crux.json" crux '"99.0.0"'
 
-  local out; out="$(bash "$CRUX_HOME/bin/upgrade.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" upgrade "$docs" 2>&1)"
   assert_contains "$out" "update the kernel" "says what to do instead of downgrading"
-  assert_exit 1 "and does not take it as good" bash "$CRUX_HOME/bin/upgrade.sh" "$docs"
-  assert_eq "99.0.0" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).crux)' "$docs/crux.json")" \
+  assert_exit 1 "and does not take it as good" "$CRUX_HOME/bin/crux" upgrade "$docs"
+  assert_eq "99.0.0" "$(json_get "$docs/crux.json" crux)" \
     "the contract is not touched"
 
-  local warning; warning="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local warning; warning="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$warning" "ahead of the kernel" "and doctor does not push toward a downgrade"
 }
 
@@ -1267,22 +1221,18 @@ test_upgrade_does_not_downgrade_the_contract_of_a_newer_project() {
 test_upgrade_in_dry_run_does_not_report_failure() {
   sandbox >/dev/null
   local docs; docs="$(new_project dry)"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.crux = "0.0.1";
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json"
+  json_set "$docs/crux.json" crux '"0.0.1"'
 
   assert_exit 0 "dry-run with pending work exits clean" \
-    bash "$CRUX_HOME/bin/upgrade.sh" "$docs" --dry-run
-  assert_eq "0.0.1" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).crux)' "$docs/crux.json")" \
+    "$CRUX_HOME/bin/crux" upgrade "$docs" --dry-run
+  assert_eq "0.0.1" "$(json_get "$docs/crux.json" crux)" \
     "and writes nothing"
 }
 
 # A template without a managed block was reported as written without touching anything.
 test_render_managed_tells_apart_a_template_without_a_block() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   local dir="$SB/rm"; mkdir -p "$dir"
   printf 'template without a block\n' > "$dir/tpl.md"
   printf '<!-- crux:begin -->\nold\n<!-- crux:end -->\n' > "$dir/dst.md"
@@ -1299,16 +1249,16 @@ test_doctor_detects_a_docs_repo_outside_git() {
   local docs; docs="$(new_project nogit)"
   rm -rf "$docs/.git"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "is not in git" "reports it"
   assert_not_contains "$out" "remote consistent with the contract" "and does not claim what it cannot know"
-  assert_exit 1 "it is an error, not a warning" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "it is an error, not a warning" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # A contract without a 'crux' field leaves "?", and sort -V put it above everything.
 test_version_comparison_ignores_what_is_not_semver() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
 
   assert_exit 1 "'?' is not greater than a version" version_greater_than "?" "0.6.0"
   assert_exit 1 "nor 'unknown'" version_greater_than "unknown" "0.6.0"
@@ -1324,9 +1274,9 @@ test_doctor_detects_unclosed_frontmatter() {
   printf -- '---\nname: broken\ndescription: use when something happens\n\n# body\n' \
     > "$docs/.claude/skills/project/broken/SKILL.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "unclosed frontmatter" "detects it"
-  assert_exit 1 "and it is an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "and it is an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 # clone ended in a conditional, so it exited with 1 after having gone well.
@@ -1344,7 +1294,7 @@ test_commands_do_not_end_in_a_conditional() {
 test_init_rejects_a_repo_that_escapes_the_folder() {
   sandbox >/dev/null
   assert_exit 1 "rejects the repo with a path" \
-    bash "$CRUX_HOME/bin/init.sh" leak --no-remote --parent "$CRUX_PROJECTS_DIR" --repos "../../ESCAPE,ok"
+    "$CRUX_HOME/bin/crux" init leak --no-remote --parent "$CRUX_PROJECTS_DIR" --repos "../../ESCAPE,ok"
   assert_no_file "$CRUX_PROJECTS_DIR/ESCAPE" "creates nothing outside"
   assert_no_file "$CRUX_PROJECTS_DIR/leak/ESCAPE" "nor inside the project"
 }
@@ -1353,7 +1303,7 @@ test_init_rejects_a_repo_that_escapes_the_folder() {
 # disappears when it is closed, and with it every skill on the machine.
 test_a_worktree_is_told_apart_from_its_main_repo() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   local repo="$SB/repo"
   mkdir -p "$repo" && git -C "$repo" init -q
   git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
@@ -1363,7 +1313,7 @@ test_a_worktree_is_told_apart_from_its_main_repo() {
   assert_exit 0 "the worktree is one" is_worktree "$SB/wt"
   assert_eq "$repo" "$(main_repo "$SB/wt")" "and it knows what it hangs from"
 
-  assert_contains "$(cat "$CRUX_HOME/install.sh")" "is_worktree" "install.sh checks it before touching anything"
+  assert_contains "$(cat "$CRUX_HOME/rs/src/cmd/install.rs")" "git::is_worktree" "the install checks it before touching anything"
 }
 
 # The cycle breaks silently if the step exists in the skill but the command that
@@ -1376,7 +1326,7 @@ test_the_cycle_leads_to_reviewing_the_proposal() {
   assert_contains "$(cat "$skill")" "name: review-pr" "and its name"
 
   assert_contains "$(cat "$CRUX_HOME/skills/flow/SKILL.md")" "/review-pr" "the cycle chains it"
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "/review-pr" "and finish reminds you of it"
+  assert_contains "$(cat "$CRUX_HOME"/rs/src/cmd/workspace/*.rs)" "/review-pr" "and finish reminds you of it"
 }
 
 test_review_gathers_the_proposals_material() {
@@ -1392,12 +1342,12 @@ test_review_gathers_the_proposals_material() {
   git -C "$repo" add -A
   git -C "$repo" -c user.email=t@t -c user.name=t commit -qm "feat: something"
 
-  local out; out="$(bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" review --repo "$repo" --base main 2>&1)"
   assert_contains "$out" "ws/task" "says which branch it reviews"
   assert_contains "$out" "src/app.sh" "and which files it touches"
   assert_contains "$out" "touches no test" "warns that there are no tests"
   assert_contains "$out" "unfinished-work markers" "and about what was left half done"
-  assert_exit 0 "finishes clean" bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main
+  assert_exit 0 "finishes clean" "$CRUX_HOME/bin/crux" review --repo "$repo" --base main
 }
 
 test_review_does_not_invent_a_review_without_changes() {
@@ -1406,9 +1356,9 @@ test_review_does_not_invent_a_review_without_changes() {
   mkdir -p "$repo" && git -C "$repo" init -q -b main
   git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
 
-  local out; out="$(bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" review --repo "$repo" --base main 2>&1)"
   assert_contains "$out" "nothing to review" "says so instead of printing an empty section"
-  assert_exit 1 "and exits with an error" bash "$CRUX_HOME/bin/review.sh" --repo "$repo" --base main
+  assert_exit 1 "and exits with an error" "$CRUX_HOME/bin/crux" review --repo "$repo" --base main
 }
 
 test_the_docs_repo_is_born_on_main() {
@@ -1425,13 +1375,9 @@ test_the_hook_protects_the_branch_the_project_declares() {
 
   local app; app="$(dirname "$docs")/app"
   mkdir -p "$app"; git -C "$app" init -q -b master
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); o.repos = ["app"];
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json"
+  json_set "$docs/crux.json" repos '["app"]'
 
-  ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  ( cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1 )
   local hook="$app/.git/hooks/pre-push"
   assert_contains "$(cat "$hook")" "refs/heads/master" "the code repo's hook watches that one"
   assert_not_contains "$(cat "$hook")" "refs/heads/main" "not one that does not exist"
@@ -1444,26 +1390,22 @@ test_the_docs_repo_is_pushed_directly() {
   local docs; docs="$(new_project direct)"
   mkdir -p "$docs/.git/hooks"
   printf '#!/usr/bin/env bash\n# Installed by crux hooks install.\nexit 1\n' > "$docs/.git/hooks/pre-push"
-  local out; out="$(cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install 2>&1)"
+  local out; out="$(cd "$docs" && "$CRUX_HOME/bin/crux" hooks install 2>&1)"
   assert_no_file "$docs/.git/hooks/pre-push" "install removes the pre-push crux put there"
   assert_contains "$out" "pre-push removed" "and says so"
   assert_file "$docs/.git/hooks/pre-commit" "doctor's pre-commit stays"
 
   printf '#!/usr/bin/env bash\n# mine\nexit 0\n' > "$docs/.git/hooks/pre-push"
-  ( cd "$docs" && bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1 )
+  ( cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1 )
   assert_file "$docs/.git/hooks/pre-push" "a pre-push that is not crux's is not touched"
 }
 
 # A project that predates the field declares nothing: what the repo uses rules.
 test_without_a_declared_branch_the_real_one_is_used() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   local docs; docs="$(new_project undeclared)"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const o = JSON.parse(fs.readFileSync(f, "utf8")); delete o.branch;
-    fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
-  ' "$docs/crux.json"
+  json_del "$docs/crux.json" branch
   git -C "$docs" branch -m main trunk
 
   assert_eq "trunk" "$(main_branch "$docs")" "falls back to the repo's real branch"
@@ -1476,7 +1418,7 @@ test_the_gate_mark_does_not_block_the_proposal() {
   mkdir -p "$repo" && git -C "$repo" init -q -b main
   git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new task --repo "$repo" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new task --repo "$repo" >/dev/null 2>&1
   local ws="$SB/app-ws-task"
   assert_file "$ws/../app/.git/info/exclude" "the exclude exists"
   printf 'abc\n' > "$ws/.crux-ship"
@@ -1486,7 +1428,7 @@ test_the_gate_mark_does_not_block_the_proposal() {
 test_the_contract_declares_the_main_branch() {
   sandbox >/dev/null
   local docs; docs="$(new_project declared --branch trunk)"
-  assert_eq "trunk" "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).branch)' "$docs/crux.json")" \
+  assert_eq "trunk" "$(json_get "$docs/crux.json" branch)" \
     "it is written in the contract"
   assert_eq "trunk" "$(git -C "$docs" rev-parse --abbrev-ref HEAD)" "and it is the repo's"
 }
@@ -1495,7 +1437,7 @@ test_the_contract_declares_the_main_branch() {
 # one leaves the hook blocking exactly the branch that has to be pushed.
 test_the_main_branch_is_not_the_worktrees() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   local repo="$SB/app"
   mkdir -p "$repo" && git -C "$repo" init -q -b main
   git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
@@ -1506,7 +1448,7 @@ test_the_main_branch_is_not_the_worktrees() {
 
 test_the_users_preferences_are_read_from_their_config() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   mkdir -p "$SB/home/.crux"
   printf 'CRUX_RM_DELETE_BRANCH=true\nCRUX_MERGE_CLOSE_WORKSPACE="true"\n' > "$SB/home/.crux/config"
 
@@ -1518,7 +1460,7 @@ test_the_users_preferences_are_read_from_their_config() {
 # A branch with work that is not integrated is not deleted because of a preference.
 test_the_branch_is_only_deleted_if_it_is_integrated() {
   sandbox >/dev/null
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "branch --merged" "rm checks integration before deleting"
+  assert_contains "$(cat "$CRUX_HOME"/rs/src/cmd/workspace/*.rs)" "branch --merged" "rm checks integration before deleting"
 }
 
 # adopt writes the current version onto a repo with no structure: if upgrade
@@ -1530,9 +1472,9 @@ test_upgrade_completes_an_adopted_project() {
   echo "# inherited" > "$docs/README.md"
   git -C "$docs" add -A
   git -C "$docs" -c user.email=t@t -c user.name=t commit -qm "docs: init"
-  ( cd "$docs" && bash "$CRUX_HOME/bin/adopt.sh" . >/dev/null 2>&1 )
+  ( cd "$docs" && "$CRUX_HOME/bin/crux" adopt . >/dev/null 2>&1 )
 
-  bash "$CRUX_HOME/bin/upgrade.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" upgrade "$docs" >/dev/null 2>&1
   for f in AGENTS.md decisions/README.md decisions/index.md repos/README.md; do
     assert_file "$docs/$f" "upgrade restores $f"
   done
@@ -1668,7 +1610,7 @@ test_install_dev_rejects_a_worktree() {
 test_release_runs_from_the_kernel_repo() {
   sandbox >/dev/null
   local outside="$SB/outside"; mkdir -p "$outside"
-  local out; out="$( cd "$outside" && bash "$CRUX_HOME/bin/release.sh" 9.9.9 2>&1 )"
+  local out; out="$( cd "$outside" && "$CRUX_HOME/bin/crux" release 9.9.9 2>&1 )"
   assert_contains "$out" "from the kernel repository" "says where it has to be run"
 }
 
@@ -1684,7 +1626,7 @@ test_status_gathers_projects_workspaces_and_what_is_not_pushed() {
   git -C "$root/api" commit -q --allow-empty -m "feat: not pushed"
   echo loose > "$root/api/pending.txt"
 
-  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" status 2>&1)"
   assert_contains "$out" "lookout" "lists the project"
   assert_contains "$out" "1 repos" "and how many repos it declares"
   assert_contains "$out" "lookout/api" "points out the repo with pending work"
@@ -1700,9 +1642,9 @@ test_status_does_not_mistake_a_workspace_for_lost_work() {
   git -C "$root/api" config user.email t@t
   git -C "$root/api" config user.name t
   git -C "$root/api" commit -q --allow-empty -m init
-  bash "$CRUX_HOME/bin/workspace.sh" new task --repo "$root/api" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new task --repo "$root/api" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" status 2>&1)"
   assert_contains "$out" "ws/task" "the workspace shows up as a workspace"
   assert_not_contains "$out" "api-ws-task " "and its worktree is not counted as a repo with pending work"
 }
@@ -1714,7 +1656,7 @@ test_release_does_not_publish_with_an_old_installed_copy() {
   echo "0.0.1" > "$old/VERSION"
   echo "CRUX_HOME=\"$old\"" > "$matches/.crux/config"
 
-  local out; out="$(cd "$CRUX_HOME" && HOME="$matches" bash "$CRUX_HOME/bin/release.sh" 99.0.0 2>&1)"
+  local out; out="$(cd "$CRUX_HOME" && HOME="$matches" "$CRUX_HOME/bin/crux" release 99.0.0 2>&1)"
   assert_contains "$out" "the installed kernel is 0.0.1" "warns that it would publish with the old publisher"
   assert_contains "$out" "install.sh" "and says how to align it"
 }
@@ -1733,9 +1675,9 @@ test_doctor_rejects_an_adr_status_that_does_not_exist() {
 - **Consequences**: does not matter
 ADR
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "unrecognized Status" "names the invalid status"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_requires_superseded_to_say_by_whom() {
@@ -1752,9 +1694,9 @@ test_doctor_requires_superseded_to_say_by_whom() {
 - **Consequences**: does not matter
 ADR
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "the chain breaks there" "explains why it matters"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_detects_a_reference_to_an_adr_that_is_not_there() {
@@ -1771,9 +1713,9 @@ test_doctor_detects_a_reference_to_an_adr_that_is_not_there() {
 - **Consequences**: does not matter
 ADR
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "and it is not there" "detects the broken reference"
-  assert_exit 1 "exits with an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "exits with an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_accepts_the_seven_states_of_the_vocabulary() {
@@ -1831,7 +1773,7 @@ test_doctor_accepts_the_seven_states_of_the_vocabulary() {
 ADR
 
   assert_exit 0 "the full vocabulary passes" \
-    bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+    "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_warns_about_a_doc_that_nobody_links() {
@@ -1840,9 +1782,9 @@ test_doctor_warns_about_a_doc_that_nobody_links() {
   mkdir -p "$docs/operations"
   echo "# Something nobody mentions" > "$docs/operations/lost.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "nobody links to operations/lost.md" "names the orphan document"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_sees_the_repo_that_only_exists_on_the_remote() {
@@ -1865,12 +1807,12 @@ GH
   chmod +x "$fake/gh"
 
   local out
-  out="$(PATH="$fake:$PATH" bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  out="$(PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
 
   assert_contains "$out" "kappa-forgotten is on the remote" "names the repo that only lives on the remote"
   assert_not_contains "$out" "other-thing is on the remote" "the rest of the account is none of its business"
   assert_not_contains "$out" "kappa-docs is on the remote" "the docs repo itself is not reported"
-  assert_exit 0 "it is a warning, not an error" env PATH="$fake:$PATH" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" env PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_warns_about_credentials_in_the_documentation() {
@@ -1890,11 +1832,11 @@ Xk7pQm2ZrT9wLb4V
 Deploy token: `ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
 DOC
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
 
   assert_contains "$out" "possible loose password" "sees the password inside the block"
   assert_contains "$out" "GitHub token" "sees the token by its format"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_doctor_does_not_mistake_configuration_for_credentials() {
@@ -1919,7 +1861,7 @@ The example password is changeme-dev
 ```
 DOC
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
 
   assert_not_contains "$out" "credential in the documentation" "syntax and examples are not secrets"
 }
@@ -1944,7 +1886,7 @@ GH
   chmod +x "$fake/gh"
 
   local out rc=0
-  out="$(cd "$repo" && PATH="$fake:$PATH" bash "$CRUX_HOME/bin/merge.sh" 7 2>&1)" || rc=$?
+  out="$(cd "$repo" && PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" merge 7 2>&1)" || rc=$?
 
   assert_contains "$out" "does not exist in someone/project-a" "says which repository it looked in"
   assert_eq "1" "$rc" "stops instead of merging blindly"
@@ -1953,7 +1895,7 @@ GH
 test_merge_requires_a_number() {
   sandbox >/dev/null
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/merge.sh" any-branch 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" merge any-branch 2>&1)" || rc=$?
   assert_contains "$out" "integer" "rejects what is not a number"
   assert_eq "1" "$rc" "exits with an error"
 }
@@ -1970,12 +1912,12 @@ test_doctor_warns_about_the_runbook_unverified_for_half_a_year() {
   printf '# Rotate the keys\n\n> Última verificación: 2020-01-15\n\nSteps.\n' \
     > "$docs/operations/legacy.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
 
   assert_contains "$out" "operations/old.md unverified" "names the one that expired"
   assert_contains "$out" "operations/legacy.md unverified" "also when it carries the old label"
   assert_not_contains "$out" "operations/recent.md unverified" "the recently checked one does not bother"
-  assert_exit 0 "it is a warning, not an error" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "it is a warning, not an error" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_status_tells_an_unreadable_contract_from_an_absent_one() {
@@ -1984,11 +1926,11 @@ test_status_tells_an_unreadable_contract_from_an_absent_one() {
   # Truncated halfway: it is neither absent nor readable.
   printf '{\n  "crux": "0.36.0",\n  "project": "s",\n  "profile": "mul' > "$docs/crux.json"
 
-  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" status 2>&1)"
   assert_contains "$out" "unreadable" "a broken contract is reported, not counted as zero repos"
   assert_not_contains "$out" "0 repos" "zero looked like data and was not"
 
-  assert_exit 1 "and --check exits 1, like memory's" bash "$CRUX_HOME/bin/status.sh" --check
+  assert_exit 1 "and --check exits 1, like memory's" "$CRUX_HOME/bin/crux" status --check
 }
 
 test_a_users_own_profile_survives_the_kernel() {
@@ -1999,11 +1941,11 @@ test_a_users_own_profile_survives_the_kernel() {
     > "$matches/.crux/profiles/solo.json"
 
   local docs="$CRUX_PROJECTS_DIR/mp/mp-docs"
-  env HOME="$matches" bash "$CRUX_HOME/bin/init.sh" mp --no-remote \
+  env HOME="$matches" "$CRUX_HOME/bin/crux" init mp --no-remote \
     --parent "$CRUX_PROJECTS_DIR" --profile solo >/dev/null 2>&1
   assert_file "$docs/crux.json" "init accepts a profile that only exists in ~/.crux/profiles"
 
-  local out; out="$(env HOME="$matches" bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$(env HOME="$matches" "$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_not_contains "$out" "unknown profile" "and doctor recognizes it"
   assert_contains "$out" "profile solo" "by its name"
 }
@@ -2014,19 +1956,15 @@ test_the_project_can_overlay_a_profile_field() {
   # The project does not redefine the whole profile: it changes one field.
   printf '{"pointers":{"write":false}}\n' > "$docs/profile.json"
 
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "profile multi-repo" "it is still its profile"
   # multi-repo writes pointers; with the overlay, it does not.
   mkdir -p "$(dirname "$docs")/app" && git -C "$(dirname "$docs")/app" init -q
   printf '# someone else'"'"'s\n' > "$(dirname "$docs")/app/AGENTS.md"
   git -C "$(dirname "$docs")/app" add -A
   git -C "$(dirname "$docs")/app" commit -qm init
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8")); j.repos = ["app"];
-    fs.writeFileSync(f, JSON.stringify(j));
-  ' "$docs/crux.json"
-  out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  json_set "$docs/crux.json" repos '["app"]'
+  out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "belongs to the client" "the overlaid field rules over the kernel's"
 }
 
@@ -2034,12 +1972,12 @@ test_a_nonexistent_directory_does_not_hang_the_commands() {
   sandbox >/dev/null
   # find_docs_repo left the path empty and dirname "" returns "." forever.
   local out
-  out="$(timeout 10 bash "$CRUX_HOME/bin/doctor.sh" "$SB/does-not-exist" 2>&1)"
+  out="$(timeout 10 "$CRUX_HOME/bin/crux" doctor "$SB/does-not-exist" 2>&1)"
   local rc=$?
   assert_eq "yes" "$([[ $rc -ne 124 ]] && echo yes || echo no)" "doctor does not hang"
   assert_contains "$out" "no docs repo found" "and says it finds nothing there"
 
-  out="$(timeout 10 bash "$CRUX_HOME/bin/link.sh" "$SB/does-not-exist" 2>&1)"
+  out="$(timeout 10 "$CRUX_HOME/bin/crux" link "$SB/does-not-exist" 2>&1)"
   rc=$?
   assert_eq "yes" "$([[ $rc -ne 124 ]] && echo yes || echo no)" "neither does link"
 }
@@ -2048,7 +1986,7 @@ test_the_profile_rules_are_written_and_verified() {
   sandbox >/dev/null
   local docs; docs="$(new_project rp)"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   local agents; agents="$(cat "$docs/AGENTS.md")"
   assert_contains "$agents" "crux:begin profile" "link writes the profile rules block"
   assert_contains "$agents" "A repo's specific documentation lives in" \
@@ -2060,11 +1998,8 @@ test_the_profile_rules_are_written_and_verified() {
   assert_contains "$agents" $'automatic checks.\n\n- ' "with a blank line before the list"
 
   # If someone deletes them, doctor says so instead of staying quiet.
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/<!-- crux:begin profile[\s\S]*?crux:end -->/, ""));
-  ' "$docs/AGENTS.md"
-  assert_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "profile rules are not in AGENTS.md" \
+  replace_block "$docs/AGENTS.md" "<!-- crux:begin profile" "crux:end -->" ""
+  assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "profile rules are not in AGENTS.md" \
     "doctor warns when the block is not there"
 }
 
@@ -2074,17 +2009,14 @@ test_link_in_a_docs_repo_workspace_writes_to_the_workspace() {
   # the main checkout and leave the workspace with nothing to propose.
   sandbox >/dev/null
   local docs; docs="$(new_project wsdocs)"
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   git -C "$docs" add -A >/dev/null 2>&1; git -C "$docs" commit -qm linked >/dev/null 2>&1
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/<!-- crux:begin profile[\s\S]*?crux:end -->/, "<!-- crux:begin profile -->old<!-- crux:end -->"));
-  ' "$docs/AGENTS.md"
+  replace_block "$docs/AGENTS.md" "<!-- crux:begin profile" "crux:end -->" "<!-- crux:begin profile -->old<!-- crux:end -->"
   git -C "$docs" commit -qam "stale block"
   local ws; ws="$(dirname "$docs")/wsdocs-docs-ws-relink"
   git -C "$docs" worktree add -q -b ws/relink "$ws" 2>/dev/null
 
-  ( cd "$ws" && bash "$CRUX_HOME/bin/link.sh" >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" link >/dev/null 2>&1 )
   assert_contains "$(cat "$ws/AGENTS.md")" "Rules of the" "the workspace gets the block"
   assert_eq "" "$(git -C "$docs" status --porcelain)" "and the main checkout is left alone"
 }
@@ -2095,12 +2027,12 @@ test_the_old_profile_block_marker_is_still_recognized() {
   sandbox >/dev/null
   local docs; docs="$(new_project rpold)"
 
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   sed -i 's/crux:begin profile/crux:begin perfil/' "$docs/AGENTS.md"
 
-  assert_not_contains "$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)" "profile rules are not in AGENTS.md" \
+  assert_not_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "profile rules are not in AGENTS.md" \
     "doctor accepts the old marker"
-  bash "$CRUX_HOME/bin/link.sh" "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
   assert_eq "1" "$(grep -cE 'crux:begin (perfil|profile)' "$docs/AGENTS.md")" \
     "link updates the block in place instead of adding a second one"
 }
@@ -2117,7 +2049,7 @@ test_a_crux_json_in_the_code_repo_is_not_the_contract() {
   printf '{"crux":"0.1.0","project":"bad","profile":"multi-repo","branch":"theirs","sections":[]}\n' \
     > "$root/app/crux.json"
 
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   local found; found="$(find_docs_repo "$root/app")"
   assert_eq "$root/impersonated-docs" "$found" "the docs repo rules, not the code repo's crux.json"
   assert_eq "main" "$(main_branch "$root/app")" "and the main branch does not come from the impersonated contract"
@@ -2125,38 +2057,42 @@ test_a_crux_json_in_the_code_repo_is_not_the_contract() {
 
 test_install_does_not_accept_a_version_that_is_a_path() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   assert_exit 1 "a version with traversal does not pass" is_semver "../../something"
   assert_exit 1 "nor an empty one" is_semver ""
   assert_exit 0 "and a normal one does" is_semver "1.2.3"
-  assert_contains "$(cat "$CRUX_HOME/install.sh")" 'is_semver "$INSTALLED_VERSION"' \
-    "install.sh checks it before composing the path it deletes"
+  assert_contains "$(cat "$CRUX_HOME/rs/src/cmd/install.rs")" 'project::is_semver(&version)' \
+    "the install checks it before composing the path it deletes"
 }
 
 test_upgrade_does_not_open_with_a_version_it_cannot_compare() {
   sandbox >/dev/null
-  source "$CRUX_HOME/lib/common.sh"
+  crux_lib
   assert_exit 1 "0.28 is not semver" is_semver "0.28"
   assert_exit 1 "neither is unknown" is_semver "unknown"
-  local up; up="$(cat "$CRUX_HOME/bin/upgrade.sh")"
-  assert_contains "$up" 'is_semver "$TO"' "upgrade checks the kernel's"
-  assert_contains "$up" 'is_semver "$FROM"' "and the contract's"
+  # What it does, not how it is written: a contract with a version that
+  # cannot be compared stops the upgrade instead of opening the guard.
+  local docs; docs="$(new_project vc --repos "api")"
+  json_set "$docs/crux.json" crux '"unknown"'
+  local out rc=0
+  out="$("$CRUX_HOME/bin/crux" upgrade "$docs" 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "upgrade stops on the contract's version"
+  assert_contains "$out" "cannot be compared" "and says why"
 }
 
 test_the_commands_the_kernel_cites_exist() {
   # A message or a skill can only send you to run something that exists: if it
   # names an invented option, it leaves whoever follows it in a dead end.
-  local bad_items="" ref sub fl script
+  local bad_items="" ref sub fl
   while IFS= read -r ref; do
     sub="$(awk '{print $2}' <<<"$ref")"
-    script="$(grep -E "^[[:space:]]+$sub\)" "$CRUX_HOME/bin/crux" | grep -oE 'bin/[a-z.-]+' | head -1)"
-    if [[ -z "$script" ]]; then
-      [[ "$sub" == "version" ]] || bad_items+="$ref (the subcommand does not exist)"$'\n'
+    if ! grep -qE "\"$sub\" (=>|\|)" "$CRUX_HOME/rs/src/cmd/mod.rs"; then
+      bad_items+="$ref (the subcommand does not exist)"$'\n'
       continue
     fi
     for fl in $(grep -oE -- '--[a-z-]+' <<<"$ref"); do
-      grep -qF -- "$fl" "$CRUX_HOME/$script" "$CRUX_HOME"/lib/* 2>/dev/null \
-        || bad_items+="$ref ($fl is not in $script)"$'\n'
+      grep -rqF -- "$fl" "$CRUX_HOME/rs/src" 2>/dev/null \
+        || bad_items+="$ref ($fl is not in the commands' code)"$'\n'
     done
   done < <(
     # What is quoted in code quotes or carries some option counts as a
@@ -2173,9 +2109,9 @@ test_the_commands_the_kernel_cites_exist() {
 # have: they may only remain as the message that gives the new name.
 test_crux_options_are_in_english() {
   local hits old_items
-  hits="$(grep -rhE -- '^[[:space:]]+--(sin|con|todo|todos|solo|forzar|nuevo|borrar)(-[a-z]+)*\)' "$CRUX_HOME/bin" \
+  hits="$(grep -rhE -- '^[[:space:]]+"--(sin|con|todo|todos|solo|forzar|nuevo|borrar)(-[a-z]+)*" =>' "$CRUX_HOME/rs/src" \
     | grep -vc 'is now called' || true)"
-  old_items="$(grep -rhE -- '^[[:space:]]+--[a-z-]+\) die ".* is now called' "$CRUX_HOME/bin" | wc -l | tr -d ' ')"
+  old_items="$(grep -rhE -- '^[[:space:]]+"--[a-z-]+" => die!\(".* is now called' "$CRUX_HOME/rs/src" | wc -l | tr -d ' ')"
   assert_eq "0" "$hits" "no crux option is in Spanish"
   assert_eq "3" "$old_items" "the three old ones only remain to say their new name"
 }
@@ -2213,12 +2149,12 @@ test_install_moves_the_claude_plugin_of_the_previous_kernel() {
 test_hooks_install_loads_the_plugin_only_in_claude() {
   sandbox >/dev/null
   printf '{"env":{"CLAUDE_CODE_PLUGIN_DIRS":"/opt/other"}}' > "$CLAUDE_SETTINGS"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   assert_contains "$(cat "$CLAUDE_SETTINGS")" "/opt/other:$CRUX_HOME/adapters/claude/plugin" \
     "install adds the Claude plugin next to the ones that were already there"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   assert_eq 1 "$(grep -o 'adapters/claude/plugin' "$CLAUDE_SETTINGS" | wc -l | tr -d ' ')" "reinstalling does not duplicate it"
-  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
   local settings; settings="$(cat "$CLAUDE_SETTINGS")"
   assert_not_contains "$settings" "adapters/claude/plugin" "remove takes it out"
   assert_contains "$settings" "/opt/other" "and leaves the plugins that are not crux's"
@@ -2241,16 +2177,16 @@ test_hooks_install_registers_the_hooks_in_codex() {
   local f="$CODEX_HOME_DIR/hooks.json"
   mkdir -p "$CODEX_HOME_DIR"
   printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/opt/mine.sh"}]}]}}' > "$f"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   local h; h="$(cat "$f")"
   assert_contains "$h" "$CRUX_HOME/adapters/claude/hooks/session-sync.sh" "Codex gets the reminder when a session opens"
   assert_contains "$h" "adapters/codex/hooks/contexto.sh" "the context hooks go through the JSON wrapper"
   assert_contains "$h" "destructive-guard.sh" "and the guards"
   assert_not_contains "$h" "memory-guard" "not the memory one, which checks Claude's"
   assert_contains "$h" "/opt/mine.sh" "the user's own hooks stay"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   assert_eq 1 "$(grep -o 'session-sync.sh' "$f" | wc -l | tr -d ' ')" "reinstalling does not duplicate them"
-  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
   h="$(cat "$f")"
   assert_not_contains "$h" "session-sync" "remove takes them out"
   assert_contains "$h" "/opt/mine.sh" "and leaves the user's own"
@@ -2259,7 +2195,7 @@ test_hooks_install_registers_the_hooks_in_codex() {
 test_hooks_install_does_not_create_codex_if_it_is_not_there() {
   sandbox >/dev/null
   rm -rf "$CODEX_HOME_DIR"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   assert_eq "no" "$([[ -e "$CODEX_HOME_DIR/hooks.json" ]] && echo yes || echo no)" "without Codex on the machine nothing is written"
 }
 

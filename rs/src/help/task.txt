@@ -1,0 +1,28 @@
+crux task — the record of the task of the workspace you are in.
+
+  crux task                        status, steps and next step
+  crux task path                   where the record is
+  crux task goal "<text>"          the objective: what and why
+  crux task scope "<text>"         what is in and what stays out
+  crux task plan <file>            dumps an approved plan and marks it planned
+  crux task add "<step>" [...]     adds steps and returns their id (T1, T2…)
+  crux task done <Tn> ["evidence"] marks a step done with what proves it
+  crux task next "<text>"          the next thing to do
+  crux task note "<what>" [--why "…"] [--where "…"] [--learned "…"]
+                                   a deviation or a decision taken along the way;
+                                   with --why it is a decision, and when the task is
+                                   archived it goes to repos/<repo>/notes.md of the docs repo
+  crux task status <status> [--force]
+  crux task wait --on "<who>" --ask "<what>" [--ref "<where>"] [--keep]
+                                   the task waits on another person: notes it and removes
+                                   the workspaces and branches that no longer add anything
+  crux task unwait                 the answer arrived: the task is work again
+  crux task list [--all] [--done]  the open tasks, with their next step; --done, the archived ones
+  crux task archive                closes it and sets it aside in done/, dated
+
+Outside a workspace, --task <project>/<task> says which one.
+
+The record lives in ~/.crux/tasks/<project>/<task>.md: local state, next to
+the workspace registry, and outside the repos. Not the code one —in a
+client's it cannot go, and a task spanning several repos would be split— nor
+the documentation one, which is for what lasts. See ADR-012.

@@ -14,28 +14,40 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
-      # The kernel scripts are bash and node, and the runner ships both. Nothing
-      # is installed: if this needed dependencies, the kernel itself would stop
-      # being installable on any machine.
+      # crux is one Rust binary; the runner ships cargo. What remains in shell
+      # is what runs where crux cannot be assumed (git hooks, skill scripts,
+      # agent adapters) and the suite itself.
       - name: Available tools
         run: |
+          cargo --version
           bash --version | head -1
-          node --version
           shellcheck --version | head -2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rs
+
+      - name: Format and lints of the binary
+        run: |
+          cargo fmt --manifest-path rs/Cargo.toml --check
+          cargo clippy --manifest-path rs/Cargo.toml --release -- -D warnings
+
+      - name: Unit tests of the binary
+        run: cargo test --manifest-path rs/Cargo.toml --release
 
       - name: Static analysis of the scripts
         run: |
           # SC1091: do not follow `source` of paths that are resolved at run
           # time. The rest is fixed.
           shellcheck --severity=warning --exclude=SC1091 \
-            bin/crux bin/*.sh lib/*.sh install.sh \
-            adapters/*/*.sh adapters/claude/hooks/*.sh \
-            skills/*/scripts/*.sh test/run.sh test/cases/*.sh
+            bin/crux install.sh \
+            adapters/*/*.sh adapters/*/hooks/*.sh \
+            skills/*/scripts/*.sh test/run.sh test/e2e.sh test/cases/*.sh
 
       - name: Kernel suite
         run: ./test/run.sh
@@ -48,30 +60,95 @@ jobs:
           git config --global user.name ci
           ./test/e2e.sh
 
+      # What travels between machines: a task started on one and resumed on
+      # another, and sync --leave refusing to leave work on one only.
+      - name: Two-machine battery
+        run: ./test/two-machines.sh
+
       # The suite runs in sandboxes; this checks the real installation path,
       # which is the first thing anyone runs on a new machine and the last thing
       # tested.
       - name: Clean install
         run: |
+          # A new machine for crux, with the Rust toolchain still where it is.
+          export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
           export HOME="$(mktemp -d)"
           ./install.sh --projects-dir "$HOME/projects"
           test -f "$HOME/.crux/config"
           test -x "$HOME/.local/bin/crux"
+          test -x "$HOME/.crux/kernel/$(cat VERSION)/bin/crux-core"
           test "$(ls "$HOME/.claude/skills" | wc -l)" -gt 0
+          "$HOME/.local/bin/crux" --version
 
       - name: A project from start to finish
         run: |
+          # A new machine for crux, with the Rust toolchain still where it is.
+          export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
           export HOME="$(mktemp -d)"
           export CRUX_HOME="$PWD"
           git config --global user.email ci@localhost
           git config --global user.name ci
           mkdir -p "$HOME/projects/demo/api"
 
-          bash bin/init.sh demo --no-remote --parent "$HOME/projects" --repos api
-          bash bin/link.sh "$HOME/projects/demo/demo-docs"
-          bash bin/doctor.sh "$HOME/projects/demo/demo-docs"
+          bin/crux init demo --no-remote --parent "$HOME/projects" --repos api
+          bin/crux link "$HOME/projects/demo/demo-docs"
+          bin/crux doctor "$HOME/projects/demo/demo-docs"
 
           # The generated pointer has to say how work is done, not just where the
           # documentation is: it is the only thing an agent reads on entering.
           grep -q "How we work here" "$HOME/projects/demo/api/CLAUDE.md"
           grep -q "crux:begin" "$HOME/projects/demo/api/AGENTS.md"
+
+  # macOS ships bash 3.2 and BSD tools. What runs on someone's machine —the
+  # binary, the launcher, the installer and the agent hooks— has to work with
+  # that, so this job uses the system's bash and installs nothing.
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rs
+
+      - name: Unit tests of the binary
+        run: cargo test --manifest-path rs/Cargo.toml --release
+
+      - name: Clean install
+        run: |
+          # A new machine for crux, with the Rust toolchain still where it is.
+          export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+          export HOME="$(mktemp -d)"
+          /bin/bash ./install.sh --projects-dir "$HOME/projects"
+          test -x "$HOME/.crux/kernel/$(cat VERSION)/bin/crux-core"
+          test "$(ls "$HOME/.claude/skills" | wc -l)" -gt 0
+          "$HOME/.local/bin/crux" --version
+
+      - name: A project from start to finish
+        run: |
+          # A new machine for crux, with the Rust toolchain still where it is.
+          export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+          export HOME="$(mktemp -d)"
+          git config --global user.email ci@localhost
+          git config --global user.name ci
+          /bin/bash ./install.sh --projects-dir "$HOME/projects"
+          crux="$HOME/.local/bin/crux"
+          mkdir -p "$HOME/projects/demo/api"
+          git -C "$HOME/projects/demo/api" init -q -b main
+          git -C "$HOME/projects/demo/api" commit -q --allow-empty -m "chore: start"
+
+          "$crux" init demo --no-remote --parent "$HOME/projects" --repos api
+          "$crux" link "$HOME/projects/demo/demo-docs"
+          "$crux" doctor "$HOME/projects/demo/demo-docs"
+          grep -q "How we work here" "$HOME/projects/demo/api/CLAUDE.md"
+
+          # A workspace and its agent hook, through the launcher of the
+          # installed version: that is the path an agent session takes.
+          (cd "$HOME/projects/demo/api" && "$crux" workspace new mac-check)
+          list="$("$crux" workspace list --all)"
+          [[ "$list" == *mac-check* ]]
+          echo '{"tool_input":{"command":"ls"}}' |
+            "$HOME/.crux/kernel/$(cat VERSION)/adapters/claude/hooks/destructive-guard.sh"
+          (cd "$HOME/projects/demo/api" && "$crux" workspace rm mac-check)

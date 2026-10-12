@@ -1,0 +1,25 @@
+[package]
+name = "crux"
+# The kernel's version is the VERSION file at the root; the crate is never
+# published on its own.
+version = "0.0.0"
+edition = "2021"
+description = "A working system for coding agents: a documentation standard, cross-agent skills and the tooling that keeps projects in line."
+license = "MIT"
+repository = "https://github.com/jocarrd/crux"
+publish = false
+
+[dependencies]
+chrono = "0.4.45"
+fancy-regex = "0.19.2"
+libc = "0.2.190"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+unicode-normalization = "0.1.25"
+
+[profile.release]
+# Installed on every machine: small and without symbols.
+lto = true
+codegen-units = 1
+strip = true

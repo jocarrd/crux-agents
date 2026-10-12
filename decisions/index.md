@@ -752,3 +752,54 @@
   `CRUX_PROFILE_REPO` pointing to their own profile.
 - **Related**: `ADR-015`, `ADR-016`, `STANDARD.md` §6 Agent auto-memory, §Multi-agent
 
+
+### ADR-019: The kernel is one Rust binary
+
+- **Date**: 2026-10-11
+- **Status**: Accepted
+- **Context**: the kernel was about 7,100 lines of bash and 4,000 of node, with
+  84 `node -e` calls only to read and write JSON. Every new command could bring
+  a new portability failure, and the first CI run on macOS measured how many
+  there were: 91 of the 303 cases it reached before its 15-minute limit failed
+  (BSD `wc` and `sed`, `/private/var` paths, bash 3.2 with empty arrays). Before
+  that, `timeout` was missing on macOS and BusyBox's `flock` had no `-w`.
+  Installing needed bash, node and git in certain versions, and the agent hooks
+  started bash and node on every message and every tool call.
+- **Decision**:
+  - The commands, the agent hooks and the libraries are one binary, `crux`,
+    built from `rs/`: a module per command over a shared foundation (paths and
+    config, the contract, the registry, task records and their replica,
+    templates, profiles, skills, checks).
+  - Output, exit codes and file formats do not change: agents, the Claude Code
+    plugin and older kernels on other machines read them.
+  - The black-box suite is the specification. Commands were ported one by one
+    behind one-line shell launchers, and the suite stayed green at each step.
+    Tests that read shell source now read the Rust source or became behaviour
+    tests; the library's functions are reachable one by one with `crux __fn`.
+  - The agent hooks are `crux hook <name>`. Their scripts stay as one-line
+    launchers, so the settings of every machine keep pointing where they did.
+  - Every rule crux applies is in the binary, also those a skill or a git hook
+    triggers: the commit-msg checks are `crux hook commit-msg`, the gate's
+    classifiers `crux ship scope` and `crux ship conventions`, the review's
+    `crux review scope`. A git hook crux installs is a launcher with the
+    project's settings baked in.
+  - What stays in shell, on purpose, is what only joins other programs or
+    starts the binary: launchers (`bin/crux`, the hooks), `install.sh` —which
+    obtains the binary from `CRUX_BIN`, a release placed as `bin/crux-core` or
+    `cargo build`, and hands over to `crux __install`—, skill scripts that wrap
+    another tool (curl, ffmpeg, a browser), and the test suite, which checks the
+    binary from outside as a person uses it. A skill whose script needs node
+    says so; crux itself never does.
+  - Discarded: TypeScript on node, which keeps the runtime dependency and gives
+    no single binary; Go, equally portable, without the type checking over the
+    contract's JSON that Rust gives.
+- **Consequences**: at run time only git is needed. Building from source needs
+  the Rust toolchain, and a release needs prebuilt binaries per platform so
+  that a person without Rust can install it. Contributors need Rust. The hooks
+  stop paying a node start per call. A command never ends the process on its
+  own: it returns how it ended, so its guards release the registry lock and
+  temporary files also when it fails halfway (enforced by
+  `test_no_command_ends_the_process_on_its_own`).
+- **Reversibility**: high cost. Going back is rewriting it again; what keeps it
+  safe is that the suite does not depend on the language.
+- **Related**: `ADR-016`, `ADR-018` (their formats are kept as they were)

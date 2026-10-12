@@ -1,0 +1,14 @@
+crux archive — mark a code repo of the project as archived, or bring it back.
+
+  crux archive <repo> --reason "<why>" [--no-remote]
+  crux unarchive <repo> [--no-remote]
+
+An archived repo is out of production but kept. The contract is what says
+so —`archived` in crux.json, with since and reason— whatever the git
+provider allows: on GitHub the remote is archived too and becomes read only;
+elsewhere crux still treats it as archived. Without this, a retired service
+kept its deploy workflow and a merge in its repo started deploying it again.
+
+From then on it is no longer in `repos`: clone, sync, link and doctor treat
+it as gone; workspace new and merge refuse to work in it, and its local clone
+refuses to push.

@@ -342,7 +342,7 @@ In cascade, three ways:
 2. `~/.crux/config`, which the installer wrote.
 3. Its own real path, resolved from the running script.
 
-That is why it works the same invoked as `crux`, as `bash bin/doctor.sh`, or
+That is why it works the same invoked as `crux`, as `bin/crux doctor`, or
 from a test with `$HOME` redirected. Zero hand-written absolute paths.
 
 ### Profiles: policy as data, not as prose
@@ -418,7 +418,7 @@ a plugin, receive the session's events and can draw in the interface.
 part, not a substitute:
 
 - **The task reminder as a panel** above the prompt, with a number to resume
-  each one. The data comes from `lib/task-sync.mjs`, just like the text of the
+  each one. The data comes from `crux __task-sync remind`, just like the text of the
   `session-sync` hook. The mod sets `CRUX_REMINDER_UI=panel` before the hook
   runs, and the hook then leaves its text for the model alone.
 - **The workspace's task in the prompt footer**, among the mode labels, updated
@@ -433,10 +433,9 @@ present.
 ### What happens when you run `crux doctor`
 
 ```
-bin/crux (dispatcher)
+bin/crux (launcher)
   └─ resolves CRUX_HOME from its real path
-  └─ exec bin/doctor.sh
-       └─ loads lib/common.sh
+  └─ exec the binary: crux doctor
        └─ find_docs_repo()        walks up the tree looking for crux.json
        └─ reads the contract
        └─ loads profiles/<profile>.json
@@ -522,10 +521,10 @@ A chain of gates where any one aborts:
 8. Commit       conventional commit that explains the why
 ```
 
-Gate 6 is the expensive one. A script classifies the diff and decides:
+Gate 6 is the expensive one. crux classifies the diff and decides:
 
 ```bash
-bash ~/.claude/skills/ship/scripts/diff-scope.sh
+crux ship scope
 ```
 
 | What it touches | What to validate |

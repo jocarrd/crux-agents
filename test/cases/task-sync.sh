@@ -27,8 +27,8 @@ en() {
     CRUX_REGISTRY="$SB/$m/registry.json" "$@"
 }
 
-engine() { local m="$1"; shift; en "$m" node "$CRUX_HOME/lib/task.mjs" "$@"; }
-replicate() { en "$1" node "$CRUX_HOME/lib/task-sync.mjs" sync --all; }
+engine() { local m="$1"; shift; en "$m" "$CRUX_HOME/bin/crux" __task "$@"; }
+replicate() { en "$1" "$CRUX_HOME/bin/crux" __task-sync sync --all; }
 task_record() { echo "$SB/$1/tasks/alpha/$2.md"; }
 
 _new_task() {
@@ -83,7 +83,7 @@ test_tasks_if_both_change_the_recent_wins_and_the_other_is_kept() {
   local out
   out="$(replicate A)"
   assert_contains "$(cat "$(task_record A t1)")" "version of A" "the most recent stays"
-  assert_contains "$(cat "$SB"/A/tasks/alpha/t1.conflicto-*.md 2>/dev/null)" "version of B" "the other is kept alongside"
+  assert_contains "$(cat "$SB"/A/tasks/alpha/t1.conflict-*.md 2>/dev/null)" "version of B" "the other is kept alongside"
   assert_contains "$out" "changed on both" "and it is warned"
 
   replicate B >/dev/null
@@ -131,7 +131,7 @@ test_tasks_without_network_stay_pending_and_leave_says_so() {
   mv "$SB/docs.git" "$SB/docs-away.git"
 
   replicate A >/dev/null
-  assert_contains "$(en A node "$CRUX_HOME/lib/task-sync.mjs" pending)" "alpha" "it is marked as pending"
+  assert_contains "$(en A "$CRUX_HOME/bin/crux" __task-sync pending)" "alpha" "it is marked as pending"
   local out rc
   out="$(en A crux sync --leave 2>&1)"; rc=$?
   assert_contains "$out" "unpublished tasks" "--leave counts it as stuck"
@@ -139,7 +139,7 @@ test_tasks_without_network_stay_pending_and_leave_says_so() {
 
   mv "$SB/docs-away.git" "$SB/docs.git"
   replicate A >/dev/null
-  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" pending)" "with network, it publishes and stops being pending"
+  assert_eq "" "$(en A "$CRUX_HOME/bin/crux" __task-sync pending)" "with network, it publishes and stops being pending"
   teardown
 }
 
@@ -189,7 +189,7 @@ test_tasks_the_reminder_informs_without_pushing() {
   engine B status --file "$(task_record B finished)" --to merged
 
   local out
-  out="$(en B node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/B/P/alpha/alpha-docs")"
+  out="$(en B "$CRUX_HOME/bin/crux" __task-sync remind --cwd "$SB/B/P/alpha/alpha-docs")"
   assert_contains "$out" "alpha/t1" "it shows the open one"
   assert_not_contains "$out" "alpha/finished" "not the one already merged"
   assert_contains "$out" "in case you want to resume one" "the person is offered it"
@@ -199,7 +199,7 @@ test_tasks_the_reminder_informs_without_pushing() {
   assert_contains "$out" '"tasks":[{"task":"alpha/t1"' "the reminder brings the tasks as data"
   assert_contains "$out" '"here":false' "and says whether they have a workspace on this machine"
 
-  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P")" "with no tasks, it says nothing"
+  assert_eq "" "$(en A "$CRUX_HOME/bin/crux" __task-sync remind --cwd "$SB/A/P")" "with no tasks, it says nothing"
   teardown
 }
 
@@ -232,7 +232,7 @@ test_tasks_returning_to_an_idle_session_reminds_once() {
   out="$(printf '%s' "$msg" | en A env HOME="$SB" bash "$hook")"
   assert_eq "" "$out" "the first message says nothing: session start already spoke"
 
-  touch -d "5 hours ago" "$SB/A/state/sessions/s2"
+  touch_ago 18000 "$SB/A/state/sessions/s2"
   out="$(printf '%s' "$msg" | en A env HOME="$SB" bash "$hook")"
   assert_contains "$out" "You are back in this session" "after hours idle, it says so"
   assert_contains "$out" "alpha/t1" "and reminds the task"
@@ -334,7 +334,7 @@ test_tasks_the_reminder_mentions_pending_conflicts() {
   _new_task A t1 "do X"
   echo "copy" > "$SB/A/tasks/alpha/t1.conflicto-remota.md"
 
-  assert_contains "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P/alpha")" \
+  assert_contains "$(en A "$CRUX_HOME/bin/crux" __task-sync remind --cwd "$SB/A/P/alpha")" \
     "of a conflict between machines" "they are not forgotten"
   teardown
 }
@@ -352,7 +352,7 @@ test_tasks_already_merged_close_themselves_and_are_not_reminded() {
   out="$(en A crux sync 2>&1)"
   assert_contains "$out" "already merged" "it says so"
   assert_no_file "$(task_record A old)" "with no workspace here, it is archived"
-  assert_eq "" "$(en A node "$CRUX_HOME/lib/task-sync.mjs" remind --cwd "$SB/A/P/alpha")" "and the reminder no longer shows it"
+  assert_eq "" "$(en A "$CRUX_HOME/bin/crux" __task-sync remind --cwd "$SB/A/P/alpha")" "and the reminder no longer shows it"
 
   replicate B >/dev/null
   assert_no_file "$(task_record B old)" "it does not reach the other machine as open"
@@ -425,14 +425,17 @@ test_tasks_the_sync_does_not_share_a_ref_with_git_fetch() {
 
   replicate A >/dev/null 2>&1
   rm -f "$docs/.git/refs/remotes/origin/crux/tasks.lock"
-  assert_eq "" "$(git -C "$docs" rev-parse -q --verify refs/remotes/origin/crux/tasks)" \
-    "the sync does not write the ref that git fetch owns"
+  # git 2.56 and later write that ref on a push, and skip it while a fetch
+  # holds it: whatever is there is the remote's branch now or before.
+  local tracked; tracked="$(git -C "$docs" rev-parse -q --verify refs/remotes/origin/crux/tasks)"
+  assert_eq "1" "$([[ -z "$tracked" ]] || git -C "$SB/docs.git" merge-base --is-ancestor "$tracked" refs/heads/crux/tasks && echo 1 || echo 0)" \
+    "the ref git fetch owns is never written by the sync with a value of its own"
 
   replicate B >/dev/null
   assert_file "$(task_record B t1)" "it publishes with a fetch holding that ref, and the other machine gets it"
   git -C "$SB/B/P/alpha/alpha-docs" fetch -q origin
   _new_task B t2 "do Y"
-  en B node "$CRUX_HOME/lib/task-sync.mjs" sync --all --fetched >/dev/null
+  en B "$CRUX_HOME/bin/crux" __task-sync sync --all --fetched >/dev/null
   replicate A >/dev/null
   assert_file "$(task_record A t2)" "also after a crux sync that already fetched"
   teardown
@@ -446,7 +449,7 @@ test_tasks_with_a_stale_already_fetched_branch_nothing_is_overwritten() {
   # B has fetched nothing and trusts what it has: its publication clashes with
   # the one from A, and the second pass has to go and fetch it.
   _new_task B by-b "b"
-  en B node "$CRUX_HOME/lib/task-sync.mjs" sync --all --fetched >/dev/null
+  en B "$CRUX_HOME/bin/crux" __task-sync sync --all --fetched >/dev/null
   replicate A >/dev/null
 
   assert_file "$(task_record B by-a)" "B ends up with the one from A"
@@ -458,7 +461,7 @@ test_task_sync_drops_the_marker_of_a_project_not_on_this_machine() {
   sandbox >/dev/null
   mkdir -p "$CRUX_STATE_DIR/task-sync"
   echo "2026-10-04T16:13:00Z" > "$CRUX_STATE_DIR/task-sync/ghost.pending"
-  assert_eq "" "$(node "$CRUX_HOME/lib/task-sync.mjs" pending 2>&1)" \
+  assert_eq "" "$("$CRUX_HOME/bin/crux" __task-sync pending 2>&1)" \
     "a project that is not here is not reported as unpublished"
   assert_no_file "$CRUX_STATE_DIR/task-sync/ghost.pending" "and its marker is removed"
 }

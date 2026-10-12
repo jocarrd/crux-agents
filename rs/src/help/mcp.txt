@@ -1,0 +1,16 @@
+crux mcp — the MCP servers the project declares, placed where the agent
+reads them.
+
+  crux mcp status     what the contract declares, what is written and whether it responds
+  crux mcp install    writes the .mcp.json files of the repos that apply
+  crux mcp remove     removes only what the contract declares
+
+An MCP is a capability of the project, not of the machine: the one needed in
+one gets in the way in another. That is why it is declared in `crux.json` and
+travels in git, like the context pointers, and not in each laptop's local
+configuration —which is what `claude mcp add` does and what is lost when
+changing machines.
+
+The contract rules. Each repo's .mcp.json is derived: `install` rewrites it,
+`remove` removes what is declared and whatever someone put there by hand
+stays where it is.

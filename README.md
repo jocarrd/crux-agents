@@ -12,8 +12,8 @@ works inside that frame and cannot step out of it on its own.
 The *crux* is the key move of a climbing route: the point on which everything
 else depends.
 
-It works with Claude Code and Codex, needs only `bash`, `git` and `node`, and
-installs once per machine.
+It works with Claude Code and Codex. It is one binary that only needs `git` to
+run, and it installs once per machine.
 
 ---
 
@@ -106,7 +106,7 @@ Tomorrow, on another machine, `crux sync` brings all of it back.
 ## Quick start
 
 ```bash
-# once per machine
+# once per machine (it builds crux with Rust's cargo: https://rustup.rs)
 git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
 ~/Proyectos/crux/install.sh --remote 'git@github.com:<you>/{repo}.git'
 
@@ -326,7 +326,7 @@ action, not who runs it.
 
 | What | Where | What for |
 | ---- | ----- | -------- |
-| The kernel version | `~/.crux/kernel/<version>/` | The copy your projects run |
+| The kernel version | `~/.crux/kernel/<version>/` | The copy your projects run, with its binary in `bin/crux-core` |
 | The command | `~/.local/bin/crux` | `crux` from any directory |
 | The skills | `~/.claude/skills/`, `~/.codex/prompts/` | `/<name>` in the agent |
 | Machine config | `~/.crux/config` | Where the kernel and the projects live, and your preferences |
@@ -385,9 +385,10 @@ crux/
 ├── AGENTS.md        how to work on the kernel (CLAUDE.md → symlink)
 ├── STANDARD.md      the standard, and the skill catalog
 ├── GUIA.md          how everything works, in eight levels
-├── install.sh       once per machine
-├── bin/             one file per command
-├── lib/             shared utilities and verifiers
+├── ARCHITECTURE.md  the map of the binary, for whoever changes it
+├── install.sh       once per machine: gets the binary, hands it the rest
+├── bin/crux         finds this kernel's binary and runs it
+├── rs/              the binary: src/cmd/ one module per command
 ├── templates/       what is materialized in docs repos and code repos
 ├── profiles/        multi-repo, client-repo
 ├── adapters/        claude/, codex/, git/
@@ -397,9 +398,11 @@ crux/
 ```
 
 ```bash
-./test/run.sh            # every case, each in an isolated sandbox
+./test/run.sh            # builds the binary, then every case in an isolated sandbox
 ./test/run.sh sync       # only those matching the pattern
 ./test/e2e.sh            # the whole journey against a local remote
+./test/two-machines.sh   # a task that travels between two computers
+cargo test --manifest-path rs/Cargo.toml   # the binary's unit tests
 ```
 
 The suite never touches `~/.claude`, `~/.codex` or your projects root. Two

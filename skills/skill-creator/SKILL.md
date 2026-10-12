@@ -90,7 +90,7 @@ black box.
    the description itself. If another skill wins, or it wins by less than 15 %,
    it does not distinguish it.
 2. **The size:** `wc -w SKILL.md` within budget.
-3. **Three scenarios with a known answer**, in `tests/escenarios.md`: a normal
+3. **Three scenarios with a known answer**, in `tests/scenarios.md`: a normal
    case, an edge case and one the skill must reject, each with its `Pregunta:`
    and its `Debe:` / `No debe:` checks (regular expressions). Run them with
    `crux skill test <skill>`; if you are shortening or changing a skill, with

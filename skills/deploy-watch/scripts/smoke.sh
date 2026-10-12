@@ -15,7 +15,22 @@
 set -uo pipefail
 
 KERNEL="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)"
-source "$KERNEL/lib/common.sh"
+CRUX="$KERNEL/bin/crux"
+# Output in the kernel's format, and the pieces of the kernel this script uses,
+# served by its binary.
+if [[ -t 1 ]]; then
+  C_RED=$'\033[31m'; C_GRN=$'\033[32m'; C_YEL=$'\033[33m'; C_DIM=$'\033[2m'; C_OFF=$'\033[0m'
+else
+  C_RED=""; C_GRN=""; C_YEL=""; C_DIM=""; C_OFF=""
+fi
+ok()   { echo "${C_GRN}ok${C_OFF}    $*"; }
+warn() { echo "${C_YEL}warn${C_OFF}  $*"; }
+err()  { echo "${C_RED}error${C_OFF} $*"; }
+info() { echo "${C_DIM}      $*${C_OFF}"; }
+die()  { err "$*"; exit 1; }
+find_docs_repo() { "$CRUX" __fn find_docs_repo "$@"; }
+valid_json() { "$CRUX" __fn valid_json "$@"; }
+with_timeout() { "$CRUX" __fn with_timeout "$@"; }
 
 URL=""; EXPECT=""; TIMEOUT=600; PATHS=()
 INTERVAL="${CRUX_SMOKE_INTERVAL:-10}"
@@ -40,16 +55,22 @@ if [[ -z "$URL" ]]; then
   common="$(git rev-parse --git-common-dir 2>/dev/null || true)"
   [[ -n "$common" ]] && repo="$(basename "$(cd "$(dirname "$common")" && pwd)")"
 
-  rc=0
-  block="$(node -e '
-    const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-    const d = c.deploy;
-    if (!d) process.exit(2);
-    const b = (d.repos && d.repos[process.argv[2]]) || (d.url ? d : null);
-    if (!b || !b.url) process.exit(3);
-    console.log(b.url);
-    for (const p of b.paths || ["/"]) console.log(p);
-  ' "$contract" "$repo")" || rc=$?
+  # The repo's own block, or the common one if it has a url.
+  rc=0; block=""
+  if ! "$CRUX" __fn valid_json "$contract" >/dev/null; then
+    rc=1
+  elif [[ -z "$("$CRUX" __fn json_value "$contract" deploy)" ]]; then
+    rc=2
+  else
+    at="deploy.repos.$repo"
+    [[ -n "$repo" && -n "$("$CRUX" __fn json_value "$contract" "$at")" ]] || at="deploy"
+    url="$("$CRUX" __fn json_get "$contract" "$at.url")"
+    if [[ -z "$url" ]]; then
+      rc=3
+    else
+      block="$url"$'\n'"$("$CRUX" __fn json_get "$contract" "$at.paths" || echo /)"
+    fi
+  fi
   case $rc in
     0) ;;
     2) die "the contract does not declare 'deploy': pass --url or declare deploy.url in $contract" ;;

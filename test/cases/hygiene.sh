@@ -15,15 +15,15 @@ _hygiene_project() {
 test_the_registry_self_heals_only_if_neither_folder_nor_branch_remain() {
   sandbox >/dev/null
   local root; root="$(_hygiene_project)"
-  bash "$CRUX_HOME/bin/workspace.sh" new deleted --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new with-branch --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new deleted --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new with-branch --repo "$root/app" >/dev/null 2>&1
 
   # What sessions did to free disk: outside crux.
   git -C "$root/app" worktree remove --force "$root/app-ws-deleted" >/dev/null 2>&1
   git -C "$root/app" branch -D ws/deleted >/dev/null 2>&1
   git -C "$root/app" worktree remove --force "$root/app-ws-with-branch" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" heal 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace heal 2>&1)"
   assert_contains "$out" "'deleted' removed from the registry" "with no folder or branch, the entry is surplus"
   assert_contains "$out" "its branch ws/with-branch is still alive" "with the branch alive there may be work: it warns"
   assert_not_contains "$(cat "$CRUX_REGISTRY")" '"deleted"' "the entry disappears"
@@ -31,7 +31,7 @@ test_the_registry_self_heals_only_if_neither_folder_nor_branch_remain() {
 
   # And there is no need to remember: opening a new workspace already heals.
   git -C "$root/app" branch -D ws/with-branch >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new other --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new other --repo "$root/app" >/dev/null 2>&1
   assert_not_contains "$(cat "$CRUX_REGISTRY")" '"with-branch"' "workspace new heals the registry unasked"
 }
 
@@ -40,14 +40,14 @@ test_adopt_registers_a_hand_made_worktree() {
   local root; root="$(_hygiene_project)"
   git -C "$root/app" worktree add -q -b fix/by-hand "$root/app-ws-by-hand" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/app-ws-by-hand" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace adopt "$root/app-ws-by-hand" 2>&1)"
   assert_contains "$out" "'by-hand' adopted (fix/by-hand" "it registers it with its branch"
   assert_contains "$(cat "$CRUX_REGISTRY")" '"path": "'"$root"'/app-ws-by-hand"' "it enters the registry"
   assert_file "$SB/tasks/proj/by-hand.md" "and opens its task"
 
-  assert_exit 1 "it is not adopted twice" bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/app-ws-by-hand"
+  assert_exit 1 "it is not adopted twice" "$CRUX_HOME/bin/crux" workspace adopt "$root/app-ws-by-hand"
   mkdir -p "$root/loose"
-  assert_exit 1 "nor something that is not a worktree" bash "$CRUX_HOME/bin/workspace.sh" adopt "$root/loose"
+  assert_exit 1 "nor something that is not a worktree" "$CRUX_HOME/bin/crux" workspace adopt "$root/loose"
 }
 
 test_status_warns_of_unknown_worktrees_and_already_merged_workspaces() {
@@ -58,12 +58,12 @@ test_status_warns_of_unknown_worktrees_and_already_merged_workspaces() {
   # A workspace whose branch had a remote and no longer does: merged and deleted.
   git init -q --bare "$SB/remote.git"
   git -C "$root/app" remote add origin "$SB/remote.git"
-  bash "$CRUX_HOME/bin/workspace.sh" new finished --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new finished --repo "$root/app" >/dev/null 2>&1
   git -C "$root/app-ws-finished" push -q -u origin ws/finished >/dev/null 2>&1
   git -C "$root/app" push -q origin --delete ws/finished >/dev/null 2>&1
   git -C "$root/app" fetch -q --prune origin >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/status.sh" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" status 2>&1)"
   assert_contains "$out" "app-ws-loose is a worktree crux does not know about" "status shows the hand-made worktree"
   assert_contains "$out" "crux workspace adopt" "with how to register it"
   assert_contains "$out" "'finished': its branch is no longer on the remote" "and the workspace that was already merged"
@@ -72,9 +72,9 @@ test_status_warns_of_unknown_worktrees_and_already_merged_workspaces() {
 test_the_guard_stops_manual_deletion_of_a_registered_workspace() {
   sandbox >/dev/null
   local root; root="$(_hygiene_project)"
-  bash "$CRUX_HOME/bin/workspace.sh" new guarded --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new guarded --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
-  _asks() { printf '{"tool_input":{"command":%s}}' "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" 2>&1; }
+  _asks() { printf '{"tool_input":{"command":%s}}' "$(json_quote "$1")" | bash "$hook" 2>&1; }
 
   local out; out="$(_asks "git worktree remove --force $root/app-ws-guarded")"
   assert_contains "$out" "crux workspace rm guarded" "it stops the shortcut and says what to use"
@@ -90,12 +90,12 @@ test_the_guard_covers_the_other_ways_of_taking_a_workspace_away() {
   # round: it blocked commands that only mentioned the words in a comment.
   sandbox >/dev/null
   local root; root="$(_hygiene_project)"
-  bash "$CRUX_HOME/bin/workspace.sh" new variants --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new variants --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
   local ws="$root/app-ws-variants"
   _cut() {
     printf '{"tool_input":{"command":%s}}' \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+      "$(json_quote "$1")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
 
@@ -125,12 +125,12 @@ test_the_guard_does_not_read_heredoc_bodies_as_commands() {
   # the rest, and its brackets were taken as a wildcard over the workspace.
   sandbox >/dev/null
   local root; root="$(_hygiene_project)"
-  bash "$CRUX_HOME/bin/workspace.sh" new design --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new design --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/worktree-guard.sh"
   local ws="$root/app-ws-design"
   _cut() {
     printf '{"tool_input":{"command":%s}}' \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+      "$(json_quote "$1")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
   local nl=$'\n'
@@ -149,11 +149,11 @@ test_the_guard_does_not_read_heredoc_bodies_as_commands() {
 test_hooks_install_hooks_the_guard_for_bash_only() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
-  local pre; pre="$(node -e 'const s=require(process.argv[1]); console.log(JSON.stringify(s.hooks.PreToolUse||[]))' "$CLAUDE_SETTINGS")"
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
+  local pre; pre="$(json_value "$CLAUDE_SETTINGS" hooks.PreToolUse)"
   assert_contains "$pre" "worktree-guard.sh" "install hooks the guard"
   assert_contains "$pre" '"matcher":"Bash"' "only on shell commands"
-  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "worktree-guard" "and remove takes it off"
 }
 
@@ -168,13 +168,13 @@ test_the_registry_does_not_say_ok_if_it_could_not_be_written() {
   echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
   printf '{"crux":"0.1.0","project":"readonly","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/readonly-docs/crux.json"
-  bash "$CRUX_HOME/bin/workspace.sh" new ro --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new ro --repo "$root/app" >/dev/null 2>&1
 
   # The directory, not the file: writing is creating a temp file and renaming it,
   # and for that being able to write in the directory is enough.
   chmod 500 "$(dirname "$CRUX_REGISTRY")"
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm ro 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace rm ro 2>&1)" || rc=$?
   chmod 700 "$(dirname "$CRUX_REGISTRY")"
 
   assert_eq "1" "$rc" "it exits red if it could not remove the entry"
@@ -182,30 +182,24 @@ test_the_registry_does_not_say_ok_if_it_could_not_be_written() {
   # The exact point where it fails depends on whether it could take the lock
   # first; what the change guarantees is that something not done is not
   # announced as done.
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "its entry is still in the registry" \
+  assert_contains "$(cat "$CRUX_HOME"/rs/src/cmd/workspace/*.rs)" "its entry is still in the registry" \
     "and there is a message that says so when the failure is on removing the entry"
 }
 
 test_the_registry_is_written_in_one_piece() {
   sandbox >/dev/null
   local reg="$SB/registry.json"
-  source "$CRUX_HOME/lib/registry.sh"
-  # registry_init reads them when the library is loaded.
-  # shellcheck disable=SC2034
-  REGISTRY="$reg"
-  # shellcheck disable=SC2034
-  LOCK="$SB/.lock"
-  registry_init
-  assert_file "$reg" "registry_init creates it"
-  assert_contains "$(cat "$CRUX_HOME/lib/registry.sh")" "renameSync" \
+  CRUX_REGISTRY="$reg" "$CRUX_HOME/bin/crux" workspace list --all >/dev/null 2>&1
+  assert_file "$reg" "the registry is created when first needed"
+  assert_contains "$(cat "$CRUX_HOME/rs/src/registry.rs")" "write_atomic" \
     "it is written to a temp file and renamed, not over it"
-  assert_contains "$(cat "$CRUX_HOME/lib/registry.sh")" "unreadable registry" \
+  assert_contains "$(cat "$CRUX_HOME/rs/src/registry.rs")" "unreadable registry" \
     "and a broken registry is reported instead of passing as empty"
 }
 
 test_a_staging_password_does_not_travel_on_the_command_line() {
   sandbox >/dev/null
-  local stg; stg="$(cat "$CRUX_HOME/bin/stg.sh")"
+  local stg; stg="$(cat "$CRUX_HOME/rs/src/cmd/stg.rs")"
   assert_not_contains "$stg" "hash-password --plaintext" \
     "the password does not go as an argument, which sudo leaves written in auth.log"
   assert_contains "$stg" "docker exec -i" "it comes in through standard input"
@@ -213,7 +207,7 @@ test_a_staging_password_does_not_travel_on_the_command_line() {
 
 test_a_project_skill_does_not_replace_the_kernels() {
   sandbox >/dev/null
-  local mat; mat="$(cat "$CRUX_HOME/adapters/claude/materialize.sh")"
+  local mat; mat="$(cat "$CRUX_HOME/rs/src/skills.rs")"
   assert_contains "$mat" "already shipped by the kernel" "it warns instead of replacing"
   assert_not_contains "$mat" 'ln -sfn "$src" "$CLAUDE_SKILLS_DIR/$name"' \
     "the link is no longer forced blindly"
@@ -223,11 +217,11 @@ test_check_secrets_sees_a_password_in_an_assignment() {
   sandbox >/dev/null
   local d="$SB/docs"; mkdir -p "$d"
   printf '# Notes\n\nDB_PASSWORD=Ab3xKq91zzTT\n' > "$d/notes.md"
-  local out; out="$(node "$CRUX_HOME/lib/check-secrets.mjs" "$d" 2>&1 || true)"
+  local out; out="$("$CRUX_HOME/bin/crux" __check secrets "$d" 2>&1 || true)"
   assert_contains "$out" "notes.md" "the KEY=value form is no longer dropped because of the ="
 
   printf '# Notes\n\nDB_PASSWORD=changeme\nPORT=3000\n' > "$d/notes.md"
-  local clean; clean="$(node "$CRUX_HOME/lib/check-secrets.mjs" "$d" 2>&1 || true)"
+  local clean; clean="$("$CRUX_HOME/bin/crux" __check secrets "$d" 2>&1 || true)"
   assert_not_contains "$clean" "notes.md" "and an example value does not shout"
 }
 
@@ -255,7 +249,7 @@ text
 
 - And that is why X.
 MD
-  node "$CRUX_HOME/lib/task.mjs" note --file "$f" --text "new decision" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" __task note --file "$f" --text "new decision" >/dev/null 2>&1
   local after_step; after_step="$(cat "$f")"
   assert_contains "$after_step" "owner-name: Jorge" "a header key with a hyphen survives"
   assert_contains "$after_step" "A paragraph of context." "and what was written before the first section"
@@ -278,20 +272,20 @@ test_the_gate_shows_the_contract_commands_the_first_time() {
     > "$root/gate-docs/crux.json"
 
   local out
-  out="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
+  out="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 "$CRUX_HOME/bin/crux" ship gate 2>&1)" || true
   assert_contains "$out" "declared in the contract" "the first time it shows them"
   assert_contains "$out" "echo checking" "with the command in front"
 
   # The second time, with the same fingerprint, it does not interrupt again.
   local other
-  other="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
+  other="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 "$CRUX_HOME/bin/crux" ship gate 2>&1)" || true
   assert_not_contains "$other" "declared in the contract" "the second time it does not bother"
 
   # And if they change, it says so.
   printf '{"crux":"0.1.0","project":"gate","profile":"multi-repo","repos":["app"],"quality":{"gate":["echo something else"]},"sections":[]}\n' \
     > "$root/gate-docs/crux.json"
   local changed
-  changed="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)" || true
+  changed="$(cd "$root/app" && CRUX_GATE_ASSUME_YES=1 "$CRUX_HOME/bin/crux" ship gate 2>&1)" || true
   assert_contains "$changed" "has changed since last time" "when it changes, it warns"
 }
 
@@ -299,7 +293,7 @@ test_the_guard_stops_what_destroys_work() {
   local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
   _bash() {
     printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+      "$(json_quote "$1")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
   assert_eq "2" "$(_bash "git reset --hard HEAD~1")" "reset --hard"
@@ -326,7 +320,7 @@ test_the_guard_lets_through_what_looks_like_it() {
   local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
   _bash() {
     printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" | bash "$hook" >/dev/null 2>&1
+      "$(json_quote "$1")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
   assert_eq "0" "$(_bash "git push --force-with-lease")" "force-with-lease is the safe form"
@@ -351,7 +345,7 @@ test_the_guard_does_not_let_private_keys_be_read() {
   local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
   _tool() {
     printf '{"tool_name":"%s","tool_input":{"%s":%s}}' "$1" "$2" \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$3")" | bash "$hook" >/dev/null 2>&1
+      "$(json_quote "$3")" | bash "$hook" >/dev/null 2>&1
     echo $?
   }
   assert_eq "2" "$(_tool Bash command "cat ~/.ssh/id_ed25519")" "cat of the private key"
@@ -368,11 +362,11 @@ test_the_guard_does_not_let_private_keys_be_read() {
 test_hooks_install_hooks_the_destructive_guard() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
-  local pre; pre="$(node -e 'const s=require(process.argv[1]); console.log(JSON.stringify(s.hooks.PreToolUse||[]))' "$CLAUDE_SETTINGS")"
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
+  local pre; pre="$(json_value "$CLAUDE_SETTINGS" hooks.PreToolUse)"
   assert_contains "$pre" "destructive-guard.sh" "install hooks the guard"
   assert_contains "$pre" '"matcher":"Bash|Read|Edit|Write|MultiEdit|NotebookEdit"' "on the shell and files"
-  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "destructive-guard" "and remove takes it off"
 }
 
@@ -380,13 +374,13 @@ test_the_proposal_guard_sends_to_finish() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_hygiene_project)"
-  bash "$CRUX_HOME/bin/workspace.sh" new cover --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new cover --repo "$root/app" >/dev/null 2>&1
   local hook="$CRUX_HOME/adapters/claude/hooks/proposal-guard.sh"
   mkdir -p "$SB/loose"; git -C "$SB/loose" init -q
   _pr() {
     printf '{"tool_name":"Bash","cwd":%s,"tool_input":{"command":%s}}' \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" \
-      "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$2")" | bash "$hook" 2>&1
+      "$(json_quote "$1")" \
+      "$(json_quote "$2")" | bash "$hook" 2>&1
     echo "rc=$?"
   }
   local out
@@ -406,9 +400,9 @@ test_the_proposal_guard_sends_to_finish() {
 test_hooks_install_hooks_the_proposal_guard() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   assert_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard.sh" "install hooks it"
-  bash "$CRUX_HOME/bin/hooks.sh" remove >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "proposal-guard" "and remove takes it off"
 }
 
@@ -420,7 +414,7 @@ test_no_skill_sends_a_command_the_guard_blocks() {
     while IFS= read -r line; do
       [[ -n "${line// }" ]] || continue
       if ! printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
-          "$(node -e 'console.log(JSON.stringify(process.argv[1]))' -- "$line")" \
+          "$(json_quote -- "$line")" \
           | bash "$hook" >/dev/null 2>&1; then
         bad_items+="${f#"$CRUX_HOME"/}: $line"$'\n'
       fi
@@ -433,7 +427,7 @@ _wait_guard() {
   # _wait_guard <command> [background] — the hook's exit code
   local bg="${2:-false}"
   printf '{"tool_name":"Bash","tool_input":{"command":%s,"run_in_background":%s}}' \
-    "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$1")" "$bg" \
+    "$(json_quote "$1")" "$bg" \
     | bash "$CRUX_HOME/adapters/claude/hooks/wait-guard.sh" >/dev/null 2>&1
   echo $?
 }
@@ -449,6 +443,8 @@ test_the_wait_guard_sends_long_commands_to_the_background() {
   assert_eq "2" "$(_wait_guard "npx eas-cli build --platform android")" "a waited cloud build"
   assert_eq "2" "$(_wait_guard "bash test/run.sh | tail -3")" "the suite run through bash, its output piped"
   assert_eq "2" "$(_wait_guard "env HOME=/tmp/h bash ~/crux/test/run.sh")" "the suite behind env"
+  assert_eq "2" "$(_wait_guard "./test/e2e.sh")" "the end-to-end battery"
+  assert_eq "2" "$(_wait_guard "cd crux && bash test/e2e.sh > out.txt 2>&1")" "the battery through bash, redirected"
 }
 
 test_the_wait_guard_lets_short_or_decided_commands_through() {
@@ -462,6 +458,8 @@ test_the_wait_guard_lets_short_or_decided_commands_through() {
   assert_eq "0" "$(_wait_guard "npx eas-cli build:list --platform android")" "listing builds is not building"
   assert_eq "0" "$(_wait_guard "grep -n crux test/run.sh | head")" "reading the suite is not running it"
   assert_eq "0" "$(_wait_guard "sed -n 1,40p test/run.sh")" "nor is printing part of it"
+  assert_eq "0" "$(_wait_guard "sed -n 120,150p test/e2e.sh")" "nor is reading the battery"
+  assert_eq "0" "$(_wait_guard "grep -n HOME test/e2e.sh | head")" "or searching it"
 }
 
 test_hooks_install_recognises_hooks_by_file_name_not_path() {
@@ -469,7 +467,7 @@ test_hooks_install_recognises_hooks_by_file_name_not_path() {
   # installing the wait guard replaced all the others with it.
   sandbox >/dev/null
   printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/opt/wait-guard-tools/mine.sh"}]}]}}\n' > "$CLAUDE_SETTINGS"
-  bash "$CRUX_HOME/bin/hooks.sh" install >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
   local settings; settings="$(cat "$CLAUDE_SETTINGS")"
   assert_contains "$settings" "/opt/wait-guard-tools/mine.sh" "a hook of the person whose path says wait-guard survives"
   assert_contains "$settings" "destructive-guard.sh" "and the other guards are installed beside it"

@@ -1,0 +1,24 @@
+crux stg — publishes a built folder to a password-protected staging, to show
+work that is not in production yet.
+
+  crux stg deploy <name> <folder>      uploads the folder and publishes it
+  crux stg list                        which demos are live, with their password
+  crux stg url <name>                  the link, the user and the password
+  crux stg rm <name>                   removes it
+
+The destination does not live here: it is declared once per machine in
+~/.crux/staging.env. The kernel does not know which VPS it is, so moving the
+staging elsewhere means changing that file and not this command.
+
+  CRUX_STG_SSH        the server's ssh host (an alias from ~/.ssh/config)
+  CRUX_STG_DOMAIN     base domain; each demo hangs off it as <name>.<domain>
+  CRUX_STG_ROOT       root on the server (contains sites/ and caddy/)
+  CRUX_STG_CONTAINER  Caddy container asked to reload
+
+Each demo has its own user and its own password: the user is its name.
+Sharing one pair for all means removing one does not cut anyone's access,
+which is exactly what is expected when removing it.
+
+A deployment restarts nothing: it writes the folder, writes the block and
+reloads the configuration, which Caddy validates before applying. If the
+block is wrong, the live config stays as it was.

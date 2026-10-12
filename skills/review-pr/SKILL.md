@@ -30,7 +30,7 @@ conventions** in its documentation.
 ## Risk and specialists
 
 `crux review` ends with the risk and the specialists it deserves
-(`scripts/review-scope.sh`):
+(`crux review scope` gives that part alone):
 
 | Risk | When | What is launched |
 | ---- | ---- | ---------------- |

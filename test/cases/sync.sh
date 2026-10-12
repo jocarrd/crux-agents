@@ -305,17 +305,18 @@ test_sync_installs_the_hooks_of_the_new_kernel() {
   mkdir -p "$home/.crux" "$clone"
   printf 'CRUX_MODE="release"\n' > "$home/.crux/config"
   echo "99.0.0" > "$clone/VERSION"
-  # A stand-in installer: the new kernel's hooks.sh writes down which kernel it believes it is.
+  # A stand-in installer: the new kernel's crux writes down which kernel it believes it is.
   cat > "$clone/install.sh" <<'SH'
 mkdir -p "$HOME/.crux/kernel/99.0.0/bin"
-printf 'echo "$CRUX_HOME" > "$HOME/hooks-from"\n' > "$HOME/.crux/kernel/99.0.0/bin/hooks.sh"
+printf '#!/usr/bin/env bash\necho "$CRUX_HOME" > "$HOME/hooks-from"\n' > "$HOME/.crux/kernel/99.0.0/bin/crux"
+chmod +x "$HOME/.crux/kernel/99.0.0/bin/crux"
 SH
   git -C "$clone" init -q -b main
   git -C "$clone" add -A && git -C "$clone" commit -q -m "release"
   git -C "$clone" tag v99.0.0
 
   local out
-  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 bash "$CRUX_HOME/bin/sync.sh" 2>&1)"
+  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 "$CRUX_HOME/bin/crux" sync 2>&1)"
 
   assert_contains "$out" "99.0.0, with its hooks" "it installs the published version"
   assert_eq "$home/.crux/kernel/99.0.0" "$(cat "$home/hooks-from" 2>/dev/null)" \
@@ -332,14 +333,15 @@ test_sync_updates_the_kernel_from_a_clone_inside_its_own_project() {
   echo "99.0.0" > "$clone/VERSION"
   cat > "$clone/install.sh" <<'SH'
 mkdir -p "$HOME/.crux/kernel/99.0.0/bin"
-printf 'true\n' > "$HOME/.crux/kernel/99.0.0/bin/hooks.sh"
+printf '#!/usr/bin/env bash\ntrue\n' > "$HOME/.crux/kernel/99.0.0/bin/crux"
+chmod +x "$HOME/.crux/kernel/99.0.0/bin/crux"
 SH
   git -C "$clone" init -q -b main
   git -C "$clone" add -A && git -C "$clone" commit -q -m "release"
   git -C "$clone" tag v99.0.0
 
   local out
-  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 bash "$CRUX_HOME/bin/sync.sh" 2>&1)"
+  out="$(env HOME="$home" CRUX_SYNC_NO_INSTALL=0 "$CRUX_HOME/bin/crux" sync 2>&1)"
   assert_contains "$out" "99.0.0, with its hooks" \
     "the kernel cloned next to its docs repo, like any project's code, is still the one it updates from"
   teardown
@@ -392,7 +394,7 @@ test_sync_points_out_a_workspace_whose_task_was_archived() {
   local app="$CRUX_PROJECTS_DIR/alpha/app" tasks
   git -C "$app" worktree add -q -b ws/old "$CRUX_PROJECTS_DIR/alpha/app-ws-old" 2>/dev/null
   git -C "$app" worktree add -q -b ws/live "$CRUX_PROJECTS_DIR/alpha/app-ws-live" 2>/dev/null
-  tasks="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; task_dir')"
+  tasks="$("$CRUX_BIN" __fn task_dir)"
   mkdir -p "$tasks/alpha/done"
   echo "task: old" > "$tasks/alpha/done/2026-10-01-old.md"
   echo "task: live" > "$tasks/alpha/live.md"
@@ -409,7 +411,7 @@ test_sync_names_the_copy_left_by_a_task_conflict() {
   sandbox >/dev/null
   _two_machines
   local tasks
-  tasks="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; task_dir')"
+  tasks="$("$CRUX_BIN" __fn task_dir)"
   mkdir -p "$tasks/alpha"
   echo "task: feat" > "$tasks/alpha/feat.md"
   echo "task: feat" > "$tasks/alpha/feat.conflicto-remota.md"

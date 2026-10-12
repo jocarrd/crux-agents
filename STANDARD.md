@@ -533,7 +533,7 @@ header in every doc:
 
 Links break when files move and, without a build to validate them, end up
 lying. A path in backticks the agent resolves just the same and never breaks.
-`lib/check-doc-paths.mjs` verifies the ones that remain.
+`crux doctor` (`crux __check doc-paths`) verifies the ones that remain.
 
 ### 4. ADRs
 
@@ -871,7 +871,7 @@ exceed **1,000 words**; the why, the history and long examples go in
 skill, check that there is not another that wins the same phrase; if there is,
 extend that one. How one is written and tested: `/skill-creator`.
 
-A skill is tested with known-answer scenarios in `tests/escenarios.md` and
+A skill is tested with known-answer scenarios in `tests/scenarios.md` and
 `crux skill test`, which compares against the previous version: shortening
 without testing loses nuances that cannot be seen by reading.
 
@@ -925,7 +925,7 @@ credentials and names. With two guards:
 | `visual-test`, `visual-diff`, `render-loop`, `device-loop`, `before-after` | Verification with the eyes; the last one, the decision-maker's, before pushing |
 | `ui-behaviour` | That controls do something and can be reached by keyboard |
 | `ui-tells` | That an interface does not look model-generated |
-| `redaccion` | That a text does not read as model-generated |
+| `prose-check` | That a text, Spanish or English, does not read as model-generated |
 | `x-posts` | Writing and planning posts for X that reach people |
 | `motion-video` | Motion graphics videos rendered from code, with sound and a critique loop |
 | `css-to-components` | Moving styles into components without changing the design |
@@ -967,7 +967,7 @@ equally valid in a client's and in a task that touches several.
 
 **It travels between machines** on the `crux/tasks` branch of the project's
 docs repo —or of the repo itself, if it is a standalone one with no docs repo—.
-That branch is a replica written by `lib/task-sync.mjs` and never by the agent;
+That branch is a replica written by crux (`rs/src/task/sync.rs`) and never by the agent;
 `main` does not see it, and the docs repo's working tree is not touched. It is
 published in the background after each write to the record, and `crux sync`
 brings it in on arrival and retries what is pending on leaving. If a task

@@ -15,12 +15,13 @@ It is not a project's documentation. It is what produces them.
 | Understand the whole system | `GUIA.md` — eight levels, from simple to deep |
 | Change a rule of the standard | `STANDARD.md` |
 | Write a new skill | The `/skill-creator` skill, and `STANDARD.md` §Skills |
-| Touch a command | `bin/<command>.sh`, and the suite in `test/` |
+| Touch the binary | `ARCHITECTURE.md`, then `rs/src/cmd/<command>.rs` and the suite in `test/` |
 
 And run the suite **before and after**:
 
 ```bash
-./test/run.sh
+./test/run.sh            # builds the binary, then every case
+cargo test --manifest-path rs/Cargo.toml   # the unit tests of the binary
 ```
 
 ---
@@ -49,17 +50,18 @@ source.
 
 It is enforced by `test_no_kernel_skill_names_an_agents_tools`.
 
-### 3. A library does not set shell options
+### 3. A command does not end the process
 
-`lib/common.sh` **has no `set -e`**. Whoever loads it has already declared
-their own options, and overriding them kills the script silently at the first
-command that returns a non-zero status.
+A command **returns** how it ended (`Res`, with `die!` for an error); only
+`main` turns that into an exit code. Ending the process from inside skips the
+destructors that release the registry lock, the reservation of a half-made
+workspace and temporary files, and leaves them behind exactly when something
+failed.
 
-This has already broken the test suite and then `doctor`, both times without a
-single message. If a command returns meaningful codes, collect them with
-`cmd || rc=$?`, never with a bare `$?`.
+In the shell version the equivalent mistake was a library that set its own
+options: it killed whoever loaded it, twice, without a single message.
 
-It is enforced by `test_the_library_does_not_override_shell_options`.
+It is enforced by `test_no_command_ends_the_process_on_its_own`.
 
 ### 4. What is generated is generated; it is not maintained by hand
 
@@ -91,9 +93,9 @@ It is enforced by `test_no_command_hides_a_file_it_cannot_read`.
 ```
 STANDARD.md    the standard: what a project must meet
 GUIA.md        how everything works, from start to finish
-install.sh     per-machine installation
-bin/           one file per command
-lib/           shared utilities and verifiers
+install.sh     per-machine installation: gets the binary and hands it the rest
+bin/crux       finds this kernel's binary and runs it
+rs/            the binary: src/cmd/ one module per command, the rest shared
 templates/     what gets materialized in each project
 profiles/      verifiable policy: multi-repo, client-repo
 adapters/      how the kernel is exposed to each agent
@@ -110,8 +112,16 @@ frontmatter. The description decides whether it activates, so it carries the
 situations and the words in which the problem shows up. Then `./install.sh`
 to materialize it.
 
-**A command**: `bin/<name>.sh` plus its entry in the `bin/crux` dispatcher, in
-`README.md` and in the table in `STANDARD.md`. And a case in `test/cases/`.
+**A command**: `rs/src/cmd/<name>.rs`, its entry in the dispatcher
+(`rs/src/cmd/mod.rs`), its usage in `rs/src/help/<name>.txt` and its line in
+`rs/src/help.rs`, `README.md` and the table
+in `STANDARD.md`. And a case in `test/cases/`, which calls it as a person
+would: `crux <name> ...`.
+
+**A shell script**: only to start the binary (a launcher, a hook, `install.sh`)
+or to join other programs (a skill that wraps curl, ffmpeg or a browser). A
+rule, a classification or a check is code of the binary, even when a skill or
+a git hook is what triggers it. See ADR-019.
 
 **A `doctor` check**: inside its numbered block, with `section` and
 `section_ok`. And a **negative** test: one that fails when it should. A check

@@ -1,0 +1,13 @@
+crux release — publish a kernel version.
+
+  crux release <version>          shows what it would do and verifies, touching nothing
+  crux release <version> --yes    tags and publishes
+
+The version number is bumped in VERSION **by proposal**, like any other
+change: this command does not commit to the main branch, it only checks that
+the version is already there and creates the tag.
+
+What sets this apart from a `git tag` is the third check: **before
+publishing, it verifies that the projects consuming the kernel are still
+conformant**. Changing the standard and breaking whoever uses it without
+noticing is the failure a release must prevent.

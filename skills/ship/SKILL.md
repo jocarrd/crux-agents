@@ -14,7 +14,7 @@ if you doubt one or are about to propose an exception.
 First of all:
 
 ```bash
-bash <this-skill-directory>/scripts/diff-scope.sh
+crux ship scope
 ```
 
 It says which gates apply, which tests to run in gate 1 and whether the
@@ -50,7 +50,7 @@ is an automatic review, it goes here.
 ## 4. Conventions
 
 ```bash
-bash <this-skill-directory>/scripts/conventions.sh
+crux ship conventions
 ```
 
 It lists the convention documents that apply and concrete signals (repeated

@@ -16,7 +16,23 @@
 set -uo pipefail
 
 KERNEL="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)"
-source "$KERNEL/lib/common.sh"
+CRUX="$KERNEL/bin/crux"
+# Output in the kernel's format, and the pieces of the kernel this script uses,
+# served by its binary.
+if [[ -t 1 ]]; then
+  C_RED=$'\033[31m'; C_GRN=$'\033[32m'; C_YEL=$'\033[33m'; C_DIM=$'\033[2m'; C_OFF=$'\033[0m'
+else
+  C_RED=""; C_GRN=""; C_YEL=""; C_DIM=""; C_OFF=""
+fi
+ok()   { echo "${C_GRN}ok${C_OFF}    $*"; }
+warn() { echo "${C_YEL}warn${C_OFF}  $*"; }
+err()  { echo "${C_RED}error${C_OFF} $*"; }
+info() { echo "${C_DIM}      $*${C_OFF}"; }
+die()  { err "$*"; exit 1; }
+find_docs_repo() { "$CRUX" __fn find_docs_repo "$@"; }
+valid_json() { "$CRUX" __fn valid_json "$@"; }
+with_timeout() { "$CRUX" __fn with_timeout "$@"; }
+command -v node >/dev/null || die "node is required: it groups and classifies the log lines"
 
 SINCE="1h"; ALL=0; MAX=15; REQUESTED=()
 LIMIT="${CRUX_SIGNALS_TIMEOUT:-60}"

@@ -1,0 +1,21 @@
+crux workspace — isolated workspaces to work in parallel.
+
+  crux workspace new <name> [--repo <dir>] [--base <branch>] [--branch <branch>] [--task <task>] [--goal "<text>"] [--force]
+  crux workspace list
+  crux workspace resume <task> [--project <p>]   resumes it here from the remote
+  crux workspace adopt <path> [--task <task>]    registers a hand-made worktree
+  crux workspace heal [--quiet]                  removes entries with no folder or branch
+  crux workspace finish <name> [--title "..."]
+  crux workspace merge <name> [--yes]
+  crux workspace rm <name> [--include-ignored]
+  crux workspace gc [--yes] [--include-disk]
+  crux workspace prune [--yes]
+
+A git worktree isolates files, but not the runtime: two agents on the same
+repo still fight over the port, the database and the .env. This shares out
+those resources too, with a registry so two workspaces do not take the same
+slot.
+
+The worktree is created as a sibling of the original repo, not in a separate
+directory: that is what makes the relative context pointers
+(../<project>-docs/) keep resolving inside the isolated workspace.

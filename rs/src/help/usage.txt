@@ -1,0 +1,11 @@
+crux usage — which skills are really used.
+
+  crux usage [--days N] [--all]
+
+A catalog that only grows ends up getting in the way of discovery: the more
+skills there are, the worse the choice between them. This measures real use
+against the installed catalog and separates the live from the dead.
+
+The source is the agent's local transcripts. It is an internal format and
+may change; if one day it stops finding invocations, it says so instead of
+reporting zero as if it were data.

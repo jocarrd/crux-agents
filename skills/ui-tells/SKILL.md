@@ -9,7 +9,7 @@ A generated interface is recognised by its shape before its content, just like a
 generated text. The markers are few, concrete and can be counted. This skill
 measures them on the already-rendered page, which is where they are seen.
 
-It is the sibling of `redaccion` for screens, and shares its main rule: **count
+It is the sibling of `prose-check` for screens, and shares its main rule: **count
 and locate, do not fix**. Deciding whether each case is surplus is up to you.
 
 ## When to use
@@ -58,7 +58,7 @@ headline fits on the first screen or it does not.
 
 | Marker | Why it is a failure |
 | ------ | ------------------- |
-| Em dash in visible text | The same tic `redaccion` catches, here in the interface |
+| Em dash in visible text | The same tic `prose-check` catches, here in the interface |
 | Headline or call to action outside the first screen | Whoever arrives does not see what this is or what to do |
 | Navigation over 80px or on two lines | It eats the screen and shows the width was not thought through |
 | Button label split over two lines | Reads badly and usually means the text is long |
@@ -73,7 +73,7 @@ drawn with divs with no image inside, «scroll» texts, version labels on the
 first screen, filler names (Acme, John Doe, Lorem), falsely round figures and
 brochure verbs (impulsar, potenciar, unleash, seamless).
 
-That separation is the same one `redaccion` makes with the em dash and the
+That separation is the same one `prose-check` makes with the em dash and the
 colon, and for the same reason: an automatic measurement cannot tell a punchline
 from an explanation.
 
@@ -107,7 +107,7 @@ each project's conventions, not in the kernel.
 
 ## Related
 
-- `redaccion` — the same method for text.
+- `prose-check` — the same method for text.
 - `visual-test` — real accessibility, horizontal scroll, contrast.
 - `ui-behaviour` — that controls do something.
 - `render-loop` — iterate on a rendered output.

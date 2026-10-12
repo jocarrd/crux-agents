@@ -1,0 +1,8 @@
+crux status — what is open right now, across all projects.
+
+  crux status            the projects, their workspaces and the unpublished work
+  crux status --check    also runs each project's doctor; exits 1 if anything fails
+
+`doctor` answers for one project. This answers for the morning: where the
+work was left, which workspaces are still alive and what is pushed nowhere.
+No network: what cannot be known locally is not asked.

@@ -1,0 +1,11 @@
+crux prose — counts the markers that give away a model-generated text.
+
+  crux prose check <file...> | --text "..."   [--lang es|en]
+  crux prose detail <file...> | --text "..."  [--lang es|en]
+
+Seven markers, with patterns for Spanish and English: negative parallelism,
+rule of three, epigrammatic headlines, recurring vocabulary and grandiloquence
+score; the em dash and colons in mid-sentence are reported apart. Quotes and
+code are left out: a text that teaches what to avoid has it written out. The
+language is detected when --lang is not given. Exits 1 when the text reads as
+generated. The method for rewriting is the prose-check skill.

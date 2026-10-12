@@ -20,6 +20,23 @@ export CRUX_IN_TESTS=1
 # test draw a panel instead of printing, and their cases fail only there.
 unset CRUX_REMINDER_UI
 
+# The Rust core is built once per run, and every case uses that build: a case
+# must never test a binary older than the sources next to it. CRUX_SUITE_BIN
+# tests a binary built elsewhere instead —a release, a static one, another
+# platform's— on a machine that may have no Rust at all.
+if [[ -n "${CRUX_SUITE_BIN:-}" ]]; then
+  [[ -x "$CRUX_SUITE_BIN" ]] || { echo "CRUX_SUITE_BIN is not an executable: $CRUX_SUITE_BIN"; exit 1; }
+  export CRUX_BIN="$CRUX_SUITE_BIN"
+else
+  CARGO="$(command -v cargo || echo "$HOME/.cargo/bin/cargo")"
+  if ! build_output="$("$CARGO" build --quiet --manifest-path "$CRUX_HOME/rs/Cargo.toml" 2>&1)"; then
+    echo "$build_output"
+    echo "the Rust core does not build: fix that before running the cases"
+    exit 1
+  fi
+  export CRUX_BIN="${CARGO_TARGET_DIR:-$CRUX_HOME/rs/target}/debug/crux"
+fi
+
 PASS=0; FAIL=0; CURRENT=""; FAILED_CASES=()
 
 if [[ -t 1 ]]; then
@@ -117,7 +134,56 @@ sandbox() {
 
 teardown() { [[ -n "${SB:-}" && "$SB" == *"crux-test-"* ]] && rm -rf "$SB"; }
 
-crux() { bash "$CRUX_HOME/bin/crux" "$@"; }
+crux() { "$CRUX_HOME/bin/crux" "$@"; }
+
+# The library's functions one by one, served by the binary, for the cases that
+# test a single piece. Same names and same answers as the shell library had.
+# JSON fixtures, through the binary under test; values are JSON.
+#   json_set <file> <dotted.path> <json>   json_push <file> <path> <json>
+#   json_del <file> <path>                 json_value <file> <path>: compact JSON
+#   json_get <file> <path>: text, an array one item per line
+#   json_quote <text>                      the text as a JSON string
+for _f in json_set json_push json_del json_get json_value json_quote; do
+  eval "$_f() { \"\$CRUX_BIN\" __fn $_f \"\$@\"; }"
+done
+unset _f
+
+# `env -C` is GNU only: busybox and macOS do not have it.
+in_dir() { local d="$1"; shift; ( cd "$d" && "$@" ); }
+
+# needs <tool> || return 0: a case for a skill whose script uses that tool.
+needs() { command -v "$1" >/dev/null 2>&1 && return 0; echo "  (no $1 on the PATH: skipped)"; return 1; }
+
+# replace_text <file> <old> <new>: the first occurrence, literally.
+replace_text() {
+  local c; c="$(cat "$1"; printf x)"; c="${c%x}"
+  printf '%s' "${c/"$2"/"$3"}" > "$1"
+}
+
+# replace_block <file> <start> <end> <new>: from <start> to the first <end>.
+replace_block() {
+  local c before rest; c="$(cat "$1"; printf x)"; c="${c%x}"
+  [[ "$c" == *"$2"* ]] || return 0
+  before="${c%%"$2"*}"; rest="${c#*"$2"}"; rest="${rest#*"$3"}"
+  printf '%s%s%s' "$before" "$4" "$rest" > "$1"
+}
+
+# touch_ago <seconds> <file>: GNU, busybox and BSD each date a file differently.
+touch_ago() {
+  local t=$(($(date +%s) - $1))
+  touch -d "@$t" "$2" 2>/dev/null ||
+    touch -d "$(date -d "@$t" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$2" 2>/dev/null ||
+    touch -t "$(date -r "$t" +%Y%m%d%H%M.%S)" "$2"
+}
+
+crux_lib() {
+  local f
+  for f in is_semver version_greater_than valid_name is_worktree main_repo main_branch \
+           find_docs_repo preference projects_root task_dir json_get remote_url remote_from_git \
+           normalize_git_url owner_from_template template_for_owner render_managed with_timeout with_lock; do
+    eval "$f() { \"\$CRUX_BIN\" __fn $f \"\$@\"; }"
+  done
+}
 
 new_project() {
   # new_project <name> [init options...] — prints the docs repo path
@@ -138,6 +204,11 @@ echo "crux test — $(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
 echo
 
 CLEAN_HOME="$HOME"; CLEAN_TMPDIR="${TMPDIR:-/tmp}"; CLEAN_PWD="$PWD"
+# The kernel under test is a clone whose git hooks are those of the real repo:
+# a case must not touch them.
+KERNEL_HOOKS_DIR="$(cd "$CRUX_HOME" && cd "$(git rev-parse --git-common-dir 2>/dev/null || echo .)" && pwd)/hooks"
+kernel_hooks() { cat "$KERNEL_HOOKS_DIR"/* 2>/dev/null | cksum; }
+CLEAN_KERNEL_HOOKS="$(kernel_hooks)"
 
 # Each case starts in an empty directory of its own, never in the one the suite
 # was launched from. A `( cd "$ws" && a; b )` whose cd fails runs b right here,
@@ -176,6 +247,10 @@ for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   if [[ -n "${SB:-}" && ( -z "${CLAUDE_SETTINGS:-}" || "${CLAUDE_SETTINGS}" == "$CLEAN_HOME"/.claude/* ) ]]; then
     _fail "the case leaves CLAUDE_SETTINGS outside the sandbox — the real hooks end up touched"
     export CLAUDE_SETTINGS="$SB/settings.json"
+  fi
+  if [[ "$(kernel_hooks)" != "$CLEAN_KERNEL_HOOKS" ]]; then
+    _fail "the case changed the git hooks of the kernel's real repo"
+    CLEAN_KERNEL_HOOKS="$(kernel_hooks)"
   fi
   if [[ -n "$(ls -A "$STRAY_DIR" 2>/dev/null)" ]]; then
     _fail "the case wrote into the directory it was started from: $(ls -A "$STRAY_DIR" | tr '\n' ' ')"

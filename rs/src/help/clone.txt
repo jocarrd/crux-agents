@@ -1,0 +1,8 @@
+crux clone — bring a whole project to a new machine.
+
+  crux clone <project> [--from <template|url>] [--parent <dir>]
+
+Clones the docs repo, reads its contract and clones the repos it declares.
+Two things come from the contract and not from an assumption: the list of
+repos —which in a hand-written guide goes stale as soon as you add one— and
+**where they are cloned from**, which can differ for documentation and code.

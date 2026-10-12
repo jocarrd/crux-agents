@@ -23,10 +23,10 @@ test_review_scope_grades_risk_by_the_diff() {
   echo '{"crux":"0.40.0","project":"risk","profile":"multi-repo"}' > "$SB/crux.json"
   _pm_repo_with_base "$repo"
   cd "$repo" || return
-  local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh"
+  local script="$CRUX_HOME/bin/crux"
 
   echo "more text" >> README.md; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: low" "a text-only change is low risk"
   assert_contains "$out" "specialists: none" "and pays for no specialist"
   assert_contains "$out" "can be merged without asking" "and in an own project it can merge itself"
@@ -34,28 +34,28 @@ test_review_scope_grades_risk_by_the_diff() {
   git reset -q --hard main
   mkdir -p src/components
   printf 'a\nb\n' > src/components/Button.tsx; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: low" "two lines of interface do not deserve a specialist"
   assert_contains "$out" "merge: a person decides" "but with code a person decides"
 
   git reset -q --hard main
   mkdir -p src/components
   seq 1 80 | sed 's/^/const v/' > src/components/Card.tsx; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: medium" "a screen is medium risk"
   assert_contains "$out" "specialists: interface" "and asks only for the interface one"
 
   git reset -q --hard main
   mkdir -p src/auth
   seq 1 40 > src/auth/session.ts; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: high" "touching the session is high risk"
   assert_contains "$out" "security" "and asks for the security specialist"
 
   git reset -q --hard main
   mkdir -p db/migrations
   echo "ALTER TABLE users DROP COLUMN name;" > db/migrations/001.sql; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: high" "a migration is high risk even if it is one line"
   assert_contains "$out" "data" "and asks for the data specialist"
 
@@ -71,11 +71,11 @@ test_review_scope_in_a_client_repo_a_person_always_decides() {
   cd "$project/app" || return
 
   echo "more text" >> README.md; _pm_commit_all
-  out="$(bash "$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" main)"
+  out="$("$CRUX_HOME/bin/crux" review scope main)"
   assert_contains "$out" "merge: a person decides" "not even a text change merges itself"
 
   echo '{"crux":' > "$project/crux.json"
-  out="$(bash "$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" main)"
+  out="$("$CRUX_HOME/bin/crux" review scope main)"
   assert_contains "$out" "cannot be read" "a broken contract is not read as an own project"
 
   cd "$CRUX_HOME" || return
@@ -86,7 +86,7 @@ test_review_scope_stops_without_a_base() {
   _pm_repo_with_base "$SB/nobase"
   cd "$SB/nobase" || return
   assert_exit 1 "a base that does not exist does not become 'no changes'" \
-    bash "$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" origin/does-not-exist
+    "$CRUX_HOME/bin/crux" review scope origin/does-not-exist
   cd "$CRUX_HOME" || return
 }
 
@@ -136,7 +136,7 @@ test_checks_brings_only_the_tail_of_the_failing_log() {
   _pm_fake_gh "$SB/bin" "$rollup"
 
   local out rc=0
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/checks.sh" 7 2>&1)" || rc=$?
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" checks 7 2>&1)" || rc=$?
   assert_eq "1" "$rc" "a red check exits red"
   assert_contains "$out" "the sum returns 5" "it brings the error message"
   assert_contains "$out" "stack trace trimmed" "it trims the stack instead of filling the context with it"
@@ -151,7 +151,7 @@ test_checks_tells_no_checks_from_green() {
   sandbox >/dev/null
   _pm_fake_gh "$SB/bin" '{"statusCheckRollup":[]}'
   local out rc=0
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/checks.sh" 7 2>&1)" || rc=$?
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" checks 7 2>&1)" || rc=$?
   assert_eq "2" "$rc" "no checks is not green"
   assert_contains "$out" "is not the same as verified" "and says so"
 }
@@ -160,7 +160,7 @@ test_checks_waits_for_the_pending_ones() {
   sandbox >/dev/null
   _pm_fake_gh "$SB/bin" '{"statusCheckRollup":[{"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"SUCCESS"}]}' "$SB/calls"
   local out rc=0
-  out="$(env PATH="$SB/bin:$PATH" CRUX_CHECKS_INTERVAL=0 bash "$CRUX_HOME/bin/checks.sh" 7 --wait 2>&1)" || rc=$?
+  out="$(env PATH="$SB/bin:$PATH" CRUX_CHECKS_INTERVAL=0 "$CRUX_HOME/bin/crux" checks 7 --wait 2>&1)" || rc=$?
   assert_eq "0" "$rc" "it waits for it to finish and exits green"
   assert_contains "$out" "all green" "and says so"
 }
@@ -169,7 +169,7 @@ test_checks_does_not_hide_an_unreadable_rollup() {
   sandbox >/dev/null
   _pm_fake_gh "$SB/bin" 'this is not json'
   local rc=0
-  env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/checks.sh" 7 >/dev/null 2>&1 || rc=$?
+  env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" checks 7 >/dev/null 2>&1 || rc=$?
   assert_eq "1" "$rc" "an unreadable answer stops, it is not read as no checks"
 }
 
@@ -191,6 +191,8 @@ JS
 }
 
 test_smoke_sees_broken_routes_and_the_new_version() {
+  needs curl || return 0
+  needs node || return 0
   sandbox >/dev/null
   _pm_server "$SB"
   local url out rc
@@ -212,6 +214,7 @@ test_smoke_sees_broken_routes_and_the_new_version() {
 }
 
 test_smoke_reads_the_contract_and_stops_if_it_cannot() {
+  needs curl || return 0
   sandbox >/dev/null
   local p="$SB/project" rc out
   mkdir -p "$p"
@@ -228,6 +231,7 @@ test_smoke_reads_the_contract_and_stops_if_it_cannot() {
 }
 
 test_signals_groups_and_does_not_swallow_the_following_sources() {
+  needs node || return 0
   sandbox >/dev/null
   local p="$SB/project" out rc
   mkdir -p "$p"
@@ -253,6 +257,7 @@ JSON
 }
 
 test_signals_tells_no_sources_from_a_broken_contract() {
+  needs node || return 0
   sandbox >/dev/null
   local p="$SB/project" rc
   mkdir -p "$p"
@@ -272,6 +277,7 @@ test_signals_tells_no_sources_from_a_broken_contract() {
 }
 
 test_signals_warns_if_the_contract_has_uncommitted_changes() {
+  needs node || return 0
   sandbox >/dev/null
   local p="$SB/docs" rc out
   mkdir -p "$p"
@@ -296,10 +302,10 @@ test_review_scope_does_not_take_dependencies_or_tests_as_text() {
   echo '{"crux":"0.40.0","project":"deps","profile":"multi-repo"}' > "$SB/crux.json"
   _pm_repo_with_base "$repo"
   cd "$repo" || return
-  local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh"
+  local script="$CRUX_HOME/bin/crux"
 
   echo "package==1.0" > requirements.txt; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: high" "a new dependency is not text"
   assert_contains "$out" "security" "and asks for the security specialist"
   assert_contains "$out" "a person decides" "and it does not merge itself"
@@ -307,29 +313,44 @@ test_review_scope_does_not_take_dependencies_or_tests_as_text() {
   git reset -q --hard main
   mkdir -p pkg/tests
   echo "import os" > pkg/tests/conftest.py; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "merge: a person decides" "a test is run by CI: it does not merge without asking"
 
   cd "$CRUX_HOME" || return
 }
 
+# The risk is seen whatever the size of the diff: the biggest change is the one
+# that most needs it.
+test_review_scope_sees_risk_in_a_large_diff() {
+  sandbox >/dev/null
+  local repo="$SB/big" out
+  echo '{"crux":"0.40.0","project":"big","profile":"multi-repo"}' > "$SB/crux.json"
+  _pm_repo_with_base "$repo"
+  cd "$repo" || return
+  mkdir -p src
+  { echo "export const reset = () => db.query('DROP TABLE users');"; for i in $(seq 1 6000); do echo "export const v$i = $i;"; done; } > src/values.ts
+  _pm_commit_all
+  out="$("$CRUX_HOME/bin/crux" review scope main)"
+  assert_contains "$out" "data: the diff adds operations that change or delete data" "a DROP TABLE is seen in a diff of 6000 lines"
+}
+
 test_review_scope_grades_the_ceremony_by_rigor() {
   sandbox >/dev/null
-  local script="$CRUX_HOME/skills/review-pr/scripts/review-scope.sh" out
+  local script="$CRUX_HOME/bin/crux" out
 
   # Without crux.json: the project is not registered and goes in `light`.
   _pm_repo_with_base "$SB/loose"
   cd "$SB/loose" || return
   mkdir -p src/components
   seq 1 80 | sed 's/^/const v/' > src/components/Card.tsx; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "rigor: light — no crux.json" "without a contract, light and says why"
   assert_contains "$out" "specialists: none — rigor light" "a screen pays no specialist in light"
   assert_contains "$out" "can be merged without asking — rigor light" "and it merges itself"
 
   mkdir -p src/auth
   seq 1 40 > src/auth/session.ts; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "security" "but the session still asks for a specialist in light"
   assert_contains "$out" "merge: a person decides" "and it does not merge itself"
 
@@ -340,12 +361,12 @@ test_review_scope_grades_the_ceremony_by_rigor() {
   cd "$SB/serious/app" || return
   mkdir -p src/components
   printf 'a\nb\n' > src/components/Button.tsx; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "risk: medium" "in strict two lines are not low risk"
   assert_contains "$out" "specialists: interface" "and they ask for their specialist"
   echo "text" >> README.md; git reset -q --soft main; git commit -qm text-only
   git reset -q --hard main; echo "more" >> README.md; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "merge: a person decides" "in strict not even text merges itself"
 
   # The kernel has no contract, but it is not just any repo.
@@ -353,14 +374,14 @@ test_review_scope_grades_the_ceremony_by_rigor() {
   cd "$SB/kernel" || return
   mkdir -p bin; touch STANDARD.md bin/crux
   seq 1 80 | sed 's/^/x=/' > bin/something.sh; _pm_commit_all
-  out="$(bash "$script" main)"
+  out="$("$script" review scope main)"
   assert_contains "$out" "rigor: normal — the kernel itself" "the kernel goes in normal even without crux.json"
   assert_contains "$out" "merge: a person decides" "and its code does not merge itself"
   cd "$SB/serious/app" || return
 
   # A value that does not exist stops, it does not fall to a default level.
   echo '{"crux":"0.40.0","project":"serious","profile":"multi-repo","rigor":"strictest"}' > "$SB/serious/crux.json"
-  assert_exit 1 "an unknown rigor stops" bash "$script" main
+  assert_exit 1 "an unknown rigor stops" "$script" review scope main
 
   cd "$CRUX_HOME" || return
 }
@@ -368,18 +389,19 @@ test_review_scope_grades_the_ceremony_by_rigor() {
 test_doctor_rejects_an_unknown_rigor() {
   sandbox >/dev/null
   local docs; docs="$(new_project rigo --repos "api")"
-  assert_exit 0 "with no declared rigor the project is conformant" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 0 "with no declared rigor the project is conformant" "$CRUX_HOME/bin/crux" doctor "$docs"
 
-  node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="light";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
-  assert_exit 0 "with a valid rigor too" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  json_set "$docs/crux.json" rigor '"light"'
+  assert_exit 0 "with a valid rigor too" "$CRUX_HOME/bin/crux" doctor "$docs"
 
-  node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.rigor="relaxed";require("fs").writeFileSync(f,JSON.stringify(j,null,2))' "$docs/crux.json"
-  local out; out="$(bash "$CRUX_HOME/bin/doctor.sh" "$docs" 2>&1)"
+  json_set "$docs/crux.json" rigor '"relaxed"'
+  local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "unknown rigor" "a misspelled rigor is pointed out"
-  assert_exit 1 "and the project stops being conformant" bash "$CRUX_HOME/bin/doctor.sh" "$docs"
+  assert_exit 1 "and the project stops being conformant" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
 test_signals_does_not_take_any_number_for_a_5xx() {
+  needs node || return 0
   sandbox >/dev/null
   local p="$SB/project" out
   mkdir -p "$p"

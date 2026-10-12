@@ -1,0 +1,4 @@
+crux doctor — checks that a docs repo meets the standard.
+
+A standard is worth little if it is only trusted to be followed. This checks
+it. Exits with code 1 on errors; warnings do not block.

@@ -13,15 +13,4 @@
 # the last thing it had read. A reminder that arrives right when it is about to
 # write is what holds. See ADR-018.
 
-set -u
-cat > /dev/null 2>&1 || true
-
-kernel="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)"
-[[ -f "$kernel/lib/common.sh" ]] || exit 0
-# shellcheck source=../../../lib/common.sh
-source "$kernel/lib/common.sh"
-
-dir="$(profile_dir 2>/dev/null)" || exit 0
-reminder="$(profile_field "$dir" reminder 2>/dev/null)"
-[[ -n "$reminder" ]] && printf '%s\n' "$reminder"
-exit 0
+exec "$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)/bin/crux" hook profile-reminder "$@"

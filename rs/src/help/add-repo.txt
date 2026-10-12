@@ -1,0 +1,6 @@
+crux add-repo — registers a new repo in an already adopted project.
+
+  crux add-repo <repo> [--description "..."] [dir]
+
+Creates its documentation folder, declares it in crux.json, registers it in
+the table of repos/README.md and regenerates the pointers.

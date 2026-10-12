@@ -79,7 +79,7 @@ this environment is one Claude Docs document per topic, which can keep being
 edited between sessions. For what is printed or sent by email, the user's
 convention is A5 PDF.
 
-Run the `/redaccion` skill before delivering any long lesson.
+Run the `/prose-check` skill before delivering any long lesson.
 
 ## Closing each session
 

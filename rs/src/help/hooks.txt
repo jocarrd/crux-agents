@@ -1,0 +1,8 @@
+crux hooks — hooks the standard into the moments where it applies.
+
+  crux hooks status     what is installed and whether it points at something real
+  crux hooks install    installs the agent's hooks and, where it applies, git's
+  crux hooks remove     removes only the ones crux manages
+
+A standard you have to remember to check gets checked sometimes. These hooks
+check it every time.

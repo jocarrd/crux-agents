@@ -23,8 +23,8 @@ test_workspace_isolates_ports_and_database() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new uno --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new dos --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new uno --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new dos --repo "$root/app" >/dev/null 2>&1
 
   local a b
   a="$(cat "$root/app-ws-uno/.env.local")"
@@ -42,7 +42,7 @@ test_workspace_keeps_relative_pointers_resolvable() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new rel --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new rel --repo "$root/app" >/dev/null 2>&1
 
   # The worktree goes in as a sibling precisely for this: if it lived outside
   # the project, the @-import of ../<project>-docs/ would stop resolving.
@@ -55,11 +55,11 @@ test_workspace_keeps_uncommitted_work() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new wip --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new wip --repo "$root/app" >/dev/null 2>&1
   echo "half-done change" >> "$root/app-ws-wip/f.txt"
 
   assert_exit 1 "refuses to delete a workspace with changes" \
-    bash "$CRUX_HOME/bin/workspace.sh" rm wip
+    "$CRUX_HOME/bin/crux" workspace rm wip
   assert_file "$root/app-ws-wip/f.txt" "the work is still there"
 }
 
@@ -68,13 +68,13 @@ test_workspace_warns_if_hooks_point_to_the_deleted_workspace() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new conhooks --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new conhooks --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-conhooks"
   printf '{"hooks":{"Stop":[{"hooks":[{"command":"%s/adapters/x.sh"}]}]}}\n' "$ws" > "$CLAUDE_SETTINGS"
 
   rm -f "$ws/.env.local"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm conhooks 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace rm conhooks 2>&1)"
   assert_contains "$out" "will break" "warns before leaving the hooks dangling"
   assert_contains "$out" "crux hooks install" "and says how to repair them"
 }
@@ -88,25 +88,20 @@ test_workspace_rm_returns_hooks_to_kernel_main_checkout() {
   git -C "$kernel" add -A
   git -C "$kernel" commit -qm kernel
 
-  bash "$CRUX_HOME/bin/workspace.sh" new probar --repo "$kernel" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new probar --repo "$kernel" >/dev/null 2>&1
   rm -f "$ws/.env.local"
   printf '#!/usr/bin/env bash\n' > "$ws/adapters/claude/hooks/new-guard.sh"
   git -C "$ws" add -A
   git -C "$ws" commit -qm "new hook"
 
   echo '{}' > "$CLAUDE_SETTINGS"
-  ( cd "$ws" && CRUX_HOME="$ws" bash "$ws/bin/hooks.sh" install >/dev/null 2>&1 )
-  node -e '
-    const fs = require("fs");
-    const [file, cmd] = process.argv.slice(1);
-    const s = JSON.parse(fs.readFileSync(file, "utf8"));
-    s.hooks.Stop.push({ matcher: "", hooks: [{ type: "command", command: cmd }] });
-    fs.writeFileSync(file, JSON.stringify(s));
-  ' "$CLAUDE_SETTINGS" "$ws/adapters/claude/hooks/new-guard.sh"
+  ( cd "$ws" && CRUX_HOME="$ws" "$ws/bin/crux" hooks install >/dev/null 2>&1 )
+  json_push "$CLAUDE_SETTINGS" hooks.Stop \
+    "{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":$(json_quote "$ws/adapters/claude/hooks/new-guard.sh")}]}"
   assert_contains "$(cat "$CLAUDE_SETTINGS")" "$ws/adapters/claude/hooks/doc-sync.sh" \
     "installing from the workspace hooks the workspace, which is what makes testing possible"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" rm probar 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace rm probar 2>&1)"
   local settings; settings="$(cat "$CLAUDE_SETTINGS")"
   assert_contains "$settings" "$kernel/adapters/claude/hooks/doc-sync.sh" \
     "closing the workspace returns the hooks to the main checkout"
@@ -138,27 +133,27 @@ STUB
 
   # With no remote configured, the remote delete fails on all three: with set -e
   # the first one took the whole pass down with it.
-  local out; out="$(cd "$repo" && PATH="$bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" prune --yes 2>&1)"
+  local out; out="$(cd "$repo" && PATH="$bin:$PATH" "$CRUX_HOME/bin/crux" workspace prune --yes 2>&1)"
 
   assert_contains "$out" "3 of 3 branches cleaned" "all three are deleted even if the remote fails"
   assert_eq "" "$(git -C "$repo" branch --list 'ws/*')" "none is left"
 }
 
 test_workspace_prune_does_not_guess_without_gh() {
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" \
+  assert_contains "$(cat "$CRUX_HOME"/rs/src/cmd/workspace/*.rs)" \
     "an authenticated gh is needed to know which proposals were merged" \
     "prune stops if it cannot query the proposals"
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" \
+  assert_contains "$(cat "$CRUX_HOME"/rs/src/cmd/workspace/*.rs)" \
     "is used by a worktree: it stays" "and does not delete the branch of a live workspace"
 }
 
 # Like prune, this needs gh and a remote: it is asserted on the source, which is
 # what the suite can check without a network.
 test_status_flags_open_proposal_without_receipt() {
-  local src; src="$(cat "$CRUX_HOME/bin/status.sh")"
+  local src; src="$(cat "$CRUX_HOME/rs/src/cmd/status.rs")"
   assert_contains "$src" "has no gate receipt" \
     "status warns about an open proposal whose branch did not pass the gate"
-  assert_contains "$src" "if command -v gh >/dev/null; then" \
+  assert_contains "$src" 'if sh::exists("gh") {' \
     "and does not even try without gh"
   assert_contains "$src" "sealed " "reading the receipt seal, not a loose sha"
 }
@@ -168,16 +163,16 @@ test_workspace_releases_and_reuses_slot() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new a --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new a --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new b --repo "$root/app" >/dev/null 2>&1
   rm -f "$root/app-ws-a/.env.local"
-  bash "$CRUX_HOME/bin/workspace.sh" rm a >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace rm a >/dev/null 2>&1
 
-  bash "$CRUX_HOME/bin/workspace.sh" new c --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new c --repo "$root/app" >/dev/null 2>&1
   assert_contains "$(cat "$root/app-ws-c/.env.local")" "PORT=4000" \
     "the released slot is reused instead of growing endlessly"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" list)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace list)"
   assert_not_contains "$out" "app-ws-a " "the deleted workspace disappears from the registry"
 }
 
@@ -189,14 +184,14 @@ test_ship_tells_what_needs_an_environment() {
   mkdir -p src/components db/migrations docs
   touch src/components/Card.tsx
   git add -A
-  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  local out; out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "runtime: yes" "a UI change calls for real validation"
   assert_contains "$out" "visual review" "and says what to validate"
 
   git reset -q; rm -rf src
   touch docs/note.md
   git add -A
-  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "runtime: no" "a documentation change does not ask for it"
 
   cd "$CRUX_HOME" || return
@@ -222,11 +217,12 @@ test_workspace_supports_per_repo_config() {
    "repos":{
      "front":{"env":{"PORT":"{{PORT0}}","API":"http://localhost:{{PORT1}}"}},
      "back":{"env":{"PORT":"{{PORT1}}","DB":"db_{{SLOT}}"},
-             "setup":"echo 'created  db_{{SLOT}}' > $CRUX_PROJECTS_DIR/setup-ran.txt"}}}}
+             "setup":"echo 'created  db_{{SLOT}}' > $CRUX_PROJECTS_DIR/setup-ran.txt",
+             "teardown":"echo 'freed {{PORT0}} db_{{SLOT}}' > $CRUX_PROJECTS_DIR/teardown-ran.txt"}}}}
 JSON
 
-  bash "$CRUX_HOME/bin/workspace.sh" new f --repo "$root/front" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$root/back" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new f --repo "$root/front" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new b --repo "$root/back" >/dev/null 2>&1
 
   local f b
   f="$(cat "$root/front-ws-f/.env.local")"
@@ -242,6 +238,12 @@ JSON
   assert_file "$CRUX_PROJECTS_DIR/setup-ran.txt" "the setup hook runs"
   # Its single quotes used to be stripped on the way to the shell.
   assert_contains "$(cat "$CRUX_PROJECTS_DIR/setup-ran.txt")" "created  db_1" "with its quotes intact"
+
+  "$CRUX_HOME/bin/crux" workspace rm b >/dev/null 2>&1
+  # The teardown releases what the setup took: the same slot and its ports,
+  # not port 0.
+  assert_contains "$(cat "$CRUX_PROJECTS_DIR/teardown-ran.txt" 2>/dev/null)" "freed 5010 db_1" \
+    "the teardown gets the ports of its slot"
 }
 
 test_workspace_env_starts_from_the_main_checkouts() {
@@ -259,7 +261,7 @@ test_workspace_env_starts_from_the_main_checkouts() {
  "workspace":{"portBase":5000,"portsPerSlot":10,"envFile":".env.local",
    "repos":{"app":{"env":{"PORT":"{{PORT0}}","DB_URL":"mysql://ws{{SLOT}}"}}}}}
 JSON
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new e --repo "$root/app" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new e --repo "$root/app" 2>&1)"
   local env; env="$(cat "$root/app-ws-e/.env.local")"
   assert_contains "$env" "AUTH_SECRET=s3cr3t" "the workspace gets the keys of the main checkout"
   assert_contains "$env" "PORT=5000" "the template wins on what is per slot"
@@ -277,7 +279,7 @@ _machine_in() {
   CRUX_CONFIG="$home/.crux/config" \
   CLAUDE_SKILLS_DIR="$home/.claude/skills" \
   CLAUDE_SETTINGS="$home/.claude/settings.json" \
-    bash "$CRUX_HOME/bin/machine.sh"
+    "$CRUX_HOME/bin/crux" machine
 }
 
 test_machine_runs_the_checks_this_machine_declares() {
@@ -338,11 +340,12 @@ test_usage_does_not_report_zero_as_data() {
   mkdir -p "$empty"
 
   local out
-  out="$(CRUX_TRANSCRIPTS="$empty" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  out="$(CRUX_TRANSCRIPTS="$empty" "$CRUX_HOME/bin/crux" usage 2>&1)"
   assert_contains "$out" "No data, not no usage" "distinguishes absence of data from absence of use"
 }
 
 test_code_health_separates_real_from_noise() {
+  needs node || return 0
   sandbox >/dev/null
   local repo="$SB/project"
   mkdir -p "$repo/src" "$repo/src/__tests__"
@@ -392,6 +395,7 @@ TS
 }
 
 test_code_health_compares_against_baseline() {
+  needs node || return 0
   sandbox >/dev/null
   local repo="$SB/base"
   mkdir -p "$repo/src"
@@ -419,7 +423,7 @@ test_workspace_respects_client_profile() {
 
   # A local branch is not documentation, and in a client repo developing is the
   # job: it warns where the documentation goes and lets the work proceed.
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new x --repo "$root/vendor" 2>&1)"
   assert_contains "$out" "documentation of vendor" "warns that the documentation does not go to the client repo"
   assert_file "$root/vendor-ws-x/f.txt" "and still creates the workspace"
   assert_file "$root/vendor-ws-x/CLAUDE.local.md" "the worktree carries its local pointer"
@@ -431,14 +435,14 @@ test_workspace_respects_client_profile() {
   assert_contains "$out" "will be seen in their repository" "warns that the client will see the branch"
   assert_contains "$out" "--branch" "and says how to choose it"
 
-  bash "$CRUX_HOME/bin/workspace.sh" rm x >/dev/null 2>&1
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --branch fix/a-real-name 2>&1)"
+  "$CRUX_HOME/bin/crux" workspace rm x >/dev/null 2>&1
+  out="$("$CRUX_HOME/bin/crux" workspace new x --repo "$root/vendor" --branch fix/a-real-name 2>&1)"
   assert_eq "fix/a-real-name" "$(git -C "$root/vendor-ws-x" rev-parse --abbrev-ref HEAD)" \
     "--branch sets the branch name"
   assert_not_contains "$out" "will be seen in their repository" "and then it does not warn"
 
-  bash "$CRUX_HOME/bin/workspace.sh" rm x >/dev/null 2>&1
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/vendor" --force 2>&1)"
+  "$CRUX_HOME/bin/crux" workspace rm x >/dev/null 2>&1
+  out="$("$CRUX_HOME/bin/crux" workspace new x --repo "$root/vendor" --force 2>&1)"
   assert_not_contains "$out" "documentation of vendor" "with --force it does not repeat the warning"
   assert_file "$root/vendor-ws-x/f.txt" "and creates the workspace anyway"
 }
@@ -452,7 +456,7 @@ test_hooks_install_commit_msg_in_client_repo_too() {
     > "$root/cli-docs/crux.json"
   git -C "$root/cli-docs" init -q
 
-  ( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+  ( cd "$root/cli-docs" && "$CRUX_HOME/bin/crux" hooks install ) >/dev/null 2>&1
 
   # `.git/hooks/` is not versioned and travels in no push: hooking it is not
   # writing to the client's repo. Skipping it left without a safety net exactly
@@ -476,7 +480,7 @@ test_hooks_install_commit_msg_in_client_repo_too() {
     bash "$root/vendor/.git/hooks/commit-msg" "$f"
   printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[],"commit":{"language":"es"}}\n' \
     > "$root/cli-docs/crux.json"
-  ( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+  ( cd "$root/cli-docs" && "$CRUX_HOME/bin/crux" hooks install ) >/dev/null 2>&1
   assert_exit 0 "and a client that writes Spanish declares it" \
     bash "$root/vendor/.git/hooks/commit-msg" "$f"
 }
@@ -494,7 +498,7 @@ test_hooks_run_in_a_repo_with_its_own_hooks_path() {
   git -C "$root/cli-docs" init -q
 
   # git ignores .git/hooks when core.hooksPath is set: crux's hooks never ran.
-  local out; out="$( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" install 2>&1 )"
+  local out; out="$( cd "$root/cli-docs" && "$CRUX_HOME/bin/crux" hooks install 2>&1 )"
   assert_contains "$out" "has its own hooks (.githooks)" "says the repo has its own hooks"
 
   local f="$SB/MSG" rc=0
@@ -507,7 +511,7 @@ test_hooks_run_in_a_repo_with_its_own_hooks_path() {
   assert_eq "0" "$rc" "a good message goes through"
   assert_contains "$(cat "$SB/ran" 2>/dev/null)" "client-hook-ran" "and the repo's own hook still runs after it"
 
-  out="$( cd "$root/cli-docs" && bash "$CRUX_HOME/bin/hooks.sh" remove 2>&1 )"
+  out="$( cd "$root/cli-docs" && "$CRUX_HOME/bin/crux" hooks remove 2>&1 )"
   assert_eq ".githooks" "$(git -C "$root/vendor" config --get core.hooksPath)" "remove gives the repo its hooks path back"
 }
 
@@ -520,7 +524,7 @@ test_hooks_enforce_conventions_in_own_repo() {
   printf '{"crux":"0.1.0","project":"own","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/own-docs/crux.json"
 
-  ( cd "$root/own-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+  ( cd "$root/own-docs" && "$CRUX_HOME/bin/crux" hooks install ) >/dev/null 2>&1
   assert_file "$root/app/.git/hooks/commit-msg" "hooks the commit-msg in the own repo"
 
   local f="$SB/MSG" hook="$root/app/.git/hooks/commit-msg"
@@ -543,21 +547,21 @@ test_ship_gate_reads_checks_from_contract() {
   # Without a declaration, the gate says how to declare it instead of inventing anything.
   printf '{"crux":"0.1.0","project":"g","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/g-docs/crux.json"
-  local out; out="$(cd "$root/app" && bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)"
+  local out; out="$(cd "$root/app" && "$CRUX_HOME/bin/crux" ship gate 2>&1)"
   assert_contains "$out" "does not declare what to check" "without a contract, it does not invent the checks"
   assert_contains "$out" "quality" "and says where to declare them"
 
   # Declared per repo: it runs them and records them with the command as is.
   printf '{"crux":"0.1.0","project":"g","profile":"multi-repo","repos":["app"],"sections":[],
     "quality":{"repos":{"app":{"gate":["true","echo done"]}}}}\n' > "$root/g-docs/crux.json"
-  ( cd "$root/app" && bash "$CRUX_HOME/bin/ship.sh" gate >/dev/null 2>&1 )
+  ( cd "$root/app" && "$CRUX_HOME/bin/crux" ship gate >/dev/null 2>&1 )
   assert_contains "$(cat "$root/app/.crux-ship")" "run 0 " "runs and records the result"
   assert_contains "$(cat "$root/app/.crux-ship")" "echo done" "with the declared command, not the wrapper"
 
   # A failing check does not close the gate.
   printf '{"crux":"0.1.0","project":"g","profile":"multi-repo","repos":["app"],"sections":[],
     "quality":{"repos":{"app":{"gate":["false"]}}}}\n' > "$root/g-docs/crux.json"
-  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/ship.sh" gate 2>&1)"
+  out="$(cd "$root/app" && "$CRUX_HOME/bin/crux" ship gate 2>&1)"
   assert_contains "$out" "failing" "and a failing one leaves it open"
 }
 
@@ -572,21 +576,21 @@ test_ship_body_blocks_signature_and_our_scaffolding() {
   local b="$SB/BODY.md"
   printf 'Adds the thing and says why.\n' > "$b"
   assert_exit 0 "lets a clean body through" \
-    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+    in_dir "$root/vendor" "$CRUX_HOME/bin/crux" ship body "$b"
 
   printf 'Adds the thing.\n\nGenerated with Claude Code\n' > "$b"
   assert_exit 1 "stops the tool signature" \
-    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+    in_dir "$root/vendor" "$CRUX_HOME/bin/crux" ship body "$b"
 
   # In a client repo, moreover, how we work internally is not shown.
   printf 'Adds the thing.\n\nChecked by passing crux ship and workspace finish.\n' > "$b"
   assert_exit 1 "and our tooling in a client repo" \
-    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+    in_dir "$root/vendor" "$CRUX_HOME/bin/crux" ship body "$b"
 
   # Nor a path to our documentation repo, which changes with each project.
   printf 'Adds the thing.\n\nSee cli-docs/repos/vendor/notes.md\n' > "$b"
   assert_exit 1 "nor the name of our docs repo" \
-    env -C "$root/vendor" bash "$CRUX_HOME/bin/ship.sh" body "$b"
+    in_dir "$root/vendor" "$CRUX_HOME/bin/crux" ship body "$b"
 }
 
 test_finish_does_not_propose_unreviewed_code() {
@@ -601,12 +605,12 @@ test_finish_does_not_propose_unreviewed_code() {
   printf '{"crux":"0.1.0","project":"prop","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/prop-docs/crux.json"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new task --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new task --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-task"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace finish task 2>&1)"
   assert_contains "$out" "has not passed the quality gate" "refuses to propose without review"
   # The bash error for reading a file that does not exist used to slip in on top
   # of the message, and it is the output seen by anyone who has not yet passed the gate.
@@ -615,26 +619,26 @@ test_finish_does_not_propose_unreviewed_code() {
   # A loose sha is what used to be written: it does not say what was run, so it
   # no longer counts as having passed the gate.
   git -C "$ws" rev-parse HEAD > "$ws/.crux-ship"
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace finish task 2>&1)"
   assert_contains "$out" "not a single command run" "a loose sha is not valid as a receipt"
 
   # Neither does a receipt with a failing check.
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- false >/dev/null 2>&1 ) || true
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- false >/dev/null 2>&1 ) || true
+  out="$("$CRUX_HOME/bin/crux" workspace finish task 2>&1)"
   assert_contains "$out" "in red" "a failed check does not close the gate"
 
   # A good receipt, but for an earlier commit: the gate has to be passed again.
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
   echo more > "$ws/other.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: more"
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace finish task 2>&1)"
   assert_contains "$out" "has not passed the quality gate" "an old receipt does not count"
   assert_contains "$out" "the receipt is for" "and says why it does not count"
 
   # The shortcut exists to obey a person, and it shows.
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task --skip-gate 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace finish task --skip-gate 2>&1)"
   assert_contains "$out" "WITHOUT passing the quality gate" "with --skip-gate it says so out loud"
 }
 
@@ -649,7 +653,7 @@ test_receipt_records_crux_version_that_sealed_it() {
   echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
   printf '{"crux":"0.1.0","project":"ver","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/ver-docs/crux.json"
-  bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new t --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-t" version
   version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
   echo change > "$ws/new.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
@@ -657,19 +661,19 @@ test_receipt_records_crux_version_that_sealed_it() {
   # Sealing leaves the kernel version in the receipt and warns that the project
   # pins another.
   local out
-  out="$(cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  out="$(cd "$ws" && "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal 2>&1)"
   assert_contains "$(cat "$ws/.crux-ship")" "kernel $version" "the receipt records the kernel version"
   assert_contains "$out" "pins crux 0.1.0" "warns if the project pins another version"
 
   # A receipt sealed with another version is not valid: the rules may differ.
   sed -i "s/^kernel .*/kernel 0.0.1/" "$ws/.crux-ship"
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"
   assert_contains "$out" "was sealed with crux 0.0.1" "rejects a receipt from another version"
 
   # Nor is one without a version, from the previous format.
   sed -i "/^kernel /d" "$ws/.crux-ship"
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"
   assert_contains "$out" "does not say which crux version" "rejects a receipt without a version"
 }
 
@@ -688,7 +692,7 @@ test_finish_does_not_propose_branch_clashing_with_main() {
   printf '{"crux":"0.1.0","project":"clash","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/clash-docs/crux.json"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new t --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-t"
   echo branch > "$ws/f.txt"; git -C "$ws" commit -qam "feat: branch"
 
@@ -699,9 +703,9 @@ test_finish_does_not_propose_branch_clashing_with_main() {
   echo main > "$other_one/f.txt"; git -C "$other_one" commit -qam "fix: main"
   git -C "$other_one" push -q origin main
 
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  local out; out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"
   assert_contains "$out" "clashes with origin/main" "does not propose a branch that cannot be integrated"
   assert_contains "$out" "f.txt" "and says which file clashes"
   assert_eq "" "$(git -C "$ws" ls-remote --heads origin ws/t)" "nor pushes it"
@@ -711,9 +715,9 @@ test_finish_does_not_propose_branch_clashing_with_main() {
   git -C "$ws" reset -q --hard origin/main
   echo new > "$ws/h.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: no clash"
   echo more > "$other_one/g.txt"; git -C "$other_one" commit -qam "fix: g"; git -C "$other_one" push -q origin main
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"
   assert_contains "$out" "do not clash" "if it is only behind, it warns and carries on"
   assert_contains "$out" "pushed" "and pushes it"
 }
@@ -730,7 +734,7 @@ _merge_scenario() {
   echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
   printf '{"crux":"0.1.0","project":"mrg","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/mrg-docs/crux.json"
-  bash "$CRUX_HOME/bin/workspace.sh" new m --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new m --repo "$root/app" >/dev/null 2>&1
   echo change > "$root/app-ws-m/new.txt"
   git -C "$root/app-ws-m" add -A; git -C "$root/app-ws-m" commit -qm "feat: something"
 
@@ -756,7 +760,7 @@ test_merge_refuses_with_failing_checks() {
   _merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"FAILURE"}]}' >/dev/null
 
   local out rc=0
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" merge m --yes 2>&1)" || rc=$?
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes 2>&1)" || rc=$?
   assert_eq "1" "$rc" "exits with failure"
   assert_contains "$out" "checks failing" "says how many fail"
   assert_contains "$out" "not merging" "and that it does not merge"
@@ -767,7 +771,7 @@ test_merge_refuses_with_conflicts() {
   _merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"CONFLICTING","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}]}' >/dev/null
 
   local out rc=0
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" merge m --yes 2>&1)" || rc=$?
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes 2>&1)" || rc=$?
   assert_eq "1" "$rc" "exits with failure"
   assert_contains "$out" "conflicts to resolve" "names the conflict"
 }
@@ -777,7 +781,7 @@ test_merge_without_yes_reports_and_touches_nothing() {
   local ws; ws="$(_merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}]}')"
 
   local out rc=0
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" merge m 2>&1)" || rc=$?
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m 2>&1)" || rc=$?
   assert_eq "0" "$rc" "without --yes it is not an error"
   assert_contains "$out" "all green" "summarizes the state"
   assert_contains "$out" "--yes" "and says how to really merge"
@@ -802,16 +806,16 @@ test_finish_survives_main_branch_not_named_main() {
   git -C "$root/app" remote add origin "$SB/remote.git"
   git -C "$root/app" push -q origin trunk
 
-  bash "$CRUX_HOME/bin/workspace.sh" new t --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new t --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-t"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "a step" >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task add "a step" >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
 
   local out rc
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish t 2>&1)"; rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"; rc=$?
   assert_eq "$rc" "0" "finishes fine even if the main branch is not called main"
   assert_contains "$out" "pushed" "pushes the branch"
   # Without gh there is no proposal, but it has to get this far instead of dying
@@ -834,16 +838,16 @@ test_finish_stops_before_pushing_if_origin_is_not_the_declared_remote() {
   git -C "$root/app" remote add origin "$SB/remote.git"
   git -C "$root/app" push -q origin main
 
-  bash "$CRUX_HOME/bin/workspace.sh" new m --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new m --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-m"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "a step" >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task add "a step" >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
 
   local out rc
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish m 2>&1)"; rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace finish m 2>&1)"; rc=$?
   assert_eq "$rc" "1" "it stops instead of opening a proposal against the old owner"
   assert_contains "$out" "crux.json declares git@github.com:new-owner/app.git" "and names the cause"
   assert_contains "$out" "remote set-url origin git@github.com:new-owner/app.git" "with the command that aligns it"
@@ -862,26 +866,26 @@ test_finish_warns_if_task_closes_without_steps() {
   printf '{"crux":"0.1.0","project":"empty","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/empty-docs/crux.json"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new task --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new task --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-task"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
 
   # Without a remote the push fails afterwards, but the warning comes first and shows all the same.
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace finish task 2>&1)"
   assert_contains "$out" "without a single step noted" "says the record is left empty"
   assert_contains "$out" "recovered by nobody" "and says what is lost"
   assert_contains "$out" "warn" "it is a warning and not an error: the proposal carries on"
 
   # With a step noted it does not bother.
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "what I did" >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task add "what I did" >/dev/null 2>&1 )
   echo more > "$ws/other.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: more"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish task 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  out="$("$CRUX_HOME/bin/crux" workspace finish task 2>&1)"
   assert_not_contains "$out" "without a single step noted" "with steps noted it stays quiet"
 }
 
@@ -895,8 +899,8 @@ test_workspace_warns_if_another_session_is_in_the_repo() {
   git -C "$root/app" config user.name t
   echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
 
-  bash "$CRUX_HOME/bin/workspace.sh" new first --repo "$root/app" >/dev/null 2>&1
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new second --repo "$root/app" 2>&1)"
+  "$CRUX_HOME/bin/crux" workspace new first --repo "$root/app" >/dev/null 2>&1
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new second --repo "$root/app" 2>&1)"
   assert_contains "$out" "there is already open work" "warns about the other live session"
   assert_contains "$out" "first" "and says which"
 }
@@ -917,7 +921,7 @@ test_workspace_installs_workspace_dependencies() {
   git -C "$root/app" add -A; git -C "$root/app" commit -qm init
   mkdir -p "$root/app/node_modules"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new x --repo "$root/app" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new x --repo "$root/app" 2>&1)"
   assert_contains "$out" "dependencies" "detects the manager and tries it"
   assert_no_file "$root/app-ws-x/node_modules/.keep" "the worktree does not inherit node_modules"
 }
@@ -931,13 +935,13 @@ test_diff_scope_understands_layered_architecture() {
   touch src/modules/x/domain/entity.ts
   git add -A
 
-  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  local out; out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "logic:1" "the domain is logic, not 'other'"
   assert_contains "$out" "runtime: no" "and pure logic does not ask to bring up the environment"
 
   touch src/modules/x/infrastructure/repo.adapter.ts
   git add -A
-  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "integration:1" "the infrastructure stands out"
   assert_contains "$out" "runtime: yes" "and it does ask to test against the real service"
 
@@ -957,7 +961,7 @@ test_pre_push_blocks_main_branch() {
   git -C "$root/protected-docs" init -q
   printf '{"crux":"0.1.0","project":"protected","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/protected-docs/crux.json"
-  ( cd "$root/protected-docs" && bash "$CRUX_HOME/bin/hooks.sh" install ) >/dev/null 2>&1
+  ( cd "$root/protected-docs" && "$CRUX_HOME/bin/crux" hooks install ) >/dev/null 2>&1
 
   # The first push creates the branch on an empty remote: no proposal is
   # skipped, and without this the only way out was --no-verify.
@@ -1009,17 +1013,17 @@ test_gate_scales_with_the_diff() {
   git init -q; git config user.email t@t; git config user.name t
 
   touch docs/note.md; git add -A
-  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  local out; out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "gates: 2,8,9" "a text-only change does not pay for all nine gates"
   assert_contains "$out" "tests: none" "and has no tests to run"
 
   git reset -q; rm -f docs/nota.md
   touch src/lib/util.ts; git add -A
-  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "gates: 1,2,3,4,5,6,8,9" "code that is not visible from outside skips gate 7"
 
   touch src/components/Card.tsx; git add -A
-  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "gates: all" "if it is visible from outside, gate 7 stops being optional"
 
   cd "$CRUX_HOME" || return
@@ -1035,7 +1039,7 @@ test_gate_1_runs_only_what_is_affected() {
   # Without a contract: the kernel does not know what runs the tests here, so it
   # gives the filter and says how to declare the command.
   touch src/geohash.ts; git add -A
-  local out; out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  local out; out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "geohash" "without a contract, it at least says what to filter by"
   assert_contains "$out" "quality.tests" "and how to declare the exact command"
 
@@ -1044,13 +1048,13 @@ test_gate_1_runs_only_what_is_affected() {
   cat > "$SB/crux.json" <<'JSON'
 { "quality": { "tests": "pnpm test", "testsFiltered": "pnpm test {filter}" } }
 JSON
-  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_contains "$out" "tests: pnpm test geohash" "with a contract, the exact command"
 
   # Text only: there is nothing to filter and the whole suite is not proposed either.
   git reset -q; rm -f src/geohash.ts
   touch README.md; git add -A
-  out="$(bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh")"
+  out="$("$CRUX_HOME/bin/crux" ship scope)"
   assert_not_contains "$out" "pnpm test" "a text change does not drag in the suite"
 
   cd "$CRUX_HOME" || return
@@ -1141,9 +1145,9 @@ test_usage_counts_procedure_followed_by_hand() {
 
   # The path is resolved before the assignment in front is applied, so it comes
   # from the real kernel; the fake CRUX_HOME is only the catalog it is going to read.
-  local usage="$CRUX_HOME/bin/usage.mjs" out
+  local out
   out="$(CRUX_HOME="$kernel" CRUX_PROJECTS_DIR="$SB/empty" CRUX_TRANSCRIPTS="$SB/trans" \
-    node "$usage" 2>&1)"
+    "$CRUX_BIN" usage 2>&1)"
 
   assert_contains "$out" "withscript" "the skill shows as used even though nobody called it by name"
 
@@ -1173,9 +1177,9 @@ test_usage_does_not_count_writing_skill_as_using_it() {
     printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash run.sh"}}]}}\n'
   } > "$trans/s.jsonl"
 
-  local usage="$CRUX_HOME/bin/usage.mjs" out
+  local out
   out="$(CRUX_HOME="$kernel" CRUX_PROJECTS_DIR="$SB/empty" CRUX_TRANSCRIPTS="$SB/trans" \
-    node "$usage" 2>&1)"
+    "$CRUX_BIN" usage 2>&1)"
 
   assert_contains "$out" "veteran" "the one that was executed does count"
   local used; used="$(printf '%s' "$out" | sed -n '/Used:/,/Unused in the period/p' | grep -c fresh || true)"
@@ -1197,7 +1201,7 @@ test_ship_warns_about_artifacts_slipping_into_the_root() {
   echo "export const a = 1" > "$repo/code.ts"
   git -C "$repo" add -A
 
-  local out; out="$(cd "$repo" && bash "$CRUX_HOME/skills/ship/scripts/diff-scope.sh" 2>&1)"
+  local out; out="$(cd "$repo" && "$CRUX_HOME/bin/crux" ship scope 2>&1)"
 
   assert_contains "$out" "capture.png" "names the loose capture"
   assert_contains "$out" "output.log" "names the loose dump"
@@ -1220,9 +1224,9 @@ test_usage_flags_skill_whose_procedure_is_followed_without_calling_it() {
     printf '{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bash run.sh"}}]}}\n'
   } > "$trans/s.jsonl"
 
-  local usage="$CRUX_HOME/bin/usage.mjs" out
+  local out
   out="$(CRUX_HOME="$kernel" CRUX_PROJECTS_DIR="$SB/empty" CRUX_TRANSCRIPTS="$SB/trans" \
-    node "$usage" 2>&1)"
+    "$CRUX_BIN" usage 2>&1)"
 
   assert_contains "$out" "Followed by hand" "opens the section when there is one"
   local section; section="$(printf '%s' "$out" | sed -n '/Followed by hand/,/problem shows up/p')"
@@ -1241,10 +1245,10 @@ test_gate_counts_two_digit_failures() {
   # A command that does not exist exits with 127, a timeout with 124 and a
   # process the system kills for memory with 137. Counting only single-digit
   # codes let exactly those three through, which are the ones that show up most.
-  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- bash -c 'exit 127' ) >/dev/null 2>&1
-  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- bash -c 'exit 124' ) >/dev/null 2>&1
+  ( cd "$repo" && "$CRUX_HOME/bin/crux" ship run -- bash -c 'exit 127' ) >/dev/null 2>&1
+  ( cd "$repo" && "$CRUX_HOME/bin/crux" ship run -- bash -c 'exit 124' ) >/dev/null 2>&1
 
-  local out; out="$(cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  local out; out="$(cd "$repo" && "$CRUX_HOME/bin/crux" ship seal 2>&1)"
   assert_contains "$out" "does not close" "127 and 124 are failures: the gate does not close"
   assert_not_contains "$out" "gate closed" "and it is not declared closed"
   assert_not_contains "$(cat "$repo/.crux-ship")" "sealed " "nor is the seal written"
@@ -1254,7 +1258,7 @@ test_finish_does_not_publish_with_two_digit_red_receipt() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
-  bash "$CRUX_HOME/bin/workspace.sh" new r --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new r --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-r"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
@@ -1263,7 +1267,7 @@ test_finish_does_not_publish_with_two_digit_red_receipt() {
   printf '# receipt\nrepo %s\nrun 127 1 npm test\nsealed %s x\n' \
     "$ws" "$(git -C "$ws" rev-parse HEAD)" > "$ws/.crux-ship"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" finish r 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace finish r 2>&1)"
   assert_contains "$out" "in red" "a receipt with a 127 does not let the proposal open"
 }
 
@@ -1273,11 +1277,11 @@ test_usage_understands_days_separated_by_space() {
   printf '{"name":"Skill","input":{"skill":"adr"}}\n' > "$t/s.jsonl"
 
   local out
-  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" --days 7 2>&1)"
+  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" "$CRUX_HOME/bin/crux" usage --days 7 2>&1)"
   assert_contains "$out" "last 7 days" "the documented form '--days N' is respected"
-  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" --days=7 2>&1)"
+  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" "$CRUX_HOME/bin/crux" usage --days=7 2>&1)"
   assert_contains "$out" "last 7 days" "and the form with an equals sign still works"
-  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" --days abc 2>&1)"
+  out="$(CRUX_TRANSCRIPTS="$SB/transcripts" "$CRUX_HOME/bin/crux" usage --days abc 2>&1)"
   assert_contains "$out" "not a number" "a value that is not a number is reported, not ignored"
 }
 
@@ -1288,7 +1292,7 @@ test_usage_counts_what_subagents_did() {
   printf '{"type":"user"}\n' > "$t/session.jsonl"
   printf '{"name":"Skill","input":{"skill":"review-pr"}}\n' > "$t/session/subagents/a.jsonl"
 
-  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" "$CRUX_HOME/bin/crux" usage 2>&1)"
   assert_contains "$out" "review-pr" "what a subagent invokes counts as use"
   assert_contains "$out" "1 sessions reviewed" "and the subagent does not inflate the session count"
 }
@@ -1301,7 +1305,7 @@ test_workspace_rejects_name_escaping_the_tree() {
   # With a valid branch git no longer stops the name: it planted the worktree
   # wherever the name pointed, plus a junk 'app-ws-..' directory that rm did not pick up.
   local out
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" new '../../outside' --repo "$root/app" --branch fix/ok 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace new '../../outside' --repo "$root/app" --branch fix/ok 2>&1)"
   assert_contains "$out" "invalid workspace name" "a name with .. is rejected"
   assert_no_file "$root/outside" "and nothing is created outside the repo"
   assert_no_file "$root/app-ws-.." "nor the directory that used to be left on the way"
@@ -1309,7 +1313,7 @@ test_workspace_rejects_name_escaping_the_tree() {
     "nor is it registered"
 
   # Asking for help does not create a workspace called '--help'.
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" new --help 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace new --help 2>&1)"
   assert_contains "$out" "crux workspace new" "'new --help' shows the usage"
   assert_not_contains "$(cat "$CRUX_REGISTRY" 2>/dev/null || echo '')" "help" \
     "and does not register a workspace with that name"
@@ -1324,31 +1328,58 @@ test_registry_lock_does_not_leave_kernel_dead() {
   # place forever, and no command knew how to remove it.
   mkdir -p "$(dirname "$CRUX_REGISTRY")/.workspaces.lock"
   echo 999999 > "$(dirname "$CRUX_REGISTRY")/.workspaces.lock/pid"
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new after-oom --repo "$root/app" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new after-oom --repo "$root/app" 2>&1)"
   assert_contains "$out" "ready" "a lock held by a process that no longer exists is removed on its own"
 
   # And two workspaces launched at the same time must both come out: the lock
   # was held during setup, which can take minutes, with a five-second wait. The
   # result is checked, not the lock mechanism.
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8"));
-    j.workspace.setup = "sleep 3";
-    fs.writeFileSync(f, JSON.stringify(j));
-  ' "$root/proj-docs/crux.json"
-  bash "$CRUX_HOME/bin/workspace.sh" new par-one --repo "$root/app" >/dev/null 2>&1 &
+  json_set "$root/proj-docs/crux.json" workspace.setup '"sleep 3"'
+  "$CRUX_HOME/bin/crux" workspace new par-one --repo "$root/app" >/dev/null 2>&1 &
   local first_one=$!
   sleep 1
-  bash "$CRUX_HOME/bin/workspace.sh" new par-two --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new par-two --repo "$root/app" >/dev/null 2>&1
   local rc_two=$?
   wait "$first_one"; local rc_one=$?
 
   assert_eq "0 0" "$rc_one $rc_two" "both workspaces in parallel come out fine"
-  assert_eq "2" "$(node -e '
-    const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-    const s = Object.entries(r.workspaces).filter(([n]) => n.startsWith("par-")).map(([, w]) => w.slot);
-    process.stdout.write(String(new Set(s).size));
-  ' "$CRUX_REGISTRY")" "and each with a different slot"
+  local one two
+  one="$(json_get "$CRUX_REGISTRY" workspaces.par-one.slot)"; two="$(json_get "$CRUX_REGISTRY" workspaces.par-two.slot)"
+  assert_eq "1" "$([[ -n "$one" && -n "$two" && "$one" != "$two" ]] && echo 1 || echo 0)" "and each with a different slot"
+}
+
+test_workspaces_created_at_once_all_stay_in_the_registry() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_with_config)"
+  # From no registry at all: creating it is the first thing they race for.
+  rm -f "$CRUX_REGISTRY"
+  local i
+  for i in 1 2 3 4 5 6 7 8; do
+    "$CRUX_HOME/bin/crux" workspace new "at-once-$i" --repo "$root/app" >/dev/null 2>&1 &
+  done
+  wait
+  local kept=0
+  for i in 1 2 3 4 5 6 7 8; do
+    [[ -n "$(json_value "$CRUX_REGISTRY" "workspaces.at-once-$i")" ]] && kept=$((kept + 1))
+  done
+  assert_eq "8" "$kept" "eight created at the same time are eight in the registry"
+}
+
+test_heal_keeps_a_reservation_whose_creator_is_running() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root; root="$(_repo_with_config)"
+  # A reservation has no folder or branch yet: that is not an abandoned entry
+  # while the process creating it is alive.
+  printf '{"workspaces":{"coming":{"slot":5,"repo":"%s","path":"%s","branch":"ws/coming","ports":[3050,3059],"task":"coming","project":"proj","creating":%s}}}\n' \
+    "$root/app" "$root/app-ws-coming" "$$" > "$CRUX_REGISTRY"
+  "$CRUX_HOME/bin/crux" workspace heal >/dev/null 2>&1
+  assert_eq "5" "$(json_get "$CRUX_REGISTRY" workspaces.coming.slot)" "heal leaves it alone"
+  # Its creator died halfway: now it is debris.
+  json_set "$CRUX_REGISTRY" workspaces.coming.creating 999999
+  "$CRUX_HOME/bin/crux" workspace heal >/dev/null 2>&1
+  assert_eq "" "$(json_value "$CRUX_REGISTRY" workspaces.coming)" "and removes it once nobody is creating it"
 }
 
 test_two_projects_do_not_share_the_same_port() {
@@ -1368,35 +1399,22 @@ test_two_projects_do_not_share_the_same_port() {
     "workspace":{"portBase":4005,"portsPerSlot":5,"envFile":".env","env":{"PORT":"{{PORT0}}"}}}\n' \
     > "$other_one/other-docs/crux.json"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new b --repo "$other_one/api" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new a --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new b --repo "$other_one/api" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new a --repo "$root/app" >/dev/null 2>&1
 
-  local clashes
-  clashes="$(node -e '
-    const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-    const e = Object.entries(r.workspaces);
-    let n = 0;
-    for (let i = 0; i < e.length; i++) for (let j = i + 1; j < e.length; j++) {
-      const [, A] = e[i], [, B] = e[j];
-      if (A.ports[0] <= B.ports[1] && B.ports[0] <= A.ports[1]) n++;
-    }
-    process.stdout.write(String(n));
-  ' "$CRUX_REGISTRY")"
-  assert_eq "0" "$clashes" "no workspace overlaps the range of another"
+  local a b
+  a="$(json_value "$CRUX_REGISTRY" workspaces.a.ports | tr -d '[] ')"; b="$(json_value "$CRUX_REGISTRY" workspaces.b.ports | tr -d '[] ')"
+  assert_eq "1" "$([[ -n "$a" && -n "$b" ]] && (( ${a%,*} > ${b#*,} || ${b%,*} > ${a#*,} )) && echo 1 || echo 0)" \
+    "no workspace overlaps the range of another"
 }
 
 test_interruption_does_not_declare_workspace_ready() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8"));
-    j.workspace.setup = "sleep 10";
-    fs.writeFileSync(f, JSON.stringify(j));
-  ' "$root/proj-docs/crux.json"
+  json_set "$root/proj-docs/crux.json" workspace.setup '"sleep 10"'
 
-  bash "$CRUX_HOME/bin/workspace.sh" new interrupted --repo "$root/app" > "$SB/output" 2>&1 &
+  "$CRUX_HOME/bin/crux" workspace new interrupted --repo "$root/app" > "$SB/output" 2>&1 &
   local pid=$!
   sleep 3
   kill -TERM "$pid" 2>/dev/null
@@ -1408,9 +1426,9 @@ test_interruption_does_not_declare_workspace_ready() {
   # The worktree is already on disk: the entry stays, because deleting it left a
   # worktree the tool no longer recognized and a slot handed out twice.
   if [[ -d "$root/app-ws-interrupted" ]]; then
-    assert_contains "$(bash "$CRUX_HOME/bin/workspace.sh" list --all)" "interrupted" \
+    assert_contains "$("$CRUX_HOME/bin/crux" workspace list --all)" "interrupted" \
       "the half-done workspace shows in the list"
-    assert_not_contains "$(bash "$CRUX_HOME/bin/workspace.sh" rm interrupted 2>&1)" "does not exist" \
+    assert_not_contains "$("$CRUX_HOME/bin/crux" workspace rm interrupted 2>&1)" "does not exist" \
       "and it can be removed"
   fi
 }
@@ -1422,7 +1440,7 @@ test_unreadable_contract_does_not_become_default_ports() {
   printf '{"crux":"0.1.0","project":"proj","workspace":{"portBase":4000' \
     > "$root/proj-docs/crux.json"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" new broken --repo "$root/app" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new broken --repo "$root/app" 2>&1)"
   assert_contains "$out" "unreadable" "a broken contract is reported"
   assert_not_contains "$out" "no workspace configuration" "and it is not passed off as 'no configuration'"
   assert_no_file "$root/app-ws-broken/.env.local" "the workspace does not start with the default ports"
@@ -1433,17 +1451,17 @@ test_gc_reconciles_registry_with_disk() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new alive --repo "$root/app" >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/workspace.sh" new ghost --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new alive --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new ghost --repo "$root/app" >/dev/null 2>&1
   # The worktree disappears from outside: it is how things are left after a manual delete.
   git -C "$root/app" worktree remove --force "$root/app-ws-ghost" 2>/dev/null || rm -rf "$root/app-ws-ghost"
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace gc 2>&1)"
   assert_contains "$out" "ghost" "points out the entry with no worktree"
   assert_not_contains "$out" "alive " "and does not touch the one that has it"
   assert_contains "$(cat "$CRUX_REGISTRY")" "ghost" "without --yes it deletes nothing"
 
-  bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace gc --yes >/dev/null 2>&1
   assert_not_contains "$(cat "$CRUX_REGISTRY")" "ghost" "with --yes it removes the entry"
   assert_contains "$(cat "$CRUX_REGISTRY")" "alive" "and keeps the live one"
 }
@@ -1456,20 +1474,20 @@ test_gc_sees_worktrees_unknown_to_registry() {
   # A hand-made worktree, or the one left by a version with the name bug.
   git -C "$root/app" worktree add -b loose "$root/app-ws-loose" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" gc 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace gc 2>&1)"
   assert_contains "$out" "app-ws-loose" "sees the worktree that is not registered"
   assert_contains "$out" "--include-disk" "and says how to remove it"
 
-  bash "$CRUX_HOME/bin/workspace.sh" gc --yes >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace gc --yes >/dev/null 2>&1
   assert_file "$root/app-ws-loose/f.txt" "without --include-disk the disk is not touched"
 
   # With work inside it is not removed even when asked.
   echo pending > "$root/app-ws-loose/uncommitted.txt"
-  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --include-disk >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace gc --yes --include-disk >/dev/null 2>&1
   assert_file "$root/app-ws-loose/uncommitted.txt" "a worktree with uncommitted changes stays"
 
   rm -f "$root/app-ws-loose/uncommitted.txt"
-  bash "$CRUX_HOME/bin/workspace.sh" gc --yes --include-disk >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace gc --yes --include-disk >/dev/null 2>&1
   assert_no_file "$root/app-ws-loose" "clean and with --include-disk, it is removed"
 }
 
@@ -1477,12 +1495,12 @@ test_env_file_does_not_block_workspace_closure() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
-  bash "$CRUX_HOME/bin/workspace.sh" new withenv --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new withenv --repo "$root/app" >/dev/null 2>&1
 
   assert_file "$root/app-ws-withenv/.env.local" "the command writes the environment file"
   assert_eq "" "$(git -C "$root/app-ws-withenv" status --porcelain)" \
     "and does not count as an uncommitted change: crux wrote it, not you"
-  assert_contains "$(bash "$CRUX_HOME/bin/workspace.sh" rm withenv 2>&1)" "slot released" \
+  assert_contains "$("$CRUX_HOME/bin/crux" workspace rm withenv 2>&1)" "slot released" \
     "so it does not block closing the workspace"
 }
 
@@ -1490,9 +1508,9 @@ test_list_says_since_when_a_workspace_is_open() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
-  bash "$CRUX_HOME/bin/workspace.sh" new recent --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new recent --repo "$root/app" >/dev/null 2>&1
 
-  local out; out="$(bash "$CRUX_HOME/bin/workspace.sh" list --all)"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace list --all)"
   assert_contains "$out" "today" "a workspace opened today shows as such"
 }
 
@@ -1503,13 +1521,9 @@ test_profile_decides_branch_name() {
   printf '{"name":"mine","pointers":{"write":true},"branch":{"pattern":"feature/{{name}}"}}\n' \
     > "$matches/.crux/profiles/mine.json"
   local root; root="$(_repo_with_config)"
-  node -e '
-    const fs = require("fs"); const f = process.argv[1];
-    const j = JSON.parse(fs.readFileSync(f, "utf8")); j.profile = "mine";
-    fs.writeFileSync(f, JSON.stringify(j));
-  ' "$root/proj-docs/crux.json"
+  json_set "$root/proj-docs/crux.json" profile '"mine"'
 
-  env HOME="$matches" bash "$CRUX_HOME/bin/workspace.sh" new thing --repo "$root/app" >/dev/null 2>&1
+  env HOME="$matches" "$CRUX_HOME/bin/crux" workspace new thing --repo "$root/app" >/dev/null 2>&1
   assert_eq "feature/thing" "$(git -C "$root/app-ws-thing" rev-parse --abbrev-ref HEAD)" \
     "the branch follows the profile pattern"
 }
@@ -1525,7 +1539,7 @@ test_usage_says_with_what_words_the_problem_appeared() {
     printf '{"name":"Bash","input":{"command":"node scripts/health.mjs ."}}\n'
   } > "$t/s.jsonl"
 
-  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" node "$CRUX_HOME/bin/usage.mjs" 2>&1)"
+  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" "$CRUX_HOME/bin/crux" usage 2>&1)"
   assert_contains "$out" "code-health" "points out the skill that was followed without being called"
   assert_contains "$out" "spaghetti" "and with what words the work was asked for"
   assert_not_contains "$out" "duplication" "without repeating what the description already says"
@@ -1533,22 +1547,13 @@ test_usage_says_with_what_words_the_problem_appeared() {
 }
 
 test_proposal_title_does_not_execute_commands() {
-  # The title comes from gh, that is, from whoever can rename the proposal. It
-  # ended up in an eval between double quotes, where bash still expands $(...).
-  sandbox >/dev/null
-  local witness="$SB/RCE_TITLE"
-  local status
-  status="{\"number\":7,\"title\":\"fix: thing \$(touch $witness)\",\"url\":\"u\",\"mergeable\":\"MERGEABLE\",\"reviewDecision\":\"\",\"statusCheckRollup\":[]}"
-
-  # the same block cmd_merge uses, extracted from the file so as not to depend on gh
-  local block
-  block="$(sed -n '/^  eval "\$(node -e/,/^  '"'"' "\$status")"/p' "$CRUX_HOME/bin/workspace.sh")"
-  [[ -n "$block" ]] && PASS=$((PASS + 1)) || _fail "cannot find the eval block in workspace.sh"
-
-  ( status="$status"; eval "$block" >/dev/null 2>&1 ) || true
-  assert_no_file "$witness" "the proposal title executes nothing"
-  assert_contains "$(cat "$CRUX_HOME/bin/workspace.sh")" "Single quotes, as in load_config" \
-    "and the reason is stated"
+  # The title comes from gh, that is, from whoever can rename the proposal. In
+  # the shell version it ended up in an eval between double quotes, where bash
+  # still expands $(...). Now gh's JSON is parsed as data and no value from it
+  # reaches a shell: this keeps it that way.
+  local src; src="$(cat "$CRUX_HOME/rs/src/cmd/workspace/propose.rs")"
+  assert_not_contains "$src" '"bash"' "proposing and merging run no shell"
+  assert_not_contains "$src" 'sh::shell' "not even through the helper"
 }
 
 test_poisoned_main_branch_does_not_write_pre_push() {
@@ -1571,7 +1576,7 @@ JSON
   git -C "$root/poison-docs" config user.name t
   git -C "$root/poison-docs" add -A; git -C "$root/poison-docs" commit -qm init
   local out
-  out="$(cd "$root/poison-docs" && bash "$CRUX_HOME/bin/hooks.sh" install 2>&1)" || true
+  out="$(cd "$root/poison-docs" && "$CRUX_HOME/bin/crux" hooks install 2>&1)" || true
   assert_no_file "/tmp/CRUX_RCE_PREPUSH" "the generated hook does not execute what the contract brings"
   assert_contains "$out" "invalid characters" "and says the branch is not valid"
   assert_no_file "$root/app/.git/hooks/pre-push" "without installing a poisoned hook"
@@ -1591,7 +1596,7 @@ test_poisoned_commit_language_falls_back_to_default() {
     > "$root/lang-docs/profile.json"
   rm -f /tmp/CRUX_RCE_COMMITMSG
 
-  bash "$CRUX_HOME/bin/hooks.sh" install "$root/lang-docs" >/dev/null 2>&1 || true
+  "$CRUX_HOME/bin/crux" hooks install "$root/lang-docs" >/dev/null 2>&1 || true
   local hook="$root/app/.git/hooks/commit-msg"
   if [[ -f "$hook" ]]; then
     printf 'feat: thing\n' > "$SB/msg"
@@ -1625,7 +1630,7 @@ esac
 STUB
   chmod +x "$bin/gh"
 
-  local out; out="$(cd "$repo" && PATH="$bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" prune --yes 2>&1)"
+  local out; out="$(cd "$repo" && PATH="$bin:$PATH" "$CRUX_HOME/bin/crux" workspace prune --yes 2>&1)"
   local remaining; remaining="$(git -C "$repo" branch --list --format='%(refname:short)' | tr '\n' ' ')"
 
   assert_contains "$remaining" "develop" "develop is left alone"
@@ -1654,9 +1659,9 @@ test_two_workspaces_with_same_name_do_not_clobber_each_other() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_two_repos)"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new fix --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new fix --repo "$root/app" >/dev/null 2>&1
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" new fix --repo "$root/api" 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace new fix --repo "$root/api" 2>&1)" || rc=$?
 
   assert_eq "1" "$rc" "the second one refuses"
   assert_contains "$out" "there is already a workspace called" "and says why"
@@ -1674,7 +1679,7 @@ test_workspace_with_ignored_files_is_not_considered_clean() {
   printf 'data/\nprivate-notes.md\n' > "$root/app/.gitignore"
   git -C "$root/app" add -A; git -C "$root/app" commit -qm ignore
 
-  bash "$CRUX_HOME/bin/workspace.sh" new withdata --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new withdata --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-withdata"
   mkdir -p "$ws/data"
   echo "notes" > "$ws/private-notes.md"
@@ -1682,7 +1687,7 @@ test_workspace_with_ignored_files_is_not_considered_clean() {
 
   assert_eq "" "$(git -C "$ws" status --porcelain)" "for plain git the workspace is clean"
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm withdata 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace rm withdata 2>&1)" || rc=$?
   assert_eq "1" "$rc" "but rm refuses"
   assert_file "$ws/private-notes.md" "and what was written by hand is still there"
   assert_file "$ws/data/dump.sql" "and so is the data"
@@ -1697,7 +1702,7 @@ test_regenerable_folders_do_not_hold_a_workspace_at_any_depth() {
   printf '__pycache__/\nnode_modules/\n.astro/\n.pytest_cache/\n*.tsbuildinfo\n' > "$root/app/.gitignore"
   git -C "$root/app" add -A; git -C "$root/app" commit -qm ignore
 
-  bash "$CRUX_HOME/bin/workspace.sh" new regen --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new regen --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-regen"
   mkdir -p "$ws/server/__pycache__" "$ws/packages/ui/node_modules/x"
   echo x > "$ws/server/__pycache__/main.cpython-312.pyc"
@@ -1707,7 +1712,7 @@ test_regenerable_folders_do_not_hold_a_workspace_at_any_depth() {
   echo x > "$ws/tsconfig.tsbuildinfo"; echo x > "$ws/apps/web/tsconfig.app.tsbuildinfo"
 
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm regen 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace rm regen 2>&1)" || rc=$?
   assert_eq "0" "$rc" "rm goes ahead"
   assert_no_file "$ws/server/__pycache__/main.cpython-312.pyc" "and the worktree is gone"
 }
@@ -1718,7 +1723,7 @@ test_nonexistent_base_does_not_fall_back_to_head_silently() {
   local root; root="$(_two_repos)"
 
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" new overbase --repo "$root/app" --base v9-nonexistent 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace new overbase --repo "$root/app" --base v9-nonexistent 2>&1)" || rc=$?
   assert_eq "1" "$rc" "it stops"
   assert_contains "$out" "does not exist" "and says the base does not exist"
   assert_no_file "$root/app-ws-overbase/f.txt" "without leaving a workspace on the wrong base"
@@ -1738,17 +1743,17 @@ test_proposal_body_goes_through_the_filter() {
   printf '{"crux":"0.1.0","project":"filter","profile":"multi-repo","repos":["app"],"sections":[]}\n' \
     > "$root/filter-docs/crux.json"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new withpoison --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new withpoison --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-withpoison"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "tested with ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/task.sh" "done" T1 "in /home/otheruser/Projects/otherclient/api" >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task add "tested with ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" task "done" T1 "in /home/otheruser/Projects/otherclient/api" >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
 
   local out rc=0
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish withpoison 2>&1)" || rc=$?
+  out="$("$CRUX_HOME/bin/crux" workspace finish withpoison 2>&1)" || rc=$?
   assert_eq "1" "$rc" "does not publish a body that does not pass the filter"
   assert_contains "$out" "does not pass the filter" "and says so"
   assert_contains "$out" "credential" "pointing at the token"
@@ -1776,7 +1781,7 @@ The part in /home/someone/Projects/client/api
 
 - ok · cmd (1s)
 MD
-  local body; body="$(node "$CRUX_HOME/lib/task.mjs" body --file "$f" --lang es)"
+  local body; body="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang es)"
   assert_not_contains "$body" "/home/someone" "neither in the objective nor in the evidence"
   # The tilde here is the text expected in the output, not a path.
   # shellcheck disable=SC2088
@@ -1804,7 +1809,7 @@ test_visual_no_section_without_approval() {
   sandbox >/dev/null
   local app; app="$(_visual_scenario)"
   local out rc=0
-  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section 2>&1)" || rc=$?
+  out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual section 2>&1)" || rc=$?
   assert_eq "1" "$rc" "without a receipt there is no section"
   assert_contains "$out" "no visual review approved" "and says what is missing"
 }
@@ -1813,9 +1818,9 @@ test_visual_section_counts_approved_images() {
   sandbox >/dev/null
   local app; app="$(_visual_scenario)"
   local out
-  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures --note "Cover reviewed." 2>&1)"
+  out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual approve ../captures --note "Cover reviewed." 2>&1)"
   assert_contains "$out" "with 2 images" "only counts the images, not the text"
-  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section --lang es 2>&1)"
+  out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual section --lang es 2>&1)"
   assert_contains "$out" "<!-- visual-review:start -->" "opens with its marker"
   assert_contains "$out" "Revisión visual aprobada el" "says when it was approved"
   assert_contains "$out" "Cover reviewed." "carries the note"
@@ -1829,10 +1834,10 @@ test_visual_publishes_on_separate_branch_without_touching_proposal() {
   git -C "$app" remote set-url origin "$SB/remote.git"
   git -C "$app" config "url.$SB/remote.git.insteadOf" "https://github.com/acme/web.git"
   git -C "$app" remote set-url origin "https://github.com/acme/web.git"
-  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1 )
+  ( cd "$app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
   local before out
   before="$(git -C "$app" rev-parse HEAD)"
-  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section --publish --lang en 2>&1)"
+  out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual section --publish --lang en 2>&1)"
   assert_contains "$out" "https://github.com/acme/web/blob/crux-review/feat/cover/01-cover-desktop.png?raw=true" "links the image on the review branch"
   assert_contains "$out" "Before and after" "respects the language"
   assert_eq "$before" "$(git -C "$app" rev-parse HEAD)" "the proposal branch receives no commit"
@@ -1846,10 +1851,10 @@ test_visual_publishes_on_separate_branch_without_touching_proposal() {
 test_visual_does_not_publish_captures_of_another_commit() {
   sandbox >/dev/null
   local app; app="$(_visual_scenario)"
-  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1 )
+  ( cd "$app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
   echo more > "$app/g.txt"; git -C "$app" add -A; git -C "$app" commit -qm "feat: more"
   local out rc=0
-  out="$(cd "$app" && bash "$CRUX_HOME/bin/visual.sh" section --publish 2>&1)" || rc=$?
+  out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual section --publish 2>&1)" || rc=$?
   assert_eq "1" "$rc" "it refuses"
   assert_contains "$out" "show them again" "and asks to show them again"
 }
@@ -1863,9 +1868,9 @@ test_visual_in_client_repo_pushes_no_images() {
   printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["app"],"sections":[]}\n' \
     > "$root/cli-docs/crux.json"
   printf 'png' > "$root/captures/01.png"
-  ( cd "$root/app" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1 )
+  ( cd "$root/app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
   local out
-  out="$(cd "$root/app" && bash "$CRUX_HOME/bin/visual.sh" section --publish 2>&1)"
+  out="$(cd "$root/app" && "$CRUX_HOME/bin/crux" visual section --publish 2>&1)"
   assert_contains "$out" "Visual review approved" "leaves the review note"
   assert_not_contains "$out" "![" "without images in the client repo"
   assert_not_contains "$out" "crux" "nor the name of our tooling"
@@ -1876,11 +1881,11 @@ test_visual_second_publication_keeps_other_proposals_images() {
   local app; app="$(_visual_scenario)"
   git -C "$app" config "url.$SB/remote.git.insteadOf" "https://github.com/acme/web.git"
   git -C "$app" remote set-url origin "https://github.com/acme/web.git"
-  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/visual.sh" section --publish >/dev/null 2>&1 )
+  ( cd "$app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" visual section --publish >/dev/null 2>&1 )
   git -C "$app" checkout -qb feat/sheet
-  ( cd "$app" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/visual.sh" section --publish >/dev/null 2>&1 )
+  ( cd "$app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" visual section --publish >/dev/null 2>&1 )
   local files
   files="$(git --git-dir="$SB/remote.git" ls-tree -r --name-only crux-review)"
   assert_contains "$files" "feat/cover/01-cover-desktop.png" "the first proposal's is still there"
@@ -1916,21 +1921,21 @@ case "\$1 \$2" in
 esac
 STUB
   chmod +x "$SB/bin/gh"
-  bash "$CRUX_HOME/bin/workspace.sh" new cover --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new cover --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-cover"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: cover"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
   echo "$ws"
 }
 
 test_finish_puts_visual_review_in_the_proposal() {
   sandbox >/dev/null
   local ws; ws="$(_finish_with_visual)"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
   local out
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover 2>&1)"
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover 2>&1)"
   assert_contains "$out" "visual review added" "reports it"
   local body; body="$(cat "$SB/body.md" 2>/dev/null)"
   assert_contains "$body" "blob/crux-review/ws/cover/01-cover.png?raw=true" "the proposal links the capture"
@@ -1940,13 +1945,13 @@ test_finish_puts_visual_review_in_the_proposal() {
 test_finish_does_not_publish_visual_review_of_another_commit() {
   sandbox >/dev/null
   local ws; ws="$(_finish_with_visual)"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/visual.sh" approve ../captures >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
   echo more > "$ws/other.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: more"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
   local out
-  out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover 2>&1)"
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover 2>&1)"
   assert_contains "$out" "does not go into the proposal" "warns"
   assert_contains "$out" "show them again" "and says what to do"
   assert_contains "$out" "proposal opened" "but does not block the proposal"
@@ -1957,8 +1962,8 @@ test_finish_without_gate_does_not_claim_it_passed() {
   # The default body used to claim "gate passed" even when it was skipped.
   sandbox >/dev/null
   local ws; ws="$(_finish_with_visual)"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1 )
-  env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover --skip-gate >/dev/null 2>&1
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1 )
+  env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover --skip-gate >/dev/null 2>&1
   local body; body="$(cat "$SB/body.md" 2>/dev/null)"
   assert_contains "$body" "WITHOUT passing the quality gate" "the proposal says the gate was skipped"
   assert_not_contains "$body" "gate passed" "and does not claim it passed"
@@ -1967,7 +1972,7 @@ test_finish_without_gate_does_not_claim_it_passed() {
 test_finish_with_gate_says_so_in_the_proposal() {
   sandbox >/dev/null
   local ws; ws="$(_finish_with_visual)"
-  env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover >/dev/null 2>&1
+  env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover >/dev/null 2>&1
   local body; body="$(cat "$SB/body.md" 2>/dev/null)"
   assert_contains "$body" "- ok · true" "with a receipt, the proposal shows what was checked"
   assert_not_contains "$body" "WITHOUT passing" "and does not say the gate was skipped"
@@ -1977,11 +1982,11 @@ test_old_options_name_their_new_form() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
   local out
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish x --sin-puerta 2>&1)" || true
+  out="$("$CRUX_HOME/bin/crux" workspace finish x --sin-puerta 2>&1)" || true
   assert_contains "$out" "--skip-gate" "finish --sin-puerta names the new one"
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" rm x --con-ignorados 2>&1)" || true
+  out="$("$CRUX_HOME/bin/crux" workspace rm x --con-ignorados 2>&1)" || true
   assert_contains "$out" "--include-ignored" "rm --con-ignorados names the new one"
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" gc --con-disco 2>&1)" || true
+  out="$("$CRUX_HOME/bin/crux" workspace gc --con-disco 2>&1)" || true
   assert_contains "$out" "--include-disk" "gc --con-disco names the new one"
 }
 
@@ -1990,10 +1995,10 @@ test_finish_warns_of_proposal_over_400_lines() {
   local ws; ws="$(_finish_with_visual)"
   seq 1 450 > "$ws/big.txt"; seq 1 900 > "$ws/pnpm-lock.yaml"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: big"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover 2>&1)"
   assert_contains "$out" "451 written lines" "counts what was written, without the lockfile"
   assert_contains "$out" "proposal opened" "and warns without blocking"
 }
@@ -2003,10 +2008,10 @@ test_finish_does_not_warn_of_size_if_big_part_is_generated() {
   local ws; ws="$(_finish_with_visual)"
   seq 1 900 > "$ws/pnpm-lock.yaml"
   git -C "$ws" add -A; git -C "$ws" commit -qm "chore: lock"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover 2>&1)"
   assert_not_contains "$out" "written lines" "a lockfile does not count as review"
 }
 
@@ -2015,10 +2020,10 @@ test_finish_warns_of_big_change_without_plan() {
   local ws; ws="$(_finish_with_visual)"
   seq 1 150 > "$ws/big.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: big"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover 2>&1)"
   assert_contains "$out" "the task has no plan" "warns about the big change without a plan"
   assert_contains "$out" "crux task plan" "and says how to save it"
   assert_contains "$out" "proposal opened" "without blocking"
@@ -2028,13 +2033,13 @@ test_finish_does_not_warn_about_plan_if_saved() {
   sandbox >/dev/null
   local ws; ws="$(_finish_with_visual)"
   printf 'What changes: the big file.\n' > "$SB/plan.md"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" plan "$SB/plan.md" >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null 2>&1 )
   seq 1 150 > "$ws/big.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: big"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/ship.sh" clear >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
-  local out; out="$(env PATH="$SB/bin:$PATH" bash "$CRUX_HOME/bin/workspace.sh" finish cover 2>&1)"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+  local out; out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover 2>&1)"
   assert_not_contains "$out" "has no plan" "with a saved plan it does not warn"
   assert_contains "$out" "proposal opened" "and the proposal opens"
 }
@@ -2055,17 +2060,17 @@ test_finish_can_be_repeated_after_the_branch_was_pushed() {
   git -C "$root/app" remote add origin "$SB/again.git"
   git -C "$root/app" push -q origin main
 
-  bash "$CRUX_HOME/bin/workspace.sh" new r --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new r --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-r"
   echo change > "$ws/new.txt"
   git -C "$ws" add -A; git -C "$ws" commit -qm "feat: something"
-  ( cd "$ws" && bash "$CRUX_HOME/bin/task.sh" add "a step" >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" run -- true >/dev/null 2>&1
-    bash "$CRUX_HOME/bin/ship.sh" seal >/dev/null 2>&1 )
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task add "a step" >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
   git -C "$ws" push -q origin ws/r
 
   local out
-  out="$(bash "$CRUX_HOME/bin/workspace.sh" finish r 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" workspace finish r 2>&1)"
   assert_not_contains "$out" "nothing to propose" "the pushed branch still has its commit to propose"
   assert_contains "$out" "open the proposal" "and it gets to the proposal"
 }
@@ -2075,16 +2080,16 @@ test_ship_a_command_run_again_replaces_its_red_result() {
   local repo="$SB/repo" out
   mkdir -p "$repo" && git init -q -b main "$repo"
   echo x > "$repo/f" && git -C "$repo" add -A && git -C "$repo" commit -qm "chore: init"
-  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f ok >/dev/null 2>&1 ) || true
+  ( cd "$repo" && "$CRUX_HOME/bin/crux" ship run -- test -f ok >/dev/null 2>&1 ) || true
   touch "$repo/ok"
-  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f ok >/dev/null 2>&1 )
+  ( cd "$repo" && "$CRUX_HOME/bin/crux" ship run -- test -f ok >/dev/null 2>&1 )
 
-  out="$(cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  out="$(cd "$repo" && "$CRUX_HOME/bin/crux" ship seal 2>&1)"
   assert_contains "$out" "gate closed" "the green run replaces the red one of the same command"
 
-  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f missing >/dev/null 2>&1 ) || true
-  ( cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" run -- test -f ok >/dev/null 2>&1 )
-  out="$(cd "$repo" && bash "$CRUX_HOME/bin/ship.sh" seal 2>&1)"
+  ( cd "$repo" && "$CRUX_HOME/bin/crux" ship run -- test -f missing >/dev/null 2>&1 ) || true
+  ( cd "$repo" && "$CRUX_HOME/bin/crux" ship run -- test -f ok >/dev/null 2>&1 )
+  out="$(cd "$repo" && "$CRUX_HOME/bin/crux" ship seal 2>&1)"
   assert_contains "$out" "does not close" "a different command in red still keeps it shut"
   teardown
 }
@@ -2099,16 +2104,16 @@ test_a_copy_identical_to_the_main_repo_does_not_hold_a_workspace() {
   git -C "$root/app" add -A; git -C "$root/app" commit -qm ignore
   echo "KEY=1" > "$root/app/.env.local"
 
-  bash "$CRUX_HOME/bin/workspace.sh" new copy --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" workspace new copy --repo "$root/app" >/dev/null 2>&1
   local ws="$root/app-ws-copy" rc=0
   cp "$root/app/.env.local" "$ws/.env.local"
   mkdir -p "$ws/.expo" && echo x > "$ws/.expo/devices.json"
   echo "mine" > "$ws/notes.txt"
-  bash "$CRUX_HOME/bin/workspace.sh" rm copy >/dev/null 2>&1 || rc=$?
+  "$CRUX_HOME/bin/crux" workspace rm copy >/dev/null 2>&1 || rc=$?
   assert_eq "1" "$rc" "a file that only exists here still holds it"
 
   rm "$ws/notes.txt"; rc=0
-  bash "$CRUX_HOME/bin/workspace.sh" rm copy >/dev/null 2>&1 || rc=$?
+  "$CRUX_HOME/bin/crux" workspace rm copy >/dev/null 2>&1 || rc=$?
   assert_eq "0" "$rc" "the identical copy and the cache do not"
   assert_no_file "$ws/.env.local" "and the worktree is gone"
 }

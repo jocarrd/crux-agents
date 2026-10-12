@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# The checks are strings that truthy evaluates: shellcheck does not see the
+# variables they read.
+# shellcheck disable=SC2034
 # End-to-end battery: the complete cycle on a real project.
 #
 #   test/e2e.sh
@@ -27,6 +30,11 @@ export CLAUDE_SETTINGS="$SB/home/.claude/settings.json"
 mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
 real_settings="$HOME/.claude/settings.json"
 real_before="$(sha256sum "$real_settings" 2>/dev/null | cut -d' ' -f1)"
+# A HOME of its own: with the real one, the machine's ~/.crux/config put its
+# remote in the project's contract, and finish refused the local remote. In CI
+# there is no config and the step passed; only on a used machine did it fail.
+export HOME="$SB/home"
+printf '[user]\n\temail = e2e@localhost\n\tname = e2e\n[init]\n\tdefaultBranch = main\n' > "$HOME/.gitconfig"
 
 STEP=0; FAILURES=0
 if [[ -t 1 ]]; then R=$'\033[31m'; G=$'\033[32m'; D=$'\033[2m'; O=$'\033[0m'; else R=""; G=""; D=""; O=""; fi
@@ -38,7 +46,7 @@ truthy(){ if eval "$1"; then good "$2"; else bad "$2"; fi; }
 
 git_() { git -c user.email=e2e@localhost -c user.name=e2e "$@"; }
 
-crux() { bash "$CRUX_HOME/bin/crux" "$@"; }
+crux() { "$CRUX_HOME/bin/crux" "$@"; }
 
 # CRUX_E2E_KEEP=1 keeps the sandbox: without it, debugging a failing step
 # means reproducing the whole journey by hand.
@@ -71,7 +79,7 @@ truthy '[[ -f "$REPO/AGENTS.md" && -f "$REPO/CLAUDE.md" ]]' "the pointers are in
 truthy 'grep -q "crux:begin" "$REPO/AGENTS.md"' "and carry the managed block"
 
 step "conformance"
-bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" >/dev/null 2>&1
+"$CRUX_HOME/bin/crux" doctor "$DOCS" >/dev/null 2>&1
 truthy '[[ $? -eq 0 ]]' "doctor passes on the freshly created project"
 
 # --- 2. The guards -----------------------------------------------------------
@@ -126,7 +134,7 @@ printf '%s\n' "$(git -C "$WS" rev-parse HEAD)" > "$WS/.crux-ship"
 truthy '[[ -z "$(git -C "$WS" status --porcelain)" ]]' "the gate mark does not dirty the repo"
 
 step "gather the review material"
-output="$(bash "$CRUX_HOME/bin/review.sh" --repo "$WS" --base main 2>&1)"
+output="$("$CRUX_HOME/bin/crux" review --repo "$WS" --base main 2>&1)"
 truthy '[[ "$output" == *"ws/task"* ]]' "review says which branch it reviews"
 truthy '[[ "$output" == *"src/index.js"* ]]' "and which files it touches"
 
@@ -193,9 +201,9 @@ echo "# inherited" > "$FOREIGN/README.md"
 git_ -C "$FOREIGN" add -A && git_ -C "$FOREIGN" commit -qm "docs: init"
 ( cd "$FOREIGN" && crux adopt . >/dev/null 2>&1 )
 truthy '[[ -f "$FOREIGN/crux.json" ]]' "it ends up with a contract"
-output="$(bash "$CRUX_HOME/bin/upgrade.sh" "$FOREIGN" 2>&1)"
+output="$("$CRUX_HOME/bin/crux" upgrade "$FOREIGN" 2>&1)"
 truthy '[[ "$output" == *"materialized"* || "$output" == *"no piece of the standard is missing"* ]]' "and upgrade completes whatever is missing"
-bash "$CRUX_HOME/bin/doctor.sh" "$FOREIGN" >/dev/null 2>&1
+"$CRUX_HOME/bin/crux" doctor "$FOREIGN" >/dev/null 2>&1
 truthy '[[ $? -eq 0 ]]' "until doctor passes"
 
 # --- 8. The client profile ---------------------------------------------------
@@ -218,9 +226,9 @@ truthy '[[ -d "$CRUX_PROJECTS_DIR/client/vendor-ws-task" ]]' "and still creates 
 
 step "doctor detects what is missing and what is extra"
 rm -rf "$DOCS/repos/worker"
-output="$(bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" 2>&1)"
+output="$("$CRUX_HOME/bin/crux" doctor "$DOCS" 2>&1)"
 truthy '[[ "$output" == *"without a doc folder"* ]]' "reports the declared repo without docs"
-bash "$CRUX_HOME/bin/doctor.sh" "$DOCS" >/dev/null 2>&1
+"$CRUX_HOME/bin/crux" doctor "$DOCS" >/dev/null 2>&1
 truthy '[[ $? -ne 0 ]]' "and exits with an error"
 
 step "the real Claude Code settings are not touched"

@@ -13,6 +13,7 @@ fake_skill() {
 }
 
 test_activation_probe_flags_tie_between_two_descriptions() {
+  needs node || return 0
   sandbox >/dev/null
   fake_skill "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
   fake_skill "$CLAUDE_SKILLS_DIR" beta "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
@@ -27,6 +28,7 @@ test_activation_probe_flags_tie_between_two_descriptions() {
 }
 
 test_activation_probe_does_not_score_what_is_in_all() {
+  needs node || return 0
   sandbox >/dev/null
   fake_skill "$CLAUDE_SKILLS_DIR" alfa "Desplegar el servicio. Usa cuando toque."
   fake_skill "$CLAUDE_SKILLS_DIR" beta "Reiniciar el servicio. Usa cuando toque."
@@ -38,6 +40,7 @@ test_activation_probe_does_not_score_what_is_in_all() {
 }
 
 test_activation_probe_distinguishes_what_is_distinguishable() {
+  needs node || return 0
   sandbox >/dev/null
   fake_skill "$CLAUDE_SKILLS_DIR" alfa "Purgar la caché del radar meteorológico. Usa cuando la caché esté sucia."
   fake_skill "$CLAUDE_SKILLS_DIR" beta "Renovar el certificado del servidor de correo. Usa cuando caduque."
@@ -47,6 +50,7 @@ test_activation_probe_distinguishes_what_is_distinguishable() {
 }
 
 test_activation_cases_fail_when_another_wins() {
+  needs node || return 0
   sandbox >/dev/null
   fake_skill "$CLAUDE_SKILLS_DIR" correcta "Renovar el certificado del servidor de correo. Usa cuando caduque."
   fake_skill "$CLAUDE_SKILLS_DIR" thiefa "Renovar el certificado caducado del correo. Usa cuando el certificado del correo esté caducado y haya que renovarlo."
@@ -59,6 +63,7 @@ test_activation_cases_fail_when_another_wins() {
 }
 
 test_activation_kernel_cases_keep_passing() {
+  needs node || return 0
   # Measures the real kernel catalog: it is the net that warns if a new
   # description switches off one that used to activate. The directory goes per
   # invocation —never inherited— because the previous case leaves its own
@@ -92,6 +97,7 @@ test_activation_kernel_cases_keep_passing() {
 }
 
 test_activation_audit_sees_adapter_resembling_its_procedure() {
+  needs node || return 0
   sandbox >/dev/null
   local docs; docs="$(new_project omega --repos "web")"
 
@@ -111,6 +117,7 @@ test_activation_audit_sees_adapter_resembling_its_procedure() {
 }
 
 test_activation_audit_sees_adapter_that_does_not_name_itself() {
+  needs node || return 0
   sandbox >/dev/null
   local docs; docs="$(new_project sigma --repos "web")"
   mkdir -p "$docs/.claude/skills/project/quiet"
@@ -130,18 +137,19 @@ test_activation_check_description_catches_defects() {
   mkdir -p "$dir/broken"
   printf 'no frontmatter\n' > "$dir/broken/SKILL.md"
 
-  local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$dir" es 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" __check skill-description "$dir" es 2>&1)"
   assert_contains "$out" "does not say when to use it" "catches the description that does not activate"
   assert_contains "$out" "without frontmatter" "catches the skill the agent will not be able to load"
   assert_not_contains "$out" "'good'" "does not flag the one that does fire"
 }
 
 test_activation_check_description_passes_kernel_catalog() {
-  local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$CRUX_HOME/skills" en 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" __check skill-description "$CRUX_HOME/skills" en 2>&1)"
   assert_eq "" "$out" "no kernel skill has a malformed description"
 }
 
 test_activation_adapter_must_split() {
+  needs node || return 0
   sandbox >/dev/null
   # The generic procedure and its adapter, well split: the adapter provides
   # the proper names and does not retell the whole method.
@@ -157,6 +165,7 @@ test_activation_adapter_must_split() {
 }
 
 test_activation_adapter_stealing_generic_fails() {
+  needs node || return 0
   sandbox >/dev/null
   fake_skill "$CLAUDE_SKILLS_DIR" method \
     "Probar una aplicación móvil en un dispositivo físico. Usa cuando haya que validar en nativo."
@@ -191,7 +200,7 @@ test_activation_skill_stays_under_thousand_words() {
   _skill_of old-same 1100
   printf '# inherited\nold-grows 1150\nold-fits 1100\nold-same 1200\n' > "$dir/.oversized"
 
-  local out; out="$(node "$CRUX_HOME/lib/check-skill-description.mjs" "$dir" es 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" __check skill-description "$dir" es 2>&1)"
   assert_contains "$out" "skill 'long':" "a new one over the cap warns"
   assert_contains "$out" "references/" "and says how to fix it"
   assert_contains "$out" "skill 'old-grows': has grown" "an inherited one cannot grow"

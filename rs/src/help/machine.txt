@@ -1,0 +1,9 @@
+crux doctor --machine — checks that this machine can run the system.
+
+Projects are checked with `crux doctor`. This checks the other thing: the
+tools, authentications and paths the skills depend on. It is the difference
+between finding out that something is missing now or in the middle of an
+incident.
+
+What is indispensable is reported as an error; what only some skills need,
+as a warning, saying what you will be unable to do.

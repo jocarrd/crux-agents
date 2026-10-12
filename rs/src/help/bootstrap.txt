@@ -1,0 +1,19 @@
+crux bootstrap — get a new machine ready to work.
+
+  crux bootstrap [--owner <owner>[,<owner>]] [--parent <dir>] [--only a,b] [--dry-run]
+
+Checks the machine, discovers all the projects and fetches them. It is
+`crux clone` repeated, plus the two things you do not have on a blank
+machine: knowing which projects exist and knowing what you still have to
+install.
+
+The list comes from the remote, not from an inventory in a file. A
+hand-written inventory goes stale as soon as you create a project, and this
+is used precisely on the day you do not remember which ones you had. It is
+the same criterion `crux clone` already uses for a project's repo list: it
+comes from the contract. It searches your account and every organisation
+you are an active member of, unless --owner says where.
+
+What it does NOT do, on purpose: move credentials. SSH keys, tokens and
+secrets are not copied from one machine to another by a tool. When it
+finishes it says what each project needs and where it is documented.

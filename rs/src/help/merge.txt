@@ -1,0 +1,8 @@
+crux merge — merges a proposal after checking it is the one you think it is.
+
+  crux merge <number> [--admin]
+
+`gh pr merge` resolves the repository from the directory you are in, so a
+correct number in the wrong place merges another project's proposal without
+asking anything. Here it is said out loud what is about to be merged, and
+where, and it stops if something does not add up.

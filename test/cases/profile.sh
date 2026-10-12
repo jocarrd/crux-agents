@@ -26,7 +26,7 @@ test_profile_init_creates_it_and_loads_it_into_claude() {
   mkdir -p "$CLAUDE_CONFIG_DIR"
   printf 'My own line\n' > "$(claude_md)"
 
-  local out; out="$(bash "$CRUX_HOME/bin/profile.sh" init --no-remote 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" profile init --no-remote 2>&1)"
   local dir="$CRUX_PROJECTS_DIR/agent-profile"
   assert_file "$dir/PROFILE.md" "creates the index"
   assert_file "$dir/README.md" "and says what goes where"
@@ -43,8 +43,8 @@ test_profile_link_is_idempotent_and_brings_the_machine_note() {
   local host; host="$(hostname 2>/dev/null || uname -n)"
   printf -- '---\ntype: machine\n---\n\nThis laptop has little disk.\n' > "$dir/machines/$host.md"
 
-  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
-  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile link >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile link >/dev/null 2>&1
   assert_eq "1" "$(grep -c 'crux:profile:begin' "$(claude_md)")" "linking twice leaves one block"
   assert_contains "$(cat "$(claude_md)")" "@$dir/machines/$host.md" "and imports this machine's note"
 }
@@ -55,7 +55,7 @@ test_profile_link_copies_the_index_for_codex() {
   mkdir -p "$CODEX_HOME_DIR"
   printf 'codex notes of my own\n' > "$CODEX_HOME_DIR/AGENTS.md"
 
-  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile link >/dev/null 2>&1
   local agents; agents="$(cat "$CODEX_HOME_DIR/AGENTS.md")"
   assert_contains "$agents" "Speak plainly" "Codex has no imports: it gets the index itself"
   assert_not_contains "$agents" "reminder:" "without the frontmatter"
@@ -84,13 +84,13 @@ test_memory_sends_personal_memories_to_the_profile() {
   mkdir -p "$dir"
   printf -- '---\nname: prefers-spanish\ndescription: x\nmetadata:\n  type: feedback\n---\nbody\n' > "$dir/prefers-spanish.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" memory 2>&1)"
   assert_contains "$out" "personal, not in the profile" "with a profile, a preference is no longer local by design"
   assert_contains "$out" "agent-profile/preferences" "and says where it goes"
-  assert_exit 1 "--check fails while it is not moved" bash "$CRUX_HOME/bin/memory.sh" --check
+  assert_exit 1 "--check fails while it is not moved" "$CRUX_HOME/bin/crux" memory --check
 
   rm "$dir/prefers-spanish.md"
-  out="$(bash "$CRUX_HOME/bin/memory.sh" 2>&1)"
+  out="$("$CRUX_HOME/bin/crux" memory 2>&1)"
   assert_contains "$out" "no personal memory outside the profile" "once moved, it says so"
 }
 
@@ -101,7 +101,7 @@ test_memory_search_looks_in_the_profile_and_the_docs() {
   echo "The watermark goes big on everything shareable." > "$dir/preferences/watermark.md"
   echo "Deploys go through the watermark service." > "$docs/operations/deploy-notes.md"
 
-  local out; out="$(bash "$CRUX_HOME/bin/memory.sh" search watermark 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" memory search watermark 2>&1)"
   assert_contains "$out" "agent-profile/preferences/watermark.md" "finds it in the profile"
   assert_contains "$out" "alpha-docs/operations/deploy-notes.md" "and in the docs repos"
 }
@@ -115,19 +115,19 @@ test_memory_ignores_folders_that_are_someone_elses() {
   mkdir -p "$dir" "$SB/home/.crux"
   printf -- '---\nname: novel\ndescription: x\nmetadata:\n  type: project\n---\nbody\n' > "$dir/novel.md"
   assert_exit 1 "without the setting, another person's memory counts as a leak" \
-    env HOME="$SB/home" bash "$CRUX_HOME/bin/memory.sh" --check
+    env HOME="$SB/home" "$CRUX_HOME/bin/crux" memory --check
   echo "CRUX_MEMORY_IGNORE=\"$other\"" > "$SB/home/.crux/config"
-  assert_exit 0 "with it, it is left out" env HOME="$SB/home" bash "$CRUX_HOME/bin/memory.sh" --check
-  assert_contains "$(env HOME="$SB/home" bash "$CRUX_HOME/bin/memory.sh" 2>&1)" "ignored by CRUX_MEMORY_IGNORE" \
+  assert_exit 0 "with it, it is left out" env HOME="$SB/home" "$CRUX_HOME/bin/crux" memory --check
+  assert_contains "$(env HOME="$SB/home" "$CRUX_HOME/bin/crux" memory 2>&1)" "ignored by CRUX_MEMORY_IGNORE" \
     "and says how many it left out"
 }
 
 test_profile_link_without_profile_removes_the_block() {
   sandbox >/dev/null
   profile_here >/dev/null
-  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile link >/dev/null 2>&1
   rm -rf "$CRUX_PROJECTS_DIR/agent-profile"
-  assert_exit 1 "linking without a profile says so" bash "$CRUX_HOME/bin/profile.sh" link
+  assert_exit 1 "linking without a profile says so" "$CRUX_HOME/bin/crux" profile link
   assert_not_contains "$(cat "$(claude_md)")" "crux:profile:begin" "and leaves no import pointing to nothing"
 }
 
@@ -136,11 +136,11 @@ test_profile_status_survives_folders_that_git_did_not_bring() {
   local dir="$CRUX_PROJECTS_DIR/agent-profile"
   mkdir -p "$dir"
   printf -- '---\n---\n# P\n' > "$dir/PROFILE.md"
-  local out; out="$(bash "$CRUX_HOME/bin/profile.sh" 2>&1)"
+  local out; out="$("$CRUX_HOME/bin/crux" profile 2>&1)"
   assert_contains "$out" "machines: 0" "a cloned profile without its empty folders is still reported"
-  bash "$CRUX_HOME/bin/profile.sh" init --no-remote >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile init --no-remote >/dev/null 2>&1
   rm -rf "$dir"
-  bash "$CRUX_HOME/bin/profile.sh" init --no-remote >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile init --no-remote >/dev/null 2>&1
   assert_file "$dir/machines/.gitkeep" "and init leaves its folders tracked so they travel"
 }
 
@@ -154,7 +154,7 @@ test_profile_two_machines_adding_a_preference_do_not_clash() {
   printf -- '---\n---\n# Profile\n\n## Preferences\n\n- [One](preferences/one.md) — one\n' > "$seed/PROFILE.md"
   git -C "$seed" add -A && git -C "$seed" commit -qm "profile" && git -C "$seed" push -q origin main
   git clone -q "$SB/profile.git" "$here" && git clone -q "$SB/profile.git" "$other"
-  bash "$CRUX_HOME/bin/profile.sh" link >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" profile link >/dev/null 2>&1
 
   # Each one saves a preference at the end of the same section.
   printf -- '- [There](preferences/there.md) — there\n' >> "$other/PROFILE.md"
@@ -176,12 +176,12 @@ test_profile_works_with_a_remote_that_is_not_github() {
   mkdir -p "$remotes" && git init -q --bare -b main "$remotes/agent-profile.git"
   echo "CRUX_REMOTE=\"$remotes/{repo}.git\"" > "$cfg"
 
-  local out; out="$(CRUX_CONFIG="$cfg" bash "$CRUX_HOME/bin/profile.sh" init 2>&1)"
+  local out; out="$(CRUX_CONFIG="$cfg" "$CRUX_HOME/bin/crux" profile init 2>&1)"
   assert_not_contains "$out" "error" "init does not ask for gh"
   assert_contains "$(git -C "$remotes/agent-profile.git" log --oneline main 2>&1)" "skeleton" \
     "the profile reaches the remote of the template"
 
   rm -rf "$CRUX_PROJECTS_DIR/agent-profile"
-  out="$(CRUX_CONFIG="$cfg" bash "$CRUX_HOME/bin/profile.sh" clone 2>&1)"
+  out="$(CRUX_CONFIG="$cfg" "$CRUX_HOME/bin/crux" profile clone 2>&1)"
   assert_file "$CRUX_PROJECTS_DIR/agent-profile/PROFILE.md" "clone brings it back from that remote"
 }

@@ -1,0 +1,16 @@
+crux visual — the visual review a person approves, with a receipt.
+
+  crux visual approve <folder> [--note "<text>"]      records the approval
+  crux visual show                                    shows the receipt
+  crux visual section [--publish] [--lang en|es]      the proposal's section
+  crux visual pr <number|url>                         puts it in an open one
+  crux visual clear                                   discards the receipt
+
+`approve` is run after whoever decides has seen the comparisons and said
+yes. The receipt stores the commit they were captured on: if another one
+lands afterwards, the images no longer show what is proposed, and finish
+says so instead of publishing them as if they were current.
+
+The images are not committed to the proposal's branch: they would end up on
+the main branch. They go to a separate branch that is never merged, written
+with plumbing so as not to touch the working tree.

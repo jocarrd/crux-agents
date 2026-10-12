@@ -20,15 +20,19 @@ cd crux
 ./test/run.sh
 ```
 
-You need `bash`, `git` and `node`. `shellcheck` is only needed to run the same
-static analysis CI runs. The suite runs each case in a sandbox and never
-touches `~/.claude`, `~/.codex` or your projects.
+You need `git`, `bash` and Rust's toolchain (`cargo`, from https://rustup.rs):
+`test/run.sh` builds the binary before running the cases. The cases for the
+few skills whose scripts use `node` or `curl` are skipped without them, and
+say so. `shellcheck` is only needed to run the same static analysis CI runs
+on the remaining scripts. The suite runs each case in a sandbox and never touches `~/.claude`, `~/.codex` or your projects.
 
 To try your copy as your real kernel, install it in dev mode (see
 "Release and dev modes" in the README).
 
 ## Making the change
 
+- **Start from `ARCHITECTURE.md`** if you touch the binary: where each thing
+  lives and the conventions the code follows.
 - **Add a test with the change.** A new command gets a case in `test/cases/`.
   A new `doctor` check gets a negative test: one that fails when it should.
 - **Run the whole suite before you push**: `./test/run.sh`, and

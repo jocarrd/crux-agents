@@ -200,10 +200,10 @@ test_template_for_owner_keeps_the_shape() {
   sandbox >/dev/null
   _ready_machine
   local got
-  got="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; template_for_owner team-org')"
+  got="$("$CRUX_BIN" __fn template_for_owner team-org)"
   assert_contains "$got" "git@github.com:team-org/{repo}.git" "same template, other owner"
   printf 'CRUX_REMOTE="https://github.com/jocarrd/{repo}.git"\n' > "$CRUX_CONFIG"
-  got="$(bash -c 'source "$CRUX_HOME/lib/common.sh"; template_for_owner team-org')"
+  got="$("$CRUX_BIN" __fn template_for_owner team-org)"
   assert_contains "$got" "https://github.com/team-org/{repo}.git" "https stays https"
   teardown
 }

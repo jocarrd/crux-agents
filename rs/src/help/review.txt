@@ -1,0 +1,8 @@
+crux review — gathers the material for reviewing a proposal.
+
+  crux review [--base <branch>] [--repo <dir>]
+  crux review scope [base]     only the risk, the specialists and who merges
+
+It does not review: it prepares. `/review-pr` does the review with this in
+front of it, so it does not depend on someone remembering to gather the diff,
+the proposal and the checks.

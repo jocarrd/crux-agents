@@ -21,3 +21,5 @@ tmp/
 # Python bytecode of skill scripts
 __pycache__/
 *.pyc
+rs/target/
+bin/crux-core

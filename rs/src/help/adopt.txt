@@ -1,0 +1,7 @@
+crux adopt — registers an existing docs repo under the standard.
+
+It rewrites nothing that is already there: it detects the project and its
+repos, writes the missing crux.json and lets 'crux doctor' say what is left
+to align. It is the entry point for projects that predate the kernel.
+
+  crux adopt [dir] [--profile <profile>]

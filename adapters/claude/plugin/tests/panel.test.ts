@@ -70,7 +70,7 @@ function taskEnvironment(on, root) {
   on('process.run', async (_$, e) => {
     const argv = e.argv ?? []
     if (argv[0] === 'git') return { value: { exitCode: 0, stdout: root + '\n', stderr: '' } }
-    if (argv[0] === 'bash') return { value: { exitCode: 0, stdout: JSON.stringify({ task: 'checkout-one-step', status: 'open', steps: '2/5', next: 'Try the payment on mobile' }), stderr: '' } }
+    if (argv[0]?.endsWith('/bin/crux') && argv[1] === '__task') return { value: { exitCode: 0, stdout: JSON.stringify({ task: 'checkout-one-step', status: 'open', steps: '2/5', next: 'Try the payment on mobile' }), stderr: '' } }
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   on('classic.SessionStart', async () => ({}))
