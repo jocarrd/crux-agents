@@ -87,7 +87,7 @@ truthy '[[ $? -eq 0 ]]' "doctor passes on the freshly created project"
 step "install the guards"
 ( cd "$DOCS" && crux hooks install >/dev/null 2>&1 )
 truthy '[[ -x "$REPO/.git/hooks/pre-push" ]]' "pre-push installed in the code repo"
-truthy 'grep -q "refs/heads/main" "$REPO/.git/hooks/pre-push"' "watches the declared main branch"
+truthy 'grep -q "refs/heads/main" "$REPO/.git/hooks/pre-push.crux"' "watches the declared main branch"
 truthy '[[ ! -e "$DOCS/.git/hooks/pre-push" ]]' "the docs repo does not carry it: it is pushed directly"
 
 step "a direct push to main is blocked in code, not in docs"

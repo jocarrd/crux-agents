@@ -32,7 +32,7 @@ test_archive_takes_a_repo_out_of_production() {
   assert_contains "$(cat "$DOCS/repos/api/README.md")" "Replaced by web" "its docs say so at the top"
   assert_contains "$(cat "$SB/gh-calls")" "repo archive acme-org/api --yes" "GitHub makes it read only"
   assert_exit 1 "its local clone refuses to push" \
-    bash "$(dirname "$DOCS")/api/.git/hooks/pre-push"
+    bash "$(dirname "$DOCS")/api/.git/hooks/pre-push" </dev/null
   teardown
 }
 

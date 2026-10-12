@@ -155,11 +155,10 @@ pub fn run(argv: &[String]) -> Res {
         if repo_dir.join(".git").is_dir() {
             if let Some(hooks) = hooks_dir(&repo_dir) {
                 let _ = fs::create_dir_all(&hooks);
-                let hook = hooks.join("pre-push");
-                if let Err(e) = crate::files::write(&hook, &format!("#!/usr/bin/env bash\n# Installed by crux archive.\necho\necho \"{repo} is archived since {today}: push blocked\"\necho \"  if it is coming back to life: crux unarchive {repo}, from its docs repo\"\nexit 1\n")) {
+                let block = format!("#!/usr/bin/env bash\n# Installed by crux archive.\necho\necho \"{repo} is archived since {today}: push blocked\"\necho \"  if it is coming back to life: crux unarchive {repo}, from its docs repo\"\nexit 1\n");
+                if let Err(e) = super::hooks::put_hook(&hooks, "pre-push", &block) {
                     die!("{e}");
                 }
-                let _ = fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755));
                 ui::ok("the local clone refuses to push");
             }
         }
@@ -212,9 +211,9 @@ pub fn run(argv: &[String]) -> Res {
     }
     if repo_dir.join(".git").is_dir() {
         if let Some(hooks) = hooks_dir(&repo_dir) {
-            let hook = hooks.join("pre-push");
-            if fs::read_to_string(&hook).is_ok_and(|t| t.contains("Installed by crux archive")) {
-                let _ = fs::remove_file(&hook);
+            let archived = |f: &Path| crate::files::read_or_empty(f).contains("Installed by crux archive");
+            if archived(&hooks.join("pre-push")) || archived(&hooks.join("pre-push.crux")) {
+                super::hooks::take_hook(&hooks, "pre-push");
             }
         }
         ui::info("its usual hooks come back with 'crux hooks install' from the docs repo");

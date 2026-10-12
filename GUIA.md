@@ -765,6 +765,16 @@ a local directory of wrappers that run its hook first and then the repo's.
 Without that, a client repo with `.githooks` received dozens of commits in
 Spanish and no hook ever ran.
 
+Each git hook crux installs is a short dispatcher with two parts beside it:
+`<hook>.crux`, crux's rules, which every install rewrites, and `<hook>.local`,
+the repo's own, which crux never writes. The dispatcher runs crux's part first
+and the repo's after, with the same input; if crux's fails, the repo's does not
+run. A repo that wants its own `pre-push` or `commit-msg` puts it in the
+`.local` file, and one that had a hook before crux arrived finds it there,
+moved and still running. `crux hooks remove` puts it back in its place. The
+first copies of these hooks carried their rules inline, so no new version of
+crux reached them; `crux sync` notices them and installs the dispatcher.
+
 The cycle one exists because of an uncomfortable measurement: the skill that
 describes it was written, installed and had its description, and `crux usage`
 showed it with **zero invocations in 31 sessions**. A description competes for

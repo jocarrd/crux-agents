@@ -273,6 +273,13 @@ printf 'El comando clona cada proyecto y escribe sus punteros. Si falta una cred
 truthy '! crux prose check "$HOME/draft.md" >/dev/null 2>&1' "a text full of tics is flagged"
 truthy 'crux prose check "$HOME/plain.md" >/dev/null 2>&1' "and a plain one passes"
 
+step "a repo's own git hook runs after crux's"
+printf '#!/bin/sh\necho own >> "%s"\n' "$HOME/own-hook" > "$A/.git/hooks/commit-msg.local"; chmod +x "$A/.git/hooks/commit-msg.local"
+git -C "$A" commit -q --allow-empty -m "chore: tick the release checklist" 2>/dev/null
+truthy '[[ -s "$HOME/own-hook" ]]' "the .local hook runs on a commit"
+git -C "$A" commit -q --allow-empty -m "chore: añade la lista de la versión" 2>/dev/null
+truthy '[[ "$(wc -l < "$HOME/own-hook")" -eq 1 ]]' "and not after crux rejects the message"
+
 step "the real agent settings are not touched"
 truthy '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
   "the settings.json of whoever runs it comes out as it went in"

@@ -527,3 +527,29 @@ test_sync_does_not_discard_what_was_written_outside_the_generated_block() {
   assert_contains "$(cat "$CRUX_PROJECTS_DIR/alpha/app/CLAUDE.md")" "a rule of my own" "and nothing of it is lost"
   teardown
 }
+
+test_sync_replaces_git_hooks_from_the_shell_version() {
+  # Hooks from the shell version carried their own copy of the rules, so no
+  # new version of crux reached them.
+  sandbox >/dev/null
+  _no_gh
+  export CRUX_STATE_DIR="$SB/state"
+  new_project eta --repos "api,web" >/dev/null
+  local root="$CRUX_PROJECTS_DIR/eta"
+  git init -q "$root/api"; git init -q "$root/web"
+  printf '#!/usr/bin/env bash\n# git hook (commit-msg). Copied by `crux hooks install`.\nexit 0\n' > "$root/api/.git/hooks/commit-msg"
+  printf '#!/bin/sh\n# my own check\nexit 0\n' > "$root/web/.git/hooks/commit-msg"
+  chmod +x "$root/api/.git/hooks/commit-msg" "$root/web/.git/hooks/commit-msg"
+
+  local out; out="$(crux sync 2>&1)"
+  assert_contains "$(cat "$root/api/.git/hooks/commit-msg.crux" 2>/dev/null)" 'hook commit-msg "$@"' \
+    "the old hook is replaced by the current one"
+  assert_no_file "$root/api/.git/hooks/commit-msg.local" "an old hook of crux is not kept as the repo's own"
+  assert_contains "$out" "eta: git hooks" "and it says so"
+  assert_contains "$(cat "$root/web/.git/hooks/commit-msg.local" 2>/dev/null)" "my own check" \
+    "a hook crux did not write keeps running, after crux's"
+
+  out="$(crux sync 2>&1)"
+  assert_not_contains "$out" "eta: git hooks" "once replaced, it is not news again"
+  teardown
+}

@@ -82,6 +82,84 @@ fn executable(p: &Path) {
     let _ = std::fs::set_permissions(p, std::os::unix::fs::PermissionsExt::from_mode(0o755));
 }
 
+/// In front of every git hook crux uses, so a repo can keep its own in
+/// `<name>.local` without crux ever overwriting it.
+const DISPATCHER: &str = r#"#!/usr/bin/env bash
+# Installed by crux hooks install: crux's part first, then the repo's own.
+# The repo's own hook goes in <name>.local next to this file; crux never writes it.
+here="$(cd "$(dirname "$0")" && pwd)"
+name="$(basename "$0")"
+# Only these get input from git: read in any other, a hook run by hand waits.
+input=/dev/null
+case "$name" in
+  pre-push|pre-receive|post-receive|post-rewrite|reference-transaction)
+    input="$(mktemp)"; trap 'rm -f "$input"' EXIT; cat > "$input" ;;
+esac
+for part in "$here/$name.crux" "$here/$name.local"; do
+  [[ -x "$part" ]] || continue
+  "$part" "$@" < "$input" || exit $?
+done
+exit 0
+"#;
+const DISPATCHER_MARK: &str = "crux's part first, then the repo's own";
+
+/// A hook some version of crux wrote: replacing it loses nothing.
+fn is_crux_hook(text: &str) -> bool {
+    ["crux hooks install", "crux archive", DISPATCHER_MARK].iter().any(|m| text.contains(m))
+}
+
+fn crux_hook_at(f: &Path) -> bool {
+    std::fs::read(f).is_ok_and(|t| is_crux_hook(&String::from_utf8_lossy(&t)))
+}
+
+/// A hook that was there and is not crux's moves to `<name>.local` instead of
+/// being overwritten.
+pub fn put_hook(hooks: &Path, name: &str, body: &str) -> Result<(), String> {
+    let main = hooks.join(name);
+    let local = hooks.join(format!("{name}.local"));
+    if main.exists() {
+        let text = std::fs::read(&main).map_err(|e| format!("cannot read {}: {e}", main.display()))?;
+        if !is_crux_hook(&String::from_utf8_lossy(&text)) {
+            if local.exists() {
+                return Err(format!(
+                    "{} and {name}.local both exist and neither is crux's: left as they are",
+                    main.display()
+                ));
+            }
+            std::fs::rename(&main, &local).map_err(|e| format!("cannot move {}: {e}", main.display()))?;
+            ui::info(format!("{name}: the repo's own hook is now {name}.local and runs after crux's"));
+        }
+    }
+    let part = hooks.join(format!("{name}.crux"));
+    files::write(&part, body)?;
+    executable(&part);
+    files::write(&main, DISPATCHER)?;
+    executable(&main);
+    Ok(())
+}
+
+pub fn take_hook(hooks: &Path, name: &str) -> bool {
+    let main = hooks.join(name);
+    let part = hooks.join(format!("{name}.crux"));
+    let local = hooks.join(format!("{name}.local"));
+    let ours = crux_hook_at(&main);
+    let had = part.exists() || ours;
+    let _ = std::fs::remove_file(&part);
+    if ours {
+        let _ = std::fs::remove_file(&main);
+    }
+    if local.exists() && !main.exists() {
+        let _ = std::fs::rename(&local, &main);
+    }
+    had
+}
+
+pub fn needs_new_hooks(repo: &Path) -> bool {
+    let Some(hooks) = dir_hooks(repo) else { return false };
+    let main = hooks.join("commit-msg");
+    crux_hook_at(&main) && !files::read_or_empty(&main).contains(DISPATCHER_MARK)
+}
+
 fn read_settings(p: &Path) -> Value {
     files::read_json(p).unwrap_or_else(|_| json!({}))
 }
@@ -110,8 +188,12 @@ name="$(basename "$0")"
 common="$(git rev-parse --path-format=absolute --git-common-dir)"
 original="$(git config --get crux.originalHooksPath || true)"
 [[ -z "$original" || "$original" = /* ]] || original="$(git rev-parse --show-toplevel)/$original"
-input="$(mktemp)"; trap 'rm -f "$input"' EXIT
-[[ -t 0 ]] || cat > "$input"
+# Only these get input from git: read in any other, a hook run by hand waits.
+input=/dev/null
+case "$name" in
+  pre-push|pre-receive|post-receive|post-rewrite|reference-transaction)
+    input="$(mktemp)"; trap 'rm -f "$input"' EXIT; cat > "$input" ;;
+esac
 if [[ -x "$common/hooks/$name" ]]; then
   "$common/hooks/$name" "$@" < "$input" || exit $?
 fi
@@ -185,7 +267,10 @@ fn status(p: &Paths) -> Res {
         println!("git hooks — {}", files::name(&docs));
         let hooks = dir_hooks(&docs).unwrap_or_default();
         let has = |name: &str, needles: &[&str]| {
-            std::fs::read_to_string(hooks.join(name)).is_ok_and(|t| needles.iter().any(|n| t.contains(n)))
+            [hooks.join(format!("{name}.crux")), hooks.join(name)].iter().any(|f| {
+                let text = files::read_or_empty(f);
+                needles.iter().any(|n| text.contains(n))
+            })
         };
         if has("pre-commit", &[MARK, "crux doctor"]) {
             ui::ok("pre-commit installed")
@@ -354,9 +439,9 @@ fn install_pre_push(repo: &Path) -> bool {
         ui::info(format!("the pre-push of {} is not installed", files::name(repo)));
         return false;
     }
-    let f = hooks.join("pre-push");
-    let written = files::write(
-        &f,
+    let written = put_hook(
+        &hooks,
+        "pre-push",
         &format!(
             r#"#!/usr/bin/env bash
 # Installed by crux hooks install.
@@ -383,7 +468,6 @@ exit 0
         ui::warn(e);
         return false;
     }
-    executable(&f);
     true
 }
 
@@ -399,7 +483,14 @@ fn install_commit_msg(p: &Paths, repo: &Path, scope: Scope, language: &str) -> b
         "en".into()
     };
     let scope = scope.as_str();
-    let src = std::fs::read_to_string(p.home.join("adapters/git/commit-msg.sh")).unwrap_or_default();
+    let template = p.home.join("adapters/git/commit-msg.sh");
+    let src = match std::fs::read_to_string(&template) {
+        Ok(t) => t,
+        Err(e) => {
+            ui::warn(format!("cannot read {}: {e}", template.display()));
+            return false;
+        }
+    };
     let out: Vec<String> = src
         .lines()
         .map(|l| {
@@ -422,12 +513,10 @@ fn install_commit_msg(p: &Paths, repo: &Path, scope: Scope, language: &str) -> b
             }
         })
         .collect();
-    let f = hooks.join("commit-msg");
-    if let Err(e) = files::write(&f, &(out.join("\n") + "\n")) {
+    if let Err(e) = put_hook(&hooks, "commit-msg", &(out.join("\n") + "\n")) {
         ui::warn(e);
         return false;
     }
-    executable(&f);
     true
 }
 
@@ -525,17 +614,18 @@ fn install(p: &Paths) -> Res {
     let hooks = dir_hooks(&docs).unwrap_or_default();
     // The docs repo is pushed directly, as the profile rule says: a pre-push
     // there only served to be skipped. The one crux installed earlier goes.
-    let pre_push = hooks.join("pre-push");
-    if std::fs::read_to_string(&pre_push)
-        .is_ok_and(|t| t.contains("Instalado por crux hooks install") || t.contains("Installed by crux hooks install"))
+    let crux_pre_push = |f: &Path| {
+        files::read_or_empty(f).contains("Installed by crux hooks install")
+            || files::read_or_empty(f).contains("Instalado por crux hooks install")
+    };
+    if (crux_pre_push(&hooks.join("pre-push")) || crux_pre_push(&hooks.join("pre-push.crux")))
+        && take_hook(&hooks, "pre-push")
     {
-        let _ = std::fs::remove_file(&pre_push);
         ui::ok(format!("pre-push removed from {docs_name}: documentation is pushed directly"));
     }
-    if let Err(e) = crate::files::write(&hooks.join("pre-commit"), PRE_COMMIT) {
+    if let Err(e) = put_hook(&hooks, "pre-commit", PRE_COMMIT) {
         die!("{e}");
     }
-    executable(&hooks.join("pre-commit"));
     let installed = install_commit_msg(p, &docs, Scope::Full, "en");
     chain_hooks_path(&docs);
     if installed {
@@ -593,14 +683,10 @@ fn remove(p: &Paths) -> Res {
     ui::ok("crux hooks removed (the rest is left as it was)");
     if let Some(docs) = project::find_docs_repo(&std::env::current_dir().unwrap_or_default()) {
         let hooks = dir_hooks(&docs).unwrap_or_default();
-        if std::fs::read_to_string(hooks.join("pre-commit")).is_ok_and(|t| t.contains("crux doctor"))
-            && std::fs::remove_file(hooks.join("pre-commit")).is_ok()
-        {
+        if take_hook(&hooks, "pre-commit") {
             ui::ok("pre-commit removed");
         }
-        if std::fs::read_to_string(hooks.join("commit-msg")).is_ok_and(|t| t.contains("crux hooks install"))
-            && std::fs::remove_file(hooks.join("commit-msg")).is_ok()
-        {
+        if take_hook(&hooks, "commit-msg") {
             ui::ok("commit-msg removed");
         }
         unchain_hooks_path(&docs);
@@ -608,6 +694,11 @@ fn remove(p: &Paths) -> Res {
         for repo in files::str_list(contract.get("repos")) {
             let dir = docs.parent().unwrap().join(&repo);
             if !repo.is_empty() && project::valid_name(&repo) && dir.is_dir() {
+                if let Some(h) = dir_hooks(&dir) {
+                    if take_hook(&h, "commit-msg") | take_hook(&h, "pre-push") {
+                        ui::ok(format!("git hooks removed from {repo}"));
+                    }
+                }
                 unchain_hooks_path(&dir);
             }
         }

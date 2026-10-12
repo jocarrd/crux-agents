@@ -1424,7 +1424,7 @@ test_the_hook_protects_the_branch_the_project_declares() {
   json_set "$docs/crux.json" repos '["app"]'
 
   ( cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1 )
-  local hook="$app/.git/hooks/pre-push"
+  local hook="$app/.git/hooks/pre-push.crux"
   assert_contains "$(cat "$hook")" "refs/heads/master" "the code repo's hook watches that one"
   assert_not_contains "$(cat "$hook")" "refs/heads/main" "not one that does not exist"
 }
@@ -2263,6 +2263,31 @@ test_the_claude_plugin_passes_its_own_tests() {
   out="$(cd "$CRUX_HOME/adapters/claude/plugin" && claude plugin test 2>&1)" || rc=$?
   assert_eq 0 "$rc" "the mod's tests pass"
   assert_contains "$out" " 0 fail" "with none failing"
+}
+
+test_a_repo_keeps_its_own_git_hooks_and_they_run_after_cruxs() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project kappa --repos "api")"
+  local api="$CRUX_PROJECTS_DIR/kappa/api"
+  git init -q "$api"
+  printf '#!/bin/sh\necho ran >> "%s"\n' "$SB/own-ran" > "$api/.git/hooks/commit-msg"
+  printf '#!/bin/sh\ncat > "%s"\n' "$SB/pushed" > "$api/.git/hooks/pre-push"
+  chmod +x "$api/.git/hooks/commit-msg" "$api/.git/hooks/pre-push"
+
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  assert_contains "$(cat "$api/.git/hooks/commit-msg.local" 2>/dev/null)" "own-ran" "the repo's own hook is kept aside, not overwritten"
+
+  git -C "$api" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "feat: add the checkout" 2>/dev/null
+  assert_eq "1" "$(wc -l < "$SB/own-ran" 2>/dev/null | tr -d ' ')" "it runs after crux's"
+  git -C "$api" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "feat: añade el pago" 2>/dev/null
+  assert_eq "1" "$(wc -l < "$SB/own-ran" 2>/dev/null | tr -d ' ')" "and not when crux's rejects the commit"
+
+  (cd "$api" && printf 'refs/heads/feat 1111 refs/heads/feat 0000\n' | .git/hooks/pre-push origin "$SB/r.git")
+  assert_contains "$(cat "$SB/pushed" 2>/dev/null)" "refs/heads/feat" "the repo's own pre-push gets the same input"
+
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1)
+  assert_contains "$(cat "$api/.git/hooks/commit-msg" 2>/dev/null)" "own-ran" "remove puts the repo's own hook back"
+  assert_no_file "$api/.git/hooks/commit-msg.crux" "and takes crux's part out"
 }
 
 test_hooks_install_registers_the_hooks_in_codex() {

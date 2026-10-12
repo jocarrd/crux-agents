@@ -493,6 +493,37 @@ fn kernel_up_to_date(ctx: &Ctx) -> Option<String> {
 
 /// Tasks from the other machine are pulled and what stayed pending here is
 /// published.
+/// Hooks crux wrote before the dispatcher carry their rules inline, so no new
+/// version of crux reaches them.
+fn old_git_hooks(ctx: &Ctx) -> Vec<String> {
+    let mut out = vec![];
+    for (p, docs) in docs_repos(&ctx.root) {
+        let contract = project::contract_lenient(&docs).unwrap_or_default();
+        let parent = docs.parent().unwrap_or(&ctx.root).to_path_buf();
+        let stale = std::iter::once(docs.clone())
+            .chain(
+                files::str_list(contract.get("repos"))
+                    .into_iter()
+                    .filter(|r| project::valid_name(r))
+                    .map(|r| parent.join(r)),
+            )
+            .filter(|r| r.join(".git").exists())
+            .any(|r| super::hooks::needs_new_hooks(&r));
+        if !stale {
+            continue;
+        }
+        if super::call_quiet(&docs, "hooks", &["install"]).ok() {
+            out.push(format!("kernel\t{p}: git hooks moved to the current crux"));
+        } else {
+            out.push(format!(
+                "warning\t{p}: its git hooks are from an older crux — 'crux hooks install' in {}",
+                files::name(&docs)
+            ));
+        }
+    }
+    out
+}
+
 fn tasks_up_to_date() -> Vec<String> {
     let mut out = vec![];
     for p in tsync::projects_with_tasks() {
@@ -674,6 +705,7 @@ fn arrival(ctx: &Ctx) -> Res {
     lines.extend(fetch_new_repos(ctx));
     lines.extend(moved_remotes(ctx));
     lines.extend(kernel_up_to_date(ctx));
+    lines.extend(old_git_hooks(ctx));
     lines.extend(tasks_up_to_date());
     lines.extend(profile_up_to_date(ctx));
     lines.extend(missing_projects(ctx));

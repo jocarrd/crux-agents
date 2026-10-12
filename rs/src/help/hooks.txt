@@ -6,3 +6,6 @@ crux hooks — hooks the standard into the moments where it applies.
 
 A standard you have to remember to check gets checked sometimes. These hooks
 check it every time.
+
+A repo's own git hook goes in .git/hooks/<hook>.local and runs after crux's;
+one that was there before crux is moved there and keeps running.
