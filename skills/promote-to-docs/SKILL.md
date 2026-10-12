@@ -33,7 +33,7 @@ It moves information from the local, ephemeral scope to the durable one: git.
 
 ### 2. Locate the docs repo
 
-`~/Proyectos/<project>/<project>-docs/`. If it doesn't exist, the project is not
+`~/Projects/<project>/<project>-docs/`. If it doesn't exist, the project is not
 under the standard yet: use `/crux-init` or `crux adopt` first.
 
 ### 3. Decide the destination

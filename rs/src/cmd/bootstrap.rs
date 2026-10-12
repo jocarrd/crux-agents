@@ -25,7 +25,7 @@ fn bring_profile(parent: &Path, owner: &str, all_repos: &[String], dry: bool) {
             Command::new(std::env::current_exe().unwrap_or_default())
                 .arg("profile")
                 .args(args)
-                .env("CRUX_PROJECTS_DIR", parent)
+                .env(env::PROJECTS_DIR_KEY, parent)
                 .env("CRUX_HOME", &home),
         )
         .ok()
@@ -55,7 +55,7 @@ fn bring_tasks(parent: &Path, project: &str) {
     let out = sh::capture_cmd(
         Command::new(std::env::current_exe().unwrap_or_default())
             .args(["__task-sync", "sync", "--project", project])
-            .env("CRUX_PROJECTS_DIR", parent)
+            .env(env::PROJECTS_DIR_KEY, parent)
             .env("CRUX_HOME", &home),
     );
     let result = serde_json::from_str::<serde_json::Value>(&out.stdout)

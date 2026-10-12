@@ -4,7 +4,7 @@
 
 {{DESCRIPTION}}
 
-Code in `~/Proyectos/{{PROJECT}}/{{REPO}}/`.
+Code in `~/Projects/{{PROJECT}}/{{REPO}}/`.
 
 ## Documentation of this repo
 

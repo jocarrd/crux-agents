@@ -19,8 +19,10 @@ for a in "$@"; do
   if [[ "$a" == "--hazlo" || "$a" == "--apply" ]]; then DO_IT=1; else TARGET="$a"; fi
 done
 
-# The root on THIS machine, which need not match the one the folder came from.
-ROOT="${CRUX_PROJECTS_DIR:-$HOME/Proyectos}"
+# The root on THIS machine, which need not match the one the folder came from:
+# the variable, then the folder crux saved, then crux's own default.
+CONFIGURED="$(sed -n 's/^CRUX_PROJECTS_DIR="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$HOME/.crux/config" 2>/dev/null | tail -1)"
+ROOT="${CRUX_PROJECTS_DIR:-${CONFIGURED:-$HOME/Projects}}"
 PROJECT="${TARGET:-$ROOT/$NAME}"
 
 # A folder gathered before collect.sh anchored on the project root is named

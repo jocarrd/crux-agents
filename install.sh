@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # crux installation on a machine. Idempotent.
 #
-#   ~/Proyectos/crux/install.sh                          installs
-#   ~/Proyectos/crux/install.sh --remote '<template>'    installs, setting the
+#   ~/Projects/crux/install.sh                          installs
+#   ~/Projects/crux/install.sh --remote '<template>'    installs, setting the
 #                                                        usual remote
-#   ~/Proyectos/crux/install.sh --projects-dir <path>    sets the projects root
-#   ~/Proyectos/crux/install.sh --dev                    links this working copy
-#   ~/Proyectos/crux/install.sh --dry-run                shows what it would do
+#   ~/Projects/crux/install.sh --projects-dir <path>    sets the projects root
+#   ~/Projects/crux/install.sh --dev                    links this working copy
+#   ~/Projects/crux/install.sh --dry-run                shows what it would do
 #
 # The projects root is, by default, the directory where you cloned the kernel:
 # if crux is in /opt/dev/crux, your projects go in /opt/dev. It can be changed,

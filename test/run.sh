@@ -7,7 +7,7 @@
 # No dependencies: bash and node, the same the kernel itself needs.
 #
 # Each case runs in an isolated sandbox with the agent directories redirected,
-# so the suite NEVER touches ~/.claude, ~/.codex or ~/Proyectos.
+# so the suite NEVER touches ~/.claude, ~/.codex or ~/Projects.
 
 set -uo pipefail
 

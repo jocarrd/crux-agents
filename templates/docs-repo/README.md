@@ -9,7 +9,7 @@ See `repos/README.md` for the complete repo → documentation folder mapping.
 Filesystem layout:
 
 ```
-~/Proyectos/{{PROJECT}}/
+~/Projects/{{PROJECT}}/
 ├── <repo-1>/
 ├── <repo-2>/
 └── {{PROJECT}}-docs/        ← this repo

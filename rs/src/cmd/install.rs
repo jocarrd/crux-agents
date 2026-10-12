@@ -215,7 +215,7 @@ pub fn run(argv: &[String]) -> Res {
     let from_flag = !projects_dir.is_empty();
     let mut root = projects_dir.clone();
     if root.is_empty() {
-        if let Some(mut declared) = env::config_value_in(&config, "CRUX_PROJECTS_DIR") {
+        if let Some(mut declared) = env::config_value_in(&config, env::PROJECTS_DIR_KEY) {
             // Older installs wrote the kernels directory as the root.
             if Path::new(&declared) == home.join(".crux/kernel") {
                 ui::warn("the declared root was the kernels directory: fixing it");
@@ -232,7 +232,7 @@ pub fn run(argv: &[String]) -> Res {
         (true, Some(c)) => env::root_of_kernel_clone(c).display().to_string(),
         (true, None) => {
             root_text = "the default";
-            env::home().join("Proyectos").display().to_string()
+            env::default_projects_root().display().to_string()
         }
     };
     if !dry {
@@ -256,7 +256,7 @@ pub fn run(argv: &[String]) -> Res {
         } else if let Some(r) = previous_remote {
             text.push_str(&format!("{r}\n"));
         }
-        text.push_str(&format!("CRUX_PROJECTS_DIR=\"{root}\"\n"));
+        text.push_str(&format!("{}=\"{root}\"\n", env::PROJECTS_DIR_KEY));
         for k in kept {
             text.push_str(&format!("{k}\n"));
         }

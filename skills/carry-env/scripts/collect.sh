@@ -134,7 +134,7 @@ chmod 700 "$OUTPUT/restaurar.sh"
   echo "./restaurar.sh --apply   # copies them into place"
   echo '```'
   echo
-  echo "It looks for the project at \`~/Proyectos/$NAME\`; if it is elsewhere, pass it"
+  echo "It looks for \`$NAME\` in the projects folder crux uses on that machine; if it is elsewhere, pass it"
   echo "as an argument. It never overwrites: if the destination exists it skips it and says so."
   echo
   echo "## What goes where"

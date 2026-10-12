@@ -10,7 +10,7 @@ standard.
 
 ## When to use
 
-- You have just created or cloned a repo inside `~/Proyectos/<project>/`.
+- You have just created or cloned a repo inside `~/Projects/<project>/`.
 - You want the project to recognize it: documentation folder, entry in the
   contract, row in the index and context pointers.
 

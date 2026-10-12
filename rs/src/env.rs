@@ -6,6 +6,11 @@
 use crate::names;
 use std::path::{Path, PathBuf};
 
+/// The variable, and the machine config key, that says where projects live.
+pub const PROJECTS_DIR_KEY: &str = "CRUX_PROJECTS_DIR";
+/// Under $HOME, when nobody has said otherwise.
+pub const DEFAULT_PROJECTS_DIR: &str = "Projects";
+
 pub fn var(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.is_empty())
 }
@@ -96,10 +101,7 @@ pub fn kernel_clone(root: &Path) -> Option<PathBuf> {
 /// the commands that walk every project do not fail: they report zero, which
 /// is worse because it looks like data.
 pub fn projects_root() -> PathBuf {
-    if let Some(d) = var("CRUX_PROJECTS_DIR") {
-        return PathBuf::from(d);
-    }
-    if let Some(d) = config_value_in(&config_file(), "CRUX_PROJECTS_DIR") {
+    if let Some(d) = declared_projects_root() {
         return PathBuf::from(d);
     }
     if let Some(h) = crux_home() {
@@ -107,7 +109,16 @@ pub fn projects_root() -> PathBuf {
             return root_of_kernel_clone(&h);
         }
     }
-    home().join("Proyectos")
+    default_projects_root()
+}
+
+/// The folder the person chose: the variable first, then the machine config.
+pub fn declared_projects_root() -> Option<String> {
+    var(PROJECTS_DIR_KEY).or_else(|| config_value_in(&config_file(), PROJECTS_DIR_KEY))
+}
+
+pub fn default_projects_root() -> PathBuf {
+    home().join(DEFAULT_PROJECTS_DIR)
 }
 
 pub fn registry_file() -> PathBuf {

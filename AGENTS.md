@@ -152,7 +152,7 @@ Each case runs in an isolated sandbox with the agent directories redirected
 —including the **settings** where the hooks live, which one case put back in
 its real place with an `unset`, leaving the machine with three hooks pointing
 at an already deleted worktree—: the suite **does not touch** `~/.claude`,
-`~/.codex` or `~/Proyectos`. The runner checks this after every case. If you
+`~/.codex` or `~/Projects`. The runner checks this after every case. If you
 write a case that needs a `$HOME`, **pass it per invocation**
 (`env HOME=... bash ...`), never with `export`: exporting it carries it over
 to the next case, which, once the sandbox is deleted, is left pointing at a

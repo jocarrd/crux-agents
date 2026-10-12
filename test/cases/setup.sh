@@ -98,3 +98,22 @@ test_setup_brings_the_projects_the_account_already_has() {
   assert_contains "$out" "blog" "it finds the project on the account"
   assert_file "$home/p/blog/blog-docs/crux.json" "and brings it"
 }
+
+test_setup_offers_projects_in_home_and_keeps_the_folder_the_person_chooses() {
+  sandbox >/dev/null
+  _setup_gh ana "" https
+  local home="$SB/h"; mkdir -p "$home/.crux"
+  printf 'CRUX_REMOTE="%s/remotes/ana/{repo}.git"\n' "$SB" > "$home/.crux/config"
+  # folder: the default; profile: no; first project: no
+  local out; out="$(setup_as "$home" '\nn\nn\n')"
+  # shellcheck disable=SC2088  # setup prints the folder with a literal ~
+  assert_contains "$out" "~/Projects" "the folder offered is ~/Projects"
+  assert_contains "$(cat "$home/.crux/config")" "CRUX_PROJECTS_DIR=\"$home/Projects\"" "and the default is saved"
+
+  # folder: one of the person's own
+  out="$(setup_as "$home" "$home/code\nn\nn\n")"
+  assert_contains "$(cat "$home/.crux/config")" "CRUX_PROJECTS_DIR=\"$home/code\"" "an answer replaces it"
+  out="$(setup_as "$home" '\nn\nn\n')"
+  # shellcheck disable=SC2088  # setup prints the folder with a literal ~
+  assert_contains "$out" "~/code" "run again, it offers the folder chosen, not the default"
+}

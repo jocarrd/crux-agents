@@ -129,6 +129,21 @@ test_carry_env_restores_a_bundle_collected_as_repo() {
   teardown
 }
 
+test_carry_env_restores_into_the_folder_the_machine_config_names() {
+  sandbox >/dev/null
+  local home="$SB/h" root="$SB/code/shop"
+  mkdir -p "$home/.crux" "$root/shop-api" "$SB/b"
+  printf 'CRUX_PROJECTS_DIR="%s/code"\n' "$SB" > "$home/.crux/config"
+  printf '# proyecto: shop\nshop-api/.env|shop-api/.env\n' > "$SB/b/mapa.txt"
+  mkdir -p "$SB/b/shop-api"; echo "X=1" > "$SB/b/shop-api/.env"
+  cp "$CRUX_HOME/skills/carry-env/scripts/restaurar.sh" "$SB/b/"
+
+  env -u CRUX_PROJECTS_DIR HOME="$home" bash "$SB/b/restaurar.sh" --apply >/dev/null 2>&1
+
+  assert_file "$root/shop-api/.env" "it restores where this machine keeps its projects"
+  teardown
+}
+
 test_carry_env_names_root_files_without_inventing_a_repo() {
   sandbox >/dev/null
   mkdir -p "$SB/loose"

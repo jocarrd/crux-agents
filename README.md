@@ -107,8 +107,8 @@ Tomorrow, on another machine, `crux sync` brings all of it back.
 
 ```bash
 # once per machine (it builds crux with Rust's cargo: https://rustup.rs)
-git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh
+git clone https://github.com/jocarrd/crux.git ~/Projects/crux
+~/Projects/crux/install.sh
 
 # then let it walk you through the rest: account, remote, profile, projects
 crux setup
@@ -129,9 +129,11 @@ crux bootstrap
 ```
 
 The binary carries the whole kernel, so with the binary alone `crux install`
-does the same as `install.sh`. Where you clone the kernel decides where
-projects live: the root is the clone's parent directory (`~/Proyectos` above). `crux doctor --machine` tells
-you whether the machine is missing anything the skills need.
+does the same as `install.sh`. Projects live in one folder of your choice:
+`crux setup` asks for it (`~/Projects` unless you say otherwise), and
+`--projects-dir <path>` or the `CRUX_PROJECTS_DIR` variable set it too. A
+kernel cloned inside a folder makes that folder the default. `crux doctor
+--machine` tells you whether the machine is missing anything the skills need.
 
 ## A task, from start to merge
 
@@ -349,8 +351,8 @@ Running `install.sh` again moves to a new version; previous ones stay in
 for the machine where you develop crux.
 
 If you work on the kernel with its own docs repo, clone it inside a project
-folder like any other code: `~/Proyectos/crux/crux`, next to
-`~/Proyectos/crux/crux-docs`. The root is then the folder above.
+folder like any other code: `~/Projects/crux/crux`, next to
+`~/Projects/crux/crux-docs`. The root is then the folder above.
 
 ### Preferences
 

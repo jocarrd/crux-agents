@@ -66,8 +66,8 @@ does not belong to the kernel**.
 ### Installation, once per machine
 
 ```bash
-git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh --remote 'git@github.com:<your-user>/{repo}.git'
+git clone https://github.com/jocarrd/crux.git ~/Projects/crux
+~/Projects/crux/install.sh --remote 'git@github.com:<your-user>/{repo}.git'
 ```
 
 `--remote` is optional and sets this machine's usual remote, so you do not have
@@ -141,7 +141,7 @@ missing.
 **1. It creates the project folder and the remote repo.**
 
 ```
-~/Proyectos/example-project/
+~/Projects/example-project/
 └── example-project-docs/     ← created on GitHub and cloned
 ```
 
@@ -226,8 +226,8 @@ involve hand-editing a list inside a script.
 Three commands:
 
 ```bash
-git clone https://github.com/jocarrd/crux.git ~/Proyectos/crux
-~/Proyectos/crux/install.sh --remote 'git@github.com:your-user/{repo}.git'
+git clone https://github.com/jocarrd/crux.git ~/Projects/crux
+~/Projects/crux/install.sh --remote 'git@github.com:your-user/{repo}.git'
 crux clone example-project
 ```
 
@@ -258,7 +258,7 @@ If the project already has documentation, `crux init` is not for you: it is
 `crux adopt`, which **rewrites nothing**.
 
 ```bash
-cd ~/Proyectos/mi-proyecto/mi-proyecto-docs
+cd ~/Projects/mi-proyecto/mi-proyecto-docs
 crux adopt --profile multi-repo
 ```
 
@@ -711,7 +711,7 @@ documentation belongs to the project, the templates only fill gaps.
 ```
 
 Each case runs in an isolated sandbox with the agent directories redirected:
-the suite **does not touch** `~/.claude`, `~/.codex` or `~/Proyectos`.
+the suite **does not touch** `~/.claude`, `~/.codex` or `~/Projects`.
 
 Three kinds of case, and the third is the interesting one:
 
@@ -847,7 +847,7 @@ way to lie with this metric.
 | `repos/<x>/ is not declared` | Orphan folder | `crux add-repo`, or delete it |
 | `broken markdown links` | Documentation moved | Fix, or switch to backticks |
 | `profile client-repo: ... should not exist` | Something was written in foreign code | Delete the file |
-| A skill does not appear in the agent | Outdated installation | `~/Proyectos/crux/install.sh` |
+| A skill does not appear in the agent | Outdated installation | `~/Projects/crux/install.sh` |
 | `crux clone` does not know where to fetch something from | No `remote` in the contract | Declare it, or `crux adopt` to deduce it |
 | A hook does nothing, or "failed with non-blocking status" on every turn | It points at a file that no longer exists | `crux hooks status` to see it, `crux hooks install` from the main repo |
 | A tool is missing for a skill | — | `crux doctor --machine` |

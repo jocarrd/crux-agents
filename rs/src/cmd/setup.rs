@@ -252,8 +252,8 @@ impl Setup {
     fn folder(&mut self, dir_arg: &str) -> Res {
         self.step(3, "the projects folder");
         let dir = if dir_arg.is_empty() {
-            let default = env::config_value_in(&self.config, "CRUX_PROJECTS_DIR")
-                .unwrap_or_else(|| env::home().join("Proyectos").display().to_string());
+            let default = env::config_value_in(&self.config, env::PROJECTS_DIR_KEY)
+                .unwrap_or_else(|| env::default_projects_root().display().to_string());
             expand_home(&self.ask.line("where projects are cloned", &shown(Path::new(&default))))
         } else {
             dir_arg.to_string()
@@ -264,7 +264,7 @@ impl Setup {
         }
         done(format!("projects in {}", shown(&self.root)));
         // The commands this calls find the projects through it.
-        std::env::set_var("CRUX_PROJECTS_DIR", &dir);
+        std::env::set_var(env::PROJECTS_DIR_KEY, &dir);
         self.summary.push(("projects", shown(&self.root)));
         Ok(())
     }

@@ -882,7 +882,7 @@ test_link_does_not_fight_the_repos_formatter() {
 
 test_the_projects_root_is_not_assumed() {
   sandbox >/dev/null
-  # A kernel installed at a path that is not ~/Proyectos: its parent is the root.
+  # A kernel installed at a path that is not ~/Projects: its parent is the root.
   local root="$SB/dev"
   mkdir -p "$root/crux"
   cp "$CRUX_HOME/VERSION" "$root/crux/"

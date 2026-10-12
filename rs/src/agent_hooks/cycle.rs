@@ -28,9 +28,7 @@ pub(super) fn cycle_guard() -> Res {
     // silent on a machine with another convention.
     let config = env::config_file();
     let kernel = env::config_value_in(&config, "CRUX_HOME").unwrap_or_default();
-    let mut root = env::var("CRUX_PROJECTS_DIR")
-        .or_else(|| env::config_value_in(&config, "CRUX_PROJECTS_DIR"))
-        .unwrap_or_default();
+    let mut root = env::declared_projects_root().unwrap_or_default();
     if root.is_empty() && !kernel.is_empty() {
         root = Path::new(&kernel).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
     }

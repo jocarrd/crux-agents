@@ -28,7 +28,7 @@ it.
 ## Gather them
 
 ```bash
-<this-skill-directory>/scripts/collect.sh --project ~/Proyectos/<project>
+<this-skill-directory>/scripts/collect.sh --project ~/Projects/<project>
 ```
 
 It leaves in `~/entornos-<project>` the files, `RESTAURAR.md` with the table of
@@ -70,7 +70,7 @@ cd ~/entornos-<project>
 ./restaurar.sh --apply    # copies them (--hazlo still works)
 ```
 
-It looks for the project in `~/Proyectos/<project>`; if it isn't there, it looks
+It looks for the project in the projects folder crux uses on that machine; if it isn't there, it looks
 one level deeper in case the folder was gathered by pointing at a repo, and if
 that fails too, you pass it as an argument. **It never overwrites**: if the
 destination already exists it skips it and says so, because losing a value that
