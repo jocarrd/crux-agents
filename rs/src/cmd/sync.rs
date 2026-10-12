@@ -398,17 +398,30 @@ fn fetch_new_repos(ctx: &Ctx) -> Vec<String> {
                 continue;
             }
         };
-        let missing = files::str_list(contract.get("repos"))
-            .iter()
-            .filter(|r| project::valid_name(r))
-            .any(|r| !ctx.root.join(&p).join(r).join(".git").exists());
-        if !missing {
+        let missing = || -> Vec<String> {
+            files::str_list(contract.get("repos"))
+                .into_iter()
+                .filter(|r| project::valid_name(r) && !ctx.root.join(&p).join(r).join(".git").exists())
+                .collect()
+        };
+        let before = missing();
+        if before.is_empty() {
             continue;
         }
-        if super::call_quiet(&ctx.root, "clone", &[&p, "--parent", &ctx.root.to_string_lossy()]).ok() {
-            out.push(format!("new\t{p}: missing repos, brought in"));
-        } else {
-            out.push(format!("failed\t{p}: it lacks repos and I could not bring them — 'crux clone {p}'"));
+        let cloned = super::call_quiet(&ctx.root, "clone", &[&p, "--parent", &ctx.root.to_string_lossy()]).ok();
+        // clone warns and carries on when a repo cannot be fetched, as in a
+        // client's repo: what is still missing is what says how it went.
+        let after = missing();
+        let brought: Vec<&String> = before.iter().filter(|r| !after.contains(r)).collect();
+        if !brought.is_empty() {
+            out.push(format!(
+                "new\t{p}: brought in {}",
+                brought.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(", ")
+            ));
+        }
+        if !after.is_empty() {
+            let why = if cloned { "" } else { ", and clone failed" };
+            out.push(format!("warning\t{p}: still missing {}{why} — 'crux clone {p}' says why", after.join(", ")));
         }
     }
     out

@@ -455,6 +455,29 @@ test_sync_names_a_repo_whose_origin_is_not_the_one_the_contract_declares() {
   teardown
 }
 
+test_sync_names_the_declared_repos_it_could_not_bring() {
+  sandbox >/dev/null
+  _two_machines
+  mkdir -p "$CRUX_PROJECTS_DIR/alpha/alpha-docs"
+  # ghost has a remote that does not exist: clone warns and carries on, and
+  # sync must not report it brought in on every session.
+  # extra can be cloned: it is the one that is brought in.
+  git init -q --bare -b main "$SB/extra.git"
+  git clone -q "$SB/extra.git" "$SB/extra-seed" 2>/dev/null
+  git -C "$SB/extra-seed" commit -q --allow-empty -m "first" && git -C "$SB/extra-seed" push -q origin main
+  echo '{"crux":"0.60.0","project":"alpha","repos":["app","ghost","extra"],"remote":{"url":"'"$SB"'/{repo}.git","repos":{"app":"'"$SB"'/remote.git"}}}' \
+    > "$CRUX_PROJECTS_DIR/alpha/alpha-docs/crux.json"
+  local out
+  git -C "$CRUX_PROJECTS_DIR/alpha/alpha-docs" init -q -b main
+  git -C "$CRUX_PROJECTS_DIR/alpha/alpha-docs" add -A
+  git -C "$CRUX_PROJECTS_DIR/alpha/alpha-docs" commit -qm "docs: start"
+  out="$(crux sync 2>&1)" || true
+  assert_contains "$out" "alpha: brought in extra" "the repo it could clone is named"
+  assert_contains "$out" "alpha: still missing ghost" "and so is the one still missing"
+  assert_file "$CRUX_PROJECTS_DIR/alpha/extra/.git/HEAD" "extra is on disk"
+  teardown
+}
+
 test_sync_says_nothing_of_an_origin_that_matches_the_contract() {
   sandbox >/dev/null
   _two_machines
