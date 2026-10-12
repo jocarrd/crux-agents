@@ -233,7 +233,11 @@ pub fn run(argv: &[String]) -> Res {
         let shown = scenarios_file.strip_prefix(&cwd).map(Path::to_path_buf).unwrap_or(scenarios_file.clone());
         return fail(format!("the skill has no scenarios: create {} (see /skill-creator)", shown.display()), 2);
     };
-    let scenarios = read_scenarios(&std::fs::read_to_string(&scenarios_file).unwrap_or_default())?;
+    let text = match std::fs::read_to_string(&scenarios_file) {
+        Ok(t) => t,
+        Err(e) => return fail(format!("cannot read {}: {e}", scenarios_file.display()), 2),
+    };
+    let scenarios = read_scenarios(&text)?;
     if scenarios.is_empty() {
         return fail(format!("{} has no scenario («## name»)", scenarios_file.display()), 2);
     }
@@ -242,13 +246,11 @@ pub fn run(argv: &[String]) -> Res {
     };
     let tokens_cmd = adapter("CRUX_SKILL_TOKENS", "skill-tokens.sh");
     let name = crate::files::name(skill.parent().unwrap());
-    let current = try_out(
-        &std::fs::read_to_string(&skill).unwrap_or_default(),
-        &scenarios,
-        &runner,
-        tokens_cmd.as_deref(),
-        runs,
-    )?;
+    let skill_text = match std::fs::read_to_string(&skill) {
+        Ok(t) => t,
+        Err(e) => return fail(format!("cannot read {}: {e}", skill.display()), 2),
+    };
+    let current = try_out(&skill_text, &scenarios, &runner, tokens_cmd.as_deref(), runs)?;
     let preview = match &against {
         Some(r) => Some(try_out(&version(&skill, r)?, &scenarios, &runner, tokens_cmd.as_deref(), runs)?),
         None => None,

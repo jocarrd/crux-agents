@@ -176,7 +176,10 @@ pub fn run(argv: &[String]) -> Res {
     let root = if root.is_empty() { env::root_of_kernel_clone(&origin).display().to_string() } else { root };
     if !dry {
         let _ = std::fs::create_dir_all(home.join(".crux"));
-        let previous = files::read_or_empty(&config);
+        let previous = match files::read_if_exists(&config) {
+            Ok(t) => t,
+            Err(e) => die!("{e} — the lines you added there would be lost"),
+        };
         let previous_remote = previous.lines().find(|l| l.starts_with("CRUX_REMOTE=")).map(String::from);
         // Lines the person added are theirs and survive the rewrite.
         let managed =
@@ -252,8 +255,9 @@ pub fn run(argv: &[String]) -> Res {
             }
         }
     }
-    skills::codex_global(&kernel);
-    ui::ok("global Codex context in ~/.codex/AGENTS.md");
+    if skills::codex_global(&kernel) {
+        ui::ok("global Codex context in ~/.codex/AGENTS.md");
+    }
     skills::claude_global(&kernel.to_string_lossy());
     ui::ok("global Claude context verified");
     if !dry && super::call_quiet(&home, "profile", &["link"]).ok() {

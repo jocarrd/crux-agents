@@ -592,8 +592,11 @@ test_no_command_drops_a_write_error() {
   # empty body. A marker that only throttles a reminder goes through
   # files::touch_marker, which says so where it is called.
   local hits
-  hits="$(grep -rnE 'let _ = (std::)?fs::write' "$CRUX_HOME/rs/src" || true)"
+  hits="$(grep -rnE 'let _ = (std::|crate::)?(fs::write|files::write_atomic|template::)' "$CRUX_HOME/rs/src" || true)"
   assert_eq "" "$hits" "every write either reports its error or is a marker"
+  # Read as empty, a file that exists is later rewritten without what it held.
+  hits="$(grep -rnE 'read_to_string\([^)]*\)\.unwrap_or_default\(\)' "$CRUX_HOME/rs/src" | grep -v 'rs/src/files.rs' || true)"
+  assert_eq "" "$hits" "no file is read as empty when it cannot be read"
 }
 
 test_no_command_ends_the_process_on_its_own() {
@@ -1457,6 +1460,20 @@ test_the_gate_mark_does_not_block_the_proposal() {
   assert_file "$ws/../app/.git/info/exclude" "the exclude exists"
   printf 'abc\n' > "$ws/.crux-ship"
   assert_eq "" "$(git -C "$ws" status --porcelain)" "the mark does not dirty the state"
+}
+
+test_workspace_new_never_overwrites_an_exclude_it_cannot_read() {
+  sandbox >/dev/null
+  local repo="$SB/app"
+  mkdir -p "$repo" && git -C "$repo" init -q -b main
+  git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
+  printf 'my-local-dir/\n' > "$repo/.git/info/exclude"
+  chmod 200 "$repo/.git/info/exclude"
+
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new task --repo "$repo" 2>&1)"
+  chmod 644 "$repo/.git/info/exclude"
+  assert_contains "$(cat "$repo/.git/info/exclude")" "my-local-dir/" "the person's excludes are still there"
+  assert_contains "$out" "cannot read" "and it says it could not read the file"
 }
 
 test_the_contract_declares_the_main_branch() {

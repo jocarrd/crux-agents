@@ -300,7 +300,10 @@ fn expire_tasks(confirmed: bool) -> Res {
                 .find_map(|l| l.strip_prefix("created: ").map(String::from))
                 .unwrap_or_default();
             let removed = f.parent().unwrap().parent().unwrap().join(".removed");
-            let mut text = files::read_or_empty(&removed);
+            let mut text = match files::read_if_exists(&removed) {
+                Ok(t) => t,
+                Err(e) => die!("{e} — the tasks are kept, or the other machine would bring them back"),
+            };
             text.push_str(&format!("done/{} {created}\n", files::name(f)));
             if let Err(e) = crate::files::write(&removed, &text) {
                 die!("{e}");

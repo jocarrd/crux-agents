@@ -148,7 +148,7 @@ pub fn claude_global(marker: &str) {
 
 /// Codex reads ~/.codex/AGENTS.md as global context: generated between
 /// markers so it is regenerated without touching what the user wrote.
-pub fn codex_global(crux_home: &Path) {
+pub fn codex_global(crux_home: &Path) -> bool {
     let begin = "<!-- crux:begin -->";
     let end = "<!-- crux:end -->";
     let h = crux_home.display();
@@ -175,9 +175,13 @@ The procedures available as `/<name>` are in
     );
     if env::dry_run() {
         println!("      [dry-run] codex: global AGENTS.md");
-        return;
+        return true;
     }
     let dir = env::codex_home_dir();
     let _ = fs::create_dir_all(&dir);
-    let _ = template::replace_or_append_block(&dir.join(names::AGENTS), begin, end, &block);
+    if let Err(e) = template::replace_or_append_block(&dir.join(names::AGENTS), begin, end, &block) {
+        crate::ui::warn(format!("{e} — Codex does not get the global context"));
+        return false;
+    }
+    true
 }

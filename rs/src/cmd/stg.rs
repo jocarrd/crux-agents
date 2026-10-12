@@ -107,7 +107,7 @@ impl Stg {
     }
     /// The plaintext password is stored only here, to repeat the link without
     /// rotating it. The server holds the hash.
-    fn key_of(&self, name: &str) -> String {
+    fn key_of(&self, name: &str) -> Result<String, String> {
         let f = self.keys.join(format!("{name}.pass"));
         if !f.is_file() {
             let _ = std::fs::create_dir_all(&self.keys);
@@ -121,9 +121,18 @@ impl Stg {
                     key.extend(buf.iter().map(|&b| b as char).filter(char::is_ascii_alphanumeric).take(20 - key.len()));
                 }
             }
-            let _ = crate::files::write_atomic(&f, &key, Some(0o600));
+            if key.len() < 20 {
+                return Err("could not generate a password from /dev/urandom".into());
+            }
+            crate::files::write_atomic(&f, &key, Some(0o600))
+                .map_err(|e| format!("cannot write {}: {e}", f.display()))?;
         }
-        std::fs::read_to_string(&f).unwrap_or_default()
+        // An empty password would put the site up behind a lock anyone opens.
+        match std::fs::read_to_string(&f) {
+            Ok(k) if !k.trim().is_empty() => Ok(k),
+            Ok(_) => Err(format!("{} is empty — delete it to generate a new one", f.display())),
+            Err(e) => Err(format!("cannot read {}: {e}", f.display())),
+        }
     }
     /// It does not import another project's snippet: if someone renames it,
     /// the staging goes down and the reason is visible nowhere.
@@ -192,7 +201,10 @@ fn deploy(s: &Stg, args: &[String]) -> Res {
     if !folder_p.join("index.html").is_file() {
         ui::warn(format!("{folder} has no index.html at the root"));
     }
-    let key = s.key_of(name);
+    let key = match s.key_of(name) {
+        Ok(k) => k,
+        Err(e) => die!("{e}"),
+    };
     // Through stdin and not as an argument: `sudo` leaves the whole command
     // in the server's auth.log forever, and `ps` shows it meanwhile. Caddy
     // asks for the password and its confirmation.

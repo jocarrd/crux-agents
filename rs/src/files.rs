@@ -93,6 +93,16 @@ pub fn str_list(v: Option<&Value>) -> Vec<String> {
     }
 }
 
+/// Empty only when the file is not there. Any other error comes back, so a
+/// file that exists but cannot be read is never rewritten as if it were empty.
+pub fn read_if_exists(path: &Path) -> Result<String, String> {
+    match fs::read_to_string(path) {
+        Ok(t) => Ok(t),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(format!("cannot read {}: {e}", path.display())),
+    }
+}
+
 pub fn read_or_empty(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_default()
 }

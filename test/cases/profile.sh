@@ -49,6 +49,19 @@ test_profile_link_is_idempotent_and_brings_the_machine_note() {
   assert_contains "$(cat "$(claude_md)")" "@$dir/machines/$host.md" "and imports this machine's note"
 }
 
+test_profile_link_never_overwrites_a_claude_md_it_cannot_read() {
+  sandbox >/dev/null
+  profile_here >/dev/null
+  mkdir -p "$(dirname "$(claude_md)")"
+  printf 'My own global instructions.\n' > "$(claude_md)"
+  chmod 200 "$(claude_md)"
+  local out rc=0; out="$("$CRUX_HOME/bin/crux" profile link 2>&1)" || rc=$?
+  chmod 644 "$(claude_md)"
+  assert_contains "$(cat "$(claude_md)")" "My own global instructions." "the person's instructions are still there"
+  assert_contains "$out" "cannot read" "and it says it could not read the file"
+  assert_eq 1 "$rc" "ending in error"
+}
+
 test_profile_link_copies_the_index_for_codex() {
   sandbox >/dev/null
   local dir; dir="$(profile_here "Be brief.")"

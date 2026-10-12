@@ -83,7 +83,7 @@ pub fn render_managed(src: &Path, dst: &Path, vars: &[(&str, &str)]) -> std::io:
 /// markers if it was there, and leaves the rest as the person wrote it. An
 /// empty block removes it. At the top because what is read first weighs most.
 pub fn write_marked_block(file: &Path, begin: &str, end: &str, block: &str) -> std::io::Result<()> {
-    let src = fs::read_to_string(file).unwrap_or_default();
+    let src = crate::files::read_if_exists(file).map_err(std::io::Error::other)?;
     let re = Regex::new(&format!(r"{}[\s\S]*?{}\n*", regex::escape(begin), regex::escape(end))).unwrap();
     let rest = re.replacen(&src, 1, "").into_owned();
     let rest = rest.trim_start_matches('\n');
@@ -105,7 +105,7 @@ pub fn write_marked_block(file: &Path, begin: &str, end: &str, block: &str) -> s
 
 /// Replaces the marked block in place, or appends it if it is not there.
 pub fn replace_or_append_block(file: &Path, begin: &str, end: &str, block: &str) -> std::io::Result<()> {
-    let src = fs::read_to_string(file).unwrap_or_default();
+    let src = crate::files::read_if_exists(file).map_err(std::io::Error::other)?;
     if src.contains(begin) {
         let re = Regex::new(&format!(r"{}[\s\S]*?{}", regex::escape(begin), regex::escape(end))).unwrap();
         fs::write(file, re.replacen(&src, 1, regex::NoExpand(block)).into_owned())
@@ -136,7 +136,8 @@ pub fn write_local_pointer(dir: &Path, docs_name: &str) -> std::io::Result<Local
     }
     let exclude = common.join("info/exclude");
     fs::create_dir_all(common.join("info"))?;
-    let listed = fs::read_to_string(&exclude).unwrap_or_default().lines().any(|l| l == LOCAL_POINTER);
+    let listed =
+        crate::files::read_if_exists(&exclude).map_err(std::io::Error::other)?.lines().any(|l| l == LOCAL_POINTER);
     if !listed {
         let mut f = fs::OpenOptions::new().create(true).append(true).open(&exclude)?;
         std::io::Write::write_all(&mut f, format!("{LOCAL_POINTER}\n").as_bytes())?;

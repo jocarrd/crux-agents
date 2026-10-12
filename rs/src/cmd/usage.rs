@@ -171,8 +171,8 @@ fn invocations(home: &Path, since: std::time::SystemTime) -> Usage {
                 continue;
             }
             u.sessions += 1;
-            let text =
-                parts.iter().map(|f| std::fs::read_to_string(f).unwrap_or_default()).collect::<Vec<_>>().join("\n");
+            // A transcript that cannot be read does not count: these are statistics.
+            let text = parts.iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect::<Vec<_>>().join("\n");
             let mut here: Vec<String> = vec![];
             for c in skill_re.captures_iter(&text) {
                 if !here.contains(&c[1].to_string()) {

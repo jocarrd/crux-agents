@@ -198,7 +198,10 @@ pub fn run(argv: &[String]) -> Res {
             if refresh {
                 for (repo, file) in &without_markers {
                     let path = root.join(repo).join(file);
-                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    let text = match files::read_if_exists(&path) {
+                        Ok(t) => t,
+                        Err(e) => die!("{e}"),
+                    };
                     let mut lines: Vec<&str> = text.lines().collect();
                     if lines.first().is_some_and(|l| l.starts_with("# ")) {
                         lines.remove(0);

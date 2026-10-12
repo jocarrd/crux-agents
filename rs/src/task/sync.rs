@@ -143,7 +143,8 @@ fn visibility(repo: &Path) -> String {
     }
     seen.insert(name, json!(v));
     let _ = files::mkdir_private(&state_dir());
-    let _ = files::write_atomic(&cache, &Value::Object(seen).to_string(), Some(0o600));
+    // A cache: if it is not written, the visibility is asked again next time.
+    files::write_atomic(&cache, &Value::Object(seen).to_string(), Some(0o600)).ok();
     v
 }
 
@@ -240,11 +241,11 @@ pub fn record_removal(project_dir: &Path, path: &str, text: &str) {
     }
 }
 
-fn write_local(file: &Path, content: &str) {
+fn write_local(file: &Path, content: &str) -> Result<(), String> {
     if let Some(d) = file.parent() {
-        let _ = files::mkdir_private(d);
+        files::mkdir_private(d).map_err(|e| format!("cannot create {}: {e}", d.display()))?;
     }
-    let _ = files::write_atomic(file, content, Some(0o600));
+    files::write_atomic(file, content, Some(0o600)).map_err(|e| format!("cannot write {}: {e}", file.display()))
 }
 
 /// What each file last looked like when synced: without it "I changed it"
@@ -265,14 +266,14 @@ fn read_base(p: &str) -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-fn save_base(p: &str, map: &BTreeMap<String, String>) {
+fn save_base(p: &str, map: &BTreeMap<String, String>) -> Result<(), String> {
     let _ = files::mkdir_private(&state_dir());
     let obj: Map<String, Value> = map.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
     // One-space indentation: the format earlier kernels wrote and still read.
     let text = serde_json::to_string_pretty(&Value::Object(obj)).unwrap_or_default();
     let text =
         crate::regex!(r"(?m)^( +)").replace_all(&text, |c: &regex::Captures| " ".repeat(c[1].len() / 2)).into_owned();
-    write_local(&base_file(p), &text);
+    write_local(&base_file(p), &text)
 }
 
 pub fn mark_pending(p: &str) {
@@ -344,7 +345,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
         hashes(repo, &dir, &[path.to_string()]).get(path) == seen || (seen.is_none() && !dir.join(path).exists())
     };
 
-    let local_removed = files::read_or_empty(&dir.join(REMOVED));
+    let local_removed = files::read_if_exists(&dir.join(REMOVED))?;
     let remote_removed = remote_files.get(REMOVED).map(|s| blob(repo, s)).unwrap_or_default();
     let mut removed: BTreeSet<String> =
         read_removed(&local_removed).into_iter().chain(read_removed(&remote_removed)).collect();
@@ -361,10 +362,10 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
 
         // Each version is looked at separately: the local one may be the task
         // that was archived and the remote one a new task with the same name.
-        if l.is_some() && is_removed(&removed, &path, &files::read_or_empty(&local)) {
+        if l.is_some() && is_removed(&removed, &path, &files::read_if_exists(&local)?) {
             if b.is_some() && l != b {
                 let aside = conflict_copy(&local, &machine());
-                write_local(&aside, &files::read_or_empty(&local));
+                write_local(&aside, &files::read_if_exists(&local)?)?;
                 warnings
                     .push(format!("{p}/{path}: it was archived on another machine and had changes here — saved aside"));
             }
@@ -397,7 +398,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
                     fin.insert(path, rs.clone());
                     continue;
                 }
-                write_local(&local, &blob(repo, rs));
+                write_local(&local, &blob(repo, rs))?;
                 fin.insert(path, rs.clone());
                 pulled += 1;
             }
@@ -408,7 +409,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
                         fin.insert(path, rs.clone());
                         continue;
                     }
-                    write_local(&local, &blob(repo, rs));
+                    write_local(&local, &blob(repo, rs))?;
                     fin.insert(path, rs.clone());
                     pulled += 1;
                 } else if Some(rs) == b.as_ref() {
@@ -416,15 +417,15 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
                     published += 1;
                 } else {
                     // Changed on both. The most recent wins; the other stays alongside.
-                    let local_text = files::read_or_empty(&local);
+                    let local_text = files::read_if_exists(&local)?;
                     let remote_text = blob(repo, rs);
                     let remote_wins = updated(&remote_text) > updated(&local_text) && still(&path, Some(ls));
                     let loser = if remote_wins { &local_text } else { &remote_text };
                     let suffix = if remote_wins { machine() } else { "remote".into() };
                     let aside = conflict_copy(&local, &suffix);
-                    write_local(&aside, loser);
+                    write_local(&aside, loser)?;
                     if remote_wins {
-                        write_local(&local, &remote_text);
+                        write_local(&local, &remote_text)?;
                         fin.insert(path.clone(), rs.clone());
                         pulled += 1;
                     } else {
@@ -442,7 +443,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
         removed.iter().cloned().collect::<Vec<_>>().join("\n") + if removed.is_empty() { "" } else { "\n" };
     if !removed.is_empty() {
         let _ = files::mkdir_private(&dir);
-        write_local(&dir.join(REMOVED), &removed_text);
+        write_local(&dir.join(REMOVED), &removed_text)?;
     }
 
     let index = std::env::temp_dir().join(format!(
@@ -561,8 +562,8 @@ pub fn reconcile(p: &str) -> Vec<String> {
             if alive { "marked" } else { "archived" }
         ));
     }
-    let _ = files::mkdir_private(&state_dir());
-    write_local(&cache, &Value::Object(seen).to_string());
+    // A cache: if it is not written, the proposals are asked about again.
+    write_local(&cache, &Value::Object(seen).to_string()).ok();
     done
 }
 
@@ -694,7 +695,7 @@ pub fn sync_project(p: &str, already_fetched: bool) -> Result<Map<String, Value>
         last_warnings = m.warnings.clone();
         let settled = settled_base(p, &m);
         let Some(commit) = &m.commit else {
-            save_base(p, &settled);
+            save_base(p, &settled)?;
             return Ok(ok_result(p, m.pulled, m.published, m.warnings));
         };
         // No hooks: the branch is internal, and a docs repo's pre-push has
@@ -705,7 +706,7 @@ pub fn sync_project(p: &str, already_fetched: bool) -> Result<Map<String, Value>
             .is_ok()
         {
             let _ = Git::new(&repo).run(&["update-ref", TRACK_REF, commit], None);
-            save_base(p, &settled);
+            save_base(p, &settled)?;
             return Ok(ok_result(p, m.pulled, m.published, m.warnings));
         }
         // Another machine published in between: pull and merge again.

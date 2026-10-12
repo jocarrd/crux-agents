@@ -328,7 +328,13 @@ fn exclude_local_state(path: &Path, env_file: &str) {
     let Some(common) = git::common_dir(path) else { return };
     let _ = std::fs::create_dir_all(common.join("info"));
     let exclude = common.join("info/exclude");
-    let mut current = files::read_or_empty(&exclude);
+    let mut current = match files::read_if_exists(&exclude) {
+        Ok(t) => t,
+        Err(e) => {
+            ui::warn(format!("{e} — the gate receipt and {env_file} are not ignored, and could be committed"));
+            return;
+        }
+    };
     for entry in [names::GATE_RECEIPT, names::VISUAL_RECEIPT, env_file].into_iter().filter(|e| !e.is_empty()) {
         if !current.lines().any(|l| l == entry) {
             if !current.is_empty() && !current.ends_with('\n') {
@@ -385,8 +391,17 @@ fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo
     let tmpl: Vec<(String, String)> =
         config.env_template.iter().map(|(k, v)| (k.clone(), slot.fill(&files::value_text(v)))).collect();
     let base = repo.join(&config.env_file);
-    let lines: Vec<String> =
-        if base.is_file() { files::read_or_empty(&base).split('\n').map(String::from).collect() } else { vec![] };
+    let lines: Vec<String> = if !base.is_file() {
+        vec![]
+    } else {
+        match files::read_if_exists(&base) {
+            Ok(t) => t.split('\n').map(String::from).collect(),
+            Err(e) => {
+                ui::warn(format!("{e} — the workspace gets only the per-slot variables, not the app's keys"));
+                vec![]
+            }
+        }
+    };
     let mut seen = vec![];
     let mut out: Vec<String> = lines
         .iter()
@@ -410,7 +425,9 @@ fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo
         }
     }
     let file = path.join(&config.env_file);
-    let _ = files::write_atomic(&file, &(out.join("\n") + "\n"), Some(0o600));
+    if let Err(e) = files::write_atomic(&file, &(out.join("\n") + "\n"), Some(0o600)) {
+        ui::warn(format!("cannot write {}: {e} — the workspace has no environment", file.display()));
+    }
     let have: Vec<String> = out.iter().filter_map(|l| key_of(l)).collect();
     let example = path.join(".env.example");
     let mut missing: Vec<String> = vec![];
