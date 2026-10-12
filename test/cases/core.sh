@@ -2452,20 +2452,20 @@ test_the_binary_alone_installs_the_whole_kernel() {
   local home="$SB/blank"; mkdir -p "$home/dl"
   cp "$CRUX_BIN" "$home/dl/crux"
   local out rc=0
-  out="$(cd "$home/dl" && env -u CRUX_HOME HOME="$home" ./crux install --projects-dir "$home/p" 2>&1)" || rc=$?
+  out="$(cd "$home/dl" && env -u CRUX_HOME -u CRUX_BIN HOME="$home" ./crux install --projects-dir "$home/p" 2>&1)" || rc=$?
   local v; v="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
   assert_eq "0" "$rc" "install runs from the binary alone"
   assert_eq "" "$(diff -r "$CRUX_HOME/skills" "$home/.crux/kernel/$v/skills" 2>&1)" "it lays out the kernel's skills as they are"
   assert_eq "" "$(diff -r "$CRUX_HOME/adapters" "$home/.crux/kernel/$v/adapters" 2>&1)" "and its adapters"
   assert_exit 0 "with the hooks still executable" test -x "$home/.crux/kernel/$v/adapters/claude/hooks/destructive-guard.sh"
-  assert_contains "$(env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
+  assert_contains "$(env -u CRUX_HOME -u CRUX_BIN HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
     "and leaves a crux on the PATH that runs that kernel"
 
   # The installed command points CRUX_HOME at the kernel it runs: installing
   # again from it took that kernel for a clone and deleted it before copying.
-  rc=0; env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" install --projects-dir "$home/p" >/dev/null 2>&1 || rc=$?
+  rc=0; env -u CRUX_HOME -u CRUX_BIN HOME="$home" "$home/.local/bin/crux" install --projects-dir "$home/p" >/dev/null 2>&1 || rc=$?
   assert_eq "0" "$rc" "installing again from the installed command works"
   assert_eq "" "$(diff -r "$CRUX_HOME/skills" "$home/.crux/kernel/$v/skills" 2>&1)" "and leaves the kernel whole"
-  assert_contains "$(env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
+  assert_contains "$(env -u CRUX_HOME -u CRUX_BIN HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
     "with crux still on the PATH"
 }

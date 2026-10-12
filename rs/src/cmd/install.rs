@@ -167,6 +167,15 @@ pub fn run(argv: &[String]) -> Res {
     let mut kernel = origin.clone();
     if !dev && !dry {
         let target = home.join(".crux/kernel").join(&version);
+        // The binary goes with the copy: the kernel of a version runs the
+        // commands of that version. Read before the target is emptied, since
+        // installing again from the installed command runs from inside it.
+        let binary =
+            env::var("CRUX_BIN").map(PathBuf::from).or_else(|| std::env::current_exe().ok()).unwrap_or_default();
+        let binary_bytes = match std::fs::read(&binary) {
+            Ok(b) => b,
+            Err(e) => die!("cannot read the binary {}: {e}", binary.display()),
+        };
         let _ = std::fs::remove_dir_all(&target);
         let _ = std::fs::create_dir_all(&target);
         if clone.is_none() {
@@ -182,12 +191,8 @@ pub fn run(argv: &[String]) -> Res {
                 }
             }
         }
-        // The binary goes with the copy: the kernel of a version runs the
-        // commands of that version.
-        let binary =
-            env::var("CRUX_BIN").map(PathBuf::from).or_else(|| std::env::current_exe().ok()).unwrap_or_default();
         let core = target.join("bin/crux-core");
-        if let Err(e) = std::fs::copy(&binary, &core) {
+        if let Err(e) = std::fs::create_dir_all(target.join("bin")).and_then(|_| std::fs::write(&core, &binary_bytes)) {
             die!("could not copy the binary to {}: {e}", core.display());
         }
         let _ = std::fs::set_permissions(&core, std::os::unix::fs::PermissionsExt::from_mode(0o755));
