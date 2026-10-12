@@ -573,8 +573,8 @@ test_no_command_hides_a_file_it_cannot_read() {
   # empty value, and the empty value is later reported as something else:
   # missing fields, lists with no elements, a consumer that does not exist.
   local findings="" f
-  for f in "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/lib/*.sh "$CRUX_HOME/install.sh" \
-           "$CRUX_HOME"/adapters/*/*.sh; do
+  for f in "$CRUX_HOME/bin/crux" "$CRUX_HOME/install.sh" "$CRUX_HOME"/adapters/*/*.sh \
+           "$CRUX_HOME"/adapters/*/hooks/*.sh "$CRUX_HOME"/skills/*/scripts/*.sh; do
     [[ -f "$f" ]] || continue
     # Input redirection or cat on a path, with the error hidden. The shell
     # resolves the redirection before the command, so the command's 2>/dev/null
@@ -1610,6 +1610,15 @@ test_install_does_not_overwrite_an_already_declared_root() {
 
   assert_contains "$(cat "$matches/.crux/config")" "CRUX_PROJECTS_DIR=\"$matches/chosen\"" \
     "the declared root survives the reinstall"
+}
+
+test_install_does_not_warn_about_a_global_claude_md_that_is_fine() {
+  sandbox >/dev/null
+  local home="$SB/home-claude"; mkdir -p "$home/.claude"
+  printf '<!-- crux:profile:begin -->\n@%s/profile/PROFILE.md\n<!-- crux:profile:end -->\n' "$home" > "$home/.claude/CLAUDE.md"
+  local out; out="$(env HOME="$home" bash "$CRUX_HOME/install.sh" --projects-dir "$home/p" 2>&1)"
+  assert_not_contains "$out" "does not reference the kernel" \
+    "nothing writes the kernel's path there, so its absence is not a problem"
 }
 
 # Linked to the working copy, projects use whatever is in it at any moment: a

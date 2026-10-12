@@ -258,8 +258,6 @@ pub fn run(argv: &[String]) -> Res {
     if skills::codex_global(&kernel) {
         ui::ok("global Codex context in ~/.codex/AGENTS.md");
     }
-    skills::claude_global(&kernel.to_string_lossy());
-    ui::ok("global Claude context verified");
     if !dry && super::call_quiet(&home, "profile", &["link"]).ok() {
         ui::ok("person's profile loaded into the agents");
     }

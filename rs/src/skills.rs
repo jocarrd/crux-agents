@@ -135,17 +135,6 @@ pub fn prune() {
     }
 }
 
-/// Claude's global context may hold the user's own content: it is not
-/// rewritten, only checked.
-pub fn claude_global(marker: &str) {
-    let file = env::home().join(".claude/CLAUDE.md");
-    if let Ok(text) = fs::read_to_string(&file) {
-        if !text.contains(marker) {
-            println!("      claude: ~/.claude/CLAUDE.md does not reference the kernel");
-        }
-    }
-}
-
 /// Codex reads ~/.codex/AGENTS.md as global context: generated between
 /// markers so it is regenerated without touching what the user wrote.
 pub fn codex_global(crux_home: &Path) -> bool {

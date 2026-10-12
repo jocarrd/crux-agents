@@ -84,7 +84,7 @@ test_workspace_rm_returns_hooks_to_kernel_main_checkout() {
   export CRUX_REGISTRY="$SB/registry.json"
   local root; root="$(_repo_with_config)"
   local kernel="$root/app" ws="$root/app-ws-probar"
-  cp -r "$CRUX_HOME/bin" "$CRUX_HOME/lib" "$CRUX_HOME/adapters" "$kernel/"
+  cp -r "$CRUX_HOME/bin" "$CRUX_HOME/adapters" "$kernel/"
   git -C "$kernel" add -A
   git -C "$kernel" commit -qm kernel
 
