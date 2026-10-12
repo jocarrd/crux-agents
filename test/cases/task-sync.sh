@@ -465,3 +465,42 @@ test_task_sync_drops_the_marker_of_a_project_not_on_this_machine() {
     "a project that is not here is not reported as unpublished"
   assert_no_file "$CRUX_STATE_DIR/task-sync/ghost.pending" "and its marker is removed"
 }
+
+test_tasks_a_write_during_a_sync_is_not_overwritten() {
+  sandbox >/dev/null
+  _tasks_two_machines
+  _new_task A t1 "do X"
+  replicate A >/dev/null; replicate B >/dev/null
+  # B moves the task on, so A's next sync has something to bring in.
+  engine B set --file "$(task_record B t1)" --section "Next step" --text "from B" >/dev/null
+  replicate B >/dev/null
+  # A's sync looks at its files, pauses, and meanwhile the task is written here.
+  en A env CRUX_TEST_SYNC_PAUSE_MS=1500 "$CRUX_HOME/bin/crux" __task-sync sync --all >/dev/null 2>&1 &
+  local sync=$!
+  sleep 0.7
+  engine A set --file "$(task_record A t1)" --section "Next step" --text "written here meanwhile" >/dev/null
+  wait "$sync"
+  assert_contains "$(cat "$(task_record A t1)")" "written here meanwhile" "the write made during the sync survives it"
+  replicate A >/dev/null
+  local both; both="$(cat "$SB"/A/tasks/alpha/t1*.md)"
+  assert_contains "$both" "written here meanwhile" "and the next sync keeps it"
+  assert_contains "$both" "from B" "without losing the other machine's"
+  teardown
+}
+
+test_tasks_a_fetch_older_than_the_last_publication_is_not_adopted() {
+  sandbox >/dev/null
+  _tasks_two_machines
+  local docs="$SB/A/P/alpha/alpha-docs"
+  _new_task A t1 "first"
+  replicate A >/dev/null
+  # crux sync fetches every repo first; while it runs, a publication from this
+  # machine moves the tasks branch on.
+  git -C "$docs" fetch -q origin
+  engine A set --file "$(task_record A t1)" --section "Next step" --text "published after that fetch" >/dev/null
+  replicate A >/dev/null
+  en A "$CRUX_HOME/bin/crux" __task-sync sync --all --fetched >/dev/null 2>&1
+  assert_contains "$(cat "$(task_record A t1)")" "published after that fetch" \
+    "the older fetch does not bring the task back to how it was"
+  teardown
+}

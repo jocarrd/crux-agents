@@ -300,9 +300,26 @@ fn machine() -> String {
 struct Merged {
     commit: Option<String>,
     fin: BTreeMap<String, String>,
+    /// Paths written here after the merge looked at them: left as they are,
+    /// and their base kept, so the next round sees the change.
+    unsettled: BTreeSet<String>,
     warnings: Vec<String>,
     pulled: u32,
     published: u32,
+}
+
+/// The base to remember after a merge: what was synced, except the paths
+/// written meanwhile, which keep the base they had.
+fn settled_base(p: &str, m: &Merged) -> BTreeMap<String, String> {
+    let old = read_base(p);
+    let mut base = m.fin.clone();
+    for path in &m.unsettled {
+        match old.get(path) {
+            Some(b) => base.insert(path.clone(), b.clone()),
+            None => base.remove(path),
+        };
+    }
+    base
 }
 
 fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
@@ -312,6 +329,17 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
     let (head, remote_files) = remote_tree(repo);
     let base = read_base(p);
     let locals = hashes(repo, &dir, &local_files(&dir));
+    if env::in_tests() {
+        if let Some(ms) = env::var("CRUX_TEST_SYNC_PAUSE_MS").and_then(|v| v.parse().ok()) {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
+    // A task is written without this lock, while a sync may take seconds: what
+    // is about to be replaced is looked at again, and a newer write wins.
+    let mut unsettled = BTreeSet::new();
+    let still = |path: &str, seen: Option<&String>| -> bool {
+        hashes(repo, &dir, &[path.to_string()]).get(path) == seen || (seen.is_none() && !dir.join(path).exists())
+    };
 
     let local_removed = files::read_or_empty(&dir.join(REMOVED));
     let remote_removed = remote_files.get(REMOVED).map(|s| blob(repo, s)).unwrap_or_default();
@@ -361,12 +389,22 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
                     removed.insert(removal_key(&path, &blob(repo, rs)));
                     continue;
                 }
+                if !still(&path, None) {
+                    unsettled.insert(path.clone());
+                    fin.insert(path, rs.clone());
+                    continue;
+                }
                 write_local(&local, &blob(repo, rs));
                 fin.insert(path, rs.clone());
                 pulled += 1;
             }
             (Some(ls), Some(rs)) => {
                 if Some(ls) == b.as_ref() {
+                    if !still(&path, Some(ls)) {
+                        unsettled.insert(path.clone());
+                        fin.insert(path, rs.clone());
+                        continue;
+                    }
                     write_local(&local, &blob(repo, rs));
                     fin.insert(path, rs.clone());
                     pulled += 1;
@@ -377,7 +415,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
                     // Changed on both. The most recent wins; the other stays alongside.
                     let local_text = files::read_or_empty(&local);
                     let remote_text = blob(repo, rs);
-                    let remote_wins = updated(&remote_text) > updated(&local_text);
+                    let remote_wins = updated(&remote_text) > updated(&local_text) && still(&path, Some(ls));
                     let loser = if remote_wins { &local_text } else { &remote_text };
                     let suffix = if remote_wins { machine() } else { "remote".into() };
                     let aside = conflict_copy(&local, &suffix);
@@ -454,7 +492,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
     })();
     let _ = fs::remove_file(&index);
     let commit = result?;
-    Ok(Merged { commit, fin, warnings, pulled, published })
+    Ok(Merged { commit, fin, unsettled, warnings, pulled, published })
 }
 
 pub(super) fn live_workspaces() -> BTreeSet<String> {
@@ -578,15 +616,18 @@ fn fetch_branch(repo: &Path) -> &'static str {
 
 /// `crux sync` fetches every remote by name: what it brought is copied into
 /// the sync's own ref.
+/// What `crux sync` already fetched, unless it is older than what this
+/// machine last saw: a publication made while crux sync ran moves TRACK_REF
+/// on, and going back to the earlier fetch would bring old tasks back.
 fn adopt_fetched(repo: &Path) -> &'static str {
     let g = Git::new(repo);
-    match g.get(&["rev-parse", "-q", "--verify", REMOTE_REF]).filter(|s| !s.is_empty()) {
-        Some(sha) => {
-            let _ = g.run(&["update-ref", TRACK_REF, &sha], None);
-        }
-        None => {
-            let _ = g.run(&["update-ref", "-d", TRACK_REF], None);
-        }
+    let verify = |r: &str| g.get(&["rev-parse", "-q", "--verify", r]).filter(|s| !s.is_empty());
+    let Some(fetched) = verify(REMOTE_REF) else { return fetch_branch(repo) };
+    let newer_known = verify(TRACK_REF).is_some_and(|known| {
+        known == fetched || g.run(&["merge-base", "--is-ancestor", &fetched, &known], None).is_ok()
+    });
+    if !newer_known {
+        let _ = g.run(&["update-ref", TRACK_REF, &fetched], None);
     }
     "ok"
 }
@@ -648,8 +689,9 @@ pub fn sync_project(p: &str, already_fetched: bool) -> Result<Map<String, Value>
         }
         let m = merge(p, &repo)?;
         last_warnings = m.warnings.clone();
+        let settled = settled_base(p, &m);
         let Some(commit) = &m.commit else {
-            save_base(p, &m.fin);
+            save_base(p, &settled);
             return Ok(ok_result(p, m.pulled, m.published, m.warnings));
         };
         // No hooks: the branch is internal, and a docs repo's pre-push has
@@ -660,7 +702,7 @@ pub fn sync_project(p: &str, already_fetched: bool) -> Result<Map<String, Value>
             .is_ok()
         {
             let _ = Git::new(&repo).run(&["update-ref", TRACK_REF, commit], None);
-            save_base(p, &m.fin);
+            save_base(p, &settled);
             return Ok(ok_result(p, m.pulled, m.published, m.warnings));
         }
         // Another machine published in between: pull and merge again.
