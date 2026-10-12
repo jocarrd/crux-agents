@@ -2460,4 +2460,12 @@ test_the_binary_alone_installs_the_whole_kernel() {
   assert_exit 0 "with the hooks still executable" test -x "$home/.crux/kernel/$v/adapters/claude/hooks/destructive-guard.sh"
   assert_contains "$(env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
     "and leaves a crux on the PATH that runs that kernel"
+
+  # The installed command points CRUX_HOME at the kernel it runs: installing
+  # again from it took that kernel for a clone and deleted it before copying.
+  rc=0; env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" install --projects-dir "$home/p" >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "installing again from the installed command works"
+  assert_eq "" "$(diff -r "$CRUX_HOME/skills" "$home/.crux/kernel/$v/skills" 2>&1)" "and leaves the kernel whole"
+  assert_contains "$(env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
+    "with crux still on the PATH"
 }

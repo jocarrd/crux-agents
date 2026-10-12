@@ -121,7 +121,13 @@ pub fn run(argv: &[String]) -> Res {
     if dry {
         std::env::set_var("CRUX_DRY_RUN", "1");
     }
-    let clone = env::var("CRUX_HOME").map(PathBuf::from).filter(|h| h.join(names::VERSION).is_file());
+    // The installed command points CRUX_HOME at the kernel copy it runs: that
+    // is not a clone, and taking it for one deleted it before copying from it.
+    let installed = env::home().join(".crux/kernel");
+    let clone = env::var("CRUX_HOME")
+        .map(PathBuf::from)
+        .filter(|h| h.join(names::VERSION).is_file())
+        .filter(|h| !h.canonicalize().unwrap_or_else(|_| h.clone()).starts_with(&installed));
     if dev && clone.is_none() {
         die!("--dev links a kernel clone: run it from one, through install.sh");
     }
