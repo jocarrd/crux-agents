@@ -1,0 +1,14 @@
+crux install — lays out the kernel on this machine and hooks it into the agents.
+
+  crux install [--projects-dir <dir>] [--remote <template>] [--dry-run]
+
+The binary carries the whole kernel: skills, templates, adapters and hooks.
+With the binary alone —downloaded, or from a package manager— this is all a
+machine needs: it lays the kernel out in ~/.crux/kernel/<version>, leaves
+`crux` in ~/.local/bin, loads the skills into Claude and Codex and moves the
+agent hooks to this version.
+
+From a clone, install.sh runs the same thing and copies the kernel from the
+clone instead; `install.sh --dev` links the clone itself, to develop crux.
+
+Idempotent: running it again with a newer binary moves the machine to it.

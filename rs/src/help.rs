@@ -12,6 +12,7 @@ pub fn text(name: &str) -> Option<&'static str> {
         "doctor" => include_str!("help/doctor.txt"),
         "hooks" => include_str!("help/hooks.txt"),
         "init" => include_str!("help/init.txt"),
+        "install" => include_str!("help/install.txt"),
         "link" => include_str!("help/link.txt"),
         "machine" => include_str!("help/machine.txt"),
         "mcp" => include_str!("help/mcp.txt"),

@@ -2445,3 +2445,19 @@ test_hooks_status_keeps_its_columns_with_long_repo_names() {
   cols="$(cd "$docs" && "$CRUX_HOME/bin/crux" hooks status 2>&1 | sed -n "/in the order they run/,\$p" | grep " commit-msg " | awk '{print index($0, " commit-msg ")}' | sort -u | wc -l)"
   assert_eq "1" "$cols" "the hook names start in one column"
 }
+
+test_the_binary_alone_installs_the_whole_kernel() {
+  # What npm or a download hands over is the binary and nothing else.
+  sandbox >/dev/null
+  local home="$SB/blank"; mkdir -p "$home/dl"
+  cp "$CRUX_BIN" "$home/dl/crux"
+  local out rc=0
+  out="$(cd "$home/dl" && env -u CRUX_HOME HOME="$home" ./crux install --projects-dir "$home/p" 2>&1)" || rc=$?
+  local v; v="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  assert_eq "0" "$rc" "install runs from the binary alone"
+  assert_eq "" "$(diff -r "$CRUX_HOME/skills" "$home/.crux/kernel/$v/skills" 2>&1)" "it lays out the kernel's skills as they are"
+  assert_eq "" "$(diff -r "$CRUX_HOME/adapters" "$home/.crux/kernel/$v/adapters" 2>&1)" "and its adapters"
+  assert_exit 0 "with the hooks still executable" test -x "$home/.crux/kernel/$v/adapters/claude/hooks/destructive-guard.sh"
+  assert_contains "$(env -u CRUX_HOME HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
+    "and leaves a crux on the PATH that runs that kernel"
+}

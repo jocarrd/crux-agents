@@ -47,7 +47,7 @@ pub fn dispatch(argv: &[String]) -> i32 {
             Ok(())
         }
         "__fn" => crate::script_api::run(rest),
-        "__install" => install::run(rest),
+        "__install" | "install" => install::run(rest),
         "adopt" => adopt::run(rest),
         "add-repo" => add_repo::run(rest),
         "merge" => merge::run(rest),
@@ -142,6 +142,7 @@ const USAGE: &str = "crux — kernel of the agent work system
   crux init <project>   creates the docs repo of a new project
   crux clone <project>  brings a whole project to this machine
   crux bootstrap        gets a new machine ready: all projects
+  crux install          lays out the kernel this binary carries on this machine
   crux adopt [dir]      registers a docs repo that already exists
   crux add-repo <repo>  registers a new repo in the project
   crux archive <repo>   marks a repo as archived: out of production, kept

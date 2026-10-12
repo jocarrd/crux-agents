@@ -125,8 +125,9 @@ crux workspace finish checkout-flow   # pushes the branch, opens the proposal
 crux bootstrap
 ```
 
-Where you clone the kernel decides where projects live: the root is the
-clone's parent directory (`~/Proyectos` above). `crux doctor --machine` tells
+The binary carries the whole kernel, so with the binary alone `crux install`
+does the same as `install.sh`. Where you clone the kernel decides where
+projects live: the root is the clone's parent directory (`~/Proyectos` above). `crux doctor --machine` tells
 you whether the machine is missing anything the skills need.
 
 ## A task, from start to merge
@@ -246,6 +247,7 @@ A rule written in a file is advice. These are installed by
 | `crux init <project>` | Creates `<project>-docs` from the templates, on your remote |
 | `crux clone <project>` | Brings a whole project onto this machine |
 | `crux bootstrap` | Gets a blank machine ready: verifies, discovers every project and brings it |
+| `crux install` | Lays out the kernel the binary carries: with the binary alone, a machine needs nothing else |
 | `crux adopt` | Puts an existing docs repo under the standard |
 | `crux add-repo <repo>` | Registers a new code repo in a project |
 | `crux archive <repo>` / `unarchive` | Retires a repo from production while keeping it, or brings it back |

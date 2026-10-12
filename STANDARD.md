@@ -1043,6 +1043,7 @@ the session. See ADR-012.
 | `crux init <project>` | `/crux-init` | Creates the docs repo from the templates |
 | `crux clone <project>` | — | Brings a whole project onto a new machine |
 | `crux bootstrap` | — | Gets a new machine ready: verifies, discovers the projects and brings them in |
+| `crux install` | — | Lays out the kernel the binary carries and hooks it into the agents |
 | `crux adopt` | — | Registers a docs repo that already exists |
 | `crux add-repo <repo>` | `/add-repo-to-docs` | Registers a new repo in the project |
 | `crux archive <repo> --reason "…"` | — | Marks a repo as archived: contract, docs notice, read-only on GitHub, local clone refuses to push |

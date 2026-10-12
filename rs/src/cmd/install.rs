@@ -12,6 +12,43 @@ use regex::Regex;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+include!("../../kernel_pieces.rs");
+
+/// The kernel this binary was built from: without a clone, it is what gets
+/// installed.
+static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/kernel.pack"));
+
+fn packed() -> impl Iterator<Item = (String, u32, &'static [u8])> {
+    let mut rest = PACK;
+    std::iter::from_fn(move || {
+        let mut line = || {
+            let n = rest.iter().position(|b| *b == b'\n')?;
+            let l = String::from_utf8_lossy(&rest[..n]).into_owned();
+            rest = &rest[n + 1..];
+            Some(l)
+        };
+        let path = line()?;
+        let mode = u32::from_str_radix(&line()?, 8).ok()?;
+        let len: usize = line()?.parse().ok()?;
+        let bytes = rest.get(..len)?;
+        rest = &rest[len..];
+        Some((path, mode, bytes))
+    })
+}
+
+fn unpack(target: &Path) -> Result<(), String> {
+    for (path, mode, bytes) in packed() {
+        let file = target.join(&path);
+        if let Some(d) = file.parent() {
+            std::fs::create_dir_all(d).map_err(|e| format!("cannot create {}: {e}", d.display()))?;
+        }
+        std::fs::write(&file, bytes).map_err(|e| format!("cannot write {}: {e}", file.display()))?;
+        std::fs::set_permissions(&file, std::os::unix::fs::PermissionsExt::from_mode(mode))
+            .map_err(|e| format!("cannot set the mode of {}: {e}", file.display()))?;
+    }
+    Ok(())
+}
+
 fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
     let meta = std::fs::symlink_metadata(from)?;
     if meta.file_type().is_symlink() {
@@ -84,8 +121,20 @@ pub fn run(argv: &[String]) -> Res {
     if dry {
         std::env::set_var("CRUX_DRY_RUN", "1");
     }
-    let Some(origin) = env::var("CRUX_HOME").map(PathBuf::from) else { die!("run it through install.sh") };
-    let version = files::read_or_empty(&origin.join(names::VERSION)).split_whitespace().collect::<String>();
+    let clone = env::var("CRUX_HOME").map(PathBuf::from).filter(|h| h.join(names::VERSION).is_file());
+    if dev && clone.is_none() {
+        die!("--dev links a kernel clone: run it from one, through install.sh");
+    }
+    let origin = clone.clone().unwrap_or_default();
+    let version = match &clone {
+        Some(c) => files::read_or_empty(&c.join(names::VERSION)),
+        None => packed()
+            .find(|(p, _, _)| p == names::VERSION)
+            .map(|(_, _, b)| String::from_utf8_lossy(b).into_owned())
+            .unwrap_or_default(),
+    }
+    .split_whitespace()
+    .collect::<String>();
     // This version is part of a path that is deleted below: a VERSION with ../
     // would delete whatever was there.
     if !project::is_semver(&version) {
@@ -93,7 +142,7 @@ pub fn run(argv: &[String]) -> Res {
     }
     // In dev everything hangs off this directory: if it is a worktree,
     // closing it leaves the machine without skills.
-    if dev && git::is_worktree(&origin) {
+    if dev && clone.is_some() && git::is_worktree(&origin) {
         ui::err(format!("this is a kernel worktree: {}", origin.display()));
         ui::info("in dev the skills would hang off an ephemeral directory");
         ui::info(format!(
@@ -102,7 +151,7 @@ pub fn run(argv: &[String]) -> Res {
         ));
         return exit(1);
     }
-    if git::is_worktree(&origin) {
+    if clone.is_some() && git::is_worktree(&origin) {
         ui::warn(format!(
             "installing from a worktree: the copy will be of branch {}",
             git::out(&origin, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default()
@@ -114,18 +163,12 @@ pub fn run(argv: &[String]) -> Res {
         let target = home.join(".crux/kernel").join(&version);
         let _ = std::fs::remove_dir_all(&target);
         let _ = std::fs::create_dir_all(&target);
-        for piece in [
-            "bin",
-            "skills",
-            "templates",
-            "profiles",
-            "adapters",
-            names::VERSION,
-            names::STANDARD,
-            "GUIA.md",
-            names::README,
-            names::AGENTS,
-        ] {
+        if clone.is_none() {
+            if let Err(e) = unpack(&target) {
+                die!("{e}");
+            }
+        }
+        for piece in KERNEL_PIECES.iter().filter(|_| clone.is_some()) {
             let from = origin.join(piece);
             if from.exists() {
                 if let Err(e) = copy_tree(&from, &target.join(piece)) {
@@ -173,7 +216,14 @@ pub fn run(argv: &[String]) -> Res {
             }
         }
     }
-    let root = if root.is_empty() { env::root_of_kernel_clone(&origin).display().to_string() } else { root };
+    let root = match (root.is_empty(), &clone) {
+        (false, _) => root,
+        (true, Some(c)) => env::root_of_kernel_clone(c).display().to_string(),
+        (true, None) => {
+            root_text = "the default";
+            env::home().join("Proyectos").display().to_string()
+        }
+    };
     if !dry {
         let _ = std::fs::create_dir_all(home.join(".crux"));
         let previous = match files::read_if_exists(&config) {

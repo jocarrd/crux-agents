@@ -294,6 +294,15 @@ env HOME="$M3" CRUX_BIN="$BIN" bash "$HOME/crux/install.sh" --projects-dir "$M3/
 env HOME="$M3" "$M3/.local/bin/crux" bootstrap >/dev/null 2>&1
 truthy '[[ -x "$M3/Proyectos/demo/api/.git/hooks/pre-commit.project" ]]' "and another machine gets it with bootstrap"
 
+step "a machine that only gets the binary, as npm or a download hands it over"
+M4="$HOME/m4"; mkdir -p "$M4/dl"; cp "$BIN" "$M4/dl/crux"
+printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M4/.gitconfig"
+out="$(cd "$M4/dl" && env HOME="$M4" ./crux install --projects-dir "$M4/Proyectos" 2>&1)"; rc=$?
+truthy '[[ $rc -eq 0 && -x "$M4/.local/bin/crux" ]]' "crux install lays out the kernel it carries"
+env HOME="$M4" "$M4/.local/bin/crux" init solo --no-remote --parent "$M4/Proyectos" >/dev/null 2>&1
+truthy 'env HOME="$M4" "$M4/.local/bin/crux" doctor "$M4/Proyectos/solo/solo-docs" >/dev/null 2>&1' \
+  "and with it a new project passes doctor"
+
 step "the real agent settings are not touched"
 truthy '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
   "the settings.json of whoever runs it comes out as it went in"
