@@ -48,6 +48,32 @@ fn bring_profile(parent: &Path, owner: &str, all_repos: &[String], dry: bool) {
     }
 }
 
+/// The tasks the other machines left open, which is what you sit down to
+/// resume. Through the binary, so the project is looked for under `parent`.
+fn bring_tasks(parent: &Path, project: &str) {
+    let home = env::crux_home().unwrap_or_default();
+    let out = sh::capture_cmd(
+        Command::new(std::env::current_exe().unwrap_or_default())
+            .args(["__task-sync", "sync", "--project", project])
+            .env("CRUX_PROJECTS_DIR", parent)
+            .env("CRUX_HOME", &home),
+    );
+    let result = serde_json::from_str::<serde_json::Value>(&out.stdout)
+        .ok()
+        .and_then(|v| v.as_array().and_then(|a| a.first().cloned()));
+    match result.as_ref().and_then(|r| r.get("status")).and_then(serde_json::Value::as_str) {
+        Some("ok") => {
+            let n = result.as_ref().and_then(|r| r.get("pulled")).and_then(serde_json::Value::as_u64).unwrap_or(0);
+            if n > 0 {
+                ui::ok(format!("{project}: {}", ui::count(n as usize, "task pulled", "tasks pulled")));
+            }
+        }
+        Some("failed") | None => ui::warn(format!("could not bring the tasks of {project} — 'crux sync'")),
+        // Not published on purpose (public repo, disabled, no remote).
+        Some(_) => {}
+    }
+}
+
 pub fn run(argv: &[String]) -> Res {
     let (mut owners_arg, mut only, mut dry) = (String::new(), String::new(), false);
     let mut parent = env::projects_root();
@@ -233,6 +259,7 @@ pub fn run(argv: &[String]) -> Res {
                 ui::warn(format!("could not write the MCP servers in {p} — 'crux mcp install' from its docs repo"));
             }
         }
+        bring_tasks(&parent, p);
     }
     println!();
     ui::info("'crux status' to see how everything turned out");

@@ -222,3 +222,30 @@ test_bootstrap_only_does_not_call_the_rest_loose() {
   assert_not_contains "$out" "loose-one" "a repo cloned straight under the root is already here"
   teardown
 }
+
+test_bootstrap_brings_the_open_tasks_of_the_other_machine() {
+  sandbox >/dev/null
+  _ready_machine
+  local docs; docs="$(new_project alpha)"
+  git init -q --bare -b main "$SB/remotes/alpha-docs.git"
+  git -C "$docs" remote add origin "$SB/remotes/alpha-docs.git"
+  git -C "$docs" push -q origin HEAD:main 2>/dev/null
+  local record="$SB/A/tasks/alpha/t1.md"
+  CRUX_TASKS_DIR="$SB/A/tasks" crux __task ensure --file "$record" --task t1 --project alpha --repo app \
+    --workspace t1 >/dev/null
+  CRUX_TASKS_DIR="$SB/A/tasks" crux __task set --file "$record" --section "Next step" --text "finish the import" >/dev/null
+  CRUX_TASKS_DIR="$SB/A/tasks" crux __task-sync sync --all >/dev/null 2>&1
+  assert_contains "$(git -C "$SB/remotes/alpha-docs.git" branch)" "crux/tasks" "the first machine published it"
+
+  cat > "$CRUX_CONFIG" <<CONF
+CRUX_REMOTE="$SB/remotes/{repo}.git"
+CONF
+  _fake_gh "alpha-docs" "alpha"
+  CRUX_TASKS_DIR="$SB/B/tasks" CRUX_STATE_DIR="$SB/B/state" CRUX_REGISTRY="$SB/B/registry.json" \
+    crux bootstrap --owner jocarrd --parent "$SB/B/P" --only alpha >/dev/null 2>&1
+
+  assert_file "$SB/B/P/alpha/alpha-docs/crux.json" "the project arrives"
+  assert_contains "$(cat "$SB/B/tasks/alpha/t1.md" 2>/dev/null)" "finish the import" \
+    "and so does the task left open on the other machine"
+  teardown
+}

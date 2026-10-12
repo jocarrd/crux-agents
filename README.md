@@ -202,7 +202,8 @@ up as a warning, because they do not travel.
 
 **`bootstrap`** verifies the machine first, then asks your remote which
 projects exist —the `*-docs` repos that carry a `crux.json`— and brings each
-one with its code repos, pointers and hooks. The list comes from the remote,
+one with its code repos, pointers, hooks and the tasks left open on your other
+machines. The list comes from the remote,
 not from a file you would have to keep up to date.
 
 **`sync`** walks what is already on disk, fetches and fast-forwards every clean
