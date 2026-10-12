@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# A stateful stand-in for gh: proposals live in $GH_STATE, the remote is the
+# local bare repo origin points at, and checks answer what $GH_STATE/checks says
+# (pass, fail or running).
+set -u
+S="${GH_STATE:?}"; mkdir -p "$S"
+checks="$(cat "$S/checks" 2>/dev/null || echo pass)"
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+repo="$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")"; repo="${repo%%-ws-*}"
+echo "gh $*" >> "$S/calls"
+
+pr_of_branch() { grep -l "^branch=$branch$" "$S"/pr.* 2>/dev/null | head -1; }
+field() { grep "^$2=" "$1" | head -1 | cut -d= -f2-; }
+rollup() {
+  case "$checks" in
+    pass) echo '[{"name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}]' ;;
+    fail) echo '[{"name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]' ;;
+    running) echo '[{"name":"ci","status":"IN_PROGRESS","conclusion":""}]' ;;
+  esac
+}
+
+case "$1 ${2:-}" in
+  "auth status") exit 0 ;;
+  "pr create")
+    title=""; body=""; shift 2
+    while [[ $# -gt 0 ]]; do case "$1" in --title) title="$2"; shift 2 ;; --body) body="$2"; shift 2 ;; *) shift ;; esac; done
+    n=$(( $(ls "$S"/pr.* 2>/dev/null | wc -l) + 1 ))
+    printf 'number=%s\nbranch=%s\nrepo=%s\ntitle=%s\nmergedAt=\n' "$n" "$branch" "$repo" "$title" > "$S/pr.$n"
+    printf '%s' "$body" > "$S/body.$n"
+    echo "https://github.com/acme/$repo/pull/$n" ;;
+  "pr view")
+    # By number (pr view 3 ...) or by the current branch.
+    # By number or URL (pr view 3, pr view https://.../pull/3), or by the current branch.
+    which="${3:-}"; [[ "$which" =~ /pull/([0-9]+)$ ]] && which="${BASH_REMATCH[1]}"
+    if [[ "$which" =~ ^[0-9]+$ ]]; then f="$S/pr.$which"; [[ -f "$f" ]] || exit 1; else f="$(pr_of_branch)"; fi
+    [[ -n "$f" ]] || { echo "no pull requests found for branch \"$branch\"" >&2; exit 1; }
+    if [[ "$*" == *"--json state"* ]]; then [[ -n "$(field "$f" mergedAt)" ]] && echo MERGED || echo OPEN; exit 0; fi
+    n="$(field "$f" number)"
+    case "$*" in
+      *mergedAt*) field "$f" mergedAt ;;
+      *"--json body"*) cat "$S/body.$n" ;;
+      *statusCheckRollup*)
+        printf '{"number":%s,"title":"%s","url":"https://github.com/acme/%s/pull/%s","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":%s}\n' \
+          "$n" "$(field "$f" title)" "$(field "$f" repo)" "$n" "$(rollup)" ;;
+      *"--json number"*) echo "$n" ;;
+      *) echo "{}" ;;
+    esac ;;
+  "pr merge")
+    f="$(pr_of_branch)"; [[ -n "$f" ]] || exit 1
+    origin="$(git remote get-url origin)"; tmp="$(mktemp -d)"
+    git clone -q "$origin" "$tmp/m" && git -C "$tmp/m" fetch -q origin "$branch" \
+      && git -C "$tmp/m" merge -q --squash FETCH_HEAD >/dev/null \
+      && git -C "$tmp/m" -c user.email=gh@localhost -c user.name=gh commit -qm "$(field "$f" title) (#$(field "$f" number))" \
+      && git -C "$tmp/m" push -q origin HEAD:main || exit 1
+    sed -i "s/^mergedAt=.*/mergedAt=2026-10-12T12:00:00Z/" "$f"; rm -rf "$tmp" ;;
+  "pr list")
+    if [[ "$*" == *headRefName* ]]; then
+      for f in "$S"/pr.*; do [[ -f "$f" && -n "$(field "$f" mergedAt)" ]] && field "$f" branch; done; exit 0
+    fi
+    # --head <branch> --state merged: the number if that branch was merged.
+    head=""; prev=""; for a in "$@"; do [[ "$prev" == "--head" ]] && head="$a"; prev="$a"; done
+    for f in "$S"/pr.*; do [[ -f "$f" ]] || continue
+      [[ "$(field "$f" branch)" == "$head" && -n "$(field "$f" mergedAt)" ]] && field "$f" number; done ;;
+  "api user") echo "jorge" ;;
+  "api user/memberships/orgs") : ;;
+  "repo list")
+    # The bare repos under $HOME/remotes stand for the account's repos.
+    for r in "${GH_REMOTES:-$HOME/remotes}"/*.git; do [[ -d "$r" ]] && basename "$r" .git; done ;;
+  "repo view") if [[ "$*" == *visibility* ]]; then echo private; else echo "acme/$repo"; fi ;;
+  "api "*)
+    # repos/<owner>/<name>-docs/contents/crux.json: whether that repo carries a contract.
+    if [[ "$2" =~ ^repos/[^/]+/([^/]+)/contents/crux.json$ ]]; then
+      git -C "${GH_REMOTES:-$HOME/remotes}/${BASH_REMATCH[1]}.git" cat-file -e main:crux.json 2>/dev/null; exit $?
+    fi
+    exit 1 ;;
+  *) exit 1 ;;
+esac

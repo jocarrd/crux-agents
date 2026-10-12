@@ -144,6 +144,8 @@ that has never been seen to fail is worthless.
 ```bash
 ./test/run.sh            # everything
 ./test/run.sh doctor     # those matching the pattern
+bash test/e2e.sh         # one whole cycle, end to end
+bash test/flows.sh       # real journeys with crux installed on a blank HOME
 ```
 
 Each case runs in an isolated sandbox with the agent directories redirected

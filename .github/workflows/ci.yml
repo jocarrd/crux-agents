@@ -49,7 +49,8 @@ jobs:
           shellcheck --severity=warning --exclude=SC1091 \
             bin/crux install.sh \
             adapters/*/*.sh adapters/*/hooks/*.sh \
-            skills/*/scripts/*.sh test/run.sh test/e2e.sh test/cases/*.sh
+            skills/*/scripts/*.sh test/run.sh test/e2e.sh test/cases/*.sh \
+            test/two-machines.sh test/flows.sh test/fake-gh
 
       - name: Kernel suite
         run: ./test/run.sh
@@ -66,6 +67,12 @@ jobs:
       # another, and sync --leave refusing to leave work on one only.
       - name: Two-machine battery
         run: ./test/two-machines.sh
+
+      # The journeys around the cycle, with crux installed and used from the
+      # PATH: a client's project, a waiting task, a merge from GitHub's
+      # button, a second machine from nothing.
+      - name: Real workflows
+        run: bash test/flows.sh
 
       # The suite runs in sandboxes; this checks the real installation path,
       # which is the first thing anyone runs on a new machine and the last thing

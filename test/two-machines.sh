@@ -15,7 +15,11 @@
 set -uo pipefail
 
 CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
-export CRUX_HOME
+# Without CRUX_IN_TESTS, the hooks install that clone runs took this checkout
+# for the person's kernel and rewrote the git hooks of the real repo.
+export CRUX_HOME CRUX_IN_TESTS=1
+kernel_hooks() { cat "$(git -C "$CRUX_HOME" rev-parse --path-format=absolute --git-common-dir)"/hooks/* 2>/dev/null | cksum; }
+hooks_before="$(kernel_hooks)"
 # Tasks publish themselves when written; here that is what is being tested.
 export CRUX_TASK_SYNC=1
 
@@ -142,6 +146,7 @@ truthy 'ls "$SB"/*/.crux/tasks/demo/ | grep -q "checkout.conflict-.*\.md"' "the 
 
 step "the real machine was not touched"
 truthy '[[ ! -e "$HOME/.crux/tasks/demo" ]]' "no task of the demo reached the real ~/.crux"
+truthy '[[ "$(kernel_hooks)" == "$hooks_before" ]]' "nor were the kernel repo's git hooks rewritten"
 
 echo
 if [[ $FAILURES -eq 0 ]]; then
