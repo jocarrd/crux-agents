@@ -280,6 +280,20 @@ truthy '[[ -s "$HOME/own-hook" ]]' "the .local hook runs on a commit"
 git -C "$A" commit -q --allow-empty -m "chore: añade la lista de la versión" 2>/dev/null
 truthy '[[ "$(wc -l < "$HOME/own-hook")" -eq 1 ]]' "and not after crux rejects the message"
 
+step "a hook of the project's own, written once and found on every machine"
+out="$(cd "$D" && crux hooks add pre-commit --repo api 2>&1)"
+printf '#!/usr/bin/env bash\necho project >> "%s"\n' "$HOME/project-hook" > "$D/repos/api/git-hooks/pre-commit"
+git -C "$D" add -A && git -C "$D" commit -qm "chore(api): a pre-commit of its own" 2>/dev/null && git -C "$D" push -q 2>/dev/null
+(cd "$D" && crux hooks install >/dev/null 2>&1)
+git -C "$A" commit -q --allow-empty -m "chore: tick another box" 2>/dev/null
+truthy '[[ -s "$HOME/project-hook" ]]' "the project's hook runs in the code repo"
+M3="$HOME/m3"; mkdir -p "$M3/.crux"
+printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M3/.gitconfig"
+printf 'CRUX_REMOTE="%s/{repo}.git"\n' "$HOME/remotes" > "$M3/.crux/config"
+env HOME="$M3" CRUX_BIN="$BIN" bash "$HOME/crux/install.sh" --projects-dir "$M3/Proyectos" >/dev/null 2>&1
+env HOME="$M3" "$M3/.local/bin/crux" bootstrap >/dev/null 2>&1
+truthy '[[ -x "$M3/Proyectos/demo/api/.git/hooks/pre-commit.project" ]]' "and another machine gets it with bootstrap"
+
 step "the real agent settings are not touched"
 truthy '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
   "the settings.json of whoever runs it comes out as it went in"

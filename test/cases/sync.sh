@@ -551,5 +551,12 @@ test_sync_replaces_git_hooks_from_the_shell_version() {
 
   out="$(crux sync 2>&1)"
   assert_not_contains "$out" "eta: git hooks" "once replaced, it is not news again"
+
+  # A hook of the project's own, arrived from the other machine with the docs repo.
+  mkdir -p "$CRUX_PROJECTS_DIR/eta/eta-docs/repos/api/git-hooks"
+  printf '#!/bin/sh\nexit 0\n' > "$CRUX_PROJECTS_DIR/eta/eta-docs/repos/api/git-hooks/pre-commit"
+  out="$(crux sync 2>&1)"
+  assert_file "$root/api/.git/hooks/pre-commit.project" "sync installs a project hook that arrived"
+  assert_contains "$out" "eta: git hooks" "and says so"
   teardown
 }

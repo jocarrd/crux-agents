@@ -194,6 +194,7 @@ pub fn run(argv: &[String]) -> Res {
     check_mcp(&mut t, &c);
     if c.writes {
         check_code_repos(&mut t, &c);
+        check_project_hooks(&mut t, &c);
     }
 
     println!();
@@ -622,6 +623,26 @@ fn check_mcp(t: &mut Tally, c: &Checkup) {
     }
     if !mcp::declared(&c.contract).is_empty() {
         t.section_ok("MCP servers declared and written where they belong");
+    }
+}
+
+/// git runs a hook only under its exact name: one misspelt in
+/// repos/<repo>/git-hooks/ is never installed and never says so.
+fn check_project_hooks(t: &mut Tally, c: &Checkup) {
+    t.section();
+    let mut any = false;
+    for repo in &c.declared {
+        let dir = c.docs.join("repos").join(repo).join("git-hooks");
+        for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            any = true;
+            let name = e.file_name().to_string_lossy().into_owned();
+            if !super::hooks::GIT_HOOK_NAMES.contains(&name.as_str()) {
+                t.note(format!("repos/{repo}/git-hooks/{name} is not a hook git runs: it is never installed"));
+            }
+        }
+    }
+    if any && t.quiet_section() {
+        t.section_ok("the project's own git hooks have names git runs");
     }
 }
 

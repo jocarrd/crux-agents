@@ -2358,3 +2358,79 @@ test_version_also_answers_to_the_usual_flag() {
   assert_contains "$(crux --version 2>&1)" "crux $(tr -d '[:space:]' < "$CRUX_HOME/VERSION")" "--version prints the version"
   teardown
 }
+
+_hook_logging() {
+  # _hook_logging <file> <label> — a hook that appends its label to $SB/hook-order
+  printf '#!/bin/sh\necho %s >> "%s"\n' "$2" "$SB/hook-order" > "$1"
+  chmod +x "$1"
+}
+
+test_a_projects_git_hook_lives_in_its_docs_repo_and_runs_after_cruxs() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project lambda --repos "api")"
+  local api="$CRUX_PROJECTS_DIR/lambda/api"
+  git init -q "$api"
+  mkdir -p "$docs/repos/api/git-hooks"
+  _hook_logging "$docs/repos/api/git-hooks/commit-msg" project
+  _hook_logging "$api/.git/hooks/commit-msg.local" local
+
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  assert_file "$api/.git/hooks/commit-msg.project" "the project's hook reaches the repo"
+  git -C "$api" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "feat: add the cart" 2>/dev/null
+  assert_eq "project local" "$(tr '\n' ' ' < "$SB/hook-order" 2>/dev/null | sed 's/ $//')" \
+    "crux's part, then the project's, then this machine's"
+  assert_contains "$(cd "$docs" && "$CRUX_HOME/bin/crux" hooks status 2>&1)" "crux → project → local" \
+    "status shows the layers in the order they run"
+
+  rm "$docs/repos/api/git-hooks/commit-msg"
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  assert_no_file "$api/.git/hooks/commit-msg.project" "removed from the docs repo, it leaves the repo too"
+  assert_file "$api/.git/hooks/commit-msg.local" "and this machine's own stays"
+}
+
+test_a_project_hook_crux_does_not_use_gets_the_dispatcher_alone() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project mu --repos "api")"
+  local api="$CRUX_PROJECTS_DIR/mu/api"
+  git init -q "$api"
+  mkdir -p "$docs/repos/api/git-hooks"
+  _hook_logging "$docs/repos/api/git-hooks/pre-commit" project
+
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  git -C "$api" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "feat: add the cart" 2>/dev/null
+  assert_contains "$(cat "$SB/hook-order" 2>/dev/null)" "project" "a hook crux has no part in also runs"
+
+  rm "$docs/repos/api/git-hooks/pre-commit"
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  assert_no_file "$api/.git/hooks/pre-commit" "with nothing left behind it, the dispatcher goes too"
+}
+
+test_hooks_add_creates_a_hook_that_travels_or_one_that_does_not() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project nu --repos "api")"
+  local api="$CRUX_PROJECTS_DIR/nu/api"
+  git init -q "$api"
+
+  local out; out="$(cd "$docs" && "$CRUX_HOME/bin/crux" hooks add pre-push --repo api 2>&1)"
+  assert_file "$docs/repos/api/git-hooks/pre-push" "add writes the project's hook in the docs repo"
+  assert_exit 0 "executable" test -x "$docs/repos/api/git-hooks/pre-push"
+  assert_file "$api/.git/hooks/pre-push.project" "and installs it at once"
+  assert_contains "$out" "repos/api/git-hooks/pre-push" "it says where to write it"
+
+  (cd "$api" && "$CRUX_HOME/bin/crux" hooks add commit-msg --local >/dev/null 2>&1)
+  assert_file "$api/.git/hooks/commit-msg.local" "--local writes it for this machine only"
+  assert_no_file "$docs/repos/api/git-hooks/commit-msg" "and not in the docs repo"
+
+  assert_exit 1 "a name git does not run is refused" \
+    bash -c "cd '$docs' && '$CRUX_HOME/bin/crux' hooks add precommit --repo api"
+  assert_exit 1 "and so is an existing hook, which is not overwritten" \
+    bash -c "cd '$docs' && '$CRUX_HOME/bin/crux' hooks add pre-push --repo api"
+}
+
+test_doctor_names_a_project_hook_git_would_never_run() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project xi --repos "api")"
+  mkdir -p "$docs/repos/api/git-hooks"
+  printf '#!/bin/sh\nexit 0\n' > "$docs/repos/api/git-hooks/precommit"
+  assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "precommit" "doctor names the file git would ignore"
+}

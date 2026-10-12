@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 const MARK: &str = "crux/adapters";
 const CRUX_HOOKS: &str = "doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder";
-const GIT_HOOK_NAMES: [&str; 15] = [
+pub const GIT_HOOK_NAMES: [&str; 15] = [
     "applypatch-msg",
     "pre-applypatch",
     "post-applypatch",
@@ -82,11 +82,13 @@ fn executable(p: &Path) {
     let _ = std::fs::set_permissions(p, std::os::unix::fs::PermissionsExt::from_mode(0o755));
 }
 
-/// In front of every git hook crux uses, so a repo can keep its own in
-/// `<name>.local` without crux ever overwriting it.
+/// In front of every git hook crux uses, so a repo can have hooks of its own
+/// without crux ever overwriting them: `<name>.project`, which comes from the
+/// docs repo and travels, and `<name>.local`, which stays on this machine.
 const DISPATCHER: &str = r#"#!/usr/bin/env bash
-# Installed by crux hooks install: crux's part first, then the repo's own.
-# The repo's own hook goes in <name>.local next to this file; crux never writes it.
+# Installed by crux hooks install: crux's part first, then the project's, then
+# this machine's. The project's comes from repos/<repo>/git-hooks/ in the docs
+# repo; this machine's goes in <name>.local next to this file.
 here="$(cd "$(dirname "$0")" && pwd)"
 name="$(basename "$0")"
 # Only these get input from git: read in any other, a hook run by hand waits.
@@ -95,17 +97,17 @@ case "$name" in
   pre-push|pre-receive|post-receive|post-rewrite|reference-transaction)
     input="$(mktemp)"; trap 'rm -f "$input"' EXIT; cat > "$input" ;;
 esac
-for part in "$here/$name.crux" "$here/$name.local"; do
+for part in "$here/$name.crux" "$here/$name.project" "$here/$name.local"; do
   [[ -x "$part" ]] || continue
   "$part" "$@" < "$input" || exit $?
 done
 exit 0
 "#;
-const DISPATCHER_MARK: &str = "crux's part first, then the repo's own";
+const DISPATCHER_MARK: &str = "crux's part first, then the project's";
 
 /// A hook some version of crux wrote: replacing it loses nothing.
 fn is_crux_hook(text: &str) -> bool {
-    ["crux hooks install", "crux archive", DISPATCHER_MARK].iter().any(|m| text.contains(m))
+    ["crux hooks install", "crux archive", DISPATCHER_MARK, "crux's part first"].iter().any(|m| text.contains(m))
 }
 
 fn crux_hook_at(f: &Path) -> bool {
@@ -115,6 +117,14 @@ fn crux_hook_at(f: &Path) -> bool {
 /// A hook that was there and is not crux's moves to `<name>.local` instead of
 /// being overwritten.
 pub fn put_hook(hooks: &Path, name: &str, body: &str) -> Result<(), String> {
+    ensure_dispatcher(hooks, name)?;
+    let part = hooks.join(format!("{name}.crux"));
+    files::write(&part, body)?;
+    executable(&part);
+    Ok(())
+}
+
+fn ensure_dispatcher(hooks: &Path, name: &str) -> Result<(), String> {
     let main = hooks.join(name);
     let local = hooks.join(format!("{name}.local"));
     if main.exists() {
@@ -130,12 +140,74 @@ pub fn put_hook(hooks: &Path, name: &str, body: &str) -> Result<(), String> {
             ui::info(format!("{name}: the repo's own hook is now {name}.local and runs after crux's"));
         }
     }
-    let part = hooks.join(format!("{name}.crux"));
-    files::write(&part, body)?;
-    executable(&part);
-    files::write(&main, DISPATCHER)?;
-    executable(&main);
+    if files::read_or_empty(&main) != DISPATCHER {
+        files::write(&main, DISPATCHER)?;
+        executable(&main);
+    }
     Ok(())
+}
+
+/// A dispatcher with no part left behind it only costs a process per commit.
+fn drop_empty_dispatcher(hooks: &Path, name: &str) {
+    let parts = ["crux", "project", "local"].map(|k| hooks.join(format!("{name}.{k}")));
+    if !parts.iter().any(|p| p.exists()) && crux_hook_at(&hooks.join(name)) {
+        let _ = std::fs::remove_file(hooks.join(name));
+    }
+}
+
+pub fn project_hooks(docs: &Path, repo: &str) -> Vec<(String, PathBuf)> {
+    let dir = docs.join("repos").join(repo).join("git-hooks");
+    let mut out: Vec<(String, PathBuf)> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| GIT_HOOK_NAMES.contains(&n.as_str()))
+        .map(|n| (n.clone(), dir.join(n)))
+        .collect();
+    out.sort();
+    out
+}
+
+/// Also takes out the `.project` parts the docs repo no longer has.
+pub fn sync_project_hooks(docs: &Path, repo: &str, dir: &Path) -> Result<Vec<String>, String> {
+    let Some(hooks) = dir_hooks(dir) else { return Ok(vec![]) };
+    let declared = project_hooks(docs, repo);
+    for (name, src) in &declared {
+        let body = std::fs::read_to_string(src).map_err(|e| format!("cannot read {}: {e}", src.display()))?;
+        ensure_dispatcher(&hooks, name)?;
+        let part = hooks.join(format!("{name}.project"));
+        if files::read_or_empty(&part) != body {
+            files::write(&part, &body)?;
+        }
+        executable(&part);
+    }
+    for name in GIT_HOOK_NAMES {
+        let part = hooks.join(format!("{name}.project"));
+        if part.exists() && !declared.iter().any(|(n, _)| n == name) {
+            let _ = std::fs::remove_file(&part);
+            drop_empty_dispatcher(&hooks, name);
+        }
+    }
+    Ok(declared.into_iter().map(|(n, _)| n).collect())
+}
+
+/// What `sync` fixes by installing again.
+pub fn hooks_out_of_date(docs: &Path, repo: Option<&str>, dir: &Path) -> bool {
+    let Some(hooks) = dir_hooks(dir) else { return false };
+    let stale_dispatcher = GIT_HOOK_NAMES.iter().any(|n| {
+        let main = hooks.join(n);
+        crux_hook_at(&main) && files::read_or_empty(&main) != DISPATCHER
+    });
+    let declared = repo.map(|r| project_hooks(docs, r)).unwrap_or_default();
+    let stale_project = declared
+        .iter()
+        .any(|(n, src)| files::read_or_empty(&hooks.join(format!("{n}.project"))) != files::read_or_empty(src))
+        || GIT_HOOK_NAMES
+            .iter()
+            .any(|n| hooks.join(format!("{n}.project")).exists() && !declared.iter().any(|(d, _)| d == n));
+    stale_dispatcher || stale_project
 }
 
 pub fn take_hook(hooks: &Path, name: &str) -> bool {
@@ -145,6 +217,7 @@ pub fn take_hook(hooks: &Path, name: &str) -> bool {
     let ours = crux_hook_at(&main);
     let had = part.exists() || ours;
     let _ = std::fs::remove_file(&part);
+    let _ = std::fs::remove_file(hooks.join(format!("{name}.project")));
     if ours {
         let _ = std::fs::remove_file(&main);
     }
@@ -152,12 +225,6 @@ pub fn take_hook(hooks: &Path, name: &str) -> bool {
         let _ = std::fs::rename(&local, &main);
     }
     had
-}
-
-pub fn needs_new_hooks(repo: &Path) -> bool {
-    let Some(hooks) = dir_hooks(repo) else { return false };
-    let main = hooks.join("commit-msg");
-    crux_hook_at(&main) && !files::read_or_empty(&main).contains(DISPATCHER_MARK)
 }
 
 fn read_settings(p: &Path) -> Value {
@@ -286,6 +353,30 @@ fn status(p: &Paths) -> Res {
             ui::ok("commit-msg installed — messages in English")
         } else {
             ui::info("no crux commit-msg")
+        }
+        let contract = project::contract_lenient(&docs).unwrap_or_default();
+        let root = docs.parent().unwrap().to_path_buf();
+        let mut rows = vec![];
+        for repo in files::str_list(contract.get("repos")).into_iter().filter(|r| project::valid_name(r)) {
+            let Some(h) = dir_hooks(&root.join(&repo)).filter(|_| root.join(&repo).join(".git").exists()) else {
+                continue;
+            };
+            for name in GIT_HOOK_NAMES {
+                let layers: Vec<&str> = ["crux", "project", "local"]
+                    .into_iter()
+                    .filter(|k| h.join(format!("{name}.{k}")).exists())
+                    .collect();
+                if !layers.is_empty() {
+                    rows.push(format!("{repo:<24} {name:<14} {}", layers.join(" → ")));
+                }
+            }
+        }
+        if !rows.is_empty() {
+            println!();
+            println!("git hooks of the code repos, in the order they run");
+            for r in rows {
+                ui::info(r);
+            }
         }
     }
     Ok(())
@@ -656,8 +747,88 @@ fn install(p: &Paths) -> Res {
         if install_pre_push(&dir) {
             ui::ok(format!("pre-push in {repo}"));
         }
+        match sync_project_hooks(&docs, &repo, &dir) {
+            Ok(names) if !names.is_empty() => ui::ok(format!("the project's own in {repo}: {}", names.join(", "))),
+            Ok(_) => {}
+            Err(e) => ui::warn(e),
+        }
         chain_hooks_path(&dir);
     }
+    Ok(())
+}
+
+const OWN_HOOK: &str = r#"#!/usr/bin/env bash
+# The NAME hook of REPO, run after crux's. It gets what git gives NAME: the
+# same arguments and input. Exiting non-zero stops the operation.
+set -euo pipefail
+
+exit 0
+"#;
+
+fn add(argv: &[String]) -> Res {
+    let usage = "usage: crux hooks add <hook> [--repo <repo>] [--local]";
+    let Some(name) = argv.first().filter(|a| !a.starts_with('-')).cloned() else { die!("{usage}") };
+    let (mut repo, mut local) = (None, false);
+    let mut i = 1;
+    while i < argv.len() {
+        match argv[i].as_str() {
+            "--repo" => {
+                repo = argv.get(i + 1).cloned();
+                i += 1;
+            }
+            "--local" => local = true,
+            other => die!("unknown option: {other} — {usage}"),
+        }
+        i += 1;
+    }
+    if !GIT_HOOK_NAMES.contains(&name.as_str()) {
+        die!("'{name}' is not a hook git runs: {}", GIT_HOOK_NAMES.join(", "));
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let Some(docs) = project::find_docs_repo(&cwd) else { die!("no docs repo found from here") };
+    let root = docs.parent().unwrap().to_path_buf();
+    let repo = match repo {
+        Some(r) => r,
+        None => match git::out(&cwd, &["rev-parse", "--show-toplevel"]).map(PathBuf::from) {
+            Some(top) if top.parent() == Some(root.as_path()) && top != docs => files::name(&top),
+            _ => die!("which repo? --repo <repo>"),
+        },
+    };
+    let contract = project::contract_lenient(&docs).unwrap_or_default();
+    if !project::valid_name(&repo) || !files::str_list(contract.get("repos")).contains(&repo) {
+        die!("'{repo}' is not a repo of {}", files::name(&docs));
+    }
+    let dir = root.join(&repo);
+    let body = OWN_HOOK.replace("NAME", &name).replace("REPO", &repo);
+    if local {
+        let Some(hooks) = dir_hooks(&dir) else { die!("{repo} is not cloned here") };
+        let file = hooks.join(format!("{name}.local"));
+        if file.exists() {
+            die!("{} already exists: edit it", file.display());
+        }
+        if let Err(e) = ensure_dispatcher(&hooks, &name).and_then(|_| files::write(&file, &body)) {
+            die!("{e}");
+        }
+        executable(&file);
+        ui::ok(format!("{name} for {repo} on this machine only: {}", file.display()));
+        return Ok(());
+    }
+    let file = docs.join("repos").join(&repo).join("git-hooks").join(&name);
+    if file.exists() {
+        die!("{} already exists: edit it", file.display());
+    }
+    let _ = std::fs::create_dir_all(file.parent().unwrap());
+    if let Err(e) = files::write(&file, &body) {
+        die!("{e}");
+    }
+    executable(&file);
+    if dir.join(".git").exists() {
+        if let Err(e) = sync_project_hooks(&docs, &repo, &dir) {
+            die!("{e}");
+        }
+    }
+    ui::ok(format!("{name} for {repo}: {}/repos/{repo}/git-hooks/{name}", files::name(&docs)));
+    ui::info("write it there and commit it: every machine gets it with 'crux sync'");
     Ok(())
 }
 
@@ -712,6 +883,7 @@ pub fn run(argv: &[String]) -> Res {
         "status" => status(&p),
         "install" => install(&p),
         "remove" => remove(&p),
-        _ => die!("usage: crux hooks {{status|install|remove}}"),
+        "add" => add(&argv[1..]),
+        _ => die!("usage: crux hooks {{status|install|remove|add}}"),
     }
 }

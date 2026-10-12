@@ -500,20 +500,16 @@ fn old_git_hooks(ctx: &Ctx) -> Vec<String> {
     for (p, docs) in docs_repos(&ctx.root) {
         let contract = project::contract_lenient(&docs).unwrap_or_default();
         let parent = docs.parent().unwrap_or(&ctx.root).to_path_buf();
-        let stale = std::iter::once(docs.clone())
-            .chain(
-                files::str_list(contract.get("repos"))
-                    .into_iter()
-                    .filter(|r| project::valid_name(r))
-                    .map(|r| parent.join(r)),
-            )
-            .filter(|r| r.join(".git").exists())
-            .any(|r| super::hooks::needs_new_hooks(&r));
+        let stale = super::hooks::hooks_out_of_date(&docs, None, &docs)
+            || files::str_list(contract.get("repos"))
+                .into_iter()
+                .filter(|r| project::valid_name(r) && parent.join(r).join(".git").exists())
+                .any(|r| super::hooks::hooks_out_of_date(&docs, Some(&r), &parent.join(&r)));
         if !stale {
             continue;
         }
         if super::call_quiet(&docs, "hooks", &["install"]).ok() {
-            out.push(format!("kernel\t{p}: git hooks moved to the current crux"));
+            out.push(format!("kernel\t{p}: git hooks brought up to date"));
         } else {
             out.push(format!(
                 "warning\t{p}: its git hooks are from an older crux — 'crux hooks install' in {}",

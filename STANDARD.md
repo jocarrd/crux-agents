@@ -416,6 +416,7 @@ They appear **when the project needs them**, not before:
 | `operations/` | There is infrastructure: servers, cloud, monitoring, deployments |
 | `topics/` | Container for categories specific to the project's domain |
 | `.claude/skills/project/` | Project-specific skills |
+| `repos/<repo>/git-hooks/` | A repo needs git hooks of its own, beyond crux's: each file, named as git names the hook, runs after crux's on every machine. `crux hooks add <hook> --repo <repo>` creates it |
 
 ### `topics/` — what is specific to the domain
 

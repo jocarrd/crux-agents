@@ -258,7 +258,7 @@ A rule written in a file is advice. These are installed by
 | `crux checks [n]` | Waits for a proposal's CI and brings only the end of what fails |
 | `crux merge <n>` | Merges a proposal after saying which one and in which repository |
 | `crux doctor` | Checks a docs repo against the standard; `--machine` checks the machine |
-| `crux hooks` | Installs the guards into the agent and into git |
+| `crux hooks` | Installs the guards into the agent and into git; `crux hooks add` gives a repo git hooks of its own, run after crux's |
 | `crux mcp` | Writes the MCP servers a project declares and checks they respond |
 | `crux stg` | Publishes a built folder to a keyed staging |
 | `crux usage` | Which skills are actually used |

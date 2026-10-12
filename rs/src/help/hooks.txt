@@ -3,9 +3,13 @@ crux hooks — hooks the standard into the moments where it applies.
   crux hooks status     what is installed and whether it points at something real
   crux hooks install    installs the agent's hooks and, where it applies, git's
   crux hooks remove     removes only the ones crux manages
+  crux hooks add <hook> [--repo <repo>] [--local]
+                        a git hook of the repo's own, run after crux's: in the
+                        docs repo so every machine gets it, or --local here only
 
 A standard you have to remember to check gets checked sometimes. These hooks
 check it every time.
 
-A repo's own git hook goes in .git/hooks/<hook>.local and runs after crux's;
-one that was there before crux is moved there and keeps running.
+Each git hook runs crux's part, then the project's (repos/<repo>/git-hooks/
+in the docs repo), then this machine's (.git/hooks/<hook>.local). A hook the
+repo had before crux is moved to .local and keeps running.
