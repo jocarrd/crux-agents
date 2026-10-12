@@ -84,7 +84,12 @@ performs.
 `2>/dev/null` is fine for asking whether something exists. It is not fine for
 reading something that has to be there.
 
-It is enforced by `test_no_command_hides_a_file_it_cannot_read`.
+The same holds for a write: one whose error is thrown away is followed by a
+message saying it was done. `files::write` returns the error with the path;
+`files::touch_marker` is only for a file that throttles a reminder.
+
+It is enforced by `test_no_command_hides_a_file_it_cannot_read` for the
+scripts and by `test_no_command_drops_a_write_error` for the binary.
 
 ---
 

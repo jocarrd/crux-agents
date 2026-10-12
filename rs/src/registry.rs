@@ -72,7 +72,12 @@ pub fn lock(tries: u32) -> Result<Lock, String> {
     loop {
         match fs::create_dir(&dir) {
             Ok(()) => {
-                let _ = fs::write(dir.join("pid"), format!("{}\n", std::process::id()));
+                // Without its pid a lock left by a dead process cannot be told
+                // from a live one, and it blocks every later command.
+                if let Err(e) = crate::files::write(&dir.join("pid"), &format!("{}\n", std::process::id())) {
+                    let _ = fs::remove_dir_all(&dir);
+                    return Err(e);
+                }
                 return Ok(Lock { dir });
             }
             Err(_) => {

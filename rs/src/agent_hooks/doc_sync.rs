@@ -90,7 +90,7 @@ pub(super) fn doc_sync() -> Res {
     if m.is_file() {
         return Ok(());
     }
-    let _ = std::fs::write(&m, "");
+    crate::files::touch_marker(&m, "");
     sweep(&state, "doc-gate-", Duration::from_secs(3 * 86400));
     let mut msg = format!(
         "DOCUMENTATION GATE — project {project_name}\n\nThis session has moved things. Before closing, answer in one line what\nof what happened stays in {project_name}-docs and what does not.\n"

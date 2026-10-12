@@ -76,7 +76,11 @@ fn run_cmd(ctx: &Ctx, args: &[String], label: Option<&str>) -> Res {
         let _ = std::fs::remove_file(&ctx.receipt);
     }
     if !ctx.receipt.is_file() {
-        let _ = std::fs::write(&ctx.receipt, format!("# quality gate receipt — crux\nrepo {}\n", ctx.repo.display()));
+        if let Err(e) =
+            crate::files::write(&ctx.receipt, &format!("# quality gate receipt — crux\nrepo {}\n", ctx.repo.display()))
+        {
+            die!("{e}");
+        }
     }
     let start = Instant::now();
     let rc = match Command::new(&args[0]).args(&args[1..]).status() {
@@ -104,7 +108,9 @@ fn run_cmd(ctx: &Ctx, args: &[String], label: Option<&str>) -> Res {
         out.push('\n');
     }
     out.push_str(&format!("run {rc} {secs} {label}\n"));
-    let _ = std::fs::write(&ctx.receipt, out);
+    if let Err(e) = crate::files::write(&ctx.receipt, &out) {
+        die!("{e}");
+    }
     if rc == 0 {
         ui::ok(format!("{label} — {secs}s"));
         Ok(())
@@ -140,7 +146,9 @@ fn seal(ctx: &Ctx) -> Res {
         text.lines().filter(|l| !l.starts_with("sealed ") && !l.starts_with("kernel ")).map(String::from).collect();
     lines.push(format!("kernel {kernel}"));
     lines.push(format!("sealed {head} {}", chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
-    let _ = std::fs::write(&ctx.receipt, lines.join("\n") + "\n");
+    if let Err(e) = crate::files::write(&ctx.receipt, &(lines.join("\n") + "\n")) {
+        die!("{e}");
+    }
     let short = git::out(&ctx.repo, &["rev-parse", "--short", "HEAD"]).unwrap_or_default();
     ui::ok(format!("gate closed on {short} with {} (crux {kernel})", ui::count(total, "check", "checks")));
     if let Some(p) = pinned.filter(|p| !p.is_empty() && *p != kernel) {
@@ -362,7 +370,7 @@ fn gate(ctx: &Ctx) -> Res {
                 die!("gate cancelled");
             }
         }
-        let _ = std::fs::write(&fingerprint_file, &now);
+        crate::files::touch_marker(&fingerprint_file, &now);
     }
     let _ = std::fs::remove_file(&ctx.receipt);
     let mut failures = 0;

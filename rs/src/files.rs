@@ -44,6 +44,17 @@ pub fn write_atomic(path: &Path, content: &str, mode: Option<u32>) -> std::io::R
     fs::rename(&tmp, path)
 }
 
+/// The error names the path: "permission denied" alone does not say where.
+pub fn write(path: &Path, content: &str) -> Result<(), String> {
+    fs::write(path, content).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
+/// For a file that only throttles a reminder or remembers when something ran:
+/// if it cannot be written the reminder shows again, which is harmless.
+pub fn touch_marker(path: &Path, content: &str) {
+    fs::write(path, content).ok();
+}
+
 /// Two-space JSON plus the newline, byte for byte what the earlier kernels
 /// wrote: other machines may run one, and they read and diff these files.
 pub fn json_pretty(v: &Value) -> String {

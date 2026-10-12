@@ -174,7 +174,9 @@ pub fn run(argv: &[String]) -> Res {
             } else if let Some(last) = lines.iter().rposition(|l| l.starts_with('|')) {
                 lines.insert(last + 1, row);
             }
-            let _ = std::fs::write(&index, lines.join("\n"));
+            if let Err(e) = crate::files::write(&index, &lines.join("\n")) {
+                die!("{e}");
+            }
         }
     }
     if !repos.is_empty() {

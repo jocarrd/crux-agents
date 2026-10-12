@@ -30,8 +30,8 @@ fn tagline_of(docs: &Path, repo: &str, project_name: &str) -> String {
 
 /// The profile's rules, written into a managed block that doctor checks. The
 /// old block was marked `perfil`: still recognised and replaced.
-fn write_profile_rules(profile: &str, docs: &Path, tree: &Path) {
-    let Some(rules) = policy::get(profile, Some(docs), "rules").filter(|r| !r.is_empty()) else { return };
+fn write_profile_rules(profile: &str, docs: &Path, tree: &Path) -> Result<(), String> {
+    let Some(rules) = policy::get(profile, Some(docs), "rules").filter(|r| !r.is_empty()) else { return Ok(()) };
     let mut block = format!(
         "<!-- crux:begin profile -->\n## Rules of the `{profile}` profile\n\nThe profile declares them, and `crux doctor` checks they are written here.\nFollowing them is up to whoever does the work: they are working rules, not\nautomatic checks.\n\n"
     );
@@ -40,17 +40,18 @@ fn write_profile_rules(profile: &str, docs: &Path, tree: &Path) {
     }
     block.push_str("\n<!-- crux:end -->");
     let target = tree.join(names::AGENTS);
-    let Ok(current) = std::fs::read_to_string(&target) else { return };
+    let Ok(current) = std::fs::read_to_string(&target) else { return Ok(()) };
     let re = crate::regex!(r"<!-- crux:begin (?:perfil|profile)[\s\S]*?crux:end -->");
     if let Some(m) = re.find(&current) {
         if m.as_str() != block {
-            let _ = std::fs::write(&target, re.replacen(&current, 1, regex::NoExpand(&block)).into_owned());
+            crate::files::write(&target, &re.replacen(&current, 1, regex::NoExpand(&block)))?;
             ui::ok(format!("profile {profile} rules updated in AGENTS.md"));
         }
     } else {
-        let _ = std::fs::write(&target, format!("{current}\n{block}\n"));
+        crate::files::write(&target, &format!("{current}\n{block}\n"))?;
         ui::ok(format!("profile {profile} rules written to AGENTS.md"));
     }
+    Ok(())
 }
 
 /// The first sentence of a skill's description: an index is scanned, not read.
@@ -117,7 +118,9 @@ pub fn run(argv: &[String]) -> Res {
     }
     println!("project {project_name} · profile {profile}");
     println!();
-    write_profile_rules(&profile, &docs, &tree);
+    if let Err(e) = write_profile_rules(&profile, &docs, &tree) {
+        die!("{e}");
+    }
 
     let repos = files::str_list(contract.get("repos"));
     if !policy::flag(&profile, Some(&docs), "pointers.write", true) {
@@ -210,7 +213,11 @@ pub fn run(argv: &[String]) -> Res {
                     ];
                     let rendered =
                         template::render(&home.join("templates/code-repo").join(file), &vars).unwrap_or_default();
-                    let _ = std::fs::write(&path, format!("{rendered}\n---\n\n## Own context of {repo}\n\n{own}\n"));
+                    if let Err(e) =
+                        crate::files::write(&path, &format!("{rendered}\n---\n\n## Own context of {repo}\n\n{own}\n"))
+                    {
+                        die!("{e}");
+                    }
                     ui::ok(format!("{repo}/{file} rewritten with the block, previous content kept below"));
                 }
             } else {
@@ -243,7 +250,9 @@ pub fn run(argv: &[String]) -> Res {
             let replaced = re
                 .replacen(&src, 1, regex::NoExpand(&format!("<!-- crux:skills -->\n{catalog}\n<!-- /crux:skills -->")))
                 .into_owned();
-            let _ = std::fs::write(&index, replaced);
+            if let Err(e) = crate::files::write(&index, &replaced) {
+                die!("{e}");
+            }
             ui::ok(format!("kernel catalog updated in AGENTS.md ({} skills)", lines.len()));
         }
     }

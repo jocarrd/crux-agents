@@ -77,13 +77,16 @@ fn codex_stub(src: &Path, name: &str) {
     }
     let dir = env::codex_prompts_dir();
     let _ = fs::create_dir_all(&dir);
-    let _ = fs::write(
-        dir.join(format!("{name}.md")),
-        format!(
+    let written = crate::files::write(
+        &dir.join(format!("{name}.md")),
+        &format!(
             "Read and follow the procedure described in:\n\n{}\n\nApply it to the current task. User arguments (if any): $ARGUMENTS\n",
             skill_md.display()
         ),
     );
+    if let Err(e) = written {
+        crate::ui::warn(format!("{e} — Codex will not offer /{name}"));
+    }
 }
 
 /// Accepts a flat skills directory and one with subcategories.

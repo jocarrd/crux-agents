@@ -358,6 +358,24 @@ test_task_decisions_move_to_the_docs_repo_on_archive() {
   assert_eq "" "$(git -C "$docs" status --porcelain)" "leaving nothing loose"
 }
 
+test_task_decisions_never_overwrite_notes_they_cannot_read() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  local docs="$root/proj-docs"
+  mkdir -p "$docs/repos/app"; echo "# Notes kept for years" > "$docs/repos/app/notes.md"
+  git -C "$docs" init -q; git -C "$docs" config user.email t@t; git -C "$docs" config user.name t
+  git -C "$docs" add -A; git -C "$docs" commit -qm init
+  "$CRUX_HOME/bin/crux" workspace new dec --repo "$root/app" >/dev/null 2>&1
+  (cd "$root/app-ws-dec" && "$CRUX_HOME/bin/crux" task note "Keys get a prefix" --why "the format changed" >/dev/null 2>&1)
+  "$CRUX_HOME/bin/crux" __task status --file "$SB/tasks/proj/dec.md" --to merged >/dev/null
+
+  chmod 200 "$docs/repos/app/notes.md"
+  local out; out="$("$CRUX_HOME/bin/crux" workspace rm dec 2>&1)"
+  chmod 644 "$docs/repos/app/notes.md"
+  assert_contains "$(cat "$docs/repos/app/notes.md")" "Notes kept for years" "the notes it could not read are still there"
+  assert_contains "$out" "move them by hand" "and it says where the decisions are"
+}
+
 test_a_task_without_decisions_does_not_touch_the_docs_repo() {
   sandbox >/dev/null
   local root; root="$(_tasks_project)"

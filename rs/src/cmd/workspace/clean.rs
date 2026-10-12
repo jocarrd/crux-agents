@@ -29,7 +29,16 @@ fn repoint_hooks(workspace: &Path, main_repo: &Path, settings: &Path) {
         return;
     }
     let prefix = format!("{}/", workspace.display());
-    let mut s = files::read_json(settings).unwrap_or(Value::Null);
+    // Read as null, the file would be written back as "null" and every
+    // setting the person has would be gone.
+    let mut s = match files::read_json(settings) {
+        Ok(v) if v.is_object() => v,
+        Ok(_) | Err(_) => {
+            ui::warn(format!("{} cannot be read as JSON: hooks left as they were", settings.display()));
+            ui::info("fix it and run 'crux hooks install' from the main repo");
+            return;
+        }
+    };
     let mut removed = 0;
     if let Some(hooks) = s.get_mut("hooks").and_then(Value::as_object_mut) {
         for groups in hooks.values_mut() {
@@ -45,7 +54,10 @@ fn repoint_hooks(workspace: &Path, main_repo: &Path, settings: &Path) {
             }
         }
     }
-    let _ = std::fs::write(settings, files::json_pretty(&s));
+    if let Err(e) = files::write(settings, &files::json_pretty(&s)) {
+        ui::warn(format!("{e} — the agent hooks still point to this workspace"));
+        return;
+    }
     ui::ok(format!("agent hooks returned to the main checkout: {}", main_repo.display()));
     if removed > 0 {
         ui::info(format!("removed {removed} that only existed in the workspace"));
@@ -290,7 +302,9 @@ fn expire_tasks(confirmed: bool) -> Res {
             let removed = f.parent().unwrap().parent().unwrap().join(".removed");
             let mut text = files::read_or_empty(&removed);
             text.push_str(&format!("done/{} {created}\n", files::name(f)));
-            let _ = std::fs::write(&removed, text);
+            if let Err(e) = crate::files::write(&removed, &text) {
+                die!("{e}");
+            }
             let _ = std::fs::remove_file(f);
         }
         ui::ok(format!("{} expired tasks deleted", old.len()));

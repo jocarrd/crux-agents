@@ -338,7 +338,9 @@ fn exclude_local_state(path: &Path, env_file: &str) {
             current.push('\n');
         }
     }
-    let _ = std::fs::write(&exclude, current);
+    if let Err(e) = files::write(&exclude, &current) {
+        ui::warn(format!("{e} — the gate receipt and {env_file} are not ignored, and could be committed"));
+    }
 }
 
 const INSTALLERS: [(&str, &str); 9] = [

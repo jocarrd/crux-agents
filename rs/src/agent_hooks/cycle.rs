@@ -65,7 +65,7 @@ pub(super) fn cycle_guard() -> Res {
     if m.exists() {
         return Ok(());
     }
-    let _ = std::fs::write(&m, "");
+    crate::files::touch_marker(&m, "");
     print!(
         "You are on '{branch}', the main branch of {base}, which is a repo
 managed by crux. If what comes next is a development task, the work enters

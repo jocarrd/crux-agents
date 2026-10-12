@@ -326,13 +326,22 @@ pub fn promote_decisions(record_file: &Path) {
         return;
     };
     let target = docs.join("repos").join(&repo).join("notes.md");
-    let mut text = std::fs::read_to_string(&target).unwrap_or_default();
-    if !text.is_empty() {
+    // Read as empty, the notes already there would be overwritten by this entry.
+    let read =
+        if target.exists() { std::fs::read_to_string(&target).map_err(|e| e.to_string()) } else { Ok(String::new()) };
+    let written = read.and_then(|mut text| {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(&entry);
         text.push('\n');
+        crate::files::write(&target, &text)
+    });
+    if let Err(e) = written {
+        crate::ui::warn(format!("the task decisions could not go to {}: {e}", target.display()));
+        crate::ui::info(format!("move them by hand from: {}", record_file.display()));
+        return;
     }
-    text.push_str(&entry);
-    text.push('\n');
-    let _ = std::fs::write(&target, text);
     let rel = format!("repos/{repo}/notes.md");
     let docs_name = crate::files::name(&docs);
     let stem = record_file.file_stem().unwrap().to_string_lossy().into_owned();

@@ -806,7 +806,7 @@ pub fn run(argv: &[String]) -> Res {
                 return Ok(());
             }
             let Some(_lock) = take_lock(&state, true) else { return Ok(()) };
-            let _ = std::fs::write(&marker, "");
+            crate::files::touch_marker(&marker, "");
             let _ = arrival(&ctx);
             Ok(())
         }

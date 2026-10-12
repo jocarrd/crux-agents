@@ -25,7 +25,7 @@ pub(super) fn task_context() -> Res {
     }
     let Ok(doc) = record::read(&file) else { return Ok(()) };
     let s = record::summary(&doc);
-    let _ = std::fs::write(&m, "");
+    crate::files::touch_marker(&m, "");
     let steps = if s.steps.is_empty() { String::new() } else { format!(" · steps {}", s.steps) };
     let next = if s.next.is_empty() { String::new() } else { format!(" · next: {}", s.next) };
     println!("Task '{}' · {}{steps}{next}", s.task, s.status);
@@ -75,7 +75,7 @@ pub(super) fn session_sync() -> Res {
     if !session.is_empty() {
         let dir = env::state_dir().join("sessions");
         let _ = files::mkdir_private(&dir);
-        let _ = std::fs::write(dir.join(safe_id(&session)), "");
+        crate::files::touch_marker(&dir.join(safe_id(&session)), "");
     }
     let (synced, reminder) = synced_and_reminder(&field(&event, "cwd"));
     if synced.is_empty() && reminder.is_none() {
@@ -127,7 +127,7 @@ pub(super) fn session_idle() -> Res {
         .ok()
         .and_then(|t| t.elapsed().ok())
         .is_some_and(|a| a > Duration::from_secs(hours * 3600));
-    let _ = std::fs::write(&m, "");
+    crate::files::touch_marker(&m, "");
     if !stopped {
         return Ok(());
     }

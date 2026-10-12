@@ -143,7 +143,9 @@ pub fn run(argv: &[String]) -> Res {
                         out.push(line.clone());
                     }
                 }
-                let _ = fs::write(&readme, out.join("\n") + "\n");
+                if let Err(e) = crate::files::write(&readme, &(out.join("\n") + "\n")) {
+                    die!("{e}");
+                }
                 ui::ok(format!("notice at the top of repos/{repo}/README.md"));
             }
         }
@@ -154,10 +156,9 @@ pub fn run(argv: &[String]) -> Res {
             if let Some(hooks) = hooks_dir(&repo_dir) {
                 let _ = fs::create_dir_all(&hooks);
                 let hook = hooks.join("pre-push");
-                let _ = fs::write(
-                    &hook,
-                    format!("#!/usr/bin/env bash\n# Installed by crux archive.\necho\necho \"{repo} is archived since {today}: push blocked\"\necho \"  if it is coming back to life: crux unarchive {repo}, from its docs repo\"\nexit 1\n"),
-                );
+                if let Err(e) = crate::files::write(&hook, &format!("#!/usr/bin/env bash\n# Installed by crux archive.\necho\necho \"{repo} is archived since {today}: push blocked\"\necho \"  if it is coming back to life: crux unarchive {repo}, from its docs repo\"\nexit 1\n")) {
+                    die!("{e}");
+                }
                 let _ = fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755));
                 ui::ok("the local clone refuses to push");
             }
@@ -203,7 +204,9 @@ pub fn run(argv: &[String]) -> Res {
                 skip = false;
                 out.push(l);
             }
-            let _ = fs::write(&readme, out.join("\n") + "\n");
+            if let Err(e) = crate::files::write(&readme, &(out.join("\n") + "\n")) {
+                die!("{e}");
+            }
             ui::ok(format!("notice removed from repos/{repo}/README.md"));
         }
     }

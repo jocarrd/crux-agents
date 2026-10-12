@@ -586,6 +586,16 @@ test_no_command_hides_a_file_it_cannot_read() {
   assert_eq "" "$findings" "no command reads a file while hiding the error"
 }
 
+test_no_command_drops_a_write_error() {
+  # A write whose error is thrown away is followed by a message saying it was
+  # done: hooks "installed", a row "registered", a proposal opened with an
+  # empty body. A marker that only throttles a reminder goes through
+  # files::touch_marker, which says so where it is called.
+  local hits
+  hits="$(grep -rnE 'let _ = (std::)?fs::write' "$CRUX_HOME/rs/src" || true)"
+  assert_eq "" "$hits" "every write either reports its error or is a marker"
+}
+
 test_no_command_ends_the_process_on_its_own() {
   # A command returns how it ended instead of calling exit: that is what lets
   # the registry lock and temporary files be released on the way out, also
@@ -2195,6 +2205,17 @@ test_hooks_install_loads_the_plugin_only_in_claude() {
   local settings; settings="$(cat "$CLAUDE_SETTINGS")"
   assert_not_contains "$settings" "adapters/claude/plugin" "remove takes it out"
   assert_contains "$settings" "/opt/other" "and leaves the plugins that are not crux's"
+}
+
+test_hooks_install_does_not_report_hooks_it_could_not_write() {
+  sandbox >/dev/null
+  echo '{}' > "$CLAUDE_SETTINGS"
+  chmod a-w "$CLAUDE_SETTINGS"
+  local out rc=0; out="$("$CRUX_HOME/bin/crux" hooks install 2>&1)" || rc=$?
+  chmod u+w "$CLAUDE_SETTINGS"
+  assert_eq 1 "$rc" "install ends in error"
+  assert_contains "$out" "cannot write $CLAUDE_SETTINGS" "naming the settings it could not write"
+  assert_eq "{}" "$(cat "$CLAUDE_SETTINGS")" "which stay as they were"
 }
 
 test_the_claude_plugin_passes_its_own_tests() {

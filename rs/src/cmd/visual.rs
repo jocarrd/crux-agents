@@ -255,7 +255,9 @@ fn pr(ctx: &Ctx, argv: &[String]) -> Res {
     }
     let new_body = replace_section(&body.out(), &new_section);
     let tmp = std::env::temp_dir().join(format!("crux-visual-body.{}", std::process::id()));
-    let _ = std::fs::write(&tmp, format!("{new_body}\n"));
+    if let Err(e) = crate::files::write(&tmp, &format!("{new_body}\n")) {
+        die!("{e}");
+    }
     let done = (|| {
         if !super::call_quiet(&ctx.repo, "ship", &["body", &tmp.to_string_lossy()]).ok() {
             ui::err("the new body does not pass the proposal filter");

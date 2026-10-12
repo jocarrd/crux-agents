@@ -185,7 +185,9 @@ fn try_out(
     ));
     let _ = std::fs::create_dir_all(&dir);
     let file = dir.join(names::SKILL);
-    let _ = std::fs::write(&file, text);
+    if let Err(e) = crate::files::write(&file, text) {
+        return fail(e, 1);
+    }
     let tokens = tokens_cmd
         .and_then(|c| run_adapter(c, &file, "").ok())
         .and_then(|t| t.parse::<f64>().ok())

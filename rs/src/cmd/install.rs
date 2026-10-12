@@ -31,8 +31,8 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// The agent hooks carry the version in their path: without this, sessions
 /// keep running the previous kernel until someone reinstalls the hooks.
-fn move_hooks(file: &Path, kernels: &Path, target: &Path, plugin_dirs: bool) -> usize {
-    let Ok(mut s) = files::read_json(file) else { return 0 };
+fn move_hooks(file: &Path, kernels: &Path, target: &Path, plugin_dirs: bool) -> Result<usize, String> {
+    let mut s = files::read_json(file).map_err(|e| format!("{} cannot be read: {e}", file.display()))?;
     let k = regex::escape(&kernels.to_string_lossy());
     let old = Regex::new(&format!("{k}/[^/]+/adapters/")).unwrap();
     let new = format!("{}/adapters/", target.display());
@@ -64,9 +64,9 @@ fn move_hooks(file: &Path, kernels: &Path, target: &Path, plugin_dirs: bool) -> 
         }
     }
     if n > 0 {
-        let _ = std::fs::write(file, files::json_pretty(&s));
+        files::write(file, &files::json_pretty(&s))?;
     }
-    n
+    Ok(n)
 }
 
 pub fn run(argv: &[String]) -> Res {
@@ -229,7 +229,10 @@ pub fn run(argv: &[String]) -> Res {
         let settings =
             env::var("CLAUDE_SETTINGS").map(PathBuf::from).unwrap_or_else(|| home.join(".claude/settings.json"));
         if settings.is_file() {
-            let n = move_hooks(&settings, &home.join(".crux/kernel"), &kernel, true);
+            let n = match move_hooks(&settings, &home.join(".crux/kernel"), &kernel, true) {
+                Ok(n) => n,
+                Err(e) => die!("{e} — the agent hooks still run the previous kernel"),
+            };
             if n > 0 {
                 ui::ok(format!("agent hooks moved to {version} ({n})"));
             }
@@ -240,7 +243,10 @@ pub fn run(argv: &[String]) -> Res {
             .unwrap_or_else(|| home.join(".codex"))
             .join("hooks.json");
         if codex.is_file() {
-            let n = move_hooks(&codex, &home.join(".crux/kernel"), &kernel, false);
+            let n = match move_hooks(&codex, &home.join(".crux/kernel"), &kernel, false) {
+                Ok(n) => n,
+                Err(e) => die!("{e} — the Codex hooks still run the previous kernel"),
+            };
             if n > 0 {
                 ui::ok(format!("Codex hooks moved to {version} ({n})"));
             }

@@ -310,7 +310,9 @@ fn proposal_body(path: &Path, record_file: Option<&Path>, language: &str, log: &
 /// leaves, so a body with a credential inside does not even push.
 fn check_body(path: &Path, body: &str, record_file: Option<&Path>) -> Res {
     let tmp = std::env::temp_dir().join(format!("crux-body.{}", std::process::id()));
-    let _ = std::fs::write(&tmp, format!("{body}\n"));
+    if let Err(e) = crate::files::write(&tmp, &format!("{body}\n")) {
+        die!("{e}");
+    }
     let filter = crate::cmd::call_quiet(path, "ship", &["body", &tmp.to_string_lossy()]);
     let _ = std::fs::remove_file(&tmp);
     if filter.ok() {

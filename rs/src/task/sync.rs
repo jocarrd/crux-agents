@@ -277,7 +277,10 @@ fn save_base(p: &str, map: &BTreeMap<String, String>) {
 
 pub fn mark_pending(p: &str) {
     let _ = files::mkdir_private(&state_dir());
-    let _ = fs::write(pending_file(p), chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+    crate::files::touch_marker(
+        &pending_file(p),
+        &chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+    );
 }
 
 fn conflict_copy(local: &Path, who: &str) -> PathBuf {

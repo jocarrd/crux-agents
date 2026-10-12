@@ -86,8 +86,8 @@ fn read_settings(p: &Path) -> Value {
     files::read_json(p).unwrap_or_else(|_| json!({}))
 }
 
-fn write_settings(p: &Path, v: &Value) {
-    let _ = std::fs::write(p, files::json_pretty(v));
+fn write_settings(p: &Path, v: &Value) -> Result<(), String> {
+    files::write(p, &files::json_pretty(v))
 }
 
 /// A repo with core.hooksPath —its own versioned hooks, as many clients
@@ -122,7 +122,10 @@ exit 0
 "#;
     for name in GIT_HOOK_NAMES {
         let f = chain.join(name);
-        let _ = std::fs::write(&f, wrapper);
+        if let Err(e) = files::write(&f, wrapper) {
+            ui::warn(format!("{e} — {} runs neither crux's hooks nor its own", files::name(repo)));
+            return;
+        }
         executable(&f);
     }
     ui::info(format!("{} has its own hooks ({own}): crux runs its hooks first, then those", files::name(repo)));
@@ -295,7 +298,7 @@ fn strip_crux(s: &mut Value, pattern: &str) {
 /// same scripts are registered. It has no file tools of its own, the hooks
 /// that give context go through contexto.sh, and the memory guard is left out
 /// because it reviews Claude's memories.
-fn codex_hooks(p: &Paths, add: bool) {
+fn codex_hooks(p: &Paths, add: bool) -> Result<(), String> {
     let file = p.codex_dir.join("hooks.json");
     let mut s = if file.exists() { read_settings(&file) } else { json!({}) };
     if !s.get("hooks").is_some_and(Value::is_object) {
@@ -334,7 +337,7 @@ fn codex_hooks(p: &Paths, add: bool) {
     if s.get("hooks").and_then(Value::as_object).is_some_and(|h| h.is_empty()) {
         s.as_object_mut().unwrap().shift_remove("hooks");
     }
-    write_settings(&file, &s);
+    write_settings(&file, &s)
 }
 
 /// Blocks direct pushes to the main branch. The real protection is server
@@ -352,9 +355,9 @@ fn install_pre_push(repo: &Path) -> bool {
         return false;
     }
     let f = hooks.join("pre-push");
-    let _ = std::fs::write(
+    let written = files::write(
         &f,
-        format!(
+        &format!(
             r#"#!/usr/bin/env bash
 # Installed by crux hooks install.
 # Work comes in through a proposal, not by direct push to {main}.
@@ -376,6 +379,10 @@ exit 0
 "#
         ),
     );
+    if let Err(e) = written {
+        ui::warn(e);
+        return false;
+    }
     executable(&f);
     true
 }
@@ -416,7 +423,10 @@ fn install_commit_msg(p: &Paths, repo: &Path, scope: Scope, language: &str) -> b
         })
         .collect();
     let f = hooks.join("commit-msg");
-    let _ = std::fs::write(&f, out.join("\n") + "\n");
+    if let Err(e) = files::write(&f, &(out.join("\n") + "\n")) {
+        ui::warn(e);
+        return false;
+    }
     executable(&f);
     true
 }
@@ -454,7 +464,9 @@ fn install(p: &Paths) -> Res {
         let _ = std::fs::create_dir_all(d);
     }
     if !p.settings.is_file() {
-        let _ = std::fs::write(&p.settings, "{}\n");
+        if let Err(e) = crate::files::write(&p.settings, "{}\n") {
+            die!("{e}");
+        }
     }
     let _ = std::fs::copy(&p.settings, p.settings.with_extension("json.bak"));
     let mut s = match files::read_json(&p.settings) {
@@ -464,14 +476,18 @@ fn install(p: &Paths) -> Res {
     for h in Hook::ALL {
         let r = h.registration();
         hook_up(&mut s, r.event, &p.s(h.name()), r.previous, r.matcher);
-        write_settings(&p.settings, &s);
+        if let Err(e) = write_settings(&p.settings, &s) {
+            die!("{e}");
+        }
         ui::ok(r.what);
     }
     // Only if Codex is on the machine: creating its folder installs nothing.
     let ctx = p.home.join("adapters/codex/hooks/contexto.sh");
     if p.codex_dir.is_dir() && ctx.is_file() {
         executable(&ctx);
-        codex_hooks(p, true);
+        if let Err(e) = codex_hooks(p, true) {
+            die!("{e}");
+        }
         ui::ok(format!(
             "Codex hooks in {} (approve them the first time you open Codex)",
             p.codex_dir.join("hooks.json").display()
@@ -480,7 +496,9 @@ fn install(p: &Paths) -> Res {
     let plugin = p.home.join("adapters/claude/plugin");
     if plugin.join(".claude-plugin/plugin.json").is_file() {
         plugin_claude(&mut s, true, &plugin);
-        write_settings(&p.settings, &s);
+        if let Err(e) = write_settings(&p.settings, &s) {
+            die!("{e}");
+        }
         ui::ok("Claude Code plugin: the task reminder as a panel (Claude only)");
     }
     ui::info(format!("previous copy in {}.bak", p.settings.display()));
@@ -489,10 +507,12 @@ fn install(p: &Paths) -> Res {
     // suite that clone is the real one, shared by every worktree of it.
     let kernel = env::crux_home().filter(|k| !env::in_tests() && git::ok(k, &["rev-parse", "--git-dir"]));
     if let Some(kernel) = kernel {
-        install_pre_push(&kernel);
-        install_commit_msg(p, &kernel, Scope::Full, "en");
+        // Both run even if the first fails: `&`, not `&&`.
+        let installed = install_pre_push(&kernel) & install_commit_msg(p, &kernel, Scope::Full, "en");
         chain_hooks_path(&kernel);
-        ui::ok("pre-push and commit-msg in the kernel");
+        if installed {
+            ui::ok("pre-push and commit-msg in the kernel");
+        }
     }
     let docs = project::find_docs_repo(&std::env::current_dir().unwrap_or_default())
         .filter(|d| git::ok(d, &["rev-parse", "--git-dir"]));
@@ -512,11 +532,15 @@ fn install(p: &Paths) -> Res {
         let _ = std::fs::remove_file(&pre_push);
         ui::ok(format!("pre-push removed from {docs_name}: documentation is pushed directly"));
     }
-    let _ = std::fs::write(hooks.join("pre-commit"), PRE_COMMIT);
+    if let Err(e) = crate::files::write(&hooks.join("pre-commit"), PRE_COMMIT) {
+        die!("{e}");
+    }
     executable(&hooks.join("pre-commit"));
-    install_commit_msg(p, &docs, Scope::Full, "en");
+    let installed = install_commit_msg(p, &docs, Scope::Full, "en");
     chain_hooks_path(&docs);
-    ui::ok(format!("pre-commit and commit-msg in {docs_name}"));
+    if installed {
+        ui::ok(format!("pre-commit and commit-msg in {docs_name}"));
+    }
 
     // Commits in code repos are the majority. Client repos too: .git/hooks is
     // not versioned and travels in no push; skipping them left the one place
@@ -558,9 +582,13 @@ fn remove(p: &Paths) -> Res {
     };
     strip_crux(&mut s, CRUX_HOOKS);
     plugin_claude(&mut s, false, &p.home.join("adapters/claude/plugin"));
-    write_settings(&p.settings, &s);
+    if let Err(e) = write_settings(&p.settings, &s) {
+        die!("{e}");
+    }
     if p.codex_dir.join("hooks.json").is_file() {
-        codex_hooks(p, false);
+        if let Err(e) = codex_hooks(p, false) {
+            die!("{e}");
+        }
     }
     ui::ok("crux hooks removed (the rest is left as it was)");
     if let Some(docs) = project::find_docs_repo(&std::env::current_dir().unwrap_or_default()) {
