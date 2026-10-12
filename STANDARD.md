@@ -281,6 +281,11 @@ also copied to. That is what lets `doctor` know where a `.mcp.json` *should*
 exist and warn when it is missing —the case of a freshly cloned machine—
 instead of passing what it has not looked at.
 
+It is decided per server: a code repo's file holds only the servers that name
+it. A declared server found in a repo it is not declared for is reported by
+`doctor`, and `crux mcp install` takes it back; a server nobody declares was
+put there by hand and is left alone.
+
 **Credentials are referenced, not written**: `${VARIABLE}`. The `.mcp.json` is
 committed, and `doctor` gives an error —not a warning— if it finds a literal in
 an authorization header or a known credential fingerprint. `url`, `command`,

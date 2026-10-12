@@ -13,7 +13,7 @@ use crate::error::Res;
 use crate::mcp::{self, Action};
 use crate::{die, files, policy, project, sh, ui};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 struct Ctx {
@@ -68,9 +68,25 @@ fn targets(ctx: &Ctx, name: &str) -> Vec<PathBuf> {
     out
 }
 
-fn all_targets(ctx: &Ctx) -> Vec<PathBuf> {
-    let set: BTreeSet<PathBuf> = mcp::declared(&ctx.contract).keys().flat_map(|n| targets(ctx, n)).collect();
-    set.into_iter().collect()
+/// Each folder with the servers it gets. A code repo that gets none but
+/// holds a file is visited too: what crux once wrote there has to be taken
+/// back.
+fn plan(ctx: &Ctx) -> BTreeMap<PathBuf, Vec<String>> {
+    let mut out: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
+    for n in mcp::declared(&ctx.contract).keys() {
+        for dir in targets(ctx, n) {
+            out.entry(dir).or_default().push(n.clone());
+        }
+    }
+    if policy::flag(&ctx.profile, Some(&ctx.docs), "pointers.write", true) {
+        for r in files::str_list(ctx.contract.get("repos")) {
+            let d = ctx.root.join(r);
+            if d.join(".mcp.json").is_file() {
+                out.entry(d).or_default();
+            }
+        }
+    }
+    out
 }
 
 fn base(p: &Path) -> String {
@@ -161,10 +177,10 @@ fn status(ctx: &Ctx) -> Res {
     }
     println!();
     println!("written in the repos");
-    for dir in all_targets(ctx) {
+    for (dir, wanted) in plan(ctx) {
         // A file that cannot be read is exactly the one that cannot vanish
         // from the report: the repo would look healthy by not appearing.
-        match mcp::apply(Action::Diff, &ctx.contract, &dir) {
+        match mcp::apply(Action::Diff, &ctx.contract, &dir, &wanted) {
             Err(e) => ui::err(format!("{} — {e}", base(&dir))),
             Ok(out) => {
                 for line in out.lines() {
@@ -175,6 +191,8 @@ fn status(ctx: &Ctx) -> Res {
                         ui::warn(format!("{b} — missing {r}; run 'crux mcp install'"));
                     } else if let Some(r) = line.strip_prefix("differs ") {
                         ui::warn(format!("{b} — {r} differs from the contract; 'crux mcp install'"));
+                    } else if let Some(r) = line.strip_prefix("stray ") {
+                        ui::warn(format!("{b} — {r} is not declared for this repo; 'crux mcp install' takes it back"));
                     } else if let Some(r) = line.strip_prefix("foreign ") {
                         ui::info(format!("{b} — {r} was put there by hand; crux does not touch it"));
                     }
@@ -205,8 +223,8 @@ fn install(ctx: &Ctx) -> Res {
         }
         die!("the contract has errors; nothing is written");
     }
-    for dir in all_targets(ctx) {
-        match mcp::apply(Action::Write, &ctx.contract, &dir) {
+    for (dir, wanted) in plan(ctx) {
+        match mcp::apply(Action::Write, &ctx.contract, &dir, &wanted) {
             Ok(out) => ui::ok(format!("{} — {out}", base(&dir))),
             Err(e) => die!("{} — {e}", base(&dir)),
         }
@@ -218,8 +236,8 @@ fn install(ctx: &Ctx) -> Res {
 }
 
 fn remove(ctx: &Ctx) -> Res {
-    for dir in all_targets(ctx) {
-        match mcp::apply(Action::Clear, &ctx.contract, &dir) {
+    for (dir, wanted) in plan(ctx) {
+        match mcp::apply(Action::Clear, &ctx.contract, &dir, &wanted) {
             Ok(out) => ui::ok(format!("{} — {out}", base(&dir))),
             Err(e) => ui::err(format!("{} — {e}", base(&dir))),
         }

@@ -42,6 +42,48 @@ test_mcp_distributes_to_declared_repos() {
   assert_contains "$(cat "$root/api/.mcp.json")" '"command": "node"' "writes the stdio shape"
 }
 
+test_mcp_a_code_repo_gets_only_the_servers_declared_for_it() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project kappa --repos "api,web")"
+  local root; root="$(dirname "$docs")"
+  mkdir -p "$root/api" "$root/web"
+  mcp_declares "$docs" '{"docs-search":{"transport":"http","url":"https://e.example/mcp"},
+    "db":{"transport":"stdio","command":"node","repos":["api"]}}'
+
+  mcp_run "$docs" install >/dev/null
+  assert_contains "$(cat "$root/api/.mcp.json")" '"db"' "the repo gets the server declared for it"
+  assert_not_contains "$(cat "$root/api/.mcp.json")" "docs-search" "and not the one that stays in the docs repo"
+  assert_no_file "$root/web/.mcp.json" "a repo nobody declared gets nothing"
+  assert_contains "$(cat "$docs/.mcp.json")" "docs-search" "the docs repo keeps every server"
+  assert_contains "$(cat "$docs/.mcp.json")" '"db"' "including the ones also sent to a code repo"
+}
+
+test_mcp_install_takes_back_a_server_no_longer_declared_for_a_repo() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project lambda --repos "api")"
+  local root; root="$(dirname "$docs")"
+  mkdir -p "$root/api"
+  mcp_declares "$docs" '{"db":{"transport":"stdio","command":"node","repos":["api"]},
+    "refs":{"transport":"http","url":"https://e.example/mcp"}}'
+  mcp_run "$docs" install >/dev/null
+  json_set "$root/api/.mcp.json" mcpServers.refs '{"type":"http","url":"https://e.example/mcp"}'
+  json_set "$root/api/.mcp.json" mcpServers.mine '{"type":"http","url":"https://otro.example/mcp"}'
+
+  local status; status="$(mcp_run "$docs" status)"
+  assert_contains "$status" "api — refs is not declared for this repo" "status names the server out of place"
+  assert_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "api/.mcp.json has 'refs', which is not declared" \
+    "and so does the doctor"
+
+  mcp_run "$docs" install >/dev/null
+  assert_not_contains "$(cat "$root/api/.mcp.json")" "refs" "install takes it back"
+  assert_contains "$(cat "$root/api/.mcp.json")" "mine" "and leaves what someone put there by hand"
+
+  mcp_declares "$docs" '{"db":{"transport":"stdio","command":"node"},
+    "refs":{"transport":"http","url":"https://e.example/mcp"}}'
+  mcp_run "$docs" install >/dev/null
+  assert_not_contains "$(cat "$root/api/.mcp.json")" '"db"' "also from a repo that no longer gets any server"
+}
+
 test_mcp_respects_client_profile() {
   sandbox >/dev/null
   local docs; docs="$(new_project gamma --repos "theirs" --profile client-repo)"
@@ -83,7 +125,9 @@ test_mcp_remove_respects_foreign_entries() {
 
   json_set "$docs/.mcp.json" mcpServers.foreign '{"type":"http","url":"https://otro.example/mcp"}'
 
-  mcp_run "$docs" remove >/dev/null
+  mcp_declares "$docs" '{"ours":{"transport":"http","url":"https://e.example/mcp"},
+    "unwritten":{"transport":"http","url":"https://e.example/other"}}'
+  assert_contains "$(mcp_run "$docs" remove)" "removed 1" "it counts what it took, not what is declared"
   local left; left="$(cat "$docs/.mcp.json")"
   assert_not_contains "$left" "ours" "removes what the contract declares"
   assert_contains "$left" "foreign" "and leaves what someone else put there"

@@ -84,6 +84,16 @@ pub fn declared(contract: &Value) -> Map<String, Value> {
     contract.get("mcp").and_then(Value::as_object).cloned().unwrap_or_default()
 }
 
+/// The servers whose place is `repo`'s file; `None` is the docs repo, which
+/// holds them all.
+pub fn wanted_in(contract: &Value, repo: Option<&str>) -> Vec<String> {
+    declared(contract)
+        .keys()
+        .filter(|n| repo.is_none_or(|r| repos_of(contract, n).iter().any(|x| x == r)))
+        .cloned()
+        .collect()
+}
+
 /// The findings of the contract's `mcp` block and of the files written from
 /// it, each with its severity first: `error` if the file would be invalid or
 /// a secret is written, `warning` if it merely drifted. No network: doctor has
@@ -146,6 +156,7 @@ pub fn check(docs: &Path) -> Vec<String> {
     for dir in dirs {
         let file = dir.join(".mcp.json");
         let label = dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let wanted = wanted_in(&contract, if dir == docs { None } else { Some(&label) });
         if !file.exists() {
             if expected.contains(&dir) {
                 findings.push(format!("warning {label} has no .mcp.json — run 'crux mcp install'"));
@@ -167,6 +178,12 @@ pub fn check(docs: &Path) -> Vec<String> {
         }
         for (n, d) in &declared {
             let Some(current) = servers.get(n) else { continue };
+            if !wanted.contains(n) {
+                findings.push(format!(
+                    "warning {label}/.mcp.json has '{n}', which is not declared for this repo — 'crux mcp install'"
+                ));
+                continue;
+            }
             let Ok(want) = to_client_format(n, d) else { continue };
             if *current != want {
                 findings.push(format!(
@@ -178,15 +195,15 @@ pub fn check(docs: &Path) -> Vec<String> {
     findings
 }
 
-/// The client file: what is declared is rewritten, what someone put by hand
-/// is respected, what is left over is reported instead of deleted.
+/// The client file: what `wanted` names is rewritten, a declared server that
+/// belongs elsewhere is taken back, what someone put by hand is respected.
 pub enum Action {
     Write,
     Clear,
     Diff,
 }
 
-pub fn apply(action: Action, contract: &Value, target: &Path) -> Result<String, String> {
+pub fn apply(action: Action, contract: &Value, target: &Path, wanted: &[String]) -> Result<String, String> {
     let file = target.join(".mcp.json");
     let declared = declared(contract);
     // A corrupt file is someone's configuration: not overwritten silently.
@@ -204,10 +221,11 @@ pub fn apply(action: Action, contract: &Value, target: &Path) -> Result<String, 
     let names: Vec<String> = declared.keys().cloned().collect();
     let servers = current.get("mcpServers").and_then(Value::as_object).cloned().unwrap_or_default();
     let foreign: Vec<String> = servers.keys().filter(|n| !names.contains(n)).cloned().collect();
+    let stray: Vec<String> = servers.keys().filter(|n| names.contains(n) && !wanted.contains(n)).cloned().collect();
     match action {
         Action::Diff => {
             let mut out = vec![];
-            for n in &names {
+            for n in wanted {
                 let want = to_client_format(n, &declared[n])?;
                 match servers.get(n) {
                     None => out.push(format!("missing {n}")),
@@ -215,43 +233,54 @@ pub fn apply(action: Action, contract: &Value, target: &Path) -> Result<String, 
                     Some(_) => out.push(format!("ok {n}")),
                 }
             }
+            out.extend(stray.iter().map(|n| format!("stray {n}")));
             out.extend(foreign.iter().map(|n| format!("foreign {n}")));
             Ok(out.join("\n"))
         }
         Action::Clear => {
             let obj = current.as_object_mut().unwrap();
             let srv = obj.get_mut("mcpServers").unwrap().as_object_mut().unwrap();
-            for n in &names {
-                srv.shift_remove(n);
-            }
+            let removed = names.iter().filter(|n| srv.shift_remove(*n).is_some()).count();
             // A file that only held what is ours goes away entirely: an orphan
             // `{"mcpServers":{}}` is noise in the git status of whoever clones.
             if srv.is_empty() && obj.len() == 1 {
                 if file.exists() {
                     std::fs::remove_file(&file).map_err(|e| e.to_string())?;
                 }
-                Ok("borrado".into())
+                Ok("removed the file".into())
             } else {
                 std::fs::write(&file, files::json_pretty(&current)).map_err(|e| e.to_string())?;
-                Ok(format!("retirados {}", names.len()))
+                Ok(format!("removed {removed}"))
             }
         }
         Action::Write => {
-            if names.is_empty() {
-                return Ok("the contract declares none".into());
+            if wanted.is_empty() && stray.is_empty() {
+                return Ok("nothing for this repo".into());
             }
             let mut converted = vec![];
-            for n in &names {
+            for n in wanted {
                 converted.push((n.clone(), to_client_format(n, &declared[n])?));
             }
             let srv = current.get_mut("mcpServers").unwrap().as_object_mut().unwrap();
             for (n, v) in converted {
                 srv.insert(n, v);
             }
+            for n in &stray {
+                srv.shift_remove(n);
+            }
+            if srv.is_empty() && current.as_object().is_some_and(|o| o.len() == 1) {
+                std::fs::remove_file(&file).map_err(|e| e.to_string())?;
+                return Ok("removed the file: nothing left for this repo".into());
+            }
             std::fs::write(&file, files::json_pretty(&current)).map_err(|e| e.to_string())?;
             let left =
                 if foreign.is_empty() { String::new() } else { format!(" ({} foreign left intact)", foreign.len()) };
-            Ok(format!("written {}{left}", names.len()))
+            let taken = if stray.is_empty() {
+                String::new()
+            } else {
+                format!(" ({} taken back: not for this repo)", stray.len())
+            };
+            Ok(format!("written {}{taken}{left}", wanted.len()))
         }
     }
 }
