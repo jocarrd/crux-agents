@@ -499,6 +499,30 @@ test_add_repo_registers_everything_at_once() {
   assert_exit 0 "the project stays conformant" "$CRUX_HOME/bin/crux" doctor "$docs"
 }
 
+test_add_repo_names_a_missing_index_instead_of_a_missing_table() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project rho --repos "api")"
+  mkdir -p "$CRUX_PROJECTS_DIR/rho/worker"
+  rm "$docs/repos/README.md"
+
+  local out; out="$("$CRUX_HOME/bin/crux" add-repo worker --description "Queue." "$docs" 2>&1)"
+  assert_contains "$out" "there is no repos/README.md" "it says the file is missing"
+  assert_not_contains "$out" "has no table" "not that a file it never found lacks a table"
+}
+
+test_add_repo_does_not_claim_a_row_it_could_not_write() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project sigma --repos "api")"
+  mkdir -p "$CRUX_PROJECTS_DIR/sigma/worker"
+  chmod a-w "$docs/repos/README.md"
+
+  local out rc=0; out="$("$CRUX_HOME/bin/crux" add-repo worker --description "Queue." "$docs" 2>&1)" || rc=$?
+  chmod u+w "$docs/repos/README.md"
+  assert_not_contains "$out" "registered in repos/README.md" "it does not report a row that is not there"
+  assert_contains "$out" "repos/README.md" "it names the file it could not write"
+  assert_eq 1 "$rc" "and ends in error"
+}
+
 test_adopt_does_not_invent_empty_repos_and_keeps_the_remotes() {
   sandbox >/dev/null
   local root="$CRUX_PROJECTS_DIR/old"

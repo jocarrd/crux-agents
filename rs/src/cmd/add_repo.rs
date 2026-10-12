@@ -102,22 +102,30 @@ pub fn run(argv: &[String]) -> Res {
     // itself while it exists, and if the project deleted it, it is not
     // reinvented.
     let index = docs.join("repos/README.md");
-    let text = std::fs::read_to_string(&index).unwrap_or_default();
-    let has_table = crate::regex!(r"(?m)^\| *(Carpeta|Folder)").is_match(&text);
-    if index.is_file() && has_table {
-        let mut lines: Vec<String> = text.split('\n').map(String::from).collect();
-        if let Some(last) = lines.iter().rposition(|l| l.starts_with('|')) {
-            let row = format!("| `{repo}/` | `{project_name}/{repo}` | {} |", description.replace('|', "\\|"));
-            let empty_row = crate::regex!(r"^\|\s*\|\s*\|\s*\|\s*$");
-            match lines.iter().enumerate().position(|(i, l)| i <= last && empty_row.is_match(l)) {
-                Some(e) => lines[e] = row,
-                None => lines.insert(last + 1, row),
-            }
-            let _ = std::fs::write(&index, lines.join("\n"));
-        }
-        ui::ok("registered in repos/README.md");
+    if !index.exists() {
+        ui::warn(format!("there is no repos/README.md — {repo} is declared, without a row in an index"));
     } else {
-        ui::warn("repos/README.md has no table — register it by hand");
+        let text = match std::fs::read_to_string(&index) {
+            Ok(t) => t,
+            Err(e) => die!("repos/README.md cannot be read: {e}"),
+        };
+        let has_table = crate::regex!(r"(?m)^\| *(Carpeta|Folder)").is_match(&text);
+        let mut lines: Vec<String> = text.split('\n').map(String::from).collect();
+        match lines.iter().rposition(|l| l.starts_with('|')).filter(|_| has_table) {
+            None => ui::warn("repos/README.md has no table — register it by hand"),
+            Some(last) => {
+                let row = format!("| `{repo}/` | `{project_name}/{repo}` | {} |", description.replace('|', "\\|"));
+                let empty_row = crate::regex!(r"^\|\s*\|\s*\|\s*\|\s*$");
+                match lines.iter().enumerate().position(|(i, l)| i <= last && empty_row.is_match(l)) {
+                    Some(e) => lines[e] = row,
+                    None => lines.insert(last + 1, row),
+                }
+                if let Err(e) = std::fs::write(&index, lines.join("\n")) {
+                    die!("repos/README.md cannot be written: {e}");
+                }
+                ui::ok("registered in repos/README.md");
+            }
+        }
     }
     println!();
     super::call("link", &[&docs.to_string_lossy()]);
