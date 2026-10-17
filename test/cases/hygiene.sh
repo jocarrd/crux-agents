@@ -233,7 +233,7 @@ test_the_task_record_does_not_lose_what_crux_did_not_write() {
 task: t
 project: p
 status: open
-owner-name: Jorge
+owner-name: Alex
 ---
 
 A paragraph of context.
@@ -251,7 +251,7 @@ text
 MD
   "$CRUX_HOME/bin/crux" __task note --file "$f" --text "new decision" >/dev/null 2>&1
   local after_step; after_step="$(cat "$f")"
-  assert_contains "$after_step" "owner-name: Jorge" "a header key with a hyphen survives"
+  assert_contains "$after_step" "owner-name: Alex" "a header key with a hyphen survives"
   assert_contains "$after_step" "A paragraph of context." "and what was written before the first section"
   assert_contains "$after_step" "- And that is why X." "what came after the code block stays in place"
   local lines; lines="$(grep -n 'new decision' "$f" | cut -d: -f1)"

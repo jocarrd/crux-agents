@@ -202,7 +202,7 @@ test_mcp_does_not_run_code_hidden_in_a_name() {
 test_mcp_stops_on_secret_in_url() {
   sandbox >/dev/null
   local docs; docs="$(new_project mu)"
-  mcp_declares "$docs" '{"a":{"transport":"http","url":"https://jorge:RealSecret123@interno.example/mcp"}}'
+  mcp_declares "$docs" '{"a":{"transport":"http","url":"https://user:RealSecret123@interno.example/mcp"}}'
 
   assert_contains "$(mcp_run "$docs" install)" "URL with a password inside" \
     "a credential in the url does not slip through for not being in a header"

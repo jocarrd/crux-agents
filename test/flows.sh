@@ -29,7 +29,7 @@ export HOME="$SB/home"
 mkdir -p "$HOME/crux"
 # The kernel as a person clones it, without the build output.
 tar -C "$SRC" --exclude=./rs/target --exclude=./.git -cf - . | tar -C "$HOME/crux" -xf -
-git config --global user.email jorge@localhost; git config --global user.name jorge; git config --global init.defaultBranch main
+git config --global user.email tester@localhost; git config --global user.name tester; git config --global init.defaultBranch main
 mkdir -p "$HOME/bin" "$HOME/remotes" "$HOME/gh"; cp "$SRC/test/fake-gh" "$HOME/bin/gh"; chmod +x "$HOME/bin/gh"
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH" GH_STATE="$HOME/gh" GH_REMOTES="$HOME/remotes"
 CRUX_BIN="$BIN" bash "$HOME/crux/install.sh" --projects-dir "$HOME/Proyectos" >/dev/null 2>&1
@@ -232,7 +232,7 @@ truthy '! (cd "$WD" && crux visual show >/dev/null 2>&1)' "a new commit asks for
 # --- 12. A second machine, from nothing -------------------------------------
 step "a new machine brings every project"
 M2="$HOME/m2"; mkdir -p "$M2/.crux"
-printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M2/.gitconfig"
+printf '[user]\n\temail = tester@localhost\n\tname = tester\n[init]\n\tdefaultBranch = main\n' > "$M2/.gitconfig"
 printf 'CRUX_REMOTE="%s/{repo}.git"\n' "$HOME/remotes" > "$M2/.crux/config"
 env HOME="$M2" CRUX_BIN="$BIN" bash "$HOME/crux/install.sh" --projects-dir "$M2/Proyectos" >/dev/null 2>&1
 out="$(env HOME="$M2" "$M2/.local/bin/crux" bootstrap 2>&1)"; rc=$?
@@ -288,7 +288,7 @@ git -C "$D" add -A && git -C "$D" commit -qm "chore(api): a pre-commit of its ow
 git -C "$A" commit -q --allow-empty -m "chore: tick another box" 2>/dev/null
 truthy '[[ -s "$HOME/project-hook" ]]' "the project's hook runs in the code repo"
 M3="$HOME/m3"; mkdir -p "$M3/.crux"
-printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M3/.gitconfig"
+printf '[user]\n\temail = tester@localhost\n\tname = tester\n[init]\n\tdefaultBranch = main\n' > "$M3/.gitconfig"
 printf 'CRUX_REMOTE="%s/{repo}.git"\n' "$HOME/remotes" > "$M3/.crux/config"
 env HOME="$M3" CRUX_BIN="$BIN" bash "$HOME/crux/install.sh" --projects-dir "$M3/Proyectos" >/dev/null 2>&1
 env HOME="$M3" "$M3/.local/bin/crux" bootstrap >/dev/null 2>&1
@@ -296,7 +296,7 @@ truthy '[[ -x "$M3/Proyectos/demo/api/.git/hooks/pre-commit.project" ]]' "and an
 
 step "a machine that only gets the binary, as npm or a download hands it over"
 M4="$HOME/m4"; mkdir -p "$M4/dl"; cp "$BIN" "$M4/dl/crux"
-printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M4/.gitconfig"
+printf '[user]\n\temail = tester@localhost\n\tname = tester\n[init]\n\tdefaultBranch = main\n' > "$M4/.gitconfig"
 out="$(cd "$M4/dl" && env HOME="$M4" ./crux install --projects-dir "$M4/Proyectos" 2>&1)"; rc=$?
 truthy '[[ $rc -eq 0 && -x "$M4/.local/bin/crux" ]]' "crux install lays out the kernel it carries"
 env HOME="$M4" "$M4/.local/bin/crux" init solo --no-remote --parent "$M4/Proyectos" >/dev/null 2>&1
@@ -305,7 +305,7 @@ truthy 'env HOME="$M4" "$M4/.local/bin/crux" doctor "$M4/Proyectos/solo/solo-doc
 
 step "setup on a machine with nothing, without a terminal: it takes the defaults"
 M5="$HOME/m5"; mkdir -p "$M5/dl" "$M5/.crux"; cp "$BIN" "$M5/dl/crux"
-printf '[user]\n\temail = jorge@localhost\n\tname = jorge\n[init]\n\tdefaultBranch = main\n' > "$M5/.gitconfig"
+printf '[user]\n\temail = tester@localhost\n\tname = tester\n[init]\n\tdefaultBranch = main\n' > "$M5/.gitconfig"
 printf 'CRUX_REMOTE="%s/{repo}.git"\n' "$HOME/remotes" > "$M5/.crux/config"
 out="$(cd "$M5/dl" && env HOME="$M5" ./crux setup --projects-dir "$M5/Proyectos" </dev/null 2>&1)"; rc=$?
 truthy '[[ $rc -eq 0 && "$out" == *"ready"* ]]' "setup gets to the end without asking"

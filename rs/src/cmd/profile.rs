@@ -187,6 +187,12 @@ fn init(argv: &[String]) -> Res {
     }
     let dir = person::expected_dir();
     let name = person::repo_name();
+    let has_origin = |d: &Path| git::remote_url(d, "origin").is_some();
+    // Se comprueba antes de escribir nada: si no, queda un perfil a medias que la
+    // segunda vez se da por bueno.
+    if remote && !has_origin(&dir) && !uses_gh() && project::remote_template().is_none() {
+        die!("no remote: set CRUX_REMOTE in ~/.crux/config, install gh for GitHub, or pass --no-remote")
+    }
     if dir.join("PROFILE.md").is_file() {
         ui::ok(format!("there is already a profile in {}", dir.display()));
     } else {
@@ -200,7 +206,6 @@ fn init(argv: &[String]) -> Res {
         git::run(&dir, &["add", "-A"]);
         git::run(&dir, &["commit", "-qm", "chore: agent profile skeleton"]);
     }
-    let has_origin = |d: &Path| git::remote_url(d, "origin").is_some();
     if remote && !has_origin(&dir) && !uses_gh() {
         let Some(template) = project::remote_template() else {
             die!("no remote: set CRUX_REMOTE in ~/.crux/config, install gh for GitHub, or pass --no-remote")

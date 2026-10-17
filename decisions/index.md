@@ -316,7 +316,7 @@
     threshold, 0.25, **left out the canonical example that opens this ADR**
     —`device-loop` and its adapter overlap 0.1887—; it is set to 0.18. The
     signal for adapters that are not named got 0 of 4 right on the only real
-    project where it fired, because `vcr` has three letters and the term filter
+    project where it fired, because `ops` has three letters and the term filter
     required four. And the module extracted from `doctor` was not used by
     `doctor`: the duplication was still there and the two copies had already
     diverged in the same commit that split them.

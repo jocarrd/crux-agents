@@ -70,7 +70,9 @@ test_doctor_measures_drift_between_code_and_documentation() {
   git -C "$repo" config user.name t
   printf 'x\n' > "$repo/a.txt"
   git -C "$repo" add -A
-  git -C "$repo" commit -qm "after the docs"
+  # Dos minutos después del commit de docs: en el mismo segundo no hay deriva.
+  local later; later="@$(( $(date +%s) + 120 )) +0000"
+  GIT_AUTHOR_DATE="$later" GIT_COMMITTER_DATE="$later" git -C "$repo" commit -qm "after the docs"
 
   local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "code ↔ doc drift" "warns about the drift"
@@ -476,12 +478,17 @@ test_no_kernel_skill_names_an_agents_tools() {
 }
 
 test_kernel_names_no_concrete_projects() {
+  # Los nombres que no deben aparecer no viven en el repo, que es público: los
+  # pone quien lo mantiene en CRUX_PRIVATE_NAMES (una regex; en la CI, un
+  # secreto) o en un fichero fuera del repo, un nombre por línea.
+  local names="${CRUX_PRIVATE_NAMES:-}" file="${CRUX_PRIVATE_NAMES_FILE:-$CLEAN_HOME/.config/crux/private-names}"
+  [[ -z "$names" && -s "$file" ]] && names="$(grep -v '^[[:space:]]*$' "$file" | paste -sd'|' -)"
+  [[ -n "$names" ]] || return 0
   local hits
-  # Todo el repo salvo test/, que necesita los nombres para buscarlos.
-  hits="$(grep -rliE 'acme|demo-co|client|weather-app|personal-site' \
-    --exclude-dir=.git --exclude-dir=test --exclude-dir=node_modules --exclude-dir=target \
-    "$CRUX_HOME" 2>/dev/null | wc -l)"
-  assert_eq "0" "$hits" "the kernel is free of project names"
+  hits="$(grep -rliE "$names" \
+    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
+    "$CRUX_HOME" 2>/dev/null)"
+  assert_eq "" "$hits" "the kernel is free of private names"
 }
 
 test_add_repo_registers_everything_at_once() {
@@ -832,6 +839,25 @@ test_init_does_not_assume_where_to_push_the_repo() {
   assert_eq "git@gitlab.company.com:team/sigma3-docs.git" \
     "$(git -C "$docs" remote get-url origin)" "and leaves origin configured"
   assert_contains "$(cat "$docs/crux.json")" "gitlab.company.com" "the contract declares the remote"
+}
+
+test_init_leaves_the_docs_repo_clean() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project kappa --repos "api")"
+  # El catálogo de skills se escribía después del commit inicial: el proyecto
+  # nacía con AGENTS.md modificado y status lo contaba como trabajo sin publicar.
+  assert_eq "" "$(git -C "$docs" status --porcelain)" "the initial commit carries everything init wrote"
+}
+
+test_init_with_a_reachable_remote_does_not_ask_to_create_it() {
+  sandbox >/dev/null
+  git init -q --bare "$SB/remotes/lambda-docs.git"
+  local out
+  out="$(HOME="$SB/clean3" "$CRUX_HOME/bin/crux" init lambda --parent "$CRUX_PROJECTS_DIR" \
+    --remote "file://$SB/remotes/{repo}.git" 2>&1)"
+  assert_contains "$(git -C "$SB/remotes/lambda-docs.git" branch)" "main" "the initial commit reached the remote"
+  # Si el push ha llegado, pedir que se cree el repo y se empuje a mano es falso.
+  assert_not_contains "$out" "does not exist yet" "it does not ask to create a repo that already took the push"
 }
 
 test_init_states_the_visibility_when_it_cannot_apply_it() {

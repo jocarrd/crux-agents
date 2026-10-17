@@ -61,7 +61,7 @@ case "$1 ${2:-}" in
     head=""; prev=""; for a in "$@"; do [[ "$prev" == "--head" ]] && head="$a"; prev="$a"; done
     for f in "$S"/pr.*; do [[ -f "$f" ]] || continue
       [[ "$(field "$f" branch)" == "$head" && -n "$(field "$f" mergedAt)" ]] && field "$f" number; done ;;
-  "api user") echo "jorge" ;;
+  "api user") echo "octocat" ;;
   "api user/memberships/orgs") : ;;
   "repo list")
     # The bare repos under $HOME/remotes stand for the account's repos.

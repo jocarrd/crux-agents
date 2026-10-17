@@ -221,6 +221,12 @@ pub fn run(argv: &[String]) -> Res {
     }
     ui::ok("crux.json written");
 
+    // link escribe el catálogo de skills en AGENTS.md: va antes del commit para
+    // que el proyecto no nazca con ese fichero modificado.
+    println!();
+    super::call("link", &[&docs.to_string_lossy()]);
+    println!();
+
     // On a freshly set up machine there may be no identity configured, and
     // bootstrap should not fall over because of that.
     git::run(&docs, &["add", "-A"]);
@@ -243,17 +249,13 @@ pub fn run(argv: &[String]) -> Res {
             "init: scaffold the docs repo under the crux standard",
         ],
     );
-    if remote {
-        git::run(&docs, &["push", "-q", "-u", "origin", "HEAD"]);
-    }
+    // Sin gh no se sabe si el repo existe en el proveedor: el push lo dice.
+    let pushed = remote && git::ok(&docs, &["push", "-q", "-u", "origin", "HEAD"]);
     ui::ok("initial commit");
 
-    println!();
-    super::call("link", &[&docs.to_string_lossy()]);
-    println!();
     println!("done: {}", docs.display());
     println!();
-    if pending_create {
+    if pending_create && !pushed {
         println!();
         ui::warn(format!("the remote repo does not exist yet: create it on your provider as **{visibility}**"));
         ui::info("crux cannot apply visibility outside GitHub: you choose it when creating it");

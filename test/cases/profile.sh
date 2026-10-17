@@ -181,6 +181,20 @@ test_profile_two_machines_adding_a_preference_do_not_clash() {
   assert_eq "" "$(git -C "$here" status --porcelain)" "and the repo is not left dirty"
 }
 
+test_profile_init_without_a_remote_writes_nothing() {
+  sandbox >/dev/null
+  # Un PATH sin gh: solo git, para que init no pueda tirar de GitHub.
+  mkdir -p "$SB/nogh" && ln -s "$(command -v git)" "$SB/nogh/git"
+  : > "$SB/empty-config"
+  # El binario directamente: el lanzador es un script y necesita bash en el PATH.
+  local out; out="$(PATH="$SB/nogh" CRUX_CONFIG="$SB/empty-config" "$CRUX_BIN" profile init 2>&1)"
+  assert_contains "$out" "no remote" "it says what is missing"
+  # Antes escribía el esqueleto y hacía el commit, y después se paraba: quedaba
+  # un perfil a medias que la segunda vez daba por bueno.
+  assert_eq "no" "$([[ -e "$CRUX_PROJECTS_DIR/agent-profile" ]] && echo yes || echo no)" \
+    "and it stops before writing the skeleton"
+}
+
 test_profile_works_with_a_remote_that_is_not_github() {
   # Without gh, or with a remote outside GitHub, the profile goes where the
   # CRUX_REMOTE template says, like the projects crux init creates.

@@ -33,12 +33,15 @@ They are there on purpose and tests fail if they are broken. They are not style.
 ### 1. The kernel names no project
 
 Not in the skills, the templates, the profiles, the code or the documentation:
-the test reads the whole repo except `test/`.
+the test reads the whole repo, tests included.
 If you need a concrete piece of data —a path, a port, a device, a
 credential—, that data goes in an **adapter** inside the project, and what
 stays here is the procedure.
 
-It is enforced by `test_kernel_names_no_concrete_projects`. This is the
+It is enforced by `test_kernel_names_no_concrete_projects`. The names it looks
+for are not in the repo: the maintainer keeps them in `CRUX_PRIVATE_NAMES` (a
+CI secret) or in `~/.config/crux/private-names`, and without either the check
+is skipped. This is the
 rule that stops crux from coupling itself again to what it documents, which is
 exactly how the problem this repo solves was born.
 
