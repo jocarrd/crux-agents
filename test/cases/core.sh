@@ -479,10 +479,10 @@ test_no_kernel_skill_names_an_agents_tools() {
 
 test_kernel_names_no_concrete_projects() {
   # Los nombres que no deben aparecer no viven en el repo, que es público: los
-  # pone quien lo mantiene en CRUX_PRIVATE_NAMES (una regex; en la CI, un
-  # secreto) o en un fichero fuera del repo, un nombre por línea.
-  local names="${CRUX_PRIVATE_NAMES:-}" file="${CRUX_PRIVATE_NAMES_FILE:-$CLEAN_HOME/.config/crux/private-names}"
-  [[ -z "$names" && -s "$file" ]] && names="$(grep -v '^[[:space:]]*$' "$file" | paste -sd'|' -)"
+  # guarda quien lo mantiene en un fichero de su máquina, un nombre por línea.
+  # Corre en su puerta de calidad local, que es donde se hacen los commits.
+  local names="" file="${CRUX_PRIVATE_NAMES_FILE:-$CLEAN_HOME/.config/crux/private-names}"
+  [[ -s "$file" ]] && names="$(grep -v '^[[:space:]]*$' "$file" | paste -sd'|' -)"
   [[ -n "$names" ]] || return 0
   local hits
   hits="$(grep -rliE "$names" \

@@ -54,9 +54,6 @@ jobs:
 
       - name: Kernel suite
         run: ./test/run.sh
-        env:
-          # The names that must not appear in the public repo; empty on forks.
-          CRUX_PRIVATE_NAMES: ${{ secrets.CRUX_PRIVATE_NAMES }}
 
       # The failures that cost dearly did not show up in the suite: they showed
       # up when walking the whole cycle in one go, which is what this does.
