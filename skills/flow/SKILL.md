@@ -39,7 +39,9 @@ command warns if another space is open.
 ## 3. Plan before touching code
 
 - `/grill` if the request leaves decisions open.
-- `/explain-plan` for any task that is not obvious.
+- `/explain-plan` for any task that is not obvious. If it will be built from
+  the text alone, it goes through the builder check first; if the work is split
+  between several agents at once, each part carries its interfaces.
 
 The plan is approved before continuing; if you are not the one who decides, ask
 here. Once approved, it is saved: `crux task plan <file>`.
@@ -49,7 +51,9 @@ here. Once approved, it is saved: `crux task plan <file>`.
 With the project's conventions, which are in its docs repo. During development,
 not at the end:
 
-- Tests for what hurts if it fails: `/write-tests`.
+- Tests for what hurts if it fails: `/write-tests`. A bug that can be
+  reproduced, or logic whose contract is known beforehand: the test first, red
+  for the right reason, then the code.
 - If something breaks and you do not know why: `/root-cause` before fixing.
 
 ## 5. The gate
@@ -81,7 +85,8 @@ A proposal without CI is not verified, and it is said so.
 ### 6a. Review the proposal
 
 `/review-pr`, from a context different from the one that wrote the change. It
-launches only the specialists that `crux review` names.
+launches only the specialists that `crux review` names. If the plan has a review
+focus, the review starts there and then covers the rest.
 
 ### 6b. Merge, when you authorise it
 

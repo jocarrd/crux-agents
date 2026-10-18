@@ -15,6 +15,11 @@ A thread that has just defended every decision is not in a position to refute
 them: it tends to confirm what it already concluded and carries its earlier
 reasoning along as if it were evidence.
 
+The plan's review focus is the one thing from the author that does go in: the
+failures they expect, which no test covers. It is checked first and does not
+replace the rest, because the review is there for what the author did not
+foresee.
+
 ## `crux review` prepares, it does not review
 
 It gathers the material so the review does not depend on someone remembering to

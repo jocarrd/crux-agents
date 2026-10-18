@@ -1,11 +1,12 @@
 ---
 name: write-tests
-description: Write tests worth having: choose what deserves coverage and what doesn't, cover the painful case before the happy one, keep them deterministic and validate them in the negative. Use when tests have to be added to something that has none, when you add new behaviour, when you fix a bug and want it not to come back, when you are about to refactor something with no safety net, or when asked to raise coverage.
+description: Write tests worth having: choose what deserves coverage and what doesn't, decide when the test goes before the code, cover the painful case before the happy one, keep them deterministic and validate them in the negative. Use when tests have to be added to something that has none, when you add new behaviour, when you fix a bug and want it not to come back, when you are about to refactor something with no safety net, or when asked to raise coverage.
 ---
 
 # write-tests
 
-Writing tests is easy. Writing the ones worth having is not.
+Writing tests is easy. Writing the ones worth having is not. The reason behind
+when the test goes first: `<this-skill-directory>/references/why.md`.
 
 ## The criterion: test what hurts if it fails
 
@@ -24,6 +25,22 @@ ask what happens if that breaks in production and nobody notices.
 **One test per real bug.** It is the rule with the best return there is: the bug
 already proved that path breaks, so the probability of it coming back is not
 theoretical.
+
+## When the test goes first
+
+Two cases, and only these two:
+
+- **A bug that can be reproduced.** First the test that fails because of the
+  bug, then the fix.
+- **Logic whose contract is known before the code**: a calculation, a parser, a
+  validation, a conversion between formats. You know what goes in and what has
+  to come out, so write that down first.
+
+It goes red **for the reason you expect** before writing the code: a red caused
+by an import or a typo proves nothing.
+
+Everything else (exploring an approach, an interface still taking shape, glue
+code) is written first and tested afterwards, with the criterion above.
 
 ## Start with the painful case
 
@@ -60,7 +77,8 @@ and the most expensive, because it produces false confidence.
 
 After writing it: deliberately break what it tests, check that the test goes red
 for the right reason (not because of some other error), and revert. Thirty
-seconds that tell you whether the safety net exists.
+seconds that tell you whether the safety net exists. If it went red before the
+code, as in the test-first cases, this is already done.
 
 ## What to do when it is hard to write
 
@@ -105,3 +123,4 @@ it state **the condition and the expectation**, not the function name:
 
 - `/ship`: gates 1 and 5, which are these tests
 - `/root-cause`: before writing the test for a bug, understand the bug
+- `/explain-plan`: the plan's review focus says which failures no test covers

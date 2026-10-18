@@ -30,6 +30,30 @@ to say "that reason no longer applies, let us reopen".
 A plan that pretends to cover everything is worse than one that points out its
 gaps: the gap is still there and now it is also hidden.
 
+## Review focus
+
+Tests cover what someone thought of testing. The failures that get through are
+the others: a race, a value nobody expected, a migration that runs twice. The
+author knows best where those are while writing the plan, and the reviewer
+arrives without that knowledge. Writing them down tells the review where to
+look hard first. It does not replace the rest of the review, which exists for
+what the author did not foresee.
+
+## The builder check
+
+The author reads the plan with the whole conversation in their head and fills
+every gap without noticing. An agent that builds from the text has only the
+text, and when something is missing it guesses. A reader with no context finds
+those gaps in minutes, before they become a diff built on an assumption.
+
+## Interfaces only when split
+
+Two agents working in parallel do not see each other's code until the end. If
+the contract between their parts is not fixed beforehand, each invents its own
+and the integration fails. With a single builder that contract is decided in
+the code and writing it in the plan only duplicates it, which is why it is
+conditional.
+
 ## The form
 
 A table allows deciding at a glance, which is the goal. A sequence diagram
