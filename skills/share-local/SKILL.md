@@ -7,7 +7,7 @@ description: Open the local environment to someone outside with a public tunnel,
 
 Publishes what runs on your machine under an internet address, without
 deploying. The details of each problem and the full supervisor are in
-`<this-skill-directory>/references/por-que.md`.
+`<this-skill-directory>/references/why.md`.
 
 **It is not a permanent test deployment:** the tunnel lasts as long as the
 session and its address changes. For something stable, deploy.

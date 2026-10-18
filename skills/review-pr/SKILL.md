@@ -8,14 +8,14 @@ description: Review the code of an already-open proposal (PR) with a reviewer's 
 The review between opening the proposal and someone looking at it. `/ship` asks
 whether what you did is ready; this asks whether what is being proposed is
 correct and complete. The reason behind each rule is in
-`<this-skill-directory>/references/por-que.md`.
+`<this-skill-directory>/references/why.md`.
 
 ## From an independent context
 
 The review is done from a context different from the one that wrote the change:
 an isolated review if the environment allows it, or a fresh session with **only
-the diff, the proposal description and the plan's review focus**, if there is
-one, without the history. The focus is checked first, then the whole review.
+the diff and the proposal description**, without the history. If the
+description has a review focus, it is checked first, then the whole review.
 
 ## What gets put in front of you
 

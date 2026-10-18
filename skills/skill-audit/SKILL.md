@@ -9,7 +9,7 @@ It maintains the boundary between the kernel and the projects, and the short
 catalogue: procedures locked inside a project that should move up, kernel skills
 full of special cases that should move down, and skills that compete for the
 same sentence. The reasons and measurements behind each threshold:
-`<this-skill-directory>/references/por-que.md`.
+`<this-skill-directory>/references/why.md`.
 
 **When:** when creating a skill (pattern or adapter?) and periodically at
 session close.

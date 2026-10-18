@@ -10,7 +10,7 @@ on it. The route is an Android emulator, headless, driven over `adb`, with
 `screencap` for the eyes.
 
 It is the native sibling of `/visual-test`. The why of each step and of each
-gotcha is in `<this-skill-directory>/references/por-que.md`.
+gotcha is in `<this-skill-directory>/references/why.md`.
 
 ## When to use
 

@@ -279,7 +279,7 @@ pub fn run(argv: &[String]) -> Res {
                 die!("usage: crux task plan <file with the approved plan>")
             };
             mutate(&f, |d| {
-                record::set_section(d, "Plan", plan.trim_end_matches('\n'));
+                record::set_plan(d, plan.trim_end_matches('\n'));
                 record::advance(d, record::Status::Planned);
                 Ok(())
             })?;

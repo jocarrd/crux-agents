@@ -146,6 +146,78 @@ test_the_proposal_comes_from_the_task_without_showing_the_scaffolding() {
     in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$body"
 }
 
+test_the_plan_keeps_its_headings_and_its_review_focus_reaches_the_proposal() {
+  # The plan was dumped as it came: its "## " headings split it into sections
+  # of the record, and the review focus never got to the reviewer.
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new focus --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-focus" f="$SB/tasks/proj/focus.md"
+  printf '# Plan\n\n## What changes\n\nThe cache key.\n\n```\n## inside code\n```\n\n## Review focus\n\n- A key written twice.\n\n## Steps\n\n- not the task steps\n' > "$SB/plan.md"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task goal "Versioned cache keys" >/dev/null
+    "$CRUX_HOME/bin/crux" task add "write the key" >/dev/null
+    "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null ) 2>&1
+
+  local headings; headings="$(grep '^## ' "$f")"
+  assert_not_contains "$headings" "## What changes" "the plan's headings stay inside the plan"
+  assert_not_contains "$headings" "## Review focus" "including the review focus"
+  assert_contains "$(cat "$f")" "### Review focus" "one level down"
+  assert_contains "$(cat "$f")" $'```\n## inside code\n```' "except inside code"
+  assert_contains "$(cd "$ws" && "$CRUX_HOME/bin/crux" task 2>&1)" "write the key" "the task's own steps are untouched"
+
+  local b; b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)"
+  assert_contains "$b" $'## Review focus\n\n- A key written twice.' "the proposal carries the review focus"
+  assert_not_contains "$b" "The cache key." "and not the rest of the plan"
+  assert_not_contains "$b" "not the task steps" "nor what comes after the focus"
+  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang es)" "## Foco de revisión" \
+    "with its heading in the proposal's language"
+
+  printf '## Qué cambia\n\nLa clave.\n\n## Foco de revisión\n\n- Una clave escrita dos veces.\n' > "$SB/plan.md"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null ) 2>&1
+  b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)"
+  assert_contains "$b" "Una clave escrita dos veces." "a plan written in Spanish is found too"
+  assert_not_contains "$b" "A key written twice." "and the new plan replaces the old one whole"
+}
+
+test_code_in_the_plan_does_not_break_the_record_nor_the_focus() {
+  # A "~~~" inside a "```" block closed it, and everything after it was split
+  # out as sections; a "### " inside code in the focus cut it short and left
+  # an open fence that swallowed the rest of the proposal.
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new fences --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-fences" f="$SB/tasks/proj/fences.md"
+  printf '## A\n\n```\n~~~\n## in code\n```\n\n## Review focus:\n\n- f\n\n```sh\n### not a heading\n```\n\n## Steps\n\n- not the task steps\n' > "$SB/plan.md"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task add "real step" >/dev/null
+    "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null ) 2>&1
+
+  assert_eq "1" "$(grep -c '^## Steps$' "$f")" "the plan's Steps stay inside the plan"
+  assert_exit 0 "the task's steps still answer" in_dir "$ws" "$CRUX_HOME/bin/crux" task "done" T1
+  local b; b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)"
+  assert_contains "$b" $'- f\n\n```sh\n### not a heading\n```' "the focus keeps its code block whole, with a trailing colon in its title"
+  assert_not_contains "$b" "not the task steps" "and ends at the next heading"
+
+  printf '# T\n\n###### Review focus\n\n- deep\n' > "$SB/plan.md"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null ) 2>&1
+  assert_not_contains "$(cat "$f")" "#######" "no heading goes past six #"
+  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)" "- deep" "and a deep focus is still found"
+
+  printf '## A\n\n```\nnever closed\n' > "$SB/plan.md"
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null ) 2>&1
+  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)" "real step" \
+    "a fence the plan never closes does not swallow the record"
+}
+
+test_a_record_saved_with_its_plan_split_still_gives_its_focus() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new old --repo "$root/app" >/dev/null 2>&1
+  local f="$SB/tasks/proj/old.md"
+  "$CRUX_HOME/bin/crux" __task set --file "$f" --section "Review focus" --text "- from before" >/dev/null
+  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)" $'## Review focus\n\n- from before' \
+    "the focus split out by an older crux reaches the proposal"
+}
+
 test_a_task_without_objective_says_what_changes_from_the_commits() {
   # With nothing but the gate receipt in the record, the proposal said only
   # what was run, and not what it changes.

@@ -199,14 +199,10 @@ pub fn parse(text: &str) -> Result<Doc, String> {
     }
     let body = &text[m.get(0).unwrap().end()..];
     let heading = crate::regex!(r"^## (.+)$");
-    let fence = crate::regex!(r"^\s*(```|~~~)");
     // A `## ` inside a code block is text, not a heading.
-    let mut in_code = false;
+    let mut fence = Fence::default();
     for line in body.split('\n') {
-        if fence.is_match(line) {
-            in_code = !in_code;
-        }
-        match (in_code, heading.captures(line)) {
+        match (fence.code(line), heading.captures(line)) {
             (false, Some(h)) => doc.sections.push(Section { title: canonical(h[1].trim()), lines: vec![] }),
             _ => match doc.sections.last_mut() {
                 Some(s) => s.lines.push(line.to_string()),
@@ -460,6 +456,104 @@ pub fn set_section(doc: &mut Doc, title: &str, text: &str) {
     doc.section_mut(title).lines = text.split('\n').map(String::from).collect();
 }
 
+/// A code block opens with a run of three or more ``` or ~~~ and closes only
+/// with a run of the same character at least as long: a `~~~` inside a
+/// ``` block is text, not its end.
+#[derive(Default)]
+struct Fence(Option<(char, usize)>);
+
+impl Fence {
+    /// Whether the line is code, the fence lines included.
+    fn code(&mut self, line: &str) -> bool {
+        let t = line.trim_start();
+        let first = t.chars().next().filter(|c| *c == '`' || *c == '~');
+        let run = first.map(|c| t.chars().take_while(|x| *x == c).count()).unwrap_or(0);
+        match self.0 {
+            None if run >= 3 => {
+                self.0 = first.map(|c| (c, run));
+                true
+            }
+            None => false,
+            Some((c, n)) => {
+                if first == Some(c) && run >= n && t[run..].trim().is_empty() {
+                    self.0 = None;
+                }
+                true
+            }
+        }
+    }
+
+    fn closing(&self) -> Option<String> {
+        self.0.map(|(c, n)| c.to_string().repeat(n))
+    }
+}
+
+/// The plan comes as its author wrote it, with its own `#` and `## `
+/// headings. Dumped as is, each `## ` would open a section of the record, and
+/// a `## Steps` in the plan would take over the task's. They go down until
+/// the shallowest is `### `, outside code blocks and never past six `#`.
+pub fn set_plan(doc: &mut Doc, text: &str) {
+    let heading = crate::regex!(r"^(#{1,6}) ");
+    let mut fence = Fence::default();
+    let shallowest = text
+        .split('\n')
+        .filter(|l| !fence.code(l))
+        .filter_map(|l| heading.captures(l).map(|h| h[1].len()))
+        .min()
+        .unwrap_or(3);
+    let shift = 3usize.saturating_sub(shallowest);
+    let mut fence = Fence::default();
+    let mut lines: Vec<String> = text
+        .split('\n')
+        .map(|line| match (fence.code(line), heading.captures(line)) {
+            (false, Some(h)) => {
+                let level = h[1].len();
+                format!("{}{}", "#".repeat((level + shift).min(6)), &line[level..])
+            }
+            _ => line.to_string(),
+        })
+        .collect();
+    // A block the plan never closes would turn the rest of the record into
+    // code when it is read back.
+    if let Some(close) = fence.closing() {
+        lines.push(close);
+    }
+    set_section(doc, "Plan", &lines.join("\n"));
+}
+
+/// The plan's review focus, without its heading: what the author expects to
+/// get through, which the reviewer checks first. It ends at the next heading
+/// of the same level or above. A record saved by an older crux has it split
+/// out as a section of its own.
+fn review_focus(doc: &Doc) -> String {
+    let heading = crate::regex!(r"^(#{3,6}) (.+)$");
+    let plan = content(doc.section("Plan"));
+    let mut fence = Fence::default();
+    let mut level = None;
+    let mut out = vec![];
+    for line in plan.split('\n') {
+        let code = fence.code(line);
+        if let Some(h) = heading.captures(line).filter(|_| !code) {
+            let title = h[2].trim().trim_end_matches(':').to_lowercase();
+            match level {
+                Some(l) if h[1].len() <= l => break,
+                None if title.starts_with("review focus") || title.starts_with("foco de revisi") => {
+                    level = Some(h[1].len());
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        if level.is_some() {
+            out.push(line);
+        }
+    }
+    match out.join("\n").trim() {
+        "" => content(doc.section("Review focus")),
+        focus => focus.to_string(),
+    }
+}
+
 /// Trailing blank lines in a section are formatting, not content: if they
 /// stay, each new item shows up separated from the previous one.
 fn truncate(s: &mut Section) {
@@ -617,10 +711,10 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
         };
         user_path.replace_all(&v, "~").into_owned()
     };
-    let (changes, scope, done_t, decisions_t, checked_t) = if language == "es" {
-        ("Qué cambia", "Alcance", "Hecho", "Decisiones", "Comprobado")
+    let (changes, scope, focus_t, done_t, decisions_t, checked_t) = if language == "es" {
+        ("Qué cambia", "Alcance", "Foco de revisión", "Hecho", "Decisiones", "Comprobado")
     } else {
-        ("What changes", "Scope", "Done", "Decisions", "Checked")
+        ("What changes", "Scope", "Review focus", "Done", "Decisions", "Checked")
     };
     let block =
         |title: &str, text: String| if text.is_empty() { String::new() } else { format!("## {title}\n\n{text}\n") };
@@ -639,6 +733,7 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
     let blocks = [
         block(changes, without_paths(if objective.is_empty() { commits } else { &objective })),
         block(scope, without_paths(&sec("Scope"))),
+        block(focus_t, without_paths(&review_focus(doc))),
         block(done_t, without_paths(&done)),
         block(decisions_t, without_paths(&sec("Deviations and decisions"))),
         block(checked_t, without_paths(&checked)),

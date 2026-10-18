@@ -84,18 +84,9 @@ fn written_lines(path: &Path, range: &str) -> usize {
 }
 
 fn plan_lines(record_file: &Path) -> usize {
-    let mut on = false;
-    let comment = crate::regex!(r"^<!--.*-->$");
-    files::read_or_empty(record_file)
-        .lines()
-        .filter(|l| {
-            if l.starts_with("## ") {
-                on = *l == "## Plan";
-                return false;
-            }
-            on && !l.trim().is_empty() && !comment.is_match(l)
-        })
-        .count()
+    record::read(record_file)
+        .map(|d| record::content(d.section("Plan")).lines().filter(|l| !l.trim().is_empty()).count())
+        .unwrap_or(0)
 }
 
 pub fn finish(argv: &[String]) -> Res {

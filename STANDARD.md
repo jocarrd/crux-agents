@@ -873,7 +873,7 @@ the skills with their trigger.
 A skill is loaded whole into the context every time it is used. `SKILL.md`
 carries what the agent has to do (steps, commands, rules, gotchas) and does not
 exceed **1,000 words**; the why, the history and long examples go in
-`references/por-que.md`, which is only opened if needed. Before creating a
+`references/why.md`, which is only opened if needed. Before creating a
 skill, check that there is not another that wins the same phrase; if there is,
 extend that one. How one is written and tested: `/skill-creator`.
 

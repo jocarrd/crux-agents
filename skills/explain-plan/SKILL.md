@@ -7,7 +7,7 @@ description: Present a technical proposal so that it can be decided on: what cha
 
 A plan is written **so that someone can stop it in time**: it is measured by how
 long it takes the reader to see that it is wrong. The reason behind each
-section: `<this-skill-directory>/references/por-que.md`.
+section: `<this-skill-directory>/references/why.md`.
 
 **Use** before implementing something that touches more than one module or that
 cannot be undone in five minutes, when there are several reasonable ways, or
@@ -33,7 +33,9 @@ None out of habit: if one adds nothing, it is dropped.
 
 Every plan ends with it, unlike the sections above, which can be dropped: the
 failures most likely to get through that no test would catch, five at most,
-each with where it would show. `/review-pr` checks them first, before the rest.
+each with where it would show. Under the heading `Review focus` (or `Foco de
+revisión`), `crux workspace finish` copies it into the proposal and `/review-pr`
+checks it first, before the rest.
 If you cannot name one, the plan has not yet been thought through against
 reality.
 

@@ -7,7 +7,7 @@ description: Write and plan posts for X (Twitter) that reach people and build a 
 
 The deliverable is **drafts**. Nothing is ever published without the author's
 explicit OK on the exact text. How X distributes reach, with the measured
-weights and the sources, is in `<this-skill-directory>/references/por-que.md`;
+weights and the sources, is in `<this-skill-directory>/references/why.md`;
 before an important campaign, check whether they have changed.
 
 **Do not use** for the voice or data of a specific project (those go in its

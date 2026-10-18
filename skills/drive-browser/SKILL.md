@@ -8,7 +8,7 @@ description: Drive a browser WITH the user's already-logged-in session from the 
 Control the user's Chrome, with its session cookies, from the terminal over CDP
 (`--remote-debugging-port`), when an authenticated website has to be operated
 and there is no browser tool. Why each restriction:
-`<this-skill-directory>/references/por-que.md`.
+`<this-skill-directory>/references/why.md`.
 
 **Do not use** for screenshots of your own local app (`/visual-test`), nor if a
 browser MCP is available: check with `claude mcp list`. If you are going to

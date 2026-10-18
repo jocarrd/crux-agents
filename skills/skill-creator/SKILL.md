@@ -8,7 +8,7 @@ description: Write a new skill that gets discovered when it should, can be follo
 A skill is a procedure that an agent finds through its description and loads in
 full into its context every time it uses it. That is why it has to activate when
 it should and take up as little as possible. The examples and the reason behind
-each rule are in `<this-skill-directory>/references/por-que.md`.
+each rule are in `<this-skill-directory>/references/why.md`.
 
 ## 1. Is a new skill needed?
 
@@ -44,10 +44,10 @@ description: What it does. Use when <situation>, when <another>, or when <sympto
 
 `SKILL.md` carries **what the agent has to do**: steps, commands, rules,
 decision tables, gotchas in one line and how to verify. Everything else goes in
-`references/por-que.md` and is opened only if needed: the reason behind each
+`references/why.md` and is opened only if needed: the reason behind each
 rule, the history of how it was discovered, the cases that gave rise to it, the
 sources and the long examples. Cite the reference at the start with
-`<this-skill-directory>/references/por-que.md`.
+`<this-skill-directory>/references/why.md`.
 
 Write in the imperative and in short sentences. Do not narrate what the command
 already says or explain what any manual covers.

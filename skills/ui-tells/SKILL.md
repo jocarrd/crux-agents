@@ -89,7 +89,7 @@ look like each other, and not any one of them on its own.
 ## Gotchas
 
 Three false positives already solved in the script (how and why, in
-`<this-skill-directory>/references/por-que.md`): do not reintroduce the height
+`<this-skill-directory>/references/why.md`): do not reintroduce the height
 comparison for split labels, the fake window with an image inside or navigation
 rows by exact coordinate. The `100vh` check only sees the domain's own CSS.
 

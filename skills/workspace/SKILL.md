@@ -8,7 +8,7 @@ description: Create isolated workspaces to work on several tasks of the same rep
 A worktree isolates the files, but not the runtime: two parallel tasks still
 fight over the port, the database and the environment file, and the failure
 shows up as silently corrupted data. This skill splits both. The reason behind
-each decision: `<this-skill-directory>/references/por-que.md`.
+each decision: `<this-skill-directory>/references/why.md`.
 
 ## Usage
 

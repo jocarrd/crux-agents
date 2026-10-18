@@ -8,7 +8,7 @@ description: Show whoever decides the before and after of a visual change —the
 A visual change is finished when **whoever decides** has seen it. This skill
 prepares the before and the after for them, side by side, at three screen sizes,
 so they can decide in a minute from their phone. The reason behind each step and
-each gotcha: `<this-skill-directory>/references/por-que.md`.
+each gotcha: `<this-skill-directory>/references/why.md`.
 
 ## When to use
 

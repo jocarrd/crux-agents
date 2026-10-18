@@ -8,7 +8,7 @@ description: Visually inspect web pages and components at mobile (390px) and des
 Headless visual inspection with the system Chrome: see the page as on a real
 phone, detect horizontal scroll and catch the culprit element. The real cases
 behind each check and the full gotchas are in
-`<this-skill-directory>/references/por-que.md`.
+`<this-skill-directory>/references/why.md`.
 
 ## Setup, once
 

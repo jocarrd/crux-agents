@@ -6,7 +6,7 @@ description: Quality gate before committing, graded by what the diff touches: cl
 # ship
 
 A chain of gates before committing. It stops as soon as one fails. The reason
-behind each rule is in `<this-skill-directory>/references/por-que.md`; read it
+behind each rule is in `<this-skill-directory>/references/why.md`; read it
 if you doubt one or are about to propose an exception.
 
 ## 0. Which gates are needed

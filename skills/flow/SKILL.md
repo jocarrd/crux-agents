@@ -6,7 +6,7 @@ description: The complete cycle of a development task: the order of its seven st
 # flow
 
 The order in which the cycle's skills are used. The why of each step and what it
-costs to skip it are in `<this-skill-directory>/references/por-que.md`.
+costs to skip it are in `<this-skill-directory>/references/why.md`.
 
 **Applies** to any task that is going to produce a commit. **Does not apply** to
 questions or code reading, to obvious one-line changes (a typo, a config value)
