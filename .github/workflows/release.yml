@@ -1,0 +1,120 @@
+name: release
+
+# Builds the binaries of a tag that `crux release` already created, uploads them
+# to its GitHub release with their checksums and, if asked, publishes the npm
+# package. By hand while the repo is private: macOS minutes are billed at ten
+# times the rate. The trigger on `v*` tags comes back when the repo goes public.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, e.g. v0.79.0"
+        required: true
+      publish:
+        description: "Publish crux-agents to npm"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # Static musl binaries: one built against the runner's glibc does not start
+  # on Ubuntu 22.04, Debian 12 or Alpine.
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rs
+      - name: Toolchain
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          pip install ziglang==0.13.0
+          cargo install cargo-zigbuild --locked --version 0.24.0
+      - name: Build
+        run: |
+          mkdir dist
+          for pair in x86_64-unknown-linux-musl:linux-x64 aarch64-unknown-linux-musl:linux-arm64; do
+            cargo zigbuild --release --target "${pair%%:*}" --manifest-path rs/Cargo.toml
+            cp "rs/target/${pair%%:*}/release/crux" "dist/crux-${pair##*:}"
+          done
+          file dist/*
+          ./dist/crux-linux-x64 --version
+      - uses: docker/setup-qemu-action@v3
+      - name: The arm64 binary starts
+        run: docker run --rm --platform linux/arm64 -v "$PWD/dist:/d:ro" alpine:3.20 /d/crux-linux-arm64 --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/
+
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Build
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          mkdir dist
+          for pair in aarch64-apple-darwin:darwin-arm64 x86_64-apple-darwin:darwin-x64; do
+            cargo build --release --target "${pair%%:*}" --manifest-path rs/Cargo.toml
+            cp "rs/target/${pair%%:*}/release/crux" "dist/crux-${pair##*:}"
+          done
+          file dist/*
+          ./dist/crux-darwin-arm64 --version
+          ./dist/crux-darwin-x64 --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/
+
+  publish:
+    needs: [linux, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: The tag is the version in VERSION
+        run: test "$TAG" = "v$(tr -d '[:space:]' < VERSION)"
+      - name: Checksums and upload to the release
+        run: |
+          chmod 755 dist/crux-*
+          (cd dist && sha256sum crux-* > SHA256SUMS && cat SHA256SUMS)
+          gh release upload "$TAG" dist/* --clobber
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Package, and try it as a person would
+        run: |
+          npm/pack.sh dist pkg
+          npm install -g pkg/crux-agents-*.tgz
+          crux --version | grep -q "not installed on this machine yet"
+      # Trusted publishing: npm trusts this workflow through OIDC, with no token
+      # stored anywhere. It is set up on npmjs.com once the package exists.
+      # Provenance needs a public repo: on a private one npm refuses the publish.
+      - name: Publish to npm
+        if: inputs.publish
+        env:
+          PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          provenance=""; [ "$PRIVATE" = "false" ] && provenance="--provenance"
+          npm publish pkg/crux-agents-*.tgz --access public $provenance

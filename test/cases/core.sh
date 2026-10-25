@@ -2506,6 +2506,21 @@ test_hooks_status_keeps_its_columns_with_long_repo_names() {
   assert_eq "1" "$cols" "the hook names start in one column"
 }
 
+# Before `crux install`, init answered "unknown profile: multi-repo".
+test_the_binary_alone_says_to_install_before_anything_else() {
+  sandbox >/dev/null
+  local home="$SB/blank"; mkdir -p "$home/dl"
+  cp "$CRUX_BIN" "$home/dl/crux"
+  local out rc=0
+  out="$(cd "$home" && env -u CRUX_HOME -u CRUX_BIN HOME="$home" "$home/dl/crux" init shop --no-remote 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "a command that needs the kernel stops"
+  assert_contains "$out" "not installed on this machine yet" "and says why"
+  assert_contains "$out" "crux install" "and what to run"
+  assert_no_file "$home/Projects/shop" "without creating anything"
+  out="$(env -u CRUX_HOME -u CRUX_BIN HOME="$home" "$home/dl/crux" prose check --text "A short text." 2>&1)"
+  assert_contains "$out" "words" "prose check works without installing"
+}
+
 test_the_binary_alone_installs_the_whole_kernel() {
   # What npm or a download hands over is the binary and nothing else.
   sandbox >/dev/null
@@ -2528,4 +2543,43 @@ test_the_binary_alone_installs_the_whole_kernel() {
   assert_eq "" "$(diff -r "$CRUX_HOME/skills" "$home/.crux/kernel/$v/skills" 2>&1)" "and leaves the kernel whole"
   assert_contains "$(env -u CRUX_HOME -u CRUX_BIN HOME="$home" "$home/.local/bin/crux" --version 2>&1)" "kernel/$v" \
     "with crux still on the PATH"
+}
+
+# The npm package runs the binary of this machine with the same arguments and
+# hands back its exit code: a launcher that swallowed it made every failure ok.
+test_the_npm_launcher_runs_this_machines_binary() {
+  sandbox >/dev/null
+  needs node || return 0
+  local pkg="$SB/pkg"; mkdir -p "$pkg/vendor"
+  cp -R "$CRUX_HOME/npm/bin" "$pkg/"
+  local platform; platform="$(node -p 'process.platform + "-" + process.arch')"
+  printf '#!/bin/sh\necho "args: $*"\nexit 3\n' > "$pkg/vendor/crux-$platform"
+  chmod 644 "$pkg/vendor/crux-$platform"
+
+  local out rc=0
+  out="$(node "$pkg/bin/crux.js" init "two words" 2>&1)" || rc=$?
+  assert_eq "args: init two words" "$out" "it passes the arguments through"
+  assert_eq "3" "$rc" "and hands back the binary's exit code"
+
+  rm "$pkg/vendor/crux-$platform"
+  rc=0; out="$(node "$pkg/bin/crux.js" --version 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "without a binary for this machine it fails"
+  assert_contains "$out" "no binary for $platform" "and says which platform"
+}
+
+test_the_npm_package_carries_four_binaries_and_the_version() {
+  sandbox >/dev/null
+  needs npm || return 0
+  local bins="$SB/bins"; mkdir -p "$bins"
+  local p
+  for p in linux-x64 linux-arm64 darwin-x64; do printf '#!/bin/sh\n' > "$bins/crux-$p"; done
+  local rc=0; bash "$CRUX_HOME/npm/pack.sh" "$bins" "$SB/out" >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "a missing binary stops the package"
+  printf '#!/bin/sh\n' > "$bins/crux-darwin-arm64"
+  bash "$CRUX_HOME/npm/pack.sh" "$bins" "$SB/out" >/dev/null 2>&1
+  local v; v="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
+  assert_file "$SB/out/crux-agents-$v.tgz" "the package takes the version from VERSION"
+  local list; list="$(tar tzvf "$SB/out/crux-agents-$v.tgz")"
+  assert_contains "$list" "package/vendor/crux-darwin-arm64" "with the four binaries"
+  assert_contains "$(grep 'vendor/crux-linux-x64' <<<"$list")" "rwxr-xr-x" "executable"
 }

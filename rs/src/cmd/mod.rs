@@ -41,6 +41,17 @@ pub fn dispatch(argv: &[String]) -> i32 {
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) && help(name) {
         return 0;
     }
+    // The binary alone, from npm or a download, carries the kernel but has not
+    // laid it out: `init` answered "unknown profile: multi-repo".
+    let standalone =
+        matches!(name, "version" | "--version" | "-v" | "help" | "-h" | "--help" | "install" | "setup" | "prose")
+            || name.starts_with("__");
+    if !standalone && crate::env::crux_home().is_none_or(|h| !h.is_dir()) {
+        crate::ui::err("crux is not installed on this machine yet");
+        crate::ui::info("crux install    lays out the kernel this binary carries");
+        crate::ui::info("crux setup      the same, step by step: account, remote, profile and projects");
+        return 1;
+    }
     let result: Res = match name {
         "version" | "--version" | "-v" => version(),
         "help" | "-h" | "--help" => {

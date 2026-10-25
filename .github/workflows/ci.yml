@@ -50,7 +50,7 @@ jobs:
             bin/crux install.sh \
             adapters/*/*.sh adapters/*/hooks/*.sh \
             skills/*/scripts/*.sh test/run.sh test/e2e.sh test/cases/*.sh \
-            test/two-machines.sh test/flows.sh test/fake-gh
+            test/two-machines.sh test/flows.sh test/fake-gh npm/pack.sh
 
       - name: Kernel suite
         run: ./test/run.sh
