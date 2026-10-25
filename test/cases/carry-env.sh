@@ -73,7 +73,10 @@ test_carry_env_does_not_overwrite_on_restore() {
   mkdir -p "$target/api" "$target/web"
   echo "WHAT-WAS-ALREADY-THERE=1" > "$target/api/.env"
 
-  bash "$SB/out/restaurar.sh" "$target" --apply >/dev/null 2>&1
+  # A HOME with no crux config, like the machine this is for: with the real one
+  # the test passed here and failed in CI.
+  mkdir -p "$SB/blank"
+  env HOME="$SB/blank" bash "$SB/out/restaurar.sh" "$target" --apply >/dev/null 2>&1
 
   assert_eq "WHAT-WAS-ALREADY-THERE=1" "$(cat "$target/api/.env")" "does not overwrite what was already there"
   assert_file "$target/web/.env.production" "and does put what was missing"
@@ -122,7 +125,8 @@ test_carry_env_restores_a_bundle_collected_as_repo() {
   echo "X=1" > "$SB/old/.env"
   cp "$CRUX_HOME/skills/carry-env/scripts/restaurar.sh" "$SB/old/"
 
-  CRUX_PROJECTS_DIR="$SB/Proyectos" bash "$SB/old/restaurar.sh" --hazlo >/dev/null 2>&1
+  mkdir -p "$SB/blank"
+  env HOME="$SB/blank" CRUX_PROJECTS_DIR="$SB/Proyectos" bash "$SB/old/restaurar.sh" --hazlo >/dev/null 2>&1
 
   assert_file "$root/shop-api/.env" \
     "finds it one level deeper instead of giving up"

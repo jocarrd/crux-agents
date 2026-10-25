@@ -21,7 +21,12 @@ done
 
 # The root on THIS machine, which need not match the one the folder came from:
 # the variable, then the folder crux saved, then crux's own default.
-CONFIGURED="$(sed -n 's/^CRUX_PROJECTS_DIR="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$HOME/.crux/config" 2>/dev/null | tail -1)"
+# A machine without crux has no config: under pipefail, sed failing on it ended
+# the script with exit 2 and not a word, on exactly the machine this is for.
+CONFIGURED=""
+if [[ -f "$HOME/.crux/config" ]]; then
+  CONFIGURED="$(sed -n 's/^CRUX_PROJECTS_DIR="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$HOME/.crux/config" | tail -1)"
+fi
 ROOT="${CRUX_PROJECTS_DIR:-${CONFIGURED:-$HOME/Projects}}"
 PROJECT="${TARGET:-$ROOT/$NAME}"
 
