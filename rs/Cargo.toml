@@ -6,7 +6,7 @@ version = "0.0.0"
 edition = "2021"
 description = "A working system for coding agents: a documentation standard, cross-agent skills and the tooling that keeps projects in line."
 license = "MIT"
-repository = "https://github.com/jocarrd/crux"
+repository = "https://github.com/jocarrd/crux-agents"
 publish = false
 
 [dependencies]

@@ -4,12 +4,12 @@
   "description": "A working system for coding agents: a documentation standard, cross-agent skills and the tooling that keeps projects in line. Its memory lives in git.",
   "license": "MIT",
   "author": "Jorge Carrera Diez",
-  "homepage": "https://github.com/jocarrd/crux#readme",
+  "homepage": "https://github.com/jocarrd/crux-agents#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jocarrd/crux.git"
+    "url": "git+https://github.com/jocarrd/crux-agents.git"
   },
-  "bugs": "https://github.com/jocarrd/crux/issues",
+  "bugs": "https://github.com/jocarrd/crux-agents/issues",
   "keywords": ["agents", "coding-agents", "claude-code", "codex", "skills", "documentation", "git"],
   "bin": {
     "crux": "bin/crux.js"

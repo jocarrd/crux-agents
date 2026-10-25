@@ -379,12 +379,15 @@ fn open_proposal(path: &Path, base: &str, branch: &str, title: &str, commits: us
 
 pub fn merge(argv: &[String]) -> Res {
     let Some(name) = argv.first().filter(|n| !n.is_empty()).cloned() else {
-        die!("usage: crux workspace merge <name> [--yes]")
+        die!("usage: crux workspace merge <name> [--yes] [--admin]")
     };
-    let mut confirmed = false;
+    let (mut confirmed, mut admin) = (false, false);
     for a in &argv[1..] {
         match a.as_str() {
             "--yes" => confirmed = true,
+            // A protected main asks for an approval GitHub does not let the
+            // author give: the admin's bypass is used only when asked for.
+            "--admin" => admin = true,
             other => die!("unknown option: {other}"),
         }
     }
@@ -495,7 +498,12 @@ pub fn merge(argv: &[String]) -> Res {
     }
     // Without --delete-branch: gh tries to switch to the base branch to delete
     // the local one, and from a worktree the base is used by another.
-    sh::status(Command::new("gh").args(["pr", "merge", "--squash"]).current_dir(&path));
+    let mut merge = Command::new("gh");
+    merge.args(["pr", "merge", "--squash"]).current_dir(&path);
+    if admin {
+        merge.arg("--admin");
+    }
+    sh::status(&mut merge);
     // The exit code is not trusted: the cleanup can fail after the merge.
     let merged = sh::capture_in(&path, "gh", &["pr", "view", "--json", "mergedAt", "-q", ".mergedAt // \"\""]).out();
     if merged.is_empty() {

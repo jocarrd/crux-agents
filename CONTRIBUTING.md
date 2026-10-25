@@ -15,7 +15,7 @@ How the kernel is built, and the rules a change has to respect, are in
 ## Setting up
 
 ```bash
-git clone https://github.com/jocarrd/crux.git
+git clone https://github.com/jocarrd/crux-agents.git
 cd crux
 ./test/run.sh
 ```

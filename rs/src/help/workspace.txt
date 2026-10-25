@@ -6,7 +6,7 @@ crux workspace — isolated workspaces to work in parallel.
   crux workspace adopt <path> [--task <task>]    registers a hand-made worktree
   crux workspace heal [--quiet]                  removes entries with no folder or branch
   crux workspace finish <name> [--title "..."]
-  crux workspace merge <name> [--yes]
+  crux workspace merge <name> [--yes] [--admin]
   crux workspace rm <name> [--include-ignored]
   crux workspace gc [--yes] [--include-disk]
   crux workspace prune [--yes]

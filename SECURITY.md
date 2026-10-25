@@ -7,7 +7,7 @@ permissions, so reports are welcome.
 ## Reporting a vulnerability
 
 Please **do not open a public issue**. Report it privately through
-[GitHub's security advisories](https://github.com/jocarrd/crux/security/advisories/new).
+[GitHub's security advisories](https://github.com/jocarrd/crux-agents/security/advisories/new).
 
 Include what an attacker can do, the steps to reproduce it and the crux
 version (`crux --version`). You will get an answer within a week.

@@ -66,7 +66,7 @@ does not belong to the kernel**.
 ### Installation, once per machine
 
 ```bash
-git clone https://github.com/jocarrd/crux.git ~/Projects/crux
+git clone https://github.com/jocarrd/crux-agents.git ~/Projects/crux
 ~/Projects/crux/install.sh --remote 'git@github.com:<your-user>/{repo}.git'
 ```
 
@@ -226,7 +226,7 @@ involve hand-editing a list inside a script.
 Three commands:
 
 ```bash
-git clone https://github.com/jocarrd/crux.git ~/Projects/crux
+git clone https://github.com/jocarrd/crux-agents.git ~/Projects/crux
 ~/Projects/crux/install.sh --remote 'git@github.com:your-user/{repo}.git'
 crux clone example-project
 ```

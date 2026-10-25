@@ -107,7 +107,7 @@ Tomorrow, on another machine, `crux sync` brings all of it back.
 
 ```bash
 # once per machine (it builds crux with Rust's cargo: https://rustup.rs)
-git clone https://github.com/jocarrd/crux.git ~/Projects/crux
+git clone https://github.com/jocarrd/crux-agents.git ~/Projects/crux
 ~/Projects/crux/install.sh
 
 # then let it walk you through the rest: account, remote, profile, projects

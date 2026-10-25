@@ -10,7 +10,7 @@ const platform = `${process.platform}-${process.arch}`;
 const bin = join(__dirname, "..", "vendor", `crux-${platform}`);
 if (!existsSync(bin)) {
   console.error(`crux has no binary for ${platform}: it ships for Linux and macOS, on x64 and arm64.`);
-  console.error("It can be built from source: https://github.com/jocarrd/crux");
+  console.error("It can be built from source: https://github.com/jocarrd/crux-agents");
   process.exit(1);
 }
 // Some installers unpack without the executable bit.

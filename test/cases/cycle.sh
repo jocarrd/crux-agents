@@ -750,7 +750,7 @@ case "\$1 \$2" in
 $1
 JSON
     ;;
-  "pr merge") echo merged ;;
+  "pr merge") echo "\$*" >> "$SB/gh-merge"; echo merged ;;
   *) exit 0 ;;
 esac
 STUB
@@ -794,6 +794,20 @@ test_merge_refuses_what_the_proposal_does_not_hold() {
   echo loose > "$ws/loose.txt"
   out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes 2>&1)" || rc=$?
   assert_contains "$out" "uncommitted changes" "uncommitted changes stop it too"
+}
+
+# A protected main asks for an approval the author cannot give: --admin uses
+# the admin's bypass, and only when it is asked for.
+test_merge_passes_the_admin_bypass_only_when_asked() {
+  sandbox >/dev/null
+  _merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"name":"verify","status":"COMPLETED","conclusion":"SUCCESS"}]}' >/dev/null
+  env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes >/dev/null 2>&1
+  assert_not_contains "$(cat "$SB/gh-merge")" "--admin" "without the flag, no bypass"
+  teardown
+  sandbox >/dev/null
+  _merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"name":"verify","status":"COMPLETED","conclusion":"SUCCESS"}]}' >/dev/null
+  env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes --admin >/dev/null 2>&1
+  assert_contains "$(cat "$SB/gh-merge")" "--squash --admin" "with it, gh merges using the bypass"
 }
 
 test_merge_refuses_with_conflicts() {

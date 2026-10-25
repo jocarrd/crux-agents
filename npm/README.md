@@ -14,4 +14,4 @@ Or install the command globally with `npm i -g crux-agents` and run
 
 The package carries one binary per platform (Linux and macOS, x64 and arm64)
 and runs nothing when it is installed. Documentation, source and issues:
-https://github.com/jocarrd/crux
+https://github.com/jocarrd/crux-agents
