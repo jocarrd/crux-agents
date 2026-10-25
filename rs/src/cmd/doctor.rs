@@ -417,6 +417,16 @@ fn check_profile_rules(t: &mut Tally, c: &Checkup) {
     t.section_ok(format!("profile {} rules", c.profile));
 }
 
+/// Pointers are also switched off for a repo of ours that keeps its own
+/// AGENTS.md, like a public one: calling it the client's misled.
+fn owner(c: &Checkup) -> &'static str {
+    if c.profile == "client-repo" {
+        "belongs to the client"
+    } else {
+        "is the repo's own"
+    }
+}
+
 /// In someone else's code, a client's own AGENTS.md is theirs; the intrusion
 /// is the file we put there, recognised by the managed block or by not being
 /// versioned.
@@ -433,7 +443,7 @@ fn foreign_repo_pointers(t: &mut Tally, c: &Checkup) {
             {
                 t.fail(format!("profile {}: {repo}/{intruder} should not exist (someone else's code)", c.profile));
             } else {
-                t.note(format!("{repo}/{intruder} belongs to the client — respected, not touched"));
+                t.note(format!("{repo}/{intruder} {} — respected, not touched", owner(c)));
             }
         }
     }
@@ -448,7 +458,7 @@ fn foreign_repo_pointers(t: &mut Tally, c: &Checkup) {
             continue;
         }
         if git::ok(&dir, &["ls-files", "--error-unmatch", LOCAL_POINTER]) {
-            t.note(format!("{repo}/{LOCAL_POINTER} belongs to the client — respected, not touched"));
+            t.note(format!("{repo}/{LOCAL_POINTER} {} — respected, not touched", owner(c)));
         } else if !dir.join(LOCAL_POINTER).is_file() {
             t.fail(format!(
                 "{repo}/ has no {LOCAL_POINTER}: the agent will not discover {} ('crux link')",

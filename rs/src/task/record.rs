@@ -271,6 +271,54 @@ pub fn write(file: &Path, doc: &mut Doc, publish: bool) -> Result<(), String> {
     Ok(())
 }
 
+pub struct Lock(PathBuf);
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Each write is atomic, but a read-change-write is not: eight `task add` at
+/// once left one step and all eight said ok. A directory, as in the registry,
+/// because it is the one primitive every system has; one older than the
+/// longest edit belongs to a process that died.
+pub fn lock(file: &Path) -> Result<Lock, String> {
+    let dir = file.with_file_name(format!(".{}.lock", files::name(file)));
+    if let Some(d) = file.parent() {
+        files::mkdir_private(d).map_err(|e| e.to_string())?;
+    }
+    for _ in 0..100 {
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return Ok(Lock(dir)),
+            Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => {
+                return Err(format!("cannot lock {}: {e}", file.display()))
+            }
+            Err(_) => {}
+        }
+        let stale = std::fs::metadata(&dir)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|e| e.as_secs() > 30);
+        if stale {
+            let _ = std::fs::remove_dir_all(&dir);
+            continue;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Err(format!("{} is being written by another command; remove {} if none is running", file.display(), dir.display()))
+}
+
+/// Read, change and write the record holding its lock.
+pub fn edit<T>(file: &Path, publish: bool, op: impl FnOnce(&mut Doc) -> Result<T, String>) -> Result<T, String> {
+    let _lock = lock(file)?;
+    let mut doc = read(file)?;
+    let out = op(&mut doc)?;
+    write(file, &mut doc, publish)?;
+    Ok(out)
+}
+
 /// A section with only its help comment is empty.
 pub fn content(s: Option<&Section>) -> String {
     let text = s.map(|s| s.lines.join("\n")).unwrap_or_default();

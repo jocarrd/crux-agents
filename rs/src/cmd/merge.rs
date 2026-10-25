@@ -67,7 +67,7 @@ pub fn run(argv: &[String]) -> Res {
         ));
     }
     let mut merge = Command::new("gh");
-    merge.args(["pr", "merge", &num, "--repo", &slug, "--merge", "--delete-branch"]).args(&argv[1..]);
+    merge.args(["pr", "merge", &num, "--repo", &slug, "--squash", "--delete-branch"]).args(&argv[1..]);
     sh::status(&mut merge);
 
     // The exit code is not trusted: the cleanup after the merge can fail once

@@ -619,3 +619,42 @@ GH
   out="$("$CRUX_HOME/bin/crux" workspace rm maps 2>&1)"
   assert_contains "$out" "task 'maps' archived" "so removing the workspace archives it"
 }
+
+# Each write was atomic but the read-change-write was not: eight at once kept
+# one step, and all eight said ok.
+test_concurrent_writes_to_a_record_keep_every_change() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/par --goal g >/dev/null 2>&1
+  local i
+  for i in 1 2 3 4 5 6 7 8; do "$CRUX_HOME/bin/crux" task add --task proj/par "step $i" >/dev/null 2>&1 & done
+  wait
+  for i in 1 2 3 4 5 6 7 8; do "$CRUX_HOME/bin/crux" task note --task proj/par "note $i" >/dev/null 2>&1 & done
+  wait
+  local f="$SB/tasks/proj/par.md"
+  assert_eq 8 "$(grep -c '^- \[ \] T[0-9]* step' "$f")" "eight steps added at once are eight steps"
+  assert_eq 8 "$(grep -c 'note [0-9]' "$f")" "and eight notes are eight notes"
+  assert_no_file "$SB/tasks/proj/.par.md.lock" "the lock is released"
+}
+
+test_task_with_only_the_task_flag_shows_it() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/seen --goal "the goal" >/dev/null 2>&1
+  local out; out="$("$CRUX_HOME/bin/crux" task --task proj/seen 2>&1)"
+  assert_contains "$out" "task seen" "outside a workspace, --task alone shows the task"
+  assert_not_contains "$out" "unknown subcommand" "and is not taken for a subcommand"
+}
+
+test_a_truncated_record_is_named_not_hidden() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/good --goal g >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task new proj/cut --goal g >/dev/null 2>&1
+  local f="$SB/tasks/proj/cut.md"
+  head -c 40 "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+
+  local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_contains "$out" "proj/good" "the readable task is listed"
+  assert_contains "$out" "proj/cut: unreadable record" "the truncated one is named"
+  out="$("$CRUX_HOME/bin/crux" status 2>&1)"
+  assert_contains "$out" "unreadable task record" "status names it too"
+  assert_exit 1 "and showing it is an error, not an empty task" "$CRUX_HOME/bin/crux" task --task proj/cut
+}

@@ -85,7 +85,11 @@ pub fn run(_argv: &[String]) -> Res {
     }
     let skills_dir = env::claude_skills_dir();
     let linked = entries(&skills_dir);
-    let in_kernel = entries(&env::crux_home().unwrap_or_default().join("skills")).len();
+    // Only folders with a SKILL.md: the kernel also keeps `.oversized` there.
+    let in_kernel = entries(&env::crux_home().unwrap_or_default().join("skills"))
+        .iter()
+        .filter(|p| p.join("SKILL.md").is_file())
+        .count();
     if linked.is_empty() {
         t.fail("no skill materialized — run install.sh");
     } else {

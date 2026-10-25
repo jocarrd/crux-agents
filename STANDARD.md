@@ -1076,6 +1076,7 @@ the session. See ADR-012.
 | `crux mcp` | — | The MCP servers the project declares, placed where the agent reads them |
 | `crux stg` | — | Publishes a built folder to a key-protected staging |
 | `crux usage` | — | Measures which skills are actually used |
+| `crux prose check <file>` | `/prose-check` | Counts the markers of a model-generated text, in English or Spanish |
 | `crux skill test <skill>` | — | Tests a skill with its scenarios; `--against <ref>` flags regressions |
 | `crux memory [--check]` | `search <text>` | Agent memories that should be in git; searches the profile and the docs repos |
 | `crux profile` | `init`, `link`, `clone` | The person's profile: a repo of its own that every agent loads |

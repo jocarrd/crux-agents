@@ -531,7 +531,7 @@ pub fn reconcile(p: &str) -> Vec<String> {
             continue;
         }
         let f = dir.join(&n);
-        let Ok(mut doc) = record::read(&f) else { continue };
+        let Ok(doc) = record::read(&f) else { continue };
         let pr = doc.text("pr");
         if pr.is_empty() || !matches!(doc.status(), Some(record::Status::Verified | record::Status::Proposed)) {
             continue;
@@ -550,8 +550,13 @@ pub fn reconcile(p: &str) -> Vec<String> {
         if r.stdout.trim() != "MERGED" {
             continue;
         }
-        record::advance(&mut doc, record::Status::Merged);
-        let _ = record::write(&f, &mut doc, false);
+        // Read again under the lock: a step added during the 15 s of gh was lost.
+        let Ok(doc) = record::edit(&f, false, |d| {
+            record::advance(d, record::Status::Merged);
+            Ok(d.clone())
+        }) else {
+            continue;
+        };
         let alive = doc.list("workspaces").iter().any(|w| live.contains(w));
         let pending = record::pending(&doc);
         if !alive && pending == 0 {

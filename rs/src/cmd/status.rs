@@ -205,6 +205,9 @@ fn open_proposals(slug: String) -> (String, HashMap<String, String>) {
 /// workspace was closed before finishing them—, and those waiting on another
 /// person: not pending work of ours, but they cannot be lost sight of.
 fn tasks_elsewhere(live: &[registry::Workspace]) {
+    for f in remind::unreadable_tasks() {
+        ui::warn(format!("unreadable task record, left out of this list: {}", f.display()));
+    }
     let tasks = remind::open_tasks(None);
     let alive: BTreeSet<&str> = live.iter().filter(|w| Path::new(&w.path).exists()).map(|w| w.name.as_str()).collect();
     let without: Vec<&remind::OpenTask> = tasks

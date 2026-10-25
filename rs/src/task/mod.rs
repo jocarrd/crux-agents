@@ -30,17 +30,10 @@ pub fn internal(argv: &[String]) -> Res {
         _ => return fail("missing --file"),
     };
     let mutate = |f: &mut dyn FnMut(&mut record::Doc) -> Result<Option<String>, String>| -> Res {
-        let mut doc = match record::read(&file) {
-            Ok(d) => d,
-            Err(e) => return fail(e),
-        };
-        let out = match f(&mut doc) {
+        let out = match record::edit(&file, true, |d| f(d)) {
             Ok(o) => o,
             Err(e) => return fail(e),
         };
-        if let Err(e) = record::write(&file, &mut doc, true) {
-            return fail(e);
-        }
         if let Some(line) = out {
             println!("{line}");
         }
@@ -278,9 +271,11 @@ pub fn file_for_workspace(path: &str) -> Option<PathBuf> {
 
 /// Advances a record's status; false if the record cannot be written.
 pub fn advance_file(file: &Path, status: record::Status) -> bool {
-    let Ok(mut doc) = record::read(file) else { return false };
-    record::advance(&mut doc, status);
-    record::write(file, &mut doc, true).is_ok()
+    record::edit(file, true, |d| {
+        record::advance(d, status);
+        Ok(())
+    })
+    .is_ok()
 }
 
 /// A task's decisions (the notes with a why) live in its record, which is

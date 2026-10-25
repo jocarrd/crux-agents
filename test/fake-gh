@@ -34,6 +34,10 @@ case "$1 ${2:-}" in
     which="${3:-}"; [[ "$which" =~ /pull/([0-9]+)$ ]] && which="${BASH_REMATCH[1]}"
     if [[ "$which" =~ ^[0-9]+$ ]]; then f="$S/pr.$which"; [[ -f "$f" ]] || exit 1; else f="$(pr_of_branch)"; fi
     [[ -n "$f" ]] || { echo "no pull requests found for branch \"$branch\"" >&2; exit 1; }
+    if [[ "$*" == *"--json state,url"* ]]; then
+      [[ -n "$(field "$f" mergedAt)" ]] && s=MERGED || s=OPEN
+      echo "$s https://github.com/acme/$(field "$f" repo)/pull/$(field "$f" number)"; exit 0
+    fi
     if [[ "$*" == *"--json state"* ]]; then [[ -n "$(field "$f" mergedAt)" ]] && echo MERGED || echo OPEN; exit 0; fi
     n="$(field "$f" number)"
     case "$*" in

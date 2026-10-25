@@ -1,4 +1,4 @@
 # Skills that already went over 1,000 words when the cap came in (2026-09-28),
 # with their size at the time. They can only shrink: once under the cap, they
-# are removed from here. Checked by lib/check-skill-description.mjs.
+# are removed from here. Checked by the binary, in rs/src/checks.rs.
 # Empty since 2026-09-28: every kernel skill fits under the cap.

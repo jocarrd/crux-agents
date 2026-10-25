@@ -270,6 +270,7 @@ A rule written in a file is advice. These are installed by
 | `crux mcp` | Writes the MCP servers a project declares and checks they respond |
 | `crux stg` | Publishes a built folder to a keyed staging |
 | `crux usage` | Which skills are actually used |
+| `crux prose check <file>` | Counts the markers of a model-generated text, in English or Spanish |
 | `crux skill test <skill>` | Runs a skill's scenarios and flags what changed against another version |
 | `crux memory` | Agent memories still only local, and where each one belongs |
 | `crux profile` | The person's profile repo: `init`, `link`, `clone` |

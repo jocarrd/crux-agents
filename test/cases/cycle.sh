@@ -737,6 +737,9 @@ _merge_scenario() {
   "$CRUX_HOME/bin/crux" workspace new m --repo "$root/app" >/dev/null 2>&1
   echo change > "$root/app-ws-m/new.txt"
   git -C "$root/app-ws-m" add -A; git -C "$root/app-ws-m" commit -qm "feat: something"
+  git init -q --bare "$SB/mrg-remote.git"
+  git -C "$root/app" remote add origin "$SB/mrg-remote.git"
+  git -C "$root/app-ws-m" push -q origin ws/m 2>/dev/null
 
   cat > "$SB/bin/gh" <<STUB
 #!/usr/bin/env bash
@@ -764,6 +767,33 @@ test_merge_refuses_with_failing_checks() {
   assert_eq "1" "$rc" "exits with failure"
   assert_contains "$out" "checks failing" "says how many fail"
   assert_contains "$out" "not merging" "and that it does not merge"
+}
+
+test_workspace_new_refuses_the_main_branch_as_its_branch() {
+  sandbox >/dev/null
+  local repo="$CRUX_PROJECTS_DIR/mb/app"; mkdir -p "$repo"
+  git -C "$repo" init -q -b main; echo x > "$repo/f"; git -C "$repo" add -A; git -C "$repo" commit -qm init
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new w --repo "$repo" --branch main 2>&1)"
+  assert_contains "$out" "is the main branch" "it says why, instead of git's 'already exists'"
+  assert_no_file "$CRUX_PROJECTS_DIR/mb/app-ws-w" "and creates nothing"
+}
+
+# What gets merged is the remote branch, and the worktree goes after it: a
+# commit made after finish stayed out of main with every check green.
+test_merge_refuses_what_the_proposal_does_not_hold() {
+  sandbox >/dev/null
+  local ws; ws="$(_merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[{"name":"test","status":"COMPLETED","conclusion":"SUCCESS"}]}')"
+  echo later > "$ws/later.txt"; git -C "$ws" add -A; git -C "$ws" commit -qm "feat: after finish"
+
+  local out rc=0
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "a commit the proposal does not hold stops the merge"
+  assert_contains "$out" "crux workspace finish m" "and says how to get it in"
+  assert_file "$ws/later.txt" "the worktree stays"
+
+  echo loose > "$ws/loose.txt"
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes 2>&1)" || rc=$?
+  assert_contains "$out" "uncommitted changes" "uncommitted changes stop it too"
 }
 
 test_merge_refuses_with_conflicts() {

@@ -105,6 +105,11 @@ truthy 'grep -q "Pay in one step" "$GH_STATE/body.1"' "the description comes fro
 truthy '! grep -qi "co-authored\|generated with" "$GH_STATE/body.1"' "with no tool signature"
 truthy 'grep -q "^status: proposed" "$HOME/.crux/tasks/demo/checkout.md"' "and the task is proposed"
 
+step "finishing again updates the open proposal"
+out="$(cd "$W" && crux workspace finish checkout 2>&1)"
+truthy '[[ "$out" == *"already open"* && "$out" == *"pull/1"* ]]' "it says the proposal was updated"
+truthy '[[ ! -f "$GH_STATE/pr.2" ]]' "and does not open a second one"
+
 step "red CI blocks the merge, green CI lets it through"
 echo fail > "$GH_STATE/checks"
 out="$(cd "$W" && crux workspace merge checkout --yes 2>&1)"; rc=$?
@@ -297,6 +302,9 @@ truthy '[[ -x "$M3/Proyectos/demo/api/.git/hooks/pre-commit.project" ]]' "and an
 step "a machine that only gets the binary, as npm or a download hands it over"
 M4="$HOME/m4"; mkdir -p "$M4/dl"; cp "$BIN" "$M4/dl/crux"
 printf '[user]\n\temail = tester@localhost\n\tname = tester\n[init]\n\tdefaultBranch = main\n' > "$M4/.gitconfig"
+out="$(cd "$M4/dl" && env HOME="$M4" ./crux --version 2>&1)"
+truthy '[[ "$out" == "crux $(tr -d "[:space:]" < "$SRC/VERSION") — not installed"* ]]' \
+  "before installing, it knows its version and says what comes next"
 out="$(cd "$M4/dl" && env HOME="$M4" ./crux install --projects-dir "$M4/Proyectos" 2>&1)"; rc=$?
 truthy '[[ $rc -eq 0 && -x "$M4/.local/bin/crux" ]]' "crux install lays out the kernel it carries"
 env HOME="$M4" "$M4/.local/bin/crux" init solo --no-remote --parent "$M4/Proyectos" >/dev/null 2>&1

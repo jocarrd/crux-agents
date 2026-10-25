@@ -82,7 +82,7 @@ black box.
   the project.
 - An adapter has to win the sentence with the project's names and lose the
   generic one. Check it with the two sentences written before the description:
-  `node <skill-audit-directory>/scripts/probe.mjs --adaptador <adapter> <skill> "<generic>" "<with names>"`.
+  `node <skill-audit-directory>/scripts/probe.mjs --adapter <adapter> <skill> "<generic>" "<with names>"`.
 
 ## 7. Before accepting it
 

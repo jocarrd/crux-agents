@@ -178,7 +178,12 @@ Without a directory argument, commands operate on the docs repo they find
 walking up from the current directory.";
 
 fn version() -> Res {
-    let home = crate::env::crux_home().map(|h| h.display().to_string()).unwrap_or_default();
-    println!("crux {} — {home}", crate::env::crux_version());
+    // The binary alone, as npm or a download hands it over: it knows its own
+    // version, and the next step is to lay out the kernel it carries.
+    let Some(home) = crate::env::crux_home() else {
+        println!("crux {} — not installed on this machine yet: crux install", install::packed_version());
+        return Ok(());
+    };
+    println!("crux {} — {}", crate::env::crux_version(), home.display());
     Ok(())
 }

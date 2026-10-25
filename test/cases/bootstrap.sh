@@ -249,3 +249,12 @@ CONF
     "and so does the task left open on the other machine"
   teardown
 }
+
+test_the_machine_check_counts_only_skills() {
+  sandbox >/dev/null
+  _ready_machine
+  local n; n="$(find "$CRUX_HOME/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l)"
+  local out; out="$(crux doctor --machine 2>&1)"
+  assert_contains "$out" "($n in the kernel)" "the kernel count leaves out files that are not skills"
+  teardown
+}

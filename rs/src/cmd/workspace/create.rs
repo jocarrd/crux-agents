@@ -106,6 +106,9 @@ pub fn create(a: NewArgs) -> Res {
     // repo `ws/<whatever>` shows our naming: the profile decides the pattern.
     let pattern = policy::get(&profile, docs.as_deref(), "branch.pattern").unwrap_or_else(|| "ws/{{name}}".into());
     let branch = if a.branch.is_empty() { pattern.replace("{{name}}", &name) } else { a.branch.clone() };
+    if branch == project::main_branch(&repo) {
+        die!("{branch} is the main branch, checked out in {}: --branch takes a work branch", repo.display());
+    }
     if path.exists() {
         die!("{} already exists", path.display());
     }
@@ -292,9 +295,9 @@ fn register_task(
         .then(|| record_file.parent().and_then(|dir| record::archived_copy(dir, task)))
         .flatten();
     let ensured = if record_file.exists() {
-        record::read(record_file).and_then(|mut d| {
-            record::join(&mut d, repo_name, name);
-            record::write(record_file, &mut d, true).map(|_| true)
+        record::edit(record_file, true, |d| {
+            record::join(d, repo_name, name);
+            Ok(true)
         })
     } else if let Some(old) = &archived {
         // A new workspace for an archived task reopens it instead of starting an empty one
@@ -318,15 +321,15 @@ fn register_task(
             return false;
         }
     }
-    let noted = record::read(record_file).and_then(|mut d| {
+    let noted = record::edit(record_file, true, |d| {
         let mut list: Vec<String> =
             d.list("branches").into_iter().filter(|e| !e.starts_with(&format!("{repo_name}="))).collect();
         list.push(format!("{repo_name}={branch}"));
         d.set("branches", record::Meta::List(list));
         if !goal.is_empty() {
-            record::set_section(&mut d, "Objective", goal);
+            record::set_section(d, "Objective", goal);
         }
-        record::write(record_file, &mut d, true)
+        Ok(())
     });
     if noted.is_err() {
         ui::warn("could not note the branch in the task: without it, another machine will not know how to resume it");
@@ -569,9 +572,9 @@ pub fn resume(argv: &[String]) -> Res {
         };
         if let Some(retired_branch) = retired {
             if create(args(retired_branch, project::main_branch(&dir_repo))).is_ok() {
-                let _ = record::read(&record_file).and_then(|mut d| {
-                    record::reopen_branch(&mut d, repo_name);
-                    record::write(&record_file, &mut d, true)
+                let _ = record::edit(&record_file, true, |d| {
+                    record::reopen_branch(d, repo_name);
+                    Ok(())
                 });
                 opened.extend(workspace_path(&ws_name));
                 done += 1;
@@ -595,9 +598,9 @@ pub fn resume(argv: &[String]) -> Res {
     }
     // Resuming it means the answer arrived: it stops waiting.
     let mut cleared = false;
-    let _ = record::read(&record_file).and_then(|mut d| {
-        cleared = record::clear_waiting(&mut d);
-        record::write(&record_file, &mut d, true)
+    let _ = record::edit(&record_file, true, |d| {
+        cleared = record::clear_waiting(d);
+        Ok(())
     });
     if cleared {
         ui::ok("the task no longer waits for an answer");
@@ -683,9 +686,9 @@ pub fn adopt(argv: &[String]) -> Res {
     drop(guard);
     let record_file = env::tasks_dir().join(&project_name).join(format!("{task}.md"));
     let ensured = if record_file.exists() {
-        record::read(&record_file).and_then(|mut d| {
-            record::join(&mut d, &repo_name, &name);
-            record::write(&record_file, &mut d, true)
+        record::edit(&record_file, true, |d| {
+            record::join(d, &repo_name, &name);
+            Ok(())
         })
     } else {
         let mut d = record::create(&task, &project_name, &repo_name, &name);

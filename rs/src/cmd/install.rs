@@ -18,6 +18,14 @@ include!("../../kernel_pieces.rs");
 /// installed.
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/kernel.pack"));
 
+/// The version this binary carries, whether or not it is installed yet.
+pub fn packed_version() -> String {
+    packed()
+        .find(|(p, _, _)| p == names::VERSION)
+        .map(|(_, _, b)| String::from_utf8_lossy(b).split_whitespace().collect())
+        .unwrap_or_default()
+}
+
 fn packed() -> impl Iterator<Item = (String, u32, &'static [u8])> {
     let mut rest = PACK;
     std::iter::from_fn(move || {

@@ -52,15 +52,15 @@ skill of more than 1,000 words is shortened with `/skill-creator`.
 
 ```bash
 node <this-skill-directory>/scripts/probe.mjs "the sentence you would ask for it with"
-node <this-skill-directory>/scripts/probe.mjs --casos
-node <this-skill-directory>/scripts/probe.mjs --adaptador <adapter> <kernel> "<generic sentence>" "<own sentence>"
+node <this-skill-directory>/scripts/probe.mjs --cases
+node <this-skill-directory>/scripts/probe.mjs --adapter <adapter> <kernel> "<generic sentence>" "<own sentence>"
 ```
 
 - `probe` says which skill wins a sentence and **by how much**: below 15 % of the
   leader is a tie.
-- `--casos` runs `casos/activacion.tsv` (real sentence → expected skill). A
+- `--cases` runs `casos/activacion.tsv` (real sentence → expected skill). A
   sentence without proper names has to activate the kernel, never an adapter.
-- `--adaptador`: the generic sentence is won by the kernel and the own one, by
+- `--adapter`: the generic sentence is won by the kernel and the own one, by
   the adapter.
 
 It is useful for comparing two wordings and for seeing whether a change switched

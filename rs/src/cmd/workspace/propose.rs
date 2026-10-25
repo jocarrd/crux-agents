@@ -155,10 +155,10 @@ pub fn finish(argv: &[String]) -> Res {
     } else {
         ui::ok(format!("proposal opened: {url}"));
         if let Some(f) = &record_file {
-            let _ = record::read(f).and_then(|mut d| {
+            let _ = record::edit(f, true, |d| {
                 d.set_text("pr", &url);
-                record::advance(&mut d, record::Status::Proposed);
-                record::write(f, &mut d, true)
+                record::advance(d, record::Status::Proposed);
+                Ok(())
             });
         }
     }
@@ -355,6 +355,14 @@ fn open_proposal(path: &Path, base: &str, branch: &str, title: &str, commits: us
         ui::info("if it does not sum them up: gh pr edit --title \"...\", or next time finish --title \"...\"");
     }
     let title = if title.is_empty() { first.as_str() } else { title };
+    // Finishing again is how commits reach an open proposal: the push already
+    // updated it, and a second create only failed with gh's error.
+    let open =
+        sh::capture_in(path, "gh", &["pr", "view", "--json", "state,url", "--jq", ".state + \" \" + .url"]).out();
+    if let Some(url) = open.strip_prefix("OPEN ") {
+        ui::ok("the proposal was already open: the push updated it");
+        return url.trim().to_string();
+    }
     let r =
         sh::capture_cmd(Command::new("gh").args(["pr", "create", "--title", title, "--body", body]).current_dir(path));
     let url = r.out();
@@ -387,6 +395,29 @@ pub fn merge(argv: &[String]) -> Res {
     let path = PathBuf::from(&w.path);
     if !path.is_dir() {
         die!("the workspace '{name}' is no longer on disk");
+    }
+    // What is merged is the remote branch, and after it the worktree is
+    // removed: a commit made after finish stayed out of main with all green.
+    let dirty = git::out(&path, &["status", "--porcelain"]).unwrap_or_default();
+    if !dirty.trim().is_empty() {
+        die!("uncommitted changes in {}: commit them and finish again, or they stay out", path.display());
+    }
+    let head = git::head_sha(&path).unwrap_or_default();
+    let Some(remote) = git::out(&path, &["ls-remote", "origin", &format!("refs/heads/{}", w.branch)]) else {
+        die!("cannot reach origin to check that the proposal holds this branch's last commit");
+    };
+    let pushed = remote.split_whitespace().next().unwrap_or("");
+    if pushed != head {
+        let what = if pushed.is_empty() {
+            "is not on the remote".to_string()
+        } else {
+            format!("on the remote is at {}", &pushed[..pushed.len().min(8)])
+        };
+        die!(
+            "{} {what} and here at {}: what the proposal holds is not this — crux workspace finish {name}",
+            w.branch,
+            &head[..head.len().min(8)]
+        );
     }
     let view = sh::capture_in(
         &path,

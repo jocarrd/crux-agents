@@ -36,22 +36,10 @@ fn current_file(chosen: &str) -> Result<PathBuf, Exit> {
 }
 
 fn mutate(f: &Path, op: impl FnOnce(&mut record::Doc) -> Result<(), String>) -> Res {
-    let mut doc = match record::read(f) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("{e}");
-            return Err(Exit(1));
-        }
-    };
-    if let Err(e) = op(&mut doc) {
+    record::edit(f, true, op).map_err(|e| {
         eprintln!("{e}");
-        return Err(Exit(1));
-    }
-    if let Err(e) = record::write(f, &mut doc, true) {
-        eprintln!("{e}");
-        return Err(Exit(1));
-    }
-    Ok(())
+        Exit(1)
+    })
 }
 
 /// When going into waiting, a clean workspace and a branch with nothing of
@@ -190,7 +178,14 @@ fn list(args: &[String]) -> Res {
         names.sort();
         for n in names {
             let f = tasks.join(&p).join(&n);
-            let Ok(doc) = record::read(&f) else { continue };
+            let doc = match record::read(&f) {
+                Ok(d) => d,
+                Err(e) => {
+                    ui::warn(format!("{p}/{}: unreadable record, left out — {e}", n.trim_end_matches(".md")));
+                    ui::info(f.display().to_string());
+                    continue;
+                }
+            };
             let s = record::summary(&doc);
             if s.status == record::Status::Closed.as_str() {
                 continue;
@@ -219,11 +214,13 @@ fn list(args: &[String]) -> Res {
 }
 
 pub fn run(argv: &[String]) -> Res {
-    let op = argv.first().cloned().unwrap_or_else(|| "show".into());
+    // `crux task --task p/t` is the status of a task from outside its workspace.
+    let bare = argv.first().is_none_or(|a| a.starts_with("--"));
+    let op = if bare { "show".to_string() } else { argv[0].clone() };
     let mut chosen = String::new();
     let mut goal = String::new();
     let mut args: Vec<String> = vec![];
-    let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
+    let rest = if bare { argv } else { &argv[1..] };
     let mut p = Parser::new(rest);
     while let Some(arg) = p.next() {
         match arg {
@@ -239,7 +236,10 @@ pub fn run(argv: &[String]) -> Res {
             if !f.is_file() {
                 die!("the record {} does not exist", f.display());
             }
-            let s = record::summary(&record::read(&f).unwrap_or_default());
+            let s = match record::read(&f) {
+                Ok(d) => record::summary(&d),
+                Err(e) => return fail(format!("{e}: {}", f.display())),
+            };
             println!(
                 "task {} · {}{}",
                 s.task,

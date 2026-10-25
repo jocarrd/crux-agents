@@ -1543,6 +1543,15 @@ test_the_users_preferences_are_read_from_their_config() {
   assert_eq "false" "$(HOME=$SB/home preference CRUX_NOT_DECLARED false)" "and respects the default"
 }
 
+# One byte from an editor in another encoding made the whole file read as absent.
+test_a_byte_that_is_not_utf8_does_not_void_the_config() {
+  sandbox >/dev/null
+  crux_lib
+  mkdir -p "$SB/home/.crux"
+  printf '# caf\xe9\nCRUX_RM_DELETE_BRANCH=true\n' > "$SB/home/.crux/config"
+  assert_eq "true" "$(HOME=$SB/home preference CRUX_RM_DELETE_BRANCH false)" "the rest of the config is still read"
+}
+
 # A branch with work that is not integrated is not deleted because of a preference.
 test_the_branch_is_only_deleted_if_it_is_integrated() {
   sandbox >/dev/null
@@ -2000,6 +2009,30 @@ GH
   assert_eq "1" "$rc" "stops instead of merging blindly"
 }
 
+# Squash, like workspace merge: the proposal's title is what main keeps, and a
+# repo that only allows squash rejected the merge commit.
+test_merge_squashes_like_workspace_merge() {
+  sandbox >/dev/null
+  local repo="$SB/repo"; mkdir -p "$repo"
+  git -C "$repo" init -q
+  git -C "$repo" remote add origin "https://github.com/someone/project-a.git"
+  local fake="$SB/bin"; mkdir -p "$fake"
+  cat > "$fake/gh" <<GH
+#!/usr/bin/env bash
+echo "\$*" >> "$SB/gh-calls"
+case "\$1 \$2" in
+  "auth status") exit 0 ;;
+  "pr view")
+    if [[ "\$*" == *mergedAt* ]]; then echo 2026-10-25T12:00:00Z; exit 0; fi
+    echo '{"title":"t","state":"OPEN","headRefName":"ws/t","baseRefName":"main","isDraft":false,"mergeable":"MERGEABLE"}' ;;
+  *) exit 0 ;;
+esac
+GH
+  chmod +x "$fake/gh"
+  (cd "$repo" && PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" merge 7 >/dev/null 2>&1)
+  assert_contains "$(grep "pr merge" "$SB/gh-calls")" "--squash" "the proposal is squashed"
+}
+
 test_merge_requires_a_number() {
   sandbox >/dev/null
   local out rc=0
@@ -2073,7 +2106,8 @@ test_the_project_can_overlay_a_profile_field() {
   git -C "$(dirname "$docs")/app" commit -qm init
   json_set "$docs/crux.json" repos '["app"]'
   out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
-  assert_contains "$out" "belongs to the client" "the overlaid field rules over the kernel's"
+  assert_contains "$out" "app/AGENTS.md is the repo's own" "the overlaid field rules over the kernel's"
+  assert_not_contains "$out" "belongs to the client" "and a project of ours is not called a client's"
 }
 
 test_a_nonexistent_directory_does_not_hang_the_commands() {

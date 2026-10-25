@@ -32,7 +32,21 @@ pub fn config_file_redirectable() -> PathBuf {
 
 /// The last `KEY=` line of a config file, without quotes.
 pub fn config_value_in(file: &Path, key: &str) -> Option<String> {
-    let text = std::fs::read_to_string(file).ok()?;
+    // Lossy: one byte that is not UTF-8, from an editor in another encoding,
+    // made the whole config read as absent, and the projects root fell back to
+    // the kernels directory without a word.
+    let text = match std::fs::read(file) {
+        Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| {
+                let p = crate::ui::palette();
+                eprintln!("{}warn{}  cannot read {}: {e}", p.yellow, p.off, file.display());
+            });
+            return None;
+        }
+    };
     let prefix = format!("{key}=");
     text.lines().rfind(|l| l.starts_with(&prefix)).map(|l| l[prefix.len()..].replace('"', "")).filter(|v| !v.is_empty())
 }

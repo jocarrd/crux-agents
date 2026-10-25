@@ -650,7 +650,7 @@ known— and **cold**, hooked to the session close.
 
 ```bash
 node ~/.claude/skills/skill-audit/scripts/probe.mjs "the phrase you would use to ask for it"
-node ~/.claude/skills/skill-audit/scripts/probe.mjs --casos
+node ~/.claude/skills/skill-audit/scripts/probe.mjs --cases
 ```
 
 Everything else in the system is verified. Activation was the only thing taken
@@ -658,7 +658,7 @@ on trust, and it is what decides whether the rest ever gets used.
 
 `probe` says which skill would win a phrase and **by how much**. A margin below
 0.5 means two descriptions cannot be told apart: which one wins depends on the
-luck of a word. `--casos` runs a file of real phrases with the skill that
+luck of a word. `--cases` runs a file of real phrases with the skill that
 should activate, and serves what is really needed — comparing two wordings and
 seeing whether a change has switched off something that used to activate.
 

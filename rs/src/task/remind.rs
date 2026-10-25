@@ -64,6 +64,23 @@ pub fn open_tasks(project: Option<&str>) -> Vec<OpenTask> {
     out
 }
 
+/// The records `open_tasks` leaves out because they cannot be read: without
+/// this a truncated record vanished from every listing without a word.
+pub fn unreadable_tasks() -> Vec<std::path::PathBuf> {
+    let dt = env::tasks_dir();
+    let mut out = vec![];
+    for p in crate::project::subdirs(&dt) {
+        let Ok(entries) = fs::read_dir(dt.join(&p)) else { continue };
+        for f in entries.flatten().map(|e| e.path()) {
+            if is_task(&files::name(&f)) && record::read(&f).is_err() {
+                out.push(f);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
 //
 // When a session starts, the open tasks are shown. It is a reminder and
 // nothing more: one text the person sees, another for the agent that says

@@ -158,10 +158,11 @@ fn seal(ctx: &Ctx) -> Res {
     // What was checked goes into the task as evidence: it is what the proposal
     // says afterwards, so it is not rewritten from memory.
     if let Some(f) = task::file_for_workspace(&ctx.repo.to_string_lossy()).filter(|f| f.is_file()) {
-        let ok = task::record::read(&f).ok().is_some_and(|mut d| {
-            task::record::verify(&mut d, &ctx.text(), &head);
-            task::record::write(&f, &mut d, true).is_ok()
-        });
+        let ok = task::record::edit(&f, true, |d| {
+            task::record::verify(d, &ctx.text(), &head);
+            Ok(())
+        })
+        .is_ok();
         if ok {
             ui::info(format!("task verified: {}", f.display()));
         } else {
