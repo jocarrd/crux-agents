@@ -288,10 +288,23 @@ fn register_task(
     branch: &str,
     goal: &str,
 ) -> bool {
+    let archived = (!record_file.exists())
+        .then(|| record_file.parent().and_then(|dir| record::archived_copy(dir, task)))
+        .flatten();
     let ensured = if record_file.exists() {
         record::read(record_file).and_then(|mut d| {
             record::join(&mut d, repo_name, name);
             record::write(record_file, &mut d, true).map(|_| true)
+        })
+    } else if let Some(old) = &archived {
+        // A new workspace for an archived task reopens it instead of starting an empty one
+        record::read(old).and_then(|mut d| {
+            record::reopen(&mut d, &crate::files::name(old));
+            record::join(&mut d, repo_name, name);
+            record::write(record_file, &mut d, true)?;
+            std::fs::remove_file(old).map_err(|e| e.to_string())?;
+            ui::ok(format!("reopens the archived task '{task}'"));
+            Ok(true)
         })
     } else {
         let mut d = record::create(task, project_name, repo_name, name);
@@ -335,7 +348,12 @@ fn exclude_local_state(path: &Path, env_file: &str) {
             return;
         }
     };
-    for entry in [names::GATE_RECEIPT, names::VISUAL_RECEIPT, env_file].into_iter().filter(|e| !e.is_empty()) {
+    // uv run writes uv.lock; a Python repo that does not version it would see
+    // it as a change and finish would refuse the proposal over it
+    let lockfile = path.join("pyproject.toml").is_file()
+        && git::out(path, &["ls-files", "--", "uv.lock"]).unwrap_or_default().trim().is_empty();
+    let uv_lock = if lockfile { "/uv.lock" } else { "" };
+    for entry in [names::GATE_RECEIPT, names::VISUAL_RECEIPT, env_file, uv_lock].into_iter().filter(|e| !e.is_empty()) {
         if !current.lines().any(|l| l == entry) {
             if !current.is_empty() && !current.ends_with('\n') {
                 current.push('\n');

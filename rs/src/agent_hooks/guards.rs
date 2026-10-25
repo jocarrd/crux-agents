@@ -49,13 +49,17 @@ pub(super) fn wait_guard() -> Res {
     if is_match(&fancy(r"(^|[\s;&|(])CRUX_WAIT=1\s"), &command) {
         return Ok(());
     }
-    let text = runnable(&command, false, false);
+    // Unwrapped: what goes inside sh -c "…" is what runs, and what is decided on
+    let text = runnable(&command, true, false);
     let long: [(&str, &str); 9] = [
         // Only where it runs: as an argument of grep or sed it is being read.
         (r"(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/run\.sh(?=\s*($|[;&|)<>]))", "the whole test suite"),
         (r"(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/e2e\.sh(?=\s*($|[;&|)<>]))", "the end-to-end battery"),
-        // The gate is as long as the command it runs: a git diff is instant.
-        (r"\bcrux\s+ship\s+run\s+--\s+(?!(git|true|echo|test|ls|cat)\b)", "the quality gate"),
+        // The gate is as long as the command it runs: a git diff, a grep or a syntax check is instant.
+        (
+            r"\bcrux\s+ship\s+run\s+--\s+(?=\S)(?!(git|true|echo|test|ls|cat|grep|rg|wc|diff|head|tail|jq)\b|(?:ba)?sh\s+-n\b)",
+            "the quality gate",
+        ),
         (r"\bgh\s+(pr\s+checks|run\s+watch)\b[^;&|\n]*--watch|\bgh\s+run\s+watch\b", "watching CI"),
         (r"\buntil\b[\s\S]*?\bdo\b[\s\S]*?\bsleep\b", "a loop that waits"),
         (r"\bsleep\s+([1-9]\d{2,})\b", "a long sleep"),

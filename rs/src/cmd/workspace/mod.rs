@@ -140,20 +140,24 @@ pub fn free_slot(list: &[registry::Workspace], base: i64, per_slot: i64) -> Opti
 /// restores, the gate receipt, the local pointer and the env file crux itself
 /// writes are left out; and a file identical to the main repo's is the copy
 /// the workspace was born with.
+/// What a build or a dev server writes again on its own: losing it costs
+/// nothing, so it does not stop a workspace from being removed.
+pub fn regenerable(path: &str) -> bool {
+    let dirs = crate::regex!(
+        r"^(.*/)?(node_modules|\.next|\.astro|\.svelte-kit|\.nuxt|\.output|\.vercel|\.wrangler|\.cache|\.parcel-cache|dist|build|target|\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.gradle|\.turbo|\.nx|\.pnpm-store|coverage|\.expo|[^/]+\.egg-info|src-tauri/gen)/"
+    );
+    let files = crate::regex!(r"^(.*/)?([^/]*\.tsbuildinfo|next-env\.d\.ts)$");
+    dirs.is_match(path) || files.is_match(path)
+}
+
 pub fn ignored_files(dir: &Path, own: &str) -> Vec<String> {
     let main = git::main_repo(dir);
-    let regenerable = crate::regex!(
-        r"^(.*/)?(node_modules|\.next|\.astro|\.svelte-kit|\.nuxt|\.output|\.vercel|\.wrangler|\.cache|\.parcel-cache|dist|build|target|\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.gradle|\.turbo|\.nx|\.pnpm-store|coverage|\.expo)/"
-    );
     let crux_own = crate::regex!(r"^(\.crux-ship|\.crux-visual|CLAUDE\.local\.md$)");
-    let tsbuild = crate::regex!(r"^(.*/)?[^/]*\.tsbuildinfo$");
     git::out(dir, &["status", "--porcelain", "--ignored=matching"])
         .unwrap_or_default()
         .lines()
         .filter_map(|l| l.strip_prefix("!! "))
-        .filter(|f| {
-            !crux_own.is_match(f) && !tsbuild.is_match(f) && !regenerable.is_match(f) && (own.is_empty() || *f != own)
-        })
+        .filter(|f| !crux_own.is_match(f) && !regenerable(f) && (own.is_empty() || *f != own))
         .filter(|f| match &main {
             Some(m) if m != dir && dir.join(f).is_file() && m.join(f).is_file() => {
                 std::fs::read(dir.join(f)).ok() != std::fs::read(m.join(f)).ok()
@@ -176,9 +180,10 @@ pub fn clean_workspace(w: &Path, env_file: &str) -> bool {
     git::out(w, &["log", "--oneline", &format!("{base}..HEAD"), "--not", "--remotes"]).unwrap_or_default().is_empty()
 }
 
-/// A task archives itself when its last workspace closes and it is already
-/// merged. Still open, it stays: a workspace can close to resume the task
-/// from another.
+/// A task archives itself when its last workspace closes, it is already
+/// merged and no step is left. Still open, or with steps to do, it stays: a
+/// workspace can close to resume the task from another, and one task can take
+/// several proposals.
 pub fn archive_if_finished(project_name: &str, task: &str) {
     let file = env::tasks_dir().join(project_name).join(format!("{task}.md"));
     let Ok(doc) = record::read(&file) else { return };
@@ -192,6 +197,12 @@ pub fn archive_if_finished(project_name: &str, task: &str) {
     let waiting = doc.text("waiting_on");
     if !waiting.is_empty() {
         ui::info(format!("the task '{task}' is waiting on {waiting}: not archiving"));
+        return;
+    }
+    let pending = record::pending(&doc);
+    if pending > 0 && matches!(doc.status(), Some(record::Status::Merged | record::Status::Deployed)) {
+        ui::info(format!("the task '{task}' has {pending} pending step(s): not archiving"));
+        ui::info(format!("when it is finished: crux task archive --task {project_name}/{task}"));
         return;
     }
     match doc.status() {
@@ -258,6 +269,29 @@ pub fn run(argv: &[String]) -> Res {
         _ => {
             eprintln!("{}", crate::help::text("workspace").unwrap_or_default());
             die!("usage: crux workspace {{new|list|resume|adopt|finish|merge|rm|gc|heal|prune}}")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::regenerable;
+
+    #[test]
+    fn what_builds_write_again_does_not_block_removal() {
+        for p in [
+            "node_modules/x/y.js",
+            "web/.next/cache/a",
+            "src/app.egg-info/",
+            "next-env.d.ts",
+            "app/next-env.d.ts",
+            "src-tauri/gen/schemas/",
+            "tsconfig.tsbuildinfo",
+        ] {
+            assert!(regenerable(p), "{p}");
+        }
+        for p in [".env.local", "notes.txt", "src/gen/schemas/", "my-next-env.d.ts.bak", "data.db"] {
+            assert!(!regenerable(p), "{p}");
         }
     }
 }

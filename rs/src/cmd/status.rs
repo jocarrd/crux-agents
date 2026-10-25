@@ -99,7 +99,9 @@ fn workspaces(root: &Path) -> Vec<registry::Workspace> {
     let branch_w = live.iter().map(|w| w.branch.chars().count()).max().unwrap_or(0);
     for w in &live {
         let alive = if Path::new(&w.path).is_dir() { "" } else { "  (no worktree)" };
-        println!("  {:<name_w$}  {:<branch_w$}  slot {}{alive}", w.name, w.branch, w.slot);
+        let archived =
+            if task_archived(w) { format!("  (task archived: crux workspace rm {})", w.name) } else { String::new() };
+        println!("  {:<name_w$}  {:<branch_w$}  slot {}{alive}{archived}", w.name, w.branch, w.slot);
     }
     branches_gone(&live);
     unregistered_worktrees(root, &live);
@@ -107,6 +109,16 @@ fn workspaces(root: &Path) -> Vec<registry::Workspace> {
         proposals_without_receipt(&live);
     }
     live
+}
+
+/// A workspace that outlived its task: archived elsewhere, or by hand, with
+/// the folder still there.
+fn task_archived(w: &registry::Workspace) -> bool {
+    if w.task.is_empty() || w.project.is_empty() {
+        return false;
+    }
+    let dir = crate::env::tasks_dir().join(&w.project);
+    !dir.join(format!("{}.md", w.task)).exists() && crate::task::record::archived_copy(&dir, &w.task).is_some()
 }
 
 /// A workspace whose branch is no longer on the remote is almost always

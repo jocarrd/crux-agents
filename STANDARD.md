@@ -997,7 +997,7 @@ that has already arrived.
 | Gate closed | `crux ship seal`, which dumps the receipt as evidence | `verified` |
 | Proposal opened | `crux workspace finish`, which takes the description from there | `proposed` |
 | Merged | `crux workspace merge --yes` | `merged` |
-| Its last workspace closed | `crux workspace rm`, which archives it in `done/` if already merged | `closed` |
+| Its last workspace closed | `crux workspace rm`, which archives it in `done/` if already merged and no step is left | `closed` |
 
 **Waiting for another person is not a state of the cycle.** A task can be
 merged and still pending a reply, so the wait is kept apart:
@@ -1015,7 +1015,17 @@ Archived tasks do not appear in the lists (`crux task list --done` shows them)
 and they expire: `crux workspace gc --yes` deletes those older than 180 days
 (`CRUX_TASKS_RETENTION_DAYS`). What had to last has already gone out to the
 proposal and the docs repo. An unfinished task is not archived when its
-workspace closes; if it no longer continues, `crux task archive`.
+workspace closes; if it no longer continues, `crux task archive`. Nor is a
+merged one that still has steps to do: one task can take several proposals, and
+neither closing the workspace nor the sync's merged check archives it while a
+step is open.
+
+A task can be started without a workspace (`crux task new <project>/<task>
+[--goal "<text>"]`), for work that is still being thought out. If the task was
+archived, both that command and `crux workspace new --task` reopen it instead of
+starting an empty record: back in progress, with its history, a note of the
+reopening and a new creation date, so the other machine does not take it for
+the archived one and delete it.
 
 The record is written in the language of the repo's proposals —that of its
 commits—, because the proposal's description is taken from it.

@@ -2,6 +2,8 @@ crux task — the record of the task of the workspace you are in.
 
   crux task                        status, steps and next step
   crux task path                   where the record is
+  crux task new <project>/<task> [--goal "<text>"]
+                                   a task with no workspace yet; if it was archived, reopens it
   crux task goal "<text>"          the objective: what and why
   crux task scope "<text>"         what is in and what stays out
   crux task plan <file>            dumps an approved plan and marks it planned

@@ -553,13 +553,14 @@ pub fn reconcile(p: &str) -> Vec<String> {
         record::advance(&mut doc, record::Status::Merged);
         let _ = record::write(&f, &mut doc, false);
         let alive = doc.list("workspaces").iter().any(|w| live.contains(w));
-        if !alive {
+        let pending = record::pending(&doc);
+        if !alive && pending == 0 {
             let _ = record::archive(&f, false);
         }
         done.push(format!(
             "{p}/{}: its proposal was already merged — {}",
             doc.text("task"),
-            if alive { "marked" } else { "archived" }
+            if alive || pending > 0 { "marked" } else { "archived" }
         ));
     }
     // A cache: if it is not written, the proposals are asked about again.

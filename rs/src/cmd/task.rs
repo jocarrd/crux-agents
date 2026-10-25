@@ -221,12 +221,14 @@ fn list(args: &[String]) -> Res {
 pub fn run(argv: &[String]) -> Res {
     let op = argv.first().cloned().unwrap_or_else(|| "show".into());
     let mut chosen = String::new();
+    let mut goal = String::new();
     let mut args: Vec<String> = vec![];
     let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
     let mut p = Parser::new(rest);
     while let Some(arg) = p.next() {
         match arg {
             "--task" => chosen = p.value(),
+            "--goal" => goal = p.value(),
             other => args.push(other.to_string()),
         }
     }
@@ -248,6 +250,46 @@ pub fn run(argv: &[String]) -> Res {
                 ui::info("no next step: crux task next \"...\"");
             } else {
                 println!("next: {}", s.next);
+            }
+            ui::info(f.display().to_string());
+            Ok(())
+        }
+        "new" => {
+            let name = if chosen.is_empty() { arg(0) } else { chosen.clone() };
+            let Some((project_name, task_name)) = name.split_once('/') else {
+                return fail("usage: crux task new <project>/<task> [--goal \"<text>\"]");
+            };
+            if project_name.is_empty() || task_name.is_empty() || task_name.contains('/') {
+                return fail("usage: crux task new <project>/<task> [--goal \"<text>\"]");
+            }
+            let dir = env::tasks_dir().join(project_name);
+            let f = dir.join(format!("{task_name}.md"));
+            if f.exists() {
+                return fail(format!("the task '{name}' already exists: {}", f.display()));
+            }
+            let mut doc = match record::archived_copy(&dir, task_name) {
+                Some(old) => {
+                    let mut d = match record::read(&old) {
+                        Ok(d) => d,
+                        Err(e) => return fail(e),
+                    };
+                    record::reopen(&mut d, &crate::files::name(&old));
+                    if let Err(e) = std::fs::remove_file(&old) {
+                        return fail(e.to_string());
+                    }
+                    ui::ok(format!("reopens the archived task '{name}'"));
+                    d
+                }
+                None => {
+                    ui::ok(format!("task '{name}' created"));
+                    record::create(task_name, project_name, "", "")
+                }
+            };
+            if !goal.is_empty() {
+                record::set_section(&mut doc, "Objective", &goal);
+            }
+            if let Err(e) = record::write(&f, &mut doc, true) {
+                return fail(e);
             }
             ui::info(f.display().to_string());
             Ok(())

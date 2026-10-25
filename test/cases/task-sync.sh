@@ -359,6 +359,23 @@ test_tasks_already_merged_close_themselves_and_are_not_reminded() {
   teardown
 }
 
+test_a_merged_task_with_steps_left_stays_open() {
+  # One task can take several proposals: merging the first does not finish it.
+  sandbox >/dev/null
+  _tasks_two_machines
+  printf '#!/bin/sh\n[ "$1 $2" = "pr view" ] && echo MERGED && exit 0\nexit 1\n' > "$SB/bin/gh"
+  _new_task A big "several proposals"
+  engine A meta --file "$(task_record A big)" --key pr --value "https://github.com/o/r/pull/1"
+  engine A status --file "$(task_record A big)" --to proposed
+  en A "$CRUX_HOME/bin/crux" task add --task alpha/big "second proposal" >/dev/null
+
+  local out
+  out="$(en A crux sync 2>&1)"
+  assert_contains "$out" "already merged — marked" "it is marked merged"
+  assert_file "$(task_record A big)" "but with a step left it is not archived"
+  teardown
+}
+
 test_tasks_are_not_published_in_a_public_repo() {
   sandbox >/dev/null
   _tasks_two_machines

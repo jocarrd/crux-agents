@@ -301,6 +301,38 @@ pub fn steps(doc: &Doc) -> Vec<Step> {
         .unwrap_or_default()
 }
 
+/// Steps still to do. A merged proposal does not finish a task that has them:
+/// one task can take several proposals.
+pub fn pending(doc: &Doc) -> usize {
+    steps(doc).iter().filter(|s| !s.done).count()
+}
+
+/// The most recent archived copy of a task in `<project>/done/`, if any.
+pub fn archived_copy(project_dir: &Path, task: &str) -> Option<PathBuf> {
+    let suffix = format!("-{task}.md");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(project_dir.join("done"))
+        .ok()?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            let name = files::name(p);
+            name.len() == 11 + suffix.len() - 1 && name.ends_with(&suffix)
+        })
+        .collect();
+    found.sort();
+    found.pop()
+}
+
+/// Back to work: open again, with a new creation date. The sync identifies an
+/// archived record by its path and that date, so keeping the old one would
+/// make the other machine delete it again.
+pub fn reopen(doc: &mut Doc, from: &str) {
+    let today = now();
+    doc.set_text("status", Status::InProgress.as_str());
+    doc.set_text("created", &today);
+    set_section(doc, "Closure", "");
+    append(doc, "Deviations and decisions", &format!("{}: reopened from done/{from}", &today[..10]));
+}
+
 /// Statuses only advance on their own. Going back is a decision and is asked
 /// for with `crux task status`. An unknown status written by hand is behind
 /// every known one.
@@ -793,6 +825,43 @@ mod tests {
         let back = parse(&text).unwrap();
         assert_eq!(render(&back), text);
         assert_eq!(decisions(&back)[0].why.as_deref(), Some("because"));
+    }
+
+    #[test]
+    fn pending_counts_the_steps_not_done() {
+        let mut d = create("t", "p", "app", "t");
+        assert_eq!(pending(&d), 0);
+        let first = add_step(&mut d, "first");
+        add_step(&mut d, "second");
+        assert_eq!(pending(&d), 2);
+        complete(&mut d, &first, "").unwrap();
+        assert_eq!(pending(&d), 1);
+    }
+
+    #[test]
+    fn reopening_opens_with_a_new_creation_date() {
+        let mut d = create("t", "p", "app", "t");
+        d.set_text("status", Status::Closed.as_str());
+        d.set_text("created", "2020-01-01T00:00:00");
+        set_section(&mut d, "Closure", "closed 2020-01-02");
+        reopen(&mut d, "2020-01-02-t.md");
+        assert_eq!(d.status(), Some(Status::InProgress));
+        assert_ne!(d.text("created"), "2020-01-01T00:00:00");
+        assert!(d.section("Closure").is_none_or(|s| s.lines.iter().all(|l| l.trim().is_empty())));
+        assert!(render(&d).contains("reopened from done/2020-01-02-t.md"));
+    }
+
+    #[test]
+    fn the_archived_copy_is_the_latest_with_that_exact_name() {
+        let dir = std::env::temp_dir().join(format!("crux-archived-{}", std::process::id()));
+        let done = dir.join("done");
+        std::fs::create_dir_all(&done).unwrap();
+        for n in ["2026-10-01-t.md", "2026-10-05-t.md", "2026-10-09-other-t.md", "2026-10-09-tt.md"] {
+            std::fs::write(done.join(n), "").unwrap();
+        }
+        assert_eq!(archived_copy(&dir, "t"), Some(done.join("2026-10-05-t.md")));
+        assert_eq!(archived_copy(&dir, "missing"), None);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
