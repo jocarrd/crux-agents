@@ -513,7 +513,11 @@ pub fn merge(argv: &[String]) -> Res {
     if let Some(f) = task::file_for_workspace(&w.path).filter(|f| f.is_file()) {
         task::advance_file(&f, record::Status::Merged);
     }
-    if git::ok(&path, &["push", "-q", "origin", "--delete", &w.branch]) {
+    // A provider that deletes branches on merge has already done it, and the
+    // failed delete read as "still there". The remote is asked instead.
+    let deleted = git::ok(&path, &["push", "-q", "origin", "--delete", &w.branch])
+        || git::out(&path, &["ls-remote", "--heads", "origin", &w.branch]).is_some_and(|o| o.trim().is_empty());
+    if deleted {
         ui::ok("remote branch deleted");
     } else {
         ui::info("the remote branch is still there: delete it from your provider if you want");
