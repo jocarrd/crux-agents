@@ -1011,6 +1011,14 @@ whom and since when, and suggest following up after 7 days
 own was removed— and it stops waiting; `crux task unwait` removes the wait
 without opening a workspace. See ADR-017.
 
+**A task only archives itself when its last workspace closes**, so one opened
+with `crux task new` and then worked in a workspace with another name stays open.
+`crux task list` and the reminder mark as `idle` the open tasks with no workspace
+on this machine and untouched for 3 days (`CRUX_IDLE_TASK_DAYS`), and
+`crux workspace new` lists them when it registers a new task, so the work joins
+the right one with `--task`. `/end-session` reviews the tasks of the session.
+Nothing archives them on its own: whether the work is done is the person's call.
+
 Archived tasks do not appear in the lists (`crux task list --done` shows them)
 and they expire: `crux workspace gc --yes` deletes those older than 180 days
 (`CRUX_TASKS_RETENTION_DAYS`). What had to last has already gone out to the

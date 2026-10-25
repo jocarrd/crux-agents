@@ -19,7 +19,9 @@ crux task — the record of the task of the workspace you are in.
                                    the task waits on another person: notes it and removes
                                    the workspaces and branches that no longer add anything
   crux task unwait                 the answer arrived: the task is work again
-  crux task list [--all] [--done]  the open tasks, with their next step; --done, the archived ones
+  crux task list [--all] [--done]  the open tasks, with their next step; --done, the archived ones.
+                                   "idle Nd": no workspace here and untouched for N days
+                                   (CRUX_IDLE_TASK_DAYS, 3 by default): done or forgotten?
   crux task archive                closes it and sets it aside in done/, dated
 
 Outside a workspace, --task <project>/<task> says which one.

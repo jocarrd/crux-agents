@@ -289,6 +289,20 @@ test_workspace_list_shows_where_each_task_stands() {
   assert_contains "$out" "review the widget" "with its next step"
 }
 
+test_a_task_left_without_workspace_is_flagged() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" task new proj/forgotten --goal "clean the routes" >/dev/null 2>&1
+  sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB/tasks/proj/forgotten.md"
+
+  local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_contains "$out" "idle" "an old task with no workspace is marked idle"
+
+  out="$("$CRUX_HOME/bin/crux" workspace new routes --repo "$root/app" 2>&1)"
+  assert_contains "$out" "with no workspace: forgotten" "a new task names the unattended ones"
+  assert_contains "$out" "--task <task>" "and how to join one of them"
+}
+
 test_an_unreadable_record_is_reported_and_stops() {
   sandbox >/dev/null
   local f="$SB/tasks/proj/broken.md"

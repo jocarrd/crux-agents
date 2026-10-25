@@ -162,6 +162,7 @@ fn list(args: &[String]) -> Res {
             scope = task::project_name_for(&here);
         }
     }
+    let live = crate::task::sync::live_workspaces();
     let mut found = false;
     for p in project::subdirs(&tasks) {
         if !scope.is_empty() && p != scope {
@@ -203,7 +204,11 @@ fn list(args: &[String]) -> Res {
                 );
                 continue;
             }
-            println!("{label:<28} {:<12} {:<6} {}", s.status, s.steps, cut(&s.next, 70));
+            let status = match crate::task::remind::idle_days(&doc.text("updated"), &doc.list("workspaces"), &live) {
+                Some(days) => format!("idle {days}d"),
+                None => s.status.clone(),
+            };
+            println!("{label:<28} {:<12} {:<6} {}", status, s.steps, cut(&s.next, 70));
         }
     }
     if !found {
