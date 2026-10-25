@@ -109,12 +109,15 @@ jobs:
           npm install -g ./pkg/crux-agents-*.tgz
           crux --version | grep -q "not installed on this machine yet"
       # Trusted publishing: npm trusts this workflow through OIDC, with no token
-      # stored anywhere. It is set up on npmjs.com once the package exists.
+      # stored anywhere. It can only be set on a package that exists, so the
+      # first publish used an NPM_TOKEN secret, deleted afterwards; while it is
+      # absent, NODE_AUTH_TOKEN is empty and npm goes through OIDC.
       # Provenance needs a public repo: on a private one npm refuses the publish.
       - name: Publish to npm
         if: inputs.publish
         env:
           PRIVATE: ${{ github.event.repository.private }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           provenance=""; [ "$PRIVATE" = "false" ] && provenance="--provenance"
           npm publish ./pkg/crux-agents-*.tgz --access public $provenance
