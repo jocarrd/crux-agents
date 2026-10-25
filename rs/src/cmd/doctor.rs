@@ -363,13 +363,25 @@ fn archived_repos(t: &mut Tally, c: &Checkup) -> Vec<String> {
 fn undeclared_on_remote(t: &mut Tally, c: &Checkup, archived: &[String]) {
     let owner =
         crate::regex!(r"^.*github\.com[:/]").replace(&c.origin_docs, "").split('/').next().unwrap_or("").to_string();
+    // Archived on GitHub is read-only: nothing more can land there.
+    let jq = ".[] | select(.isArchived | not) | .name";
     let list =
-        sh::capture("gh", &["repo", "list", &owner, "--limit", "200", "--json", "name", "--jq", ".[].name"]).stdout;
+        sh::capture("gh", &["repo", "list", &owner, "--limit", "200", "--json", "name,isArchived", "--jq", jq]).stdout;
+    // A declared repo can live under another name: its URL in the contract says which.
+    let remote_names: Vec<String> = c
+        .declared
+        .iter()
+        .filter_map(|d| project::remote_url(&c.contract, d))
+        .filter_map(|u| {
+            u.trim_end_matches('/').rsplit(['/', ':']).next().map(|n| n.trim_end_matches(".git").to_lowercase())
+        })
+        .collect();
     let lower = c.project_name.to_lowercase();
     for remote in list.lines().filter(|r| !r.is_empty() && **r != c.docs_name) {
         let r = remote.to_lowercase();
         if r == lower || r.starts_with(&format!("{lower}-")) {
-            let known = c.declared.iter().chain(archived.iter()).any(|x| x.to_lowercase() == r);
+            let known =
+                c.declared.iter().chain(archived.iter()).any(|x| x.to_lowercase() == r) || remote_names.contains(&r);
             if !known {
                 t.note(format!("{remote} is on the remote and not declared ('crux add-repo {remote}')"));
             }

@@ -2583,3 +2583,30 @@ test_the_npm_package_carries_four_binaries_and_the_version() {
   assert_contains "$list" "package/vendor/crux-darwin-arm64" "with the four binaries"
   assert_contains "$(grep 'vendor/crux-linux-x64' <<<"$list")" "rwxr-xr-x" "executable"
 }
+
+# A repo of the project that lives on the remote and is not in the contract is
+# named. Not one that is declared under another name, nor one archived on
+# GitHub: the published kernel was told to add itself and its archived copy.
+test_doctor_names_only_the_repos_really_missing_from_the_contract() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project kit --repos kit)"
+  git -C "$docs" remote add origin "https://github.com/acme/kit-docs.git"
+  json_set "$docs/crux.json" remote '{"url":"https://github.com/acme/{repo}.git","repos":{"kit":"https://github.com/acme/kit-agents.git"}}'
+  mkdir -p "$SB/bin"
+  cat > "$SB/bin/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "repo list")
+    printf '%s\n' kit-docs kit-agents kit-extra
+    # What gh's --jq leaves when it filters out the archived ones.
+    [[ "$*" == *isArchived* ]] || echo kit-old ;;
+  *) exit 1 ;;
+esac
+GH
+  chmod +x "$SB/bin/gh"
+  local out; out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
+  assert_contains "$out" "kit-extra is on the remote and not declared" "a repo missing from the contract is named"
+  assert_not_contains "$out" "kit-agents is on the remote" "not the declared repo under its other name"
+  assert_not_contains "$out" "kit-old is on the remote" "nor one archived on GitHub"
+}
