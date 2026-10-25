@@ -106,9 +106,8 @@ Tomorrow, on another machine, `crux sync` brings all of it back.
 ## Quick start
 
 ```bash
-# once per machine (it builds crux with Rust's cargo: https://rustup.rs)
-git clone https://github.com/jocarrd/crux-agents.git ~/Projects/crux
-~/Projects/crux/install.sh
+# once per machine: lays out the kernel the package carries (Linux and macOS)
+npx crux-agents install
 
 # then let it walk you through the rest: account, remote, profile, projects
 crux setup
@@ -128,8 +127,12 @@ crux workspace finish checkout-flow   # pushes the branch, opens the proposal
 crux bootstrap
 ```
 
-The binary carries the whole kernel, so with the binary alone `crux install`
-does the same as `install.sh`. Projects live in one folder of your choice:
+The package is one static binary per platform and runs nothing when it is
+installed; `crux install` lays out the kernel it carries and leaves `crux` on
+your PATH. `npm i -g crux-agents` works too, and each release also carries the
+binaries with their checksums. To work on crux itself, clone it and run
+`install.sh`, which builds it with Rust's cargo (see `CONTRIBUTING.md`).
+Projects live in one folder of your choice:
 `crux setup` asks for it (`~/Projects` unless you say otherwise), and
 `--projects-dir <path>` or the `CRUX_PROJECTS_DIR` variable set it too. A
 kernel cloned inside a folder makes that folder the default. `crux doctor
