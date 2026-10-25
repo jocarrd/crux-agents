@@ -6,7 +6,7 @@ Seven steps, each of which looks first at what is already done and skips it:
 git and GitHub (it offers 'gh auth login' if gh has no session), where new
 repos go (your account or one of your organisations, cloned the way the
 account clones), the projects folder, crux itself, your profile (brought from
-the remote, or created), your projects (brought if the account has them; if it
+the remote, or created), your projects (the account's, picking which to bring; if it
 has none, the first one is created with you), and what the machine still
 lacks for the skills.
 

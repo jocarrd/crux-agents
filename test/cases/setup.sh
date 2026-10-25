@@ -117,3 +117,31 @@ test_setup_offers_projects_in_home_and_keeps_the_folder_the_person_chooses() {
   # shellcheck disable=SC2088  # setup prints the folder with a literal ~
   assert_contains "$out" "~/code" "run again, it offers the folder chosen, not the default"
 }
+
+# All or nothing made a machine carry every project of the account: the person
+# picks which, by number or name, and none is a valid answer.
+test_setup_brings_only_the_projects_picked() {
+  sandbox >/dev/null
+  _setup_gh ana "" https
+  local home="$SB/h"; mkdir -p "$home/.crux"
+  printf 'CRUX_REMOTE="%s/remotes/ana/{repo}.git"\n' "$SB" > "$home/.crux/config"
+  printf '[user]\n\temail = ana@localhost\n\tname = ana\n[init]\n\tdefaultBranch = main\n' > "$home/.gitconfig"
+  local seed="$SB/seed" p
+  for p in blog shop; do
+    env HOME="$home" "$CRUX_HOME/bin/crux" init "$p" --no-remote --parent "$seed" >/dev/null 2>&1
+    git init -q --bare -b main "$SB/remotes/ana/$p-docs.git"
+    git -C "$seed/$p/$p-docs" push -q "$SB/remotes/ana/$p-docs.git" HEAD:main 2>/dev/null
+  done
+
+  # profile: no; projects: only shop, by name
+  local out; out="$(setup_as "$home" 'n\nshop\n' --projects-dir "$home/p")"
+  assert_contains "$out" "which to bring" "it asks which"
+  assert_file "$home/p/shop/shop-docs/crux.json" "it brings the one picked"
+  assert_no_file "$home/p/blog" "and not the other"
+
+  local home2="$SB/h2"; mkdir -p "$home2/.crux"
+  cp "$home/.crux/config" "$home2/.crux/"; cp "$home/.gitconfig" "$home2/"
+  out="$(setup_as "$home2" 'n\nnone\n' --projects-dir "$home2/p")"
+  assert_contains "$out" "crux clone <project> brings one later" "none is an answer, and it says how to bring one later"
+  assert_no_file "$home2/p/shop" "nothing is brought"
+}
