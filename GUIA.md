@@ -66,8 +66,7 @@ does not belong to the kernel**.
 ### Installation, once per machine
 
 ```bash
-git clone https://github.com/jocarrd/crux-agents.git ~/Projects/crux
-~/Projects/crux/install.sh --remote 'git@github.com:<your-user>/{repo}.git'
+npx crux-agents install --remote 'git@github.com:<your-user>/{repo}.git'
 ```
 
 `--remote` is optional and sets this machine's usual remote, so you do not have
@@ -223,11 +222,10 @@ involve hand-editing a list inside a script.
 
 ## Level 3b — Changing computers
 
-Three commands:
+Two commands:
 
 ```bash
-git clone https://github.com/jocarrd/crux-agents.git ~/Projects/crux
-~/Projects/crux/install.sh --remote 'git@github.com:your-user/{repo}.git'
+npx crux-agents install --remote 'git@github.com:your-user/{repo}.git'
 crux clone example-project
 ```
 
@@ -847,7 +845,7 @@ way to lie with this metric.
 | `repos/<x>/ is not declared` | Orphan folder | `crux add-repo`, or delete it |
 | `broken markdown links` | Documentation moved | Fix, or switch to backticks |
 | `profile client-repo: ... should not exist` | Something was written in foreign code | Delete the file |
-| A skill does not appear in the agent | Outdated installation | `~/Projects/crux/install.sh` |
+| A skill does not appear in the agent | Outdated installation | `npx crux-agents install` |
 | `crux clone` does not know where to fetch something from | No `remote` in the contract | Declare it, or `crux adopt` to deduce it |
 | A hook does nothing, or "failed with non-blocking status" on every turn | It points at a file that no longer exists | `crux hooks status` to see it, `crux hooks install` from the main repo |
 | A tool is missing for a skill | — | `crux doctor --machine` |
