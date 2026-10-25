@@ -106,7 +106,7 @@ jobs:
       - name: Package, and try it as a person would
         run: |
           npm/pack.sh dist pkg
-          npm install -g pkg/crux-agents-*.tgz
+          npm install -g ./pkg/crux-agents-*.tgz
           crux --version | grep -q "not installed on this machine yet"
       # Trusted publishing: npm trusts this workflow through OIDC, with no token
       # stored anywhere. It is set up on npmjs.com once the package exists.
@@ -117,4 +117,4 @@ jobs:
           PRIVATE: ${{ github.event.repository.private }}
         run: |
           provenance=""; [ "$PRIVATE" = "false" ] && provenance="--provenance"
-          npm publish pkg/crux-agents-*.tgz --access public $provenance
+          npm publish ./pkg/crux-agents-*.tgz --access public $provenance
