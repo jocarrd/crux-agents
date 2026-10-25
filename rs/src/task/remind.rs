@@ -134,6 +134,25 @@ fn nudge_after_days() -> i64 {
         .unwrap_or(7)
 }
 
+fn idle_after_days() -> i64 {
+    env::var("CRUX_IDLE_TASK_DAYS")
+        .and_then(|v| v.parse::<f64>().ok())
+        .filter(|n| *n > 0.0)
+        .map(|n| n as i64)
+        .unwrap_or(3)
+}
+
+/// How long an open task has gone untouched with no workspace on this
+/// machine, once past the threshold. Such a task was usually finished under
+/// another name, or forgotten: nothing archives it, because only closing its
+/// last workspace does.
+pub fn idle_days(updated: &str, workspaces: &[String], live: &BTreeSet<String>) -> Option<i64> {
+    if workspaces.iter().any(|w| live.contains(w)) {
+        return None;
+    }
+    days_since(updated).filter(|d| *d >= idle_after_days())
+}
+
 fn cut(t: &str, n: usize) -> String {
     if t.chars().count() > n {
         format!("{}…", t.chars().take(n - 1).collect::<String>())
@@ -179,6 +198,7 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
         .collect();
     let mut lines = vec![];
     let mut waiting_block = false;
+    let mut idle_any = false;
     for t in shown {
         if let Some(w) = &t.waiting {
             if !waiting_block {
@@ -209,7 +229,13 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
         if !t.next.is_empty() {
             l.push_str(&format!(": {}", cut(&t.next, 70)));
         }
-        if !here {
+        if let Some(days) = idle_days(&t.updated, &t.workspaces, &live) {
+            idle_any = true;
+            l.push_str(&format!(
+                " · idle {days} days with no workspace: if it is done, crux task archive --task {}/{}",
+                t.project, t.task
+            ));
+        } else if !here {
             l.push_str(&format!(" · no workspace here: crux workspace resume {}", t.task));
         }
         lines.push(l);
@@ -252,6 +278,12 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
     agent.push("This is only a reminder. Do not resume any or propose one on your own, and do not push:".into());
     agent.push("if they ask for something else, do that something else. If they decide to resume one that has".into());
     agent.push("no workspace on this computer, it is opened with `crux workspace resume <task>`.".into());
+    if idle_any {
+        agent.push(
+            "The idle ones may have been finished under another task name: if this session did that work,".into(),
+        );
+        agent.push("say so and offer to archive them; never archive one on your own.".into());
+    }
     if waiting_block {
         agent.push(
             "The ones waiting for an answer depend on another person: do not resume them until it arrives,".into(),
@@ -266,4 +298,20 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
         "more": list.len().saturating_sub(maximum),
         "conflicts": conflicts.len(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_only_without_a_live_workspace_and_past_the_threshold() {
+        let old = (chrono::Local::now() - chrono::Duration::days(10)).format("%Y-%m-%dT%H:%M:%S").to_string();
+        let fresh = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+        let live: BTreeSet<String> = ["ws-a".to_string()].into();
+        assert_eq!(idle_days(&old, &[], &live), Some(10));
+        assert_eq!(idle_days(&old, &["ws-b".into()], &live), Some(10));
+        assert_eq!(idle_days(&old, &["ws-a".into()], &live), None);
+        assert_eq!(idle_days(&fresh, &[], &live), None);
+    }
 }

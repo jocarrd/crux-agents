@@ -499,7 +499,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
     Ok(Merged { commit, fin, unsettled, warnings, pulled, published })
 }
 
-pub(super) fn live_workspaces() -> BTreeSet<String> {
+pub(crate) fn live_workspaces() -> BTreeSet<String> {
     let r = files::read_json(&env::registry_file()).ok();
     r.and_then(|v| v.get("workspaces").and_then(Value::as_object).cloned())
         .map(|m| {

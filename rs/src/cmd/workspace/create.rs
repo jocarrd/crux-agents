@@ -315,7 +315,10 @@ fn register_task(
     };
     match ensured {
         Ok(true) => ui::ok(format!("joins the already open task '{task}'")),
-        Ok(false) => ui::ok(format!("task '{task}' registered")),
+        Ok(false) => {
+            ui::ok(format!("task '{task}' registered"));
+            hint_unattended_tasks(project_name, task, name);
+        }
         Err(e) => {
             ui::warn(format!("could not write the task record: {e}"));
             return false;
@@ -335,6 +338,23 @@ fn register_task(
         ui::warn("could not note the branch in the task: without it, another machine will not know how to resume it");
     }
     true
+}
+
+/// A new task while others in the project sit open with no workspace: the
+/// work may belong to one of them, and a second record leaves the first open
+/// forever.
+fn hint_unattended_tasks(project_name: &str, task: &str, name: &str) {
+    let live = crate::task::sync::live_workspaces();
+    let others: Vec<String> = crate::task::remind::open_tasks(Some(project_name))
+        .into_iter()
+        .filter(|t| t.task != task && t.waiting.is_none() && !t.workspaces.iter().any(|w| live.contains(w)))
+        .map(|t| t.task)
+        .collect();
+    if others.is_empty() {
+        return;
+    }
+    ui::info(format!("open tasks in {project_name} with no workspace: {}", others.join(", ")));
+    ui::info(format!("if this work is one of them: crux workspace new {name} --task <task>"));
 }
 
 /// The gate marker and the env file are local state: into the common

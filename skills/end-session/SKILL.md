@@ -93,13 +93,27 @@ and the markdown links. If broken links appear:
   standard forbids linking outside the docs repo because those links break with
   any reorganization and end up lying.
 
-### 4. Skill boundary, if you touched any
+### 4. Tasks left open
+
+```bash
+crux task list
+```
+
+A task only archives itself when its last workspace closes, so one created with
+`crux task new` and then done in a workspace with another name stays open
+forever. Go through the ones this session created or touched: if the work is
+done, archive it (`crux task archive --task <project>/<task>`); if not, leave
+its next step written. The ones marked `idle` have gone days with no workspace
+and are the usual suspects. Ask before archiving anything the session did not
+finish.
+
+### 5. Skill boundary, if you touched any
 
 If a skill was created or changed in the session, decide it now while it is
 fresh: pattern or adapter? This is the moment when it is known. Every so many
 closings, also run the full review with `/skill-audit`.
 
-### 5. Present the balance to the user
+### 6. Present the balance to the user
 
 A summary structured by the four categories, with what was found in each, and
 confirmation for each item. If there is nothing, say so plainly: a session with
@@ -107,7 +121,7 @@ nothing to make durable.
 
 **The user confirms or vetoes each item.** Nothing is promoted unilaterally.
 
-### 6. Write and commit
+### 7. Write and commit
 
 One commit per category, not one giant one:
 
@@ -118,7 +132,7 @@ One commit per category, not one giant one:
 
 Push each affected repo.
 
-### 7. Final report
+### 8. Final report
 
 What was written and where, what was fixed, which repos were pushed. If work is
 left uncommitted on purpose, say so explicitly instead of staying silent.
