@@ -102,6 +102,40 @@ impl Prompt {
         }
     }
 
+    /// Several of a list, all by default: numbers or names, `none` for none.
+    /// A yes still means all, as it did when the question was all or nothing.
+    fn pick(&self, question: &str, options: &[String]) -> Vec<usize> {
+        let p = ui::palette();
+        for (i, o) in options.iter().enumerate() {
+            println!("      {}{}{} {o}", p.cyan, i + 1, p.off);
+        }
+        loop {
+            let answer = self.line(&format!("{question} (numbers or names, none for none)"), "all").to_lowercase();
+            match answer.as_str() {
+                "all" | "y" | "yes" | "s" | "si" | "sí" => return (0..options.len()).collect(),
+                "none" | "n" | "no" | "0" => return vec![],
+                _ => {}
+            }
+            let picked: Option<Vec<usize>> = answer
+                .split([',', ' '])
+                .filter(|w| !w.is_empty())
+                .map(|w| match w.parse::<usize>() {
+                    Ok(n) if (1..=options.len()).contains(&n) => Some(n - 1),
+                    _ => options.iter().position(|o| o.to_lowercase() == w),
+                })
+                .collect();
+            match picked {
+                Some(mut v) if !v.is_empty() => {
+                    v.sort_unstable();
+                    v.dedup();
+                    return v;
+                }
+                _ if !self.interactive => return (0..options.len()).collect(),
+                _ => note(format!("numbers from 1 to {}, names from the list, all or none", options.len())),
+            }
+        }
+    }
+
     fn choose(&self, question: &str, options: &[String], default: usize) -> usize {
         let p = ui::palette();
         for (i, o) in options.iter().enumerate() {
@@ -327,11 +361,14 @@ impl Setup {
             .collect();
         let mut names = here.clone();
         if !missing.is_empty() {
-            let list: Vec<&str> = missing.iter().map(|(_, p)| p.as_str()).collect();
-            hint(format!("on your account and not here: {}", list.join(", ")));
-            if self.ask.yes("bring them to this machine?", true) {
+            hint("on your account and not here:");
+            let list: Vec<String> = missing.iter().map(|(_, p)| p.clone()).collect();
+            let chosen = self.ask.pick("which to bring to this machine", &list);
+            if chosen.is_empty() {
+                hint("none brought: crux clone <project> brings one later");
+            } else {
                 let dir = self.root.display().to_string();
-                for (owner, p) in &missing {
+                for (owner, p) in chosen.iter().map(|&i| &missing[i]) {
                     let from = self.template_of(owner);
                     if quietly(&self.root, "clone", &[p, "--parent", &dir, "--from", &from]) {
                         done(format!("{p}: its repos, pointers and hooks"));
