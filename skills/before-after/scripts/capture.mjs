@@ -63,7 +63,10 @@ async function capture(browser, url, width, file) {
     await ctx.addCookies([{ name, value: value.join('='), url }])
   }
   const page = await ctx.newPage()
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 240000 })
+  await page.goto(url, { waitUntil: 'load', timeout: 240000 })
+  // A dev server keeps its hot-reload socket open, so the network never goes
+  // idle: wait for it briefly and carry on when it does not come.
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
   // Cookie notices, chat bubbles and other floating layers cover the page in
   // every chunk; each site stores consent its own way, so they are hidden by
   // selector instead of trying to accept them.
