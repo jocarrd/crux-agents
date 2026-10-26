@@ -230,7 +230,10 @@ async function measure(url) {
   try {
     const ctx = await browser.newContext(DESKTOP)
     const page = await ctx.newPage()
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 })
+    await page.goto(url, { waitUntil: 'load', timeout: 45000 })
+    // A dev server keeps its hot-reload socket open, so the network never goes
+    // idle: wait for it briefly and carry on when it does not come.
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
     await page.waitForTimeout(900)
     return await page.evaluate(MEASURE)
   } finally {
