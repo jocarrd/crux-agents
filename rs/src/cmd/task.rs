@@ -219,14 +219,10 @@ fn list(args: &[String]) -> Res {
 }
 
 pub fn run(argv: &[String]) -> Res {
-    // `crux task --task p/t` is the status of a task from outside its workspace.
-    let bare = argv.first().is_none_or(|a| a.starts_with("--"));
-    let op = if bare { "show".to_string() } else { argv[0].clone() };
     let mut chosen = String::new();
     let mut goal = String::new();
     let mut args: Vec<String> = vec![];
-    let rest = if bare { argv } else { &argv[1..] };
-    let mut p = Parser::new(rest);
+    let mut p = Parser::new(argv);
     while let Some(arg) = p.next() {
         match arg {
             "--task" => chosen = p.value(),
@@ -234,6 +230,8 @@ pub fn run(argv: &[String]) -> Res {
             other => args.push(other.to_string()),
         }
     }
+    // `crux task --task p/t` is the status of a task from outside its workspace.
+    let op = if args.is_empty() || args[0].starts_with("--") { "show".to_string() } else { args.remove(0) };
     let arg = |n: usize| args.get(n).cloned().unwrap_or_default();
     match op.as_str() {
         "show" => {
