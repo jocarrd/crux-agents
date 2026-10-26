@@ -658,6 +658,17 @@ test_task_with_only_the_task_flag_shows_it() {
   assert_not_contains "$out" "unknown subcommand" "and is not taken for a subcommand"
 }
 
+test_the_task_flag_can_go_before_the_subcommand() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/early --goal g >/dev/null 2>&1
+  local out; out="$("$CRUX_HOME/bin/crux" task --task proj/early note "noted first" 2>&1)"
+  assert_contains "$out" "noted" "the subcommand after the flag runs"
+  "$CRUX_HOME/bin/crux" task --task proj/early next "the next one" >/dev/null 2>&1
+  local f="$SB/tasks/proj/early.md"
+  assert_contains "$(cat "$f")" "noted first" "the note is written, not dropped for a status"
+  assert_contains "$(cat "$f")" "the next one" "and so is the next step"
+}
+
 test_a_truncated_record_is_named_not_hidden() {
   sandbox >/dev/null
   "$CRUX_HOME/bin/crux" task new proj/good --goal g >/dev/null 2>&1
