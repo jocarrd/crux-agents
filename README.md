@@ -287,10 +287,10 @@ Every command accepts `--help`. The complete guide, from simple to deep, is
 
 ## Skills
 
-45 cross-cutting procedures in plain markdown (`skills/<name>/SKILL.md`), each
+46 cross-cutting procedures in plain markdown (`skills/<name>/SKILL.md`), each
 invoked as `/<name>`: the cycle (`flow`, `workspace`, `ship`, `review-pr`,
 `end-session`), debugging and testing (`root-cause`, `write-tests`, `e2e`,
-`bug-hunt`), interfaces (`visual-test`, `before-after`, `ui-tells`),
+`bug-hunt`), security (`security-audit`), interfaces (`visual-test`, `before-after`, `ui-tells`),
 documentation (`adr`, `promote-to-docs`, `runbook`) and more. A project adds
 its own in its docs repo; when one of its skills turns out to be a general
 pattern, it moves here and the project keeps a thin adapter with its own data.

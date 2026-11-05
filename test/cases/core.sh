@@ -1095,7 +1095,8 @@ test_kernel_references_no_skills_that_do_not_exist() {
   local ref
   while IFS= read -r ref; do
     [[ -d "$CRUX_HOME/skills/$ref" ]] || broken+="$ref "
-  done < <(grep -rhoE '`/[a-z][a-z0-9-]+`' \
+  # upstream/ holds verbatim third-party text, whose `/paths` are not skills.
+  done < <(grep -rhoE --exclude-dir=upstream '`/[a-z][a-z0-9-]+`' \
              "$CRUX_HOME/skills" "$CRUX_HOME"/*.md 2>/dev/null \
            | tr -d '`/' | sort -u)
 
