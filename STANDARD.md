@@ -923,6 +923,7 @@ credentials and names. With two guards:
 | `grill` | Interrogating the decision-maker before building anything |
 | `flow` | **The full cycle and its order** — the default entry point |
 | `workspace`, `ship`, `review-pr` | The pieces of the cycle: isolate, verify and review |
+| `security-audit` | Multi-phase vulnerability audit of a repository, from Cloudflare's method, on source only |
 | `merge-conflicts` | Getting through a merge or rebase left half done |
 | `deploy-watch`, `prod-signals` | After merging: watch production and read what it says |
 | `write-tests`, `e2e`, `root-cause`, `eval-fixtures` | Quality and debugging |
