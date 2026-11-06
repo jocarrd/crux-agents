@@ -2174,3 +2174,85 @@ test_a_copy_identical_to_the_main_repo_does_not_hold_a_workspace() {
   assert_eq "0" "$rc" "the identical copy and the cache do not"
   assert_no_file "$ws/.env.local" "and the worktree is gone"
 }
+
+_finish_in_client_repo() {
+  # A client project with the gate passed and a fake gh that keeps the body.
+  export CRUX_REGISTRY="$SB/registry.json"
+  local root="$CRUX_PROJECTS_DIR/cli" remote="$SB/remote.git"
+  mkdir -p "$root/app" "$root/cli-docs" "$SB/bin"
+  git init -q --bare "$remote"
+  git -C "$root/app" init -q -b main
+  echo x > "$root/app/f.txt"; git -C "$root/app" add -A; git -C "$root/app" commit -qm init
+  git -C "$root/app" config "url.$remote.insteadOf" "https://github.com/acme/web.git"
+  git -C "$root/app" remote add origin "https://github.com/acme/web.git"
+  git -C "$root/app" push -q origin main
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["app"],"sections":[]}\n' \
+    > "$root/cli-docs/crux.json"
+  cat > "$SB/bin/gh" <<STUB
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "auth status") exit 0 ;;
+  "pr create")
+    while [[ \$# -gt 0 ]]; do
+      [[ "\$1" == "--body" ]] && printf '%s' "\$2" > "$SB/body.md"
+      shift
+    done
+    echo "https://github.com/acme/web/pull/44" ;;
+  *) exit 0 ;;
+esac
+STUB
+  chmod +x "$SB/bin/gh"
+  "$CRUX_HOME/bin/crux" workspace new sheet --repo "$root/app" >/dev/null 2>&1
+  echo "$root/app-ws-sheet"
+}
+
+test_finish_in_a_client_repo_describes_the_branch_not_the_task() {
+  # 30-10-2026: the proposal took the whole task record, objective in Spanish,
+  # steps done in other proposals and decisions with emails and names, and
+  # published it in the client's repo.
+  sandbox >/dev/null
+  local ws; ws="$(_finish_in_client_repo)"
+  ( cd "$ws" || exit 1
+    "$CRUX_HOME/bin/crux" task goal "Pendientes de la web de VCR antes de enseñarla" >/dev/null
+    "$CRUX_HOME/bin/crux" task add "portada nueva" "hoja de portada" >/dev/null
+    "$CRUX_HOME/bin/crux" task "done" T1 "otra propuesta, la #41" >/dev/null
+    "$CRUX_HOME/bin/crux" task note "Lo pidió Ana por WhatsApp; respuesta a ana@cliente.example" >/dev/null ) 2>&1
+  echo change > "$ws/sheet.txt"
+  git -C "$ws" add -A
+  git -C "$ws" commit -qm "feat: add the cover sheet" -m "Shows the cover sheet before the summary."
+  ( cd "$ws" && "$CRUX_HOME/bin/crux" ship run -- true >/dev/null 2>&1
+    "$CRUX_HOME/bin/crux" ship seal >/dev/null 2>&1 )
+
+  local out rc=0
+  out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish sheet 2>&1)" || rc=$?
+  assert_eq "0" "$rc" "finish opens the proposal"
+  local b; b="$(cat "$SB/body.md")"
+  assert_contains "$b" "feat: add the cover sheet" "the body says what the branch changes"
+  assert_contains "$b" "Shows the cover sheet before the summary." "with the commit's own explanation"
+  assert_not_contains "$b" "Pendientes" "not the task's objective"
+  assert_not_contains "$b" "portada nueva" "nor the steps done in other proposals"
+  assert_not_contains "$b" "WhatsApp" "nor the decisions"
+  assert_not_contains "$b" "@cliente" "nor the emails in them"
+}
+
+test_client_filter_blocks_contact_details_and_the_wrong_language() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_in_client_repo)"
+  printf 'Asked for by mail: ana@client.example\n' > "$SB/mail.md"
+  printf 'Agreed on WhatsApp\n' > "$SB/wa.md"
+  printf 'Call +34 600 123 456 if it fails\n' > "$SB/phone.md"
+  printf 'Añade la hoja de portada para que se vea antes del resumen\n' > "$SB/es.md"
+  printf 'Adds the cover sheet before the summary\n' > "$SB/en.md"
+  assert_exit 1 "an email" in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/mail.md"
+  assert_exit 1 "WhatsApp" in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/wa.md"
+  assert_exit 1 "a phone number" in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/phone.md"
+  assert_exit 1 "Spanish in a repo whose proposals are in English" \
+    in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/es.md"
+  assert_exit 0 "a clean English body passes" in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/en.md"
+
+  local docs="$CRUX_PROJECTS_DIR/cli/cli-docs"
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["app"],"sections":[],"commit":{"language":"es"}}\n' \
+    > "$docs/crux.json"
+  assert_exit 0 "Spanish passes when the project writes its proposals in Spanish" \
+    in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/es.md"
+}

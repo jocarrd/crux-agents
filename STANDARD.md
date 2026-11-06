@@ -368,6 +368,8 @@ does not require touching the kernel repo, which is replaced on every version.
 | `pointers.write` | `true` | Whether pointers are written in the code repos |
 | `pointers.local` | `false` | With `pointers.write` set to `false`, whether the local pointer `CLAUDE.local.md`, excluded from git, is written |
 | `propose.forbid` | the tool's signature | What cannot appear in the body of a proposal, with its reason |
+| `propose.fromRecord` | `true` | Whether a proposal's description is built from the task record; with `false`, from the commits of the branch |
+| `propose.sameLanguage` | `false` | Whether a body with Spanish in it is refused when proposals are written in English |
 | `branch.pattern` | `ws/{{name}}` | What the branch a workspace opens is called |
 | `commit.language` | `en` | The language the commit hook demands |
 | `rules` | — | The working rules, in prose |
@@ -748,11 +750,19 @@ reconstruct the session.
 | The repo's own commands and scripts | Named | Named — they are theirs |
 | Our tooling: `crux`, its commands, its skills, its marks | Named | **Does not appear** |
 | Our branch names, workspaces or internal processes | Named | **Do not appear** |
+| Where the description comes from | The task record | **The commits of the branch** |
+| Names, emails, phones, chat channels | — | **Do not appear** |
 
 In a client's repo, the reader does not know how we work internally and has no
 reason to. Naming our scaffolding there adds no rigor: it adds noise and shows
 machinery that is not the project's. A script that is in the client's
 `package.json` is theirs and is cited naturally; ours stays out.
+
+The task record is ours too. It holds the objective of the whole task, the
+steps done in other proposals and the decisions, often with who asked and how
+to reach them. In a client's repo none of that describes the branch: the body
+is built from its commits, which are already written in the repo's language
+and speak only of that change.
 
 The distinction is not one of tone, it is one of ownership: the repo declares
 its profile in `crux.json`, and `client-repo` is the one that activates it.

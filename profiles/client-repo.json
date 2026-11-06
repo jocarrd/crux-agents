@@ -12,16 +12,30 @@
     "Every observation carries reproducible evidence: file and line, or the command or query that demonstrates it. Without evidence it is not written.",
     "What was measured is always distinguished from what is inherited from prior documentation: documents describe the intent at the time they were written, not the current state.",
     "Project notes and references go to git, not to the agent's local memory.",
-    "The description of a change proposal says what changes, what is added and why, plus what was checked and what is pending. It does not name our tooling —crux, its commands, its skills, its markers— nor our branch names or internal processes: the reader does not know how we work inside and it adds nothing for them. The client's own repo scripts are cited, because they are theirs."
+    "The description of a change proposal says what changes, what is added and why, plus what was checked and what is pending. It does not name our tooling —crux, its commands, its skills, its markers— nor our branch names or internal processes: the reader does not know how we work inside and it adds nothing for them. The client's own repo scripts are cited, because they are theirs. It is built from the commits of the branch, not from the task record: the record is ours and holds the objective, the steps of other proposals and the decisions, with names and contacts."
   ],
   "propose": {
     "forbid": [
       {
         "pattern": "\\bcrux\\b|\\.crux-ship|/ship\\b|workspace (new|finish)|crux doctor",
         "reason": "this names our tooling in a client's repo"
+      },
+      {
+        "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}",
+        "reason": "an email address in a client's repo"
+      },
+      {
+        "pattern": "\\bwhats ?app\\b",
+        "reason": "this names a private conversation channel"
+      },
+      {
+        "pattern": "\\+\\d{1,3}[ \\d]{8,14}\\d",
+        "reason": "a phone number in a client's repo"
       }
     ],
-    "hideDocsRepo": true
+    "hideDocsRepo": true,
+    "fromRecord": false,
+    "sameLanguage": true
   },
   "visual": {
     "publish": "none"
