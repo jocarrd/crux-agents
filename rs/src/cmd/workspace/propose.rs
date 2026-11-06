@@ -136,8 +136,13 @@ pub fn finish(argv: &[String]) -> Res {
     let language = policy::commit_language(&profile, docs.as_deref());
     let log = git::out(&path, &["log", "--format=- %s", &format!("{base}..{branch}")]).unwrap_or_default();
     let gate = if skip_gate { None } else { Some(head.as_str()) };
-    let body = proposal_body(&path, record_file.as_deref(), &language, &log, gate);
-    check_body(&path, &body, record_file.as_deref())?;
+    // In a client's repo the task record is ours: its objective, the steps of
+    // other proposals and its decisions do not describe this branch.
+    let from_record = policy::flag(&profile, docs.as_deref(), "propose.fromRecord", true);
+    let log = if from_record { log } else { commit_messages(&path, &format!("{base}..{branch}")) };
+    let body_record = if from_record { record_file.as_deref() } else { None };
+    let body = proposal_body(&path, body_record, &language, &log, gate);
+    check_body(&path, &body, body_record)?;
     if let Some(d) = docs.as_deref() {
         check_origin(&path, &repo, d)?;
     }
@@ -254,6 +259,24 @@ fn warn_about_size(path: &Path, range: &str, record_file: Option<&Path>) {
         ui::warn(format!("{lines} written lines and the task has no plan"));
         ui::info("if it was approved in the conversation, save it: crux task plan <file>");
     }
+}
+
+/// Each commit of the branch with its own explanation, oldest first.
+fn commit_messages(path: &Path, range: &str) -> String {
+    let raw = git::out(path, &["log", "--reverse", "--format=%s%x1f%b%x1e", range]).unwrap_or_default();
+    raw.split('\u{1e}')
+        .filter_map(|c| {
+            let (subject, body) = c.trim_matches('\n').split_once('\u{1f}')?;
+            let body = body.trim();
+            Some(if body.is_empty() {
+                format!("- {subject}")
+            } else {
+                let indented = body.lines().map(|l| if l.is_empty() { String::new() } else { format!("  {l}") });
+                format!("- {subject}\n\n{}", indented.collect::<Vec<_>>().join("\n"))
+            })
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The description comes from the task if it says what changes; if not, from

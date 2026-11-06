@@ -268,6 +268,15 @@ fn body(ctx: &Ctx, args: &[String]) -> Res {
                 report(format!("profile {profile}: {reason}"), found);
             }
         }
+        // Notes in the language we work in leak into a repo written in another.
+        if policy::flag(&profile, docs.as_deref(), "propose.sameLanguage", false)
+            && policy::commit_language(&profile, docs.as_deref()) == "en"
+        {
+            let found = numbered(&text, crate::regex!(r"(?i)[¿¡ñáéíóú]|\b(que|para|los|las|una|pero|también)\b"));
+            if !found.is_empty() {
+                report(format!("profile {profile}: text in Spanish in a repo whose proposals are in English"), found);
+            }
+        }
         // The docs repo name is per project, so it does not fit in a fixed
         // pattern: a path to it shows where we keep the client's notes.
         if policy::flag(&profile, docs.as_deref(), "propose.hideDocsRepo", false) {
