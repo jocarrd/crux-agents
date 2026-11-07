@@ -107,10 +107,11 @@ its next step written. The ones marked `idle` have gone days with no workspace
 and are the usual suspects. Ask before archiving anything the session did not
 finish.
 
-When the list ends with "idle tasks in <project> could be a single one", offer
-the person the merge it prints (`crux task merge <project>/<into> <task>...`):
-it keeps the pending steps and branches in one task and archives the rest.
-Run it only if they agree.
+The list ends with what stalled: tasks of a project that could be a single one
+(`crux task merge`, closing their forgotten workspaces first), tasks with every
+step done (`crux task archive`), and forgotten workspaces with unsaved work.
+Offer the first two with the command it prints and run it only if the person
+agrees; for the last, say it and touch nothing.
 
 ### 5. Skill boundary, if you touched any
 

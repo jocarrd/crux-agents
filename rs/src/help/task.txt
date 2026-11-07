@@ -25,8 +25,8 @@ crux task — the record of the task of the workspace you are in.
                                    Two or more idle in one project: it proposes merging them
   crux task merge <project>/<into> <project>/<task>... [--goal "<text>"]
                                    merges leftovers into one task: their pending steps (saying
-                                   where from), repos, branches and decisions; archives the
-                                   rest pointing to it. Created if it does not exist;
+                                   where from), repos and decisions, noting their branches;
+                                   archives the rest pointing to it. Created if missing;
                                    --goal sets its objective
   crux task archive                closes it and sets it aside in done/, dated
 

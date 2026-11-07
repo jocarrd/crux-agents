@@ -7,7 +7,7 @@
 
 use crate::args::Parser;
 use crate::error::{Exit, Res};
-use crate::task::{self, record};
+use crate::task::{self, record, stall};
 use crate::{die, env, git, project, registry, sh, ui};
 use std::path::{Path, PathBuf};
 
@@ -127,8 +127,8 @@ fn cut(t: &str, n: usize) -> String {
 }
 
 /// Leftovers of several tasks, each forgotten with a step or two, end up as a
-/// list nobody reads. Merging them into one keeps the pending steps and the
-/// branches, and archives the rest pointing to where its work went.
+/// list nobody reads. Merging them into one keeps the pending steps and notes
+/// the branches, and archives the rest pointing to where its work went.
 fn merge(names: &[String], goal: &str) -> Res {
     let usage = "usage: crux task merge <project>/<into> <project>/<task>... [--goal \"<text>\"]";
     if names.len() < 2 {
@@ -173,7 +173,10 @@ fn merge(names: &[String], goal: &str) -> Res {
             return fail(format!("{n} waits for an answer from {}: it is resumed, not merged", doc.text("waiting_on")));
         }
         if let Some(w) = doc.list("workspaces").into_iter().find(|w| live.contains(w)) {
-            return fail(format!("{n} is being worked on in the workspace {w}: close it first"));
+            return fail(format!(
+                "{n} has the workspace {w} open: close it first (crux workspace rm {w}); if it has work not \
+                 saved elsewhere, it refuses and says so"
+            ));
         }
         // Checked before touching anything: failing to archive after
         // absorbing would leave the steps in both, and a retry would copy them again.
@@ -214,7 +217,6 @@ fn merge(names: &[String], goal: &str) -> Res {
                 record::create(into, project_name, "", "")
             }
         };
-        // A reopened task keeps its own objective unless another is given.
         if !goal.is_empty() {
             record::set_section(&mut doc, "Objective", goal);
         } else if record::content(doc.section("Objective")).trim().is_empty() {
@@ -246,7 +248,8 @@ fn merge(names: &[String], goal: &str) -> Res {
             return fail(e);
         }
         let branches = doc.list("branches");
-        let carried = if branches.is_empty() { String::new() } else { format!(", branch {}", branches.join(", ")) };
+        let carried =
+            if branches.is_empty() { String::new() } else { format!(", its branch {} noted", branches.join(", ")) };
         ui::ok(format!("{name} merged: {moved} pending step(s){carried}"));
     }
     ui::info(target.display().to_string());
@@ -290,6 +293,10 @@ fn list(args: &[String]) -> Res {
         }
     }
     let live = crate::task::sync::live_workspaces();
+    let open = crate::task::remind::unfinished_tasks(if scope.is_empty() { None } else { Some(scope.as_str()) });
+    let states = stall::workspace_states(&open, &live);
+    let stalled: std::collections::BTreeMap<String, stall::Stall> =
+        open.iter().map(|t| (format!("{}/{}", t.project, t.task), stall::classify(t, &live, &states))).collect();
     let mut found = false;
     for p in project::subdirs(&tasks) {
         if !scope.is_empty() && p != scope {
@@ -331,9 +338,14 @@ fn list(args: &[String]) -> Res {
                 );
                 continue;
             }
-            let status = match crate::task::remind::idle_days(&doc.text("updated"), &doc.list("workspaces"), &live) {
-                Some(days) => format!("idle {days}d"),
-                None => s.status.clone(),
+            let status = match stalled.get(&label) {
+                Some(stall::Stall::Idle { days, .. } | stall::Stall::Finished { days, .. }) => format!("idle {days}d"),
+                Some(stall::Stall::Unsaved { days, .. }) => format!("unsaved {days}d"),
+                Some(stall::Stall::Active) => s.status.clone(),
+                None => match crate::task::remind::idle_days(&doc.text("updated"), &doc.list("workspaces"), &live) {
+                    Some(days) => format!("idle {days}d"),
+                    None => s.status.clone(),
+                },
             };
             println!("{label:<28} {:<12} {:<6} {}", status, s.steps, cut(&s.next, 70));
         }
@@ -343,12 +355,11 @@ fn list(args: &[String]) -> Res {
         println!("no open tasks{hint}");
         return Ok(());
     }
-    let open = crate::task::remind::open_tasks(if scope.is_empty() { None } else { Some(scope.as_str()) });
-    let candidates = crate::task::remind::merge_candidates(&open, &live);
-    if !candidates.is_empty() {
+    let lines = stall::survey_lines(&stall::survey(&open, &live, &states));
+    if !lines.is_empty() {
         println!();
-        for c in &candidates {
-            println!("{}", crate::task::remind::merge_line(c));
+        for l in lines {
+            println!("{l}");
         }
     }
     Ok(())

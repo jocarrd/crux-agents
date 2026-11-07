@@ -2,6 +2,7 @@
 
 pub mod record;
 pub mod remind;
+pub mod stall;
 pub mod sync;
 
 use crate::args::Opts;

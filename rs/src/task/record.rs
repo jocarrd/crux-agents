@@ -822,7 +822,7 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
 }
 
 /// Takes into `dest` what is still alive in `src`: its pending steps, saying
-/// where they came from, its repos and branches, and its decisions. The done
+/// where they came from, its repos, its decisions and which branches it used. The done
 /// steps stay in the archived source, which is where they happened.
 pub fn absorb(dest: &mut Doc, src: &Doc, from: &str) {
     let origin = crate::regex!(r" \(from [^()]+\)$");
@@ -836,20 +836,23 @@ pub fn absorb(dest: &mut Doc, src: &Doc, from: &str) {
         }
         add_step(dest, &text);
     }
-    for key in ["repos", "branches", "retired"] {
-        let mut list = dest.list(key);
-        for v in src.list(key) {
-            if !list.contains(&v) {
-                list.push(v);
-            }
+    let mut repos = dest.list("repos");
+    for r in src.list("repos") {
+        if !repos.contains(&r) {
+            repos.push(r);
         }
-        if !list.is_empty() {
-            dest.set(key, Meta::List(list));
-        }
+    }
+    if !repos.is_empty() {
+        dest.set("repos", Meta::List(repos));
     }
     let goal = first_line(&content(src.section("Objective")));
     let what = if goal.is_empty() { format!("absorbs {from}") } else { format!("absorbs {from}: {goal}") };
     append(dest, "Deviations and decisions", &what);
+    // Noted, not taken: a task has one branch per repo, and resuming the
+    // target would otherwise reopen one of the sources' old branches.
+    for b in src.list("branches") {
+        append(dest, "Deviations and decisions", &format!("{from} worked on the branch {b}"));
+    }
     let comment = crate::regex!(r"^<!--.*-->$");
     let decisions: Vec<String> = src
         .section("Deviations and decisions")
@@ -934,10 +937,11 @@ mod tests {
         let texts: Vec<String> = steps(&dest).into_iter().map(|s| format!("{} {}", s.id, s.text)).collect();
         assert_eq!(texts, vec!["T1 own step", "T2 still to do (from p/small)"], "only what is pending travels");
         assert_eq!(dest.list("repos"), vec!["web", "app"]);
-        assert_eq!(dest.list("branches"), vec!["app=ws/small"], "an unpublished branch is not lost");
+        assert!(dest.list("branches").is_empty(), "the target keeps one branch per repo: none taken");
         let notes = content(dest.section("Deviations and decisions"));
         assert!(notes.contains("absorbs p/small: fix the footer"), "{notes}");
         assert!(notes.contains("keep the logo"), "{notes}");
+        assert!(notes.contains("p/small worked on the branch app=ws/small"), "but it is noted: {notes}");
 
         absorb(&mut dest, &src, "p/small");
         assert_eq!(steps(&dest).len(), 2, "absorbing the same source again does not duplicate its steps");
