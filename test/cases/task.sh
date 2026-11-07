@@ -309,7 +309,7 @@ test_idle_leftovers_are_proposed_and_merged() {
   "$CRUX_HOME/bin/crux" task new proj/footer --goal "fix the footer" >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add "align the logo" --task proj/footer >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add "check dark mode" --task proj/footer >/dev/null 2>&1
-  "$CRUX_HOME/bin/crux" task done T1 --task proj/footer >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" T1 --task proj/footer >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task new proj/costs --goal "review the bill" >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add "ask for the invoice" --task proj/costs >/dev/null 2>&1
   sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB/tasks/proj/footer.md" "$SB/tasks/proj/costs.md"
@@ -430,7 +430,7 @@ test_finished_reviewed_and_merged_tasks_are_told_apart() {
   local root; root="$(_tasks_project)"
   "$CRUX_HOME/bin/crux" task new proj/done-one >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add "ship it" --task proj/done-one >/dev/null 2>&1
-  "$CRUX_HOME/bin/crux" task done T1 --task proj/done-one >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" T1 --task proj/done-one >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task new proj/review >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add "address comments" --task proj/review >/dev/null 2>&1
   sed -i.bak 's/^status: .*/status: proposed\npr: https:\/\/example.org\/pr\/1/' "$SB/tasks/proj/review.md"
