@@ -821,13 +821,69 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
     blocks.into_iter().filter(|b| !b.is_empty()).collect::<Vec<_>>().join("\n")
 }
 
+/// Takes into `dest` what is still alive in `src`: its pending steps, saying
+/// where they came from, its repos, its decisions and which branches it used. The done
+/// steps stay in the archived source, which is where they happened.
+pub fn absorb(dest: &mut Doc, src: &Doc, from: &str) {
+    let origin = crate::regex!(r" \(from [^()]+\)$");
+    for s in steps(src).into_iter().filter(|s| !s.done) {
+        // A step already merged once keeps its first origin, and one that is
+        // already pending in the target (a source reopened and merged again)
+        // is not copied twice.
+        let text = if origin.is_match(&s.text) { s.text.clone() } else { format!("{} (from {from})", s.text) };
+        if steps(dest).iter().any(|d| !d.done && d.text == text) {
+            continue;
+        }
+        add_step(dest, &text);
+    }
+    let mut repos = dest.list("repos");
+    for r in src.list("repos") {
+        if !repos.contains(&r) {
+            repos.push(r);
+        }
+    }
+    if !repos.is_empty() {
+        dest.set("repos", Meta::List(repos));
+    }
+    let goal = first_line(&content(src.section("Objective")));
+    let what = if goal.is_empty() { format!("absorbs {from}") } else { format!("absorbs {from}: {goal}") };
+    append(dest, "Deviations and decisions", &what);
+    // Noted, not taken: a task has one branch per repo, and resuming the
+    // target would otherwise reopen one of the sources' old branches.
+    for b in src.list("branches") {
+        append(dest, "Deviations and decisions", &format!("{from} worked on the branch {b}"));
+    }
+    let comment = crate::regex!(r"^<!--.*-->$");
+    let decisions: Vec<String> = src
+        .section("Deviations and decisions")
+        .map(|s| {
+            s.lines
+                .iter()
+                .map(|l| l.trim())
+                .filter(|l| !l.is_empty() && !comment.is_match(l))
+                .map(|l| l.trim_start_matches("- ").to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    for d in decisions {
+        append(dest, "Deviations and decisions", &d);
+    }
+}
+
 /// Archiving is closing and setting aside: the record stops showing in lists
 /// but is kept, dated, until it expires.
 pub fn archive(file: &Path, publish: bool) -> Result<PathBuf, String> {
+    archive_as(file, publish, "")
+}
+
+/// Like `archive`, saying in the closure why it closed: a task merged into
+/// another points to where its pending work went.
+pub fn archive_as(file: &Path, publish: bool, reason: &str) -> Result<PathBuf, String> {
     let mut doc = read(file)?;
     let today = now()[..10].to_string();
     doc.set_text("status", Status::Closed.as_str());
-    set_section(&mut doc, "Closure", &format!("closed {today}"));
+    let closure = if reason.is_empty() { format!("closed {today}") } else { format!("closed {today}: {reason}") };
+    set_section(&mut doc, "Closure", &closure);
     let dir = file.parent().unwrap_or(Path::new("."));
     let name = files::name(file);
     let target = dir.join("done").join(format!("{today}-{name}"));
@@ -862,6 +918,41 @@ mod tests {
         assert_eq!(doc.status(), Some(Status::Proposed), "it does not go back");
         advance(&mut doc, Status::Merged);
         assert_eq!(doc.status(), Some(Status::Merged));
+    }
+
+    #[test]
+    fn absorbing_carries_pending_steps_branches_and_decisions() {
+        let mut src = create("small", "p", "app", "small");
+        set_section(&mut src, "Objective", "fix the footer");
+        add_step(&mut src, "done already");
+        add_step(&mut src, "still to do");
+        complete(&mut src, "T1", "").unwrap();
+        src.set("branches", Meta::List(vec!["app=ws/small".into()]));
+        append(&mut src, "Deviations and decisions", &decision_line("keep the logo", "brand", "", ""));
+        let mut dest = create("pending", "p", "web", "");
+        add_step(&mut dest, "own step");
+
+        absorb(&mut dest, &src, "p/small");
+
+        let texts: Vec<String> = steps(&dest).into_iter().map(|s| format!("{} {}", s.id, s.text)).collect();
+        assert_eq!(texts, vec!["T1 own step", "T2 still to do (from p/small)"], "only what is pending travels");
+        assert_eq!(dest.list("repos"), vec!["web", "app"]);
+        assert!(dest.list("branches").is_empty(), "the target keeps one branch per repo: none taken");
+        let notes = content(dest.section("Deviations and decisions"));
+        assert!(notes.contains("absorbs p/small: fix the footer"), "{notes}");
+        assert!(notes.contains("keep the logo"), "{notes}");
+        assert!(notes.contains("p/small worked on the branch app=ws/small"), "but it is noted: {notes}");
+
+        absorb(&mut dest, &src, "p/small");
+        assert_eq!(steps(&dest).len(), 2, "absorbing the same source again does not duplicate its steps");
+        let mut again = create("next", "p", "", "");
+        absorb(&mut again, &dest, "p/pending");
+        let texts: Vec<String> = steps(&again).into_iter().map(|s| s.text).collect();
+        assert_eq!(
+            texts,
+            vec!["own step (from p/pending)", "still to do (from p/small)"],
+            "a step keeps its first origin"
+        );
     }
 
     #[test]

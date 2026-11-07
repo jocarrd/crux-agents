@@ -303,6 +303,151 @@ test_a_task_left_without_workspace_is_flagged() {
   assert_contains "$out" "--task <task>" "and how to join one of them"
 }
 
+test_idle_leftovers_are_proposed_and_merged() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" task new proj/footer --goal "fix the footer" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "align the logo" --task proj/footer >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "check dark mode" --task proj/footer >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" T1 --task proj/footer >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task new proj/costs --goal "review the bill" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "ask for the invoice" --task proj/costs >/dev/null 2>&1
+  sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB/tasks/proj/footer.md" "$SB/tasks/proj/costs.md"
+
+  local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_contains "$out" "2 idle tasks in proj could be a single one" "two forgotten tasks are proposed as one"
+  assert_contains "$out" "crux task merge proj/pending proj/costs proj/footer" "with the command ready"
+  local r; r="$("$CRUX_HOME/bin/crux" __task-sync remind --cwd "$root/app")"
+  assert_contains "$r" "crux task merge proj/pending" "the session reminder proposes it too"
+  assert_contains "$r" "never merge, archive or close on your own" "and tells the agent to ask first"
+
+  out="$("$CRUX_HOME/bin/crux" task merge proj/pending proj/costs proj/footer 2>&1)"
+  assert_contains "$out" "proj/footer merged: 1 pending step(s)" "only the pending step travels"
+  local f="$SB/tasks/proj/pending.md"
+  assert_file "$f" "the target is created"
+  assert_contains "$(cat "$f")" "check dark mode (from proj/footer)" "saying where it came from"
+  assert_contains "$(cat "$f")" "ask for the invoice (from proj/costs)" "from every source"
+  assert_not_contains "$(cat "$f")" "align the logo" "a done step stays in its own record"
+  assert_no_file "$SB/tasks/proj/footer.md" "the source leaves the open list"
+  assert_contains "$(cat "$SB"/tasks/proj/done/*-footer.md)" "merged into proj/pending" "archived pointing to the target"
+  assert_not_contains "$("$CRUX_HOME/bin/crux" task list --all 2>&1)" "could be a single one" "and the proposal is gone"
+}
+
+test_merge_refuses_a_task_waiting_for_an_answer() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/asked >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task wait --on "Alex" --ask "which data?" --keep --task proj/asked >/dev/null 2>&1
+  assert_exit 1 "a waiting task is resumed, not merged" \
+    "$CRUX_HOME/bin/crux" task merge proj/pending proj/asked
+  assert_file "$SB/tasks/proj/asked.md" "and it stays open"
+  assert_exit 1 "two projects are not mixed" \
+    "$CRUX_HOME/bin/crux" task merge proj/pending other/x
+}
+
+test_merge_refuses_a_task_with_a_live_workspace() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new busy --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task new proj/old >/dev/null 2>&1
+  local out; out="$("$CRUX_HOME/bin/crux" task merge proj/pending proj/old proj/busy 2>&1)"
+  assert_contains "$out" "has the workspace busy open: close it first" "work in progress is not merged away"
+  assert_file "$SB/tasks/proj/old.md" "and nothing is touched, not even the valid one"
+  assert_no_file "$SB/tasks/proj/pending.md" "nor is the target created"
+}
+
+test_merge_marks_moved_steps_and_keeps_a_reopened_objective() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/a --goal "goal of a" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "one" --task proj/a >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task new proj/b >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "two" --task proj/b >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task merge proj/t proj/a >/dev/null 2>&1
+  assert_contains "$(cat "$SB"/tasks/proj/done/*-a.md)" "[x] T1 one · evidence: moved to proj/t" \
+    "the archived source says where each step went"
+
+  local out; out="$("$CRUX_HOME/bin/crux" task merge proj/a proj/b 2>&1)"
+  assert_contains "$out" "reopens the archived task 'proj/a'" "an archived target is reopened, not recreated"
+  local f="$SB/tasks/proj/a.md"
+  assert_contains "$(cat "$f")" "goal of a" "keeping its objective"
+  assert_contains "$(cat "$f")" "[ ] T2 two (from proj/b)" "and receiving the new steps"
+  assert_not_contains "$(cat "$f")" "[ ] T1 one" "without bringing back what moved elsewhere"
+  assert_exit 1 "a name cannot leave the tasks folder" "$CRUX_HOME/bin/crux" task merge proj/.. proj/b
+}
+
+_old_repo() {
+  # The project, with its only commit dated years ago: a workspace opened from
+  # it has seen no activity since then.
+  local root="$1" r
+  for r in app web; do
+    GIT_COMMITTER_DATE="2020-01-01T10:00:00" git -C "$root/$r" commit -q --amend --no-edit \
+      --date="2020-01-01T10:00:00"
+  done
+}
+
+test_a_forgotten_open_workspace_is_proposed_to_close_and_merge() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  _old_repo "$root"
+  "$CRUX_HOME/bin/crux" workspace new forgot --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "finish the export" --task proj/forgot >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task new proj/loose >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "rename the column" --task proj/loose >/dev/null 2>&1
+  sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB/tasks/proj/forgot.md" "$SB/tasks/proj/loose.md"
+
+  local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_contains "$out" "crux workspace rm forgot, then crux task merge proj/pending" \
+    "an open workspace untouched for weeks is no longer taken as alive"
+
+  out="$("$CRUX_HOME/bin/crux" task merge proj/pending proj/forgot proj/loose 2>&1)"
+  assert_contains "$out" "close it first (crux workspace rm forgot)" "merging still needs it closed"
+  "$CRUX_HOME/bin/crux" workspace rm forgot >/dev/null 2>&1
+  out="$("$CRUX_HOME/bin/crux" task merge proj/pending proj/forgot proj/loose 2>&1)"
+  assert_contains "$out" "proj/forgot merged: 1 pending step(s)" "once closed, it merges"
+}
+
+test_a_forgotten_workspace_with_unsaved_work_is_only_warned() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  _old_repo "$root"
+  "$CRUX_HOME/bin/crux" workspace new draft --repo "$root/app" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "write it" --task proj/draft >/dev/null 2>&1
+  echo "half done" > "$root/app-ws-draft/notes.txt"
+  touch -d "2020-01-01 10:00" "$root/app-ws-draft/notes.txt"
+  sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB/tasks/proj/draft.md"
+
+  local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_contains "$out" "proj/draft: workspace draft untouched" "forgotten work is pointed out"
+  assert_contains "$out" "not saved elsewhere" "saying why it is not proposed to close"
+  assert_not_contains "$out" "crux workspace rm draft" "and nothing proposes removing it"
+
+  echo "today" > "$root/app-ws-draft/notes.txt"
+  out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_not_contains "$out" "proj/draft: workspace" "a file edited today keeps it alive"
+}
+
+test_finished_reviewed_and_merged_tasks_are_told_apart() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" task new proj/done-one >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "ship it" --task proj/done-one >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" T1 --task proj/done-one >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task new proj/review >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "address comments" --task proj/review >/dev/null 2>&1
+  sed -i.bak 's/^status: .*/status: proposed\npr: https:\/\/example.org\/pr\/1/' "$SB/tasks/proj/review.md"
+  "$CRUX_HOME/bin/crux" task new proj/landed >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "update the docs" --task proj/landed >/dev/null 2>&1
+  sed -i.bak 's/^status: .*/status: merged/' "$SB/tasks/proj/landed.md"
+  "$CRUX_HOME/bin/crux" task new proj/other >/dev/null 2>&1
+  sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB"/tasks/proj/*.md
+
+  local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
+  assert_contains "$out" "proj/done-one has every step done" "a finished task is proposed to archive"
+  assert_contains "$out" "crux task merge proj/pending proj/landed proj/other" \
+    "a merged proposal with a step left is a leftover too"
+  assert_not_contains "$out" "proj/review proj" "a proposal under review is not merged away"
+  assert_not_contains "$out" "proj/done-one proj" "nor is a finished one"
+}
+
 test_an_unreadable_record_is_reported_and_stops() {
   sandbox >/dev/null
   local f="$SB/tasks/proj/broken.md"

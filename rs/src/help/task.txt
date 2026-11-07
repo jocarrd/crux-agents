@@ -22,6 +22,12 @@ crux task — the record of the task of the workspace you are in.
   crux task list [--all] [--done]  the open tasks, with their next step; --done, the archived ones.
                                    "idle Nd": no workspace here and untouched for N days
                                    (CRUX_IDLE_TASK_DAYS, 3 by default): done or forgotten?
+                                   Two or more idle in one project: it proposes merging them
+  crux task merge <project>/<into> <project>/<task>... [--goal "<text>"]
+                                   merges leftovers into one task: their pending steps (saying
+                                   where from), repos and decisions, noting their branches;
+                                   archives the rest pointing to it. Created if missing;
+                                   --goal sets its objective
   crux task archive                closes it and sets it aside in done/, dated
 
 Outside a workspace, --task <project>/<task> says which one.

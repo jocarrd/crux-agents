@@ -1030,6 +1030,29 @@ on this machine and untouched for 3 days (`CRUX_IDLE_TASK_DAYS`), and
 the right one with `--task`. `/end-session` reviews the tasks of the session.
 Nothing archives them on its own: whether the work is done is the person's call.
 
+**Stalled tasks are pointed out, and leftovers merged.** A task stalls in more
+ways than an old record without a workspace: its workspace can stay open for
+weeks after the work stopped (no commit and no edited file for 7 days,
+`CRUX_STALE_WORKSPACE_DAYS`, or 3 if its branch is gone from the remote), its
+proposal can be merged with a step left, or every step can be done with the task
+still open. One waiting on someone, or with its proposal under review, has not
+stalled. The reminder and `crux task list` then propose:
+
+- **merging** two or more stalled tasks of a project with steps left, into the
+  task still alive there or a new `pending`, closing their forgotten workspaces
+  first: `crux workspace rm <ws>, then crux task merge <project>/<into> <task>...`;
+- **archiving** a stalled task with every step done;
+- and only **warning** about a forgotten workspace with uncommitted changes or
+  commits not on the remote: that work exists nowhere else.
+
+The merge carries the pending steps —saying which task each came from—, the
+repos and the decisions, notes the branches each source used (a task keeps one
+branch per repo), marks the moved steps in each source and archives it pointing
+to the target. It validates everything before touching anything and refuses a
+task waiting for an answer or with a live workspace. Like archiving, it only
+runs when the person agrees: a dozen open tasks that are each a forgotten step
+is noise that hides the real work.
+
 Archived tasks do not appear in the lists (`crux task list --done` shows them)
 and they expire: `crux workspace gc --yes` deletes those older than 180 days
 (`CRUX_TASKS_RETENTION_DAYS`). What had to last has already gone out to the

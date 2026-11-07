@@ -107,6 +107,12 @@ its next step written. The ones marked `idle` have gone days with no workspace
 and are the usual suspects. Ask before archiving anything the session did not
 finish.
 
+The list ends with what stalled: tasks of a project that could be a single one
+(`crux task merge`, closing their forgotten workspaces first), tasks with every
+step done (`crux task archive`), and forgotten workspaces with unsaved work.
+Offer the first two with the command it prints and run it only if the person
+agrees; for the last, say it and touch nothing.
+
 ### 5. Skill boundary, if you touched any
 
 If a skill was created or changed in the session, decide it now while it is

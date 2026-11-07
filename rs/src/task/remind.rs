@@ -18,10 +18,23 @@ pub struct OpenTask {
     pub next: String,
     pub workspaces: Vec<String>,
     pub waiting: Option<record::Waiting>,
+    pub steps: usize,
+    pub pending: usize,
+    pub pr: String,
 }
 
 /// The open tasks, most recently updated first.
 pub fn open_tasks(project: Option<&str>) -> Vec<OpenTask> {
+    load(project, false)
+}
+
+/// The open tasks plus the ones whose proposal was merged with steps still to
+/// do: they leave the reminder, and those are exactly the leftovers to gather.
+pub fn unfinished_tasks(project: Option<&str>) -> Vec<OpenTask> {
+    load(project, true)
+}
+
+fn load(project: Option<&str>, leftovers: bool) -> Vec<OpenTask> {
     let dt = env::tasks_dir();
     let projects: Vec<String> = match project {
         Some(p) => vec![p.to_string()],
@@ -43,7 +56,10 @@ pub fn open_tasks(project: Option<&str>) -> Vec<OpenTask> {
             let status = doc.text("status");
             // A task waiting for an answer is still alive even if merged.
             let waiting = !doc.text("waiting_on").is_empty() && doc.status() != Some(record::Status::Closed);
-            if !doc.status().is_some_and(record::Status::is_open) && !waiting {
+            let leftover = leftovers
+                && matches!(doc.status(), Some(record::Status::Merged | record::Status::Deployed))
+                && record::pending(&doc) > 0;
+            if !doc.status().is_some_and(record::Status::is_open) && !waiting && !leftover {
                 continue;
             }
             let sec = |t: &str| record::first_line(&record::content(doc.section(t)));
@@ -57,6 +73,9 @@ pub fn open_tasks(project: Option<&str>) -> Vec<OpenTask> {
                 next: if next.is_empty() { sec("Objective") } else { next },
                 workspaces: doc.list("workspaces"),
                 waiting: if waiting { record::waiting_of(&doc) } else { None },
+                steps: record::steps(&doc).len(),
+                pending: record::pending(&doc),
+                pr: doc.text("pr"),
             });
         }
     }
@@ -134,7 +153,7 @@ fn nudge_after_days() -> i64 {
         .unwrap_or(7)
 }
 
-fn idle_after_days() -> i64 {
+pub fn idle_after_days() -> i64 {
     env::var("CRUX_IDLE_TASK_DAYS")
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
@@ -169,6 +188,11 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
         return None;
     }
     let live = live_workspaces();
+    let leftovers = unfinished_tasks(scope);
+    let states = super::stall::workspace_states(&leftovers, &live);
+    let survey = super::stall::survey(&leftovers, &live, &states);
+    // The survey says what to do with a stalled task; its line does not repeat it.
+    let covered = survey.tasks();
     // First the work that depends on us; then what waits on someone else.
     let list: Vec<OpenTask> = list
         .iter()
@@ -229,20 +253,24 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
         if !t.next.is_empty() {
             l.push_str(&format!(": {}", cut(&t.next, 70)));
         }
-        if let Some(days) = idle_days(&t.updated, &t.workspaces, &live) {
-            idle_any = true;
-            l.push_str(&format!(
-                " · idle {days} days with no workspace: if it is done, crux task archive --task {}/{}",
-                t.project, t.task
-            ));
-        } else if !here {
-            l.push_str(&format!(" · no workspace here: crux workspace resume {}", t.task));
+        let idle = idle_days(&t.updated, &t.workspaces, &live).filter(|_| !super::stall::under_review(t));
+        if !covered.contains(&format!("{}/{}", t.project, t.task)) {
+            if let Some(days) = idle {
+                idle_any = true;
+                l.push_str(&format!(
+                    " · idle {days} days with no workspace: if it is done, crux task archive --task {}/{}",
+                    t.project, t.task
+                ));
+            } else if !here {
+                l.push_str(&format!(" · no workspace here: crux workspace resume {}", t.task));
+            }
         }
         lines.push(l);
     }
     if list.len() > maximum {
         lines.push(format!("· and {} more: crux status", list.len() - maximum));
     }
+    lines.extend(super::stall::survey_lines(&survey));
     let mut conflicts = vec![];
     let projects: BTreeSet<&str> = list.iter().map(|t| t.project.as_str()).collect();
     for p in projects {
@@ -283,6 +311,11 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
             "The idle ones may have been finished under another task name: if this session did that work,".into(),
         );
         agent.push("say so and offer to archive them; never archive one on your own.".into());
+    }
+    if survey != super::stall::Survey::default() {
+        agent.push("Some tasks have stalled: merging leftovers, archiving finished ones or closing a forgotten".into());
+        agent.push("workspace. Propose it once, with the command shown, and run it only if the person agrees;".into());
+        agent.push("never merge, archive or close on your own, and never touch a workspace with unsaved work.".into());
     }
     if waiting_block {
         agent.push(
