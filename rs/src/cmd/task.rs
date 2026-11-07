@@ -126,6 +126,133 @@ fn cut(t: &str, n: usize) -> String {
     t.chars().take(n).collect()
 }
 
+/// Leftovers of several tasks, each forgotten with a step or two, end up as a
+/// list nobody reads. Merging them into one keeps the pending steps and the
+/// branches, and archives the rest pointing to where its work went.
+fn merge(names: &[String], goal: &str) -> Res {
+    let usage = "usage: crux task merge <project>/<into> <project>/<task>... [--goal \"<text>\"]";
+    if names.len() < 2 {
+        return fail(usage);
+    }
+    // A name is a file inside the tasks folder: "." or ".." would step out of it.
+    let bad = |x: &str| x.is_empty() || x.contains('/') || x == "." || x == "..";
+    let Some((project_name, into)) = names[0].split_once('/') else { return fail(usage) };
+    if bad(project_name) || bad(into) {
+        return fail(usage);
+    }
+    let dir = env::tasks_dir().join(project_name);
+    let live = crate::task::sync::live_workspaces();
+    let mut sources = vec![];
+    let today = record::now()[..10].to_string();
+    for (i, n) in names[1..].iter().enumerate() {
+        if names[1..i + 1].contains(n) {
+            return fail(format!("{n} is listed twice"));
+        }
+        let Some((p, t)) = n.split_once('/') else { return fail(usage) };
+        if bad(t) {
+            return fail(usage);
+        }
+        if p != project_name {
+            return fail(format!("{n} is not in {project_name}: only tasks of one project are merged"));
+        }
+        if t == into {
+            return fail(format!("{n} is the task it is merged into"));
+        }
+        let f = dir.join(format!("{t}.md"));
+        if !f.is_file() {
+            return fail(format!("there is no open task {n}: {}", f.display()));
+        }
+        let doc = match record::read(&f) {
+            Ok(d) => d,
+            Err(e) => return fail(format!("{e}: {}", f.display())),
+        };
+        if doc.status() == Some(record::Status::Closed) {
+            return fail(format!("{n} is already archived"));
+        }
+        if !doc.text("waiting_on").is_empty() {
+            return fail(format!("{n} waits for an answer from {}: it is resumed, not merged", doc.text("waiting_on")));
+        }
+        if let Some(w) = doc.list("workspaces").into_iter().find(|w| live.contains(w)) {
+            return fail(format!("{n} is being worked on in the workspace {w}: close it first"));
+        }
+        // Checked before touching anything: failing to archive after
+        // absorbing would leave the steps in both, and a retry would copy them again.
+        let archived = dir.join("done").join(format!("{today}-{t}.md"));
+        if archived.exists() {
+            return fail(format!("{n} cannot be archived today: {} already exists", archived.display()));
+        }
+        sources.push((n.clone(), f, doc));
+    }
+    let target = dir.join(format!("{into}.md"));
+    let existed = target.exists();
+    if existed {
+        if let Err(e) = record::read(&target) {
+            return fail(format!("{e}: {}", target.display()));
+        }
+        if !goal.is_empty() {
+            mutate(&target, |d| {
+                record::set_section(d, "Objective", goal);
+                Ok(())
+            })?;
+        }
+    } else {
+        let mut doc = match record::archived_copy(&dir, into) {
+            Some(old) => {
+                let mut d = match record::read(&old) {
+                    Ok(d) => d,
+                    Err(e) => return fail(e),
+                };
+                record::reopen(&mut d, &crate::files::name(&old));
+                if let Err(e) = std::fs::remove_file(&old) {
+                    return fail(e.to_string());
+                }
+                ui::ok(format!("reopens the archived task '{}' to merge into", names[0]));
+                d
+            }
+            None => {
+                ui::ok(format!("task '{}' created to merge into", names[0]));
+                record::create(into, project_name, "", "")
+            }
+        };
+        // A reopened task keeps its own objective unless another is given.
+        if !goal.is_empty() {
+            record::set_section(&mut doc, "Objective", goal);
+        } else if record::content(doc.section("Objective")).trim().is_empty() {
+            let objective = format!("What was left pending in {project_name}, merged into one task");
+            record::set_section(&mut doc, "Objective", &objective);
+        }
+        if let Err(e) = record::write(&target, &mut doc, false) {
+            return fail(e);
+        }
+    }
+    for (name, f, doc) in &sources {
+        let before = record::read(&target).map(|d| record::steps(&d).len()).unwrap_or(0);
+        mutate(&target, |d| {
+            record::absorb(d, doc, name);
+            Ok(())
+        })?;
+        let moved = record::read(&target).map(|d| record::steps(&d).len()).unwrap_or(0) - before;
+        // Marked in the source too: reopened later, it would bring them back.
+        let pending: Vec<String> = record::steps(doc).into_iter().filter(|s| !s.done).map(|s| s.id).collect();
+        if let Err(e) = record::edit(f, false, |d| {
+            for id in &pending {
+                record::complete(d, id, &format!("moved to {}", names[0]))?;
+            }
+            Ok(())
+        }) {
+            return fail(e);
+        }
+        if let Err(e) = record::archive_as(f, true, &format!("merged into {}", names[0])) {
+            return fail(e);
+        }
+        let branches = doc.list("branches");
+        let carried = if branches.is_empty() { String::new() } else { format!(", branch {}", branches.join(", ")) };
+        ui::ok(format!("{name} merged: {moved} pending step(s){carried}"));
+    }
+    ui::info(target.display().to_string());
+    Ok(())
+}
+
 fn list(args: &[String]) -> Res {
     let all = args.iter().any(|a| a == "--all");
     let done = args.iter().any(|a| a == "--done");
@@ -214,6 +341,15 @@ fn list(args: &[String]) -> Res {
     if !found {
         let hint = if scope.is_empty() { String::new() } else { format!(" in {scope} (all: crux task list --all)") };
         println!("no open tasks{hint}");
+        return Ok(());
+    }
+    let open = crate::task::remind::open_tasks(if scope.is_empty() { None } else { Some(scope.as_str()) });
+    let candidates = crate::task::remind::merge_candidates(&open, &live);
+    if !candidates.is_empty() {
+        println!();
+        for c in &candidates {
+            println!("{}", crate::task::remind::merge_line(c));
+        }
     }
     Ok(())
 }
@@ -496,6 +632,7 @@ pub fn run(argv: &[String]) -> Res {
             }
         }
         "list" => list(&args),
+        "merge" => merge(&args, &goal),
         "-h" | "--help" | "help" => {
             super::help("task");
             Ok(())

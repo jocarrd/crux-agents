@@ -1030,6 +1030,16 @@ on this machine and untouched for 3 days (`CRUX_IDLE_TASK_DAYS`), and
 the right one with `--task`. `/end-session` reviews the tasks of the session.
 Nothing archives them on its own: whether the work is done is the person's call.
 
+**Leftovers are merged, not piled up.** When a project has two or more idle
+tasks (not waiting on anyone), the reminder and `crux task list` propose merging
+them, with the command ready: `crux task merge <project>/<into> <task>...`. The
+target is the task still alive in that project, or a new `pending`. The merge
+carries the pending steps —saying which task each came from—, the repos, the
+branches and the decisions, and archives each source with a closure that
+points to the target. It refuses a task waiting for an answer or with a live
+workspace. Like archiving, it only runs when the person agrees: a dozen open
+tasks that are each a forgotten step is noise that hides the real work.
+
 Archived tasks do not appear in the lists (`crux task list --done` shows them)
 and they expire: `crux workspace gc --yes` deletes those older than 180 days
 (`CRUX_TASKS_RETENTION_DAYS`). What had to last has already gone out to the
