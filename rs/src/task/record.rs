@@ -792,9 +792,9 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
         user_path.replace_all(&v, "~").into_owned()
     };
     let (changes, scope, focus_t, done_t, decisions_t, checked_t) = if language == "es" {
-        ("Qué cambia", "Alcance", "Foco de revisión", "Hecho", "Decisiones", "Comprobado")
+        ("Qué cambia", "Alcance", "Foco de revisión", "Hecho", "Decisiones", "Cómo se ha comprobado")
     } else {
-        ("What changes", "Scope", "Review focus", "Done", "Decisions", "Checked")
+        ("What changes", "Scope", "Review focus", "Done", "Decisions", "How it was checked")
     };
     let block =
         |title: &str, text: String| if text.is_empty() { String::new() } else { format!("## {title}\n\n{text}\n") };
@@ -808,7 +808,9 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
         .map(|p| format!("- {}", evidence.replace(&p.text, " ($1)")))
         .collect::<Vec<_>>()
         .join("\n");
-    let checked = sec("Verification").split('\n').filter(|l| l.starts_with("- ")).collect::<Vec<_>>().join("\n");
+    let verification = sec("Verification");
+    let receipt: Vec<&str> = verification.split('\n').filter(|l| l.starts_with("- ")).collect();
+    let checked = super::checks::section(&receipt, language);
     let objective = sec("Objective");
     let blocks = [
         block(changes, without_paths(if objective.is_empty() { commits } else { &objective })),

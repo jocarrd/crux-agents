@@ -230,7 +230,8 @@ test_a_task_without_objective_says_what_changes_from_the_commits() {
 
   local b; b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en --commits "- fix: the guard skips heredocs")"
   assert_contains "$b" $'## What changes\n\n- fix: the guard skips heredocs' "the commits stand in for the objective"
-  assert_contains "$b" "## Checked" "and what was checked is still there"
+  assert_contains "$b" "## How it was checked" "and what was checked is still there"
+  assert_contains "$b" '`test/run.sh` passes' "said as a check, not as a receipt line"
 
   "$CRUX_HOME/bin/crux" __task set --file "$f" --section Objective --text "Heredocs are text" >/dev/null
   b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en --commits "- fix: the guard skips heredocs")"
