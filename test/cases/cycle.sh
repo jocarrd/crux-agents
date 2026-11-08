@@ -2031,7 +2031,8 @@ test_finish_with_gate_says_so_in_the_proposal() {
   local ws; ws="$(_finish_with_visual)"
   env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover >/dev/null 2>&1
   local body; body="$(cat "$SB/body.md" 2>/dev/null)"
-  assert_contains "$body" "- ok · true" "with a receipt, the proposal shows what was checked"
+  assert_contains "$body" '`true` passes' "with a receipt, the proposal says what was checked"
+  assert_not_contains "$body" "- ok · " "and leaves no trace of the receipt"
   assert_not_contains "$body" "WITHOUT passing" "and does not say the gate was skipped"
 }
 

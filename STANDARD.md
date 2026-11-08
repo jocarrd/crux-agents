@@ -743,6 +743,14 @@ It is not a log. It does not tell the path its writer took, nor the detours,
 nor which tool ran each step. The reviewer needs to judge the change, not
 reconstruct the session.
 
+**What was checked is written for the person who reviews, not for the agent.**
+`crux` turns the gate receipt into sentences with a fixed table (`tsc` is
+"Types: no errors", `jest` on some paths is "Tests: the affected ones pass", a
+non-zero exit is "fails (exit 1)"). The commands, their timings and the receipt
+format stay in the task record and never reach the proposal: it shows no trace of
+how the gate was run. Nobody summarises by hand, so nothing that did not run can be
+claimed. Checks made by hand are written as plain sentences next to the rest.
+
 **And the bar changes depending on whose repo it is:**
 
 | | Own repo | Client repo |

@@ -1,5 +1,6 @@
 //! Task records and their replica between machines.
 
+pub mod checks;
 pub mod record;
 pub mod remind;
 pub mod stall;
