@@ -21,8 +21,8 @@ each gotcha: `<this-skill-directory>/references/why.md`.
 ## When not to use
 
 - Changes that cannot be seen: logic, backend, data, documentation.
-- Iterating on a detail yourself while laying out: that is `/render-loop`.
-- Measuring the deviation against an official design: that is `/visual-diff`.
+- Iterating on a detail alone: `/render-loop`.
+- Measuring against an official design: `/visual-diff`.
 
 ## The procedure
 
@@ -123,12 +123,9 @@ If the proposal is already open and is shown again after comments:
 
 ## Anti-patterns
 
-- Sending only desktop.
-- Showing the after without the before.
-- Pushing "so they can see it in the proposal": what is shown for approval goes
-  before pushing.
-- Publishing screenshots of an earlier commit (it is not dodged by deleting the
-  receipt).
+- Sending only desktop, or the after without the before.
+- Pushing "so they can see it in the proposal": approval comes before pushing.
+- Publishing screenshots of an earlier commit.
 
 ## Related
 
