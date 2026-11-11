@@ -50,10 +50,10 @@ node capture.mjs --base https://<published> --head http://localhost:<port> \
   --hide '<selectors for cookie notices, chat and floating layers>' --repeat
 ```
 
-`--repeat` captures the published version a second time: whatever differs
-between two captures of the same version (live data, clocks, counters) is not
-a change, and the next step leaves it unmarked. Animations are frozen in every
-capture.
+Animations are frozen in every capture. `--repeat` captures the published
+version twice, so what changes on its own (live data, clocks) is not marked.
+`--selector '<css>'` captures only that component or section, in both versions:
+the right size for work on a single piece.
 
 ### 3. Assemble the comparisons
 
@@ -61,30 +61,29 @@ capture.
 python3 "<this-skill-directory>/scripts/compose.py" <folder> --lang es
 ```
 
-It leaves in `<folder>/compare/` **one sheet per page**: desktop, mobile and
-tablet side by side, each with its before and after split by the red bar, a dark
-rule between devices, and **the regions that changed circled in red** in both
-halves. A long page is cut into parts of about 3,000 px, and every device shows
-the same share of its page in each part. `--split` also leaves the old montage
-per width, for when one size needs to be read up close.
+It leaves in `<folder>/compare/`, for each page:
 
-How the marks are found: the rows both captures share at the top and at the
-bottom are set aside, so a block inserted in the middle marks the block and not
-everything it pushes down; the rest is compared in 24 px cells. When almost the
-whole page changes, the sheet says so instead of circling everything.
+| Image | What it is for |
+| ----- | -------------- |
+| `<n>-<page>-0-overview-<part>.webp` | Desktop, mobile and tablet side by side: where something changed |
+| `<n>-<page>-<device>-<part>.webp` | Each device at a size that reads (75 % desktop and tablet, 100 % mobile) |
+
+In all of them the before and the after are split by the red bar, padded at the
+bottom so their tops align, and **what changed is boxed in red** in both
+halves. A page with no before is shown as a preview. `--overview-only` leaves
+only the overview. How the boxes are found: `references/why.md`.
 
 ### 4. Look at them before sending them
 
-Open each sheet. Whatever looks wrong is fixed before showing; tell capture
-artefacts apart (see Gotchas). A circle where nothing changed on purpose is
-either noise (capture again with `--repeat`) or a change nobody meant to make:
-the second is exactly what the marks are for.
+Open each image. Whatever looks wrong is fixed before showing; tell capture
+artefacts apart (see Gotchas). A box where nothing changed on purpose is noise
+(capture again with `--repeat`) or a change nobody meant to make.
 
 ### 5. Show them and wait
 
 They are sent to whoever decides through the conversation channel, with one line
-on what changed. Desktop and mobile first; tablet if something specific to it
-changes. **Nothing is pushed** —neither push nor proposal— until they say yes.
+on what changed: the overview first, then the devices. Never a capture that
+shows a token, a session or an authenticated URL. **Nothing is pushed** —neither push nor proposal— until they say yes.
 
 ### 6. Record the yes
 
@@ -111,19 +110,14 @@ If the proposal is already open and is shown again after comments:
 
 ## Gotchas
 
-- **An empty chart in the capture** is usually the animation restarted when the
-  window is resized; `capture.mjs` already waits. Check it in the browser before
-  calling it a bug.
-- **What loads on entering the screen** needs the page to be scrolled through;
-  the script does it.
+- **An empty chart in the capture** is usually an animation restarted by the
+  resize; the script waits. Check it in the browser before calling it a bug.
 - **With a development server, the system Chrome may not paint;** the production
   build is better.
 - **Cookie notices, chat and floating layers:** `--hide` with their selectors,
   which go in the project's adapter.
-- **Fixed elements appear at the end** of the full capture: they belong to the
-  capture, not the design.
 - **Only the pages the diff touched:** nobody reviews twenty-seven images.
-- **Circles on live data** (a countdown, the latest reading) mean the capture
+- **Boxes on live data** (a countdown, the latest reading) mean the capture
   ran without `--repeat`.
 
 ## Anti-patterns

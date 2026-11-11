@@ -4,12 +4,14 @@
 //
 //   node capture.mjs --base <url> --head <url> --paths /,/ficha \
 //     --widths 1440,820,390 --out <folder> [--cookie name=value] [--wait 3000] \
-//     [--hide '<css selectors>'] [--repeat]
+//     [--hide '<css selectors>'] [--selector '<css selector>'] [--repeat]
 //
 // Leaves <folder>/before/<page>-<width>.png and <folder>/after/<page>-<width>.png.
 // --repeat captures the published version once more into <folder>/noise/: what
 // differs between two captures of the same version (live data, clocks) is not
-// a change, and compose.py leaves it unmarked.
+// a change, and compose.py leaves it unmarked. --selector captures only the
+// first element that matches, in both versions: a component or a section
+// instead of the whole page.
 // Requires `npm i playwright-core` in the cwd, like visual-test.
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -87,6 +89,18 @@ async function capture(browser, url, width, file) {
     }
     scrollTo(0, 0)
   })
+  if (args.selector) {
+    const element = page.locator(args.selector).first()
+    if ((await element.count()) === 0) {
+      throw new Error(`${url}: nothing matches --selector ${args.selector}`)
+    }
+    await element.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(wait)
+    await element.screenshot({ path: file, animations: 'disabled' })
+    const box = await element.boundingBox()
+    await ctx.close()
+    return Math.round(box?.height ?? 0)
+  }
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   // A full-page capture resizes the window, and charts that redraw on resize
   // restart their animation: the shot catches them empty. It is enlarged

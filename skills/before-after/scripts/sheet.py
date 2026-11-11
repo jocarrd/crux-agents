@@ -1,6 +1,10 @@
-"""One sheet per page: desktop, mobile and tablet side by side, each with its
-before and after split by the red bar, a dark rule between devices and the
-regions that changed circled in red."""
+"""The images of a page's before and after.
+
+An overview sheet puts desktop, mobile and tablet side by side to see where
+something changed; it is too small to read. A detail image per device shows the
+same at a size that reads on a phone. In both, the before and the after are
+split by the red bar and the regions that changed are boxed in red.
+"""
 
 from PIL import Image, ImageDraw
 
@@ -10,19 +14,21 @@ RED = (220, 38, 38)
 GREEN = (22, 163, 74)
 INK = (17, 24, 39)
 GREY = (90, 100, 114)
+PAD_COLOUR = (241, 245, 249)
 BAR = 10
 RULE = 28
 MARGIN = 28
 HEAD = 150
-MARK_WIDTH = 6
-MARK_PAD = 0.18
-MARK_MIN_PX = 36
-NOTE_ALL = {"es": "cambia casi todo", "en": "nearly everything changes"}
 DESKTOP, MOBILE, TABLET = 0, 1, 2
 DESKTOP_FROM = 1000
 TABLET_FROM = 600
-PANEL = {DESKTOP: 640, MOBILE: 260, TABLET: 340}
-WIDE_SHARE = 0.7
+OVERVIEW_PANEL = {DESKTOP: 640, MOBILE: 260, TABLET: 340}
+DETAIL_SHARE = {DESKTOP: 0.75, MOBILE: 1.0, TABLET: 0.75}
+BOX_WIDTH = {"overview": 4, "detail": 5}
+BOX_PAD = 6
+BOX_RADIUS = 8
+NOTE_ALL = {"es": "cambia casi todo", "en": "nearly everything changes"}
+NOTE_NEW = {"es": "página nueva", "en": "new page"}
 
 
 def device_rank(width):
@@ -31,119 +37,160 @@ def device_rank(width):
     return TABLET if width >= TABLET_FROM else MOBILE
 
 
-def _mark(draw, box, scale, offset_x, offset_y, panel):
-    left, top, right, bottom = (v * scale for v in box)
-    if right - left > panel * WIDE_SHARE:
-        inset = MARK_WIDTH
-        shape = [
-            offset_x + max(inset, left),
-            offset_y + top - inset * 2,
-            offset_x + min(panel - inset, right),
-            offset_y + bottom + inset * 2,
-        ]
-        radius = min((shape[3] - shape[1]) / 2, MARK_MIN_PX)
-        draw.rounded_rectangle(shape, radius=radius, outline=RED, width=MARK_WIDTH)
-        return
-    pad_x = max((right - left) * MARK_PAD, MARK_MIN_PX / 2)
-    pad_y = max((bottom - top) * MARK_PAD, MARK_MIN_PX / 2)
-    draw.ellipse(
-        [
-            offset_x + left - pad_x,
-            offset_y + top - pad_y,
-            offset_x + right + pad_x,
-            offset_y + bottom + pad_y,
-        ],
-        outline=RED,
-        width=MARK_WIDTH,
-    )
-
-
 def _overlaps(box, others):
     left, top, right, bottom = box
     return any(
-        left < r and l < right and top < b and t < bottom for l, t, r, b in others
+        left < o_right and o_left < right and top < o_bottom and o_top < bottom
+        for o_left, o_top, o_right, o_bottom in others
     )
 
 
-def _prepare(before_path, after_path, width, noise_path=None):
-    before = Image.open(before_path).convert("RGB")
+def _pad_bottom(image, height):
+    if image.height >= height:
+        return image
+    padded = Image.new("RGB", (image.width, height), PAD_COLOUR)
+    padded.paste(image, (0, 0))
+    return padded
+
+
+def prepare(width, before_path, after_path, noise_path=None):
+    """Both captures at the same height, padded at the bottom only so their
+    tops align, with the boxes of what changed in each."""
     after = Image.open(after_path).convert("RGB")
+    if before_path is None:
+        return {"width": width, "before": None, "after": after, "marks": ([], []), "whole": False}
+    before = Image.open(before_path).convert("RGB")
     in_before, in_after, whole = changes(before, after)
     if noise_path:
         _, unstable, _ = changes(before, Image.open(noise_path).convert("RGB"))
-        in_before = [box for box in in_before if not _overlaps(box, unstable)]
-        in_after = [box for box in in_after if not _overlaps(box, unstable)]
-    panel = PANEL[device_rank(width)]
-    scale = panel / after.width
+        in_before = [b for b in in_before if not _overlaps(b, unstable)]
+        in_after = [b for b in in_after if not _overlaps(b, unstable)]
+    height = max(before.height, after.height)
     return {
         "width": width,
-        "panel": panel,
-        "scale": scale,
-        "before": before.resize((panel, round(before.height * scale))),
-        "after": after.resize((panel, round(after.height * scale))),
+        "before": _pad_bottom(before, height),
+        "after": _pad_bottom(after, height),
         "marks": (in_before, in_after),
         "whole": whole,
     }
 
 
-def compose_sheet(captures, out_base, title, names, lang, chunk, fonts):
-    """captures: [(width, before, after, noise or None)]; returns the paths written."""
-    devices = sorted(
-        (_prepare(b, a, w, n) for w, b, a, n in captures),
-        key=lambda d: device_rank(d["width"]),
+def _box(draw, box, scale, top, weight, panel):
+    left, y0, right, y1 = (v * scale for v in box)
+    edge = weight / 2
+    draw.rounded_rectangle(
+        [
+            max(edge, left - BOX_PAD),
+            y0 - top - BOX_PAD,
+            min(panel - edge, right + BOX_PAD),
+            y1 - top + BOX_PAD,
+        ],
+        radius=BOX_RADIUS,
+        outline=RED,
+        width=weight,
     )
-    big, mid, small = fonts
-    tallest = max(max(d["before"].height, d["after"].height) for d in devices)
-    parts = max(1, -(-tallest // chunk))
-    sheet_width = (
-        MARGIN * 2
-        + sum(d["panel"] * 2 + BAR for d in devices)
-        + RULE * (len(devices) - 1)
-    )
+
+
+def _piece(image, panel, top, bottom, marks, weight):
+    scale = panel / image.width
+    scaled = image.resize((panel, round(image.height * scale)))
+    piece = scaled.crop((0, top, panel, min(scaled.height, bottom)))
+    pen = ImageDraw.Draw(piece)
+    for box in marks:
+        _box(pen, box, scale, top, weight, panel)
+    return piece
+
+
+def _label(device, names, lang):
+    text = f"{names['devices'][device_rank(device['width'])]} · {device['width']} px"
+    if device["whole"]:
+        return f"{text} · {NOTE_ALL[lang]}"
+    return text
+
+
+def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, weight):
     before_label, after_label = names["labels"]
+    _, _, small = fonts
+    if device["before"] is not None:
+        draw.text((x, 110), before_label, fill=RED, font=small)
+        canvas.paste(
+            _piece(device["before"], panel, top, bottom, device["marks"][0], weight),
+            (x, HEAD),
+        )
+        draw.rectangle([x + panel, HEAD - 40, x + panel + BAR - 1, canvas.height - MARGIN], fill=RED)
+    after_x = x if device["before"] is None else x + panel + BAR
+    label = names["preview"] if device["before"] is None else after_label
+    draw.text((after_x, 110), label, fill=GREEN, font=small)
+    canvas.paste(
+        _piece(device["after"], panel, top, bottom, device["marks"][1], weight),
+        (after_x, HEAD),
+    )
+
+
+def _title(title, devices, lang, part, parts):
+    if any(d["before"] is None for d in devices):
+        title = f"{title} · {NOTE_NEW[lang]}"
+    return f"{title} · {part + 1}/{parts}" if parts > 1 else title
+
+
+def _panel(device, wanted):
+    return min(wanted, device["after"].width)
+
+
+def _span(device, panel):
+    return panel if device["before"] is None else panel * 2 + BAR
+
+
+def _parts(height, chunk):
+    parts = max(1, -(-height // chunk))
+    if parts > 1 and height - (parts - 1) * chunk < chunk // 5:
+        parts -= 1
+    return parts
+
+
+def _save(canvas, path, written):
+    canvas.save(path, "WEBP", quality=84, method=6)
+    written.append(path)
+
+
+def overview(devices, out_base, title, names, lang, chunk, fonts):
+    devices = sorted(devices, key=lambda d: device_rank(d["width"]))
+    big, mid, _ = fonts
+    panels = [_panel(d, OVERVIEW_PANEL[device_rank(d["width"])]) for d in devices]
+    scaled = [round(d["after"].height * p / d["after"].width) for d, p in zip(devices, panels, strict=True)]
+    parts = _parts(max(scaled), chunk)
+    width = MARGIN * 2 + sum(_span(d, p) for d, p in zip(devices, panels, strict=True))
+    width += RULE * (len(devices) - 1)
     written = []
     for part in range(parts):
-        heights = []
-        for d in devices:
-            full = max(d["before"].height, d["after"].height)
-            step = -(-full // parts)
-            d["top"], d["bottom"] = part * step, min(full, (part + 1) * step)
-            heights.append(d["bottom"] - d["top"])
-        canvas = Image.new("RGB", (sheet_width, HEAD + max(heights) + MARGIN), "white")
+        spans = [(-(-h // parts) * part, min(h, -(-h // parts) * (part + 1))) for h in scaled]
+        canvas = Image.new("RGB", (width, HEAD + max(b - t for t, b in spans) + MARGIN), "white")
         draw = ImageDraw.Draw(canvas)
-        heading = f"{title} · {part + 1}/{parts}" if parts > 1 else title
-        draw.text((MARGIN, 18), heading, fill=INK, font=big)
+        draw.text((MARGIN, 18), _title(title, devices, lang, part, parts), fill=INK, font=big)
         x = MARGIN
-        for index, d in enumerate(devices):
+        for index, (device, panel, (top, bottom)) in enumerate(zip(devices, panels, spans, strict=True)):
             if index:
-                draw.rectangle(
-                    [x - RULE + 8, 18, x - 8, canvas.height - 8], fill=INK
-                )
-            label = f"{names['devices'][device_rank(d['width'])]} · {d['width']} px"
-            if d["whole"]:
-                label += f" · {NOTE_ALL[lang]}"
-            draw.text((x, 70), label, fill=GREY, font=mid)
-            draw.text((x, 110), before_label, fill=RED, font=small)
-            draw.text((x + d["panel"] + BAR, 110), after_label, fill=GREEN, font=small)
-            for image, marks, offset in (
-                (d["before"], d["marks"][0], x),
-                (d["after"], d["marks"][1], x + d["panel"] + BAR),
-            ):
-                if d["top"] >= image.height:
-                    continue
-                piece = image.crop(
-                    (0, d["top"], d["panel"], min(image.height, d["bottom"]))
-                )
-                pen = ImageDraw.Draw(piece)
-                for box in marks:
-                    _mark(pen, box, d["scale"], 0, -d["top"], d["panel"])
-                canvas.paste(piece, (offset, HEAD))
-            draw.rectangle(
-                [x + d["panel"], HEAD - 40, x + d["panel"] + BAR - 1, canvas.height - MARGIN],
-                fill=RED,
-            )
-            x += d["panel"] * 2 + BAR + RULE
-        path = f"{out_base}-{part + 1}.webp"
-        canvas.save(path, "WEBP", quality=84, method=6)
-        written.append(path)
+                draw.rectangle([x - RULE + 8, 18, x - 8, canvas.height - 8], fill=INK)
+            draw.text((x, 70), _label(device, names, lang), fill=GREY, font=mid)
+            _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, BOX_WIDTH["overview"])
+            x += _span(device, panel) + RULE
+        _save(canvas, f"{out_base}-{part + 1}.webp", written)
+    return written
+
+
+def detail(device, out_base, title, names, lang, chunk, fonts):
+    big, mid, _ = fonts
+    panel = _panel(device, round(device["width"] * DETAIL_SHARE[device_rank(device["width"])]))
+    height = round(device["after"].height * panel / device["after"].width)
+    parts = _parts(height, chunk)
+    written = []
+    for part in range(parts):
+        top = part * chunk
+        bottom = height if part == parts - 1 else top + chunk
+        canvas = Image.new("RGB", (MARGIN * 2 + _span(device, panel), HEAD + bottom - top + MARGIN), "white")
+        draw = ImageDraw.Draw(canvas)
+        draw.text((MARGIN, 18), _title(title, [device], lang, part, parts), fill=INK, font=big)
+        draw.text((MARGIN, 70), _label(device, names, lang), fill=GREY, font=mid)
+        _pair(canvas, draw, device, MARGIN, panel, top, bottom, names, fonts, BOX_WIDTH["detail"])
+        _save(canvas, f"{out_base}-{part + 1}.webp", written)
     return written

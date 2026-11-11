@@ -53,14 +53,24 @@ PY
   [ "$lowest" -lt 800 ] || _fail "what the block pushed down was marked too (lowest mark at $lowest px)"
 }
 
-test_compose_leaves_one_sheet_per_page_with_every_device() {
+test_compose_leaves_an_overview_and_a_readable_image_per_device() {
   sandbox >/dev/null
   local dir="$SB/ba"
   _ba_pages "$dir"
   local out; out="$(python3 "$(_ba_script compose.py)" "$dir" --lang en 2>&1)"
-  assert_contains "$out" "01-home-1.webp" "one sheet for the changed page"
-  assert_contains "$out" "02-same-1.webp" "and one for the unchanged one"
-  assert_not_contains "$out" "home-1440-1.webp" "no per-width montage unless asked"
-  local split; split="$(python3 "$(_ba_script compose.py)" "$dir" --lang en --split 2>&1)"
-  assert_contains "$split" "home-1440-1.webp" "--split keeps the montage per width"
+  assert_contains "$out" "01-home-0-overview-1.webp" "an overview of the changed page"
+  assert_contains "$out" "01-home-desktop-1.webp" "and its desktop at a size that reads"
+  assert_contains "$out" "01-home-mobile-1.webp" "its mobile"
+  assert_contains "$out" "01-home-tablet-1.webp" "and its tablet"
+  local brief; brief="$(python3 "$(_ba_script compose.py)" "$dir" --lang en --overview-only 2>&1)"
+  assert_not_contains "$brief" "home-desktop-1.webp" "--overview-only leaves only the overview"
+}
+
+test_a_page_with_no_before_is_a_preview() {
+  sandbox >/dev/null
+  local dir="$SB/ba"
+  _ba_pages "$dir"
+  cp "$dir/after/home-390.png" "$dir/after/fresh-390.png"
+  local out; out="$(python3 "$(_ba_script compose.py)" "$dir" --lang en 2>&1)"
+  assert_contains "$out" "fresh-0-overview-1.webp" "a new page is shown instead of failing"
 }
