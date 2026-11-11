@@ -47,8 +47,13 @@ cp "<this-skill-directory>/scripts/capture.mjs" .
 
 node capture.mjs --base https://<published> --head http://localhost:<port> \
   --paths /,/<other> --widths 1440,820,390 --out <folder> \
-  --hide '<selectors for cookie notices, chat and floating layers>'
+  --hide '<selectors for cookie notices, chat and floating layers>' --repeat
 ```
+
+`--repeat` captures the published version a second time: whatever differs
+between two captures of the same version (live data, clocks, counters) is not
+a change, and the next step leaves it unmarked. Animations are frozen in every
+capture.
 
 ### 3. Assemble the comparisons
 
@@ -56,13 +61,24 @@ node capture.mjs --base https://<published> --head http://localhost:<port> \
 python3 "<this-skill-directory>/scripts/compose.py" <folder> --lang es
 ```
 
-It leaves in `<folder>/compare/` one montage per page and width (before on the
-left, after on the right, red bar), in sections of about 3,000 px and in WebP.
+It leaves in `<folder>/compare/` **one sheet per page**: desktop, mobile and
+tablet side by side, each with its before and after split by the red bar, a dark
+rule between devices, and **the regions that changed circled in red** in both
+halves. A long page is cut into parts of about 3,000 px, and every device shows
+the same share of its page in each part. `--split` also leaves the old montage
+per width, for when one size needs to be read up close.
+
+How the marks are found: the rows both captures share at the top and at the
+bottom are set aside, so a block inserted in the middle marks the block and not
+everything it pushes down; the rest is compared in 24 px cells. When almost the
+whole page changes, the sheet says so instead of circling everything.
 
 ### 4. Look at them before sending them
 
-Open each montage. Whatever looks wrong is fixed before showing; tell capture
-artefacts apart (see Gotchas).
+Open each sheet. Whatever looks wrong is fixed before showing; tell capture
+artefacts apart (see Gotchas). A circle where nothing changed on purpose is
+either noise (capture again with `--repeat`) or a change nobody meant to make:
+the second is exactly what the marks are for.
 
 ### 5. Show them and wait
 
@@ -107,6 +123,8 @@ If the proposal is already open and is shown again after comments:
 - **Fixed elements appear at the end** of the full capture: they belong to the
   capture, not the design.
 - **Only the pages the diff touched:** nobody reviews twenty-seven images.
+- **Circles on live data** (a countdown, the latest reading) mean the capture
+  ran without `--repeat`.
 
 ## Anti-patterns
 

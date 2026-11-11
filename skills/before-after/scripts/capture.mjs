@@ -4,17 +4,23 @@
 //
 //   node capture.mjs --base <url> --head <url> --paths /,/ficha \
 //     --widths 1440,820,390 --out <folder> [--cookie name=value] [--wait 3000] \
-//     [--hide '<css selectors>']
+//     [--hide '<css selectors>'] [--repeat]
 //
 // Leaves <folder>/before/<page>-<width>.png and <folder>/after/<page>-<width>.png.
+// --repeat captures the published version once more into <folder>/noise/: what
+// differs between two captures of the same version (live data, clocks) is not
+// a change, and compose.py leaves it unmarked.
 // Requires `npm i playwright-core` in the cwd, like visual-test.
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 
+const FLAGS = new Set(['repeat'])
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((pairs, arg, i, all) => {
-    if (arg.startsWith('--')) pairs.push([arg.slice(2), all[i + 1]])
+    if (!arg.startsWith('--')) return pairs
+    const name = arg.slice(2)
+    pairs.push([name, FLAGS.has(name) ? true : all[i + 1]])
     return pairs
   }, []),
 )
@@ -87,16 +93,19 @@ async function capture(browser, url, width, file) {
   // first, then it waits, and only then does it fire.
   await page.setViewportSize({ width, height })
   await page.waitForTimeout(wait)
-  await page.screenshot({ path: file, fullPage: true })
+  // Frozen animations: a floating mascot or a pulsing dot caught in two
+  // different frames would be marked as a change.
+  await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
   await ctx.close()
   return height
 }
 
 const browser = await launch()
 try {
-  for (const side of ['before', 'after']) {
+  const sides = args.repeat ? ['before', 'after', 'noise'] : ['before', 'after']
+  for (const side of sides) {
     mkdirSync(join(args.out, side), { recursive: true })
-    const base = side === 'before' ? args.base : args.head
+    const base = side === 'after' ? args.head : args.base
     for (const path of paths) {
       for (const width of widths) {
         const file = join(args.out, side, `${slug(path)}-${width}.png`)

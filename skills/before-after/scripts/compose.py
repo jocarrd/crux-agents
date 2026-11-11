@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Builds the before and after: before on the left, after on the right and a
-red bar in the middle, split into chunks that read on a phone.
+"""Builds the before and after of each page.
 
-    python3 compose.py <capture.mjs folder> [--lang es|en] [--chunk 3000]
+    python3 compose.py <capture.mjs folder> [--lang es|en] [--chunk 3000] [--split]
 
-Pairs before/<name>.png with after/<name>.png and leaves the montages in
-<folder>/compare/<name>-<n>.webp. Requires Pillow.
+Pairs before/<page>-<width>.png with after/<page>-<width>.png. By default it
+leaves one sheet per page in <folder>/compare/<n>-<page>-<part>.webp: desktop,
+mobile and tablet side by side, before and after split by a red bar and the
+regions that changed circled in red. --split also leaves the old montage per
+width. Requires Pillow and numpy.
 """
 
 import argparse
@@ -15,12 +17,18 @@ import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
+from sheet import compose_sheet
+
 BAR = 14
 HEAD = 104
 RED = (220, 38, 38)
 GREEN = (22, 163, 74)
 GREY = (90, 100, 114)
 LABELS = {"es": ("ANTES", "DESPUÉS"), "en": ("BEFORE", "AFTER")}
+SHEET_NAMES = {
+    "es": {"labels": LABELS["es"], "devices": ["escritorio", "móvil", "tablet"]},
+    "en": {"labels": LABELS["en"], "devices": ["desktop", "mobile", "tablet"]},
+}
 DEVICE = {
     "es": [(600, "móvil"), (1000, "tablet"), (10**6, "escritorio")],
     "en": [(600, "mobile"), (1000, "tablet"), (10**6, "desktop")],
@@ -86,6 +94,7 @@ def main():
     parser.add_argument("dir")
     parser.add_argument("--lang", default="es", choices=["es", "en"])
     parser.add_argument("--chunk", type=int, default=3000)
+    parser.add_argument("--split", action="store_true")
     args = parser.parse_args()
 
     before_dir = os.path.join(args.dir, "before")
@@ -99,24 +108,53 @@ def main():
     missing = [n for n in names if not os.path.exists(os.path.join(before_dir, n))]
     if missing:
         sys.exit(f"no before for: {', '.join(missing)}")
-    for index, name in enumerate(names, start=1):
+    noise_dir = os.path.join(args.dir, "noise")
+
+    def noise_of(name):
+        path = os.path.join(noise_dir, name)
+        return path if os.path.exists(path) else None
+
+    pages = {}
+    for name in names:
         stem = name[:-4]
         match = re.match(r"(.+)-(\d+)$", stem)
         page, width = (match.group(1), int(match.group(2))) if match else (stem, 1440)
-        label = f"{page} · {pick(DEVICE[args.lang], width)} {width}px"
-        base = os.path.join(out_dir, f"{index:02d}-{stem}")
-        for path in compose(
-            os.path.join(before_dir, name),
-            os.path.join(after_dir, name),
-            base,
-            label,
+        pages.setdefault(page, []).append((width, stem, name))
+
+    written = []
+    for index, (page, shots) in enumerate(sorted(pages.items()), start=1):
+        written += compose_sheet(
+            [
+                (
+                    w,
+                    os.path.join(before_dir, n),
+                    os.path.join(after_dir, n),
+                    noise_of(n),
+                )
+                for w, _, n in shots
+            ],
+            os.path.join(out_dir, f"{index:02d}-{page}"),
+            page,
+            SHEET_NAMES[args.lang],
             args.lang,
             args.chunk,
-            width,
-        ):
-            size = os.path.getsize(path) // 1024
-            print(f"{path} ({size} KB)")
-
+            (font(40), font(26), font(24)),
+        )
+        if not args.split:
+            continue
+        for width, stem, name in shots:
+            label = f"{page} · {pick(DEVICE[args.lang], width)} {width}px"
+            written += compose(
+                os.path.join(before_dir, name),
+                os.path.join(after_dir, name),
+                os.path.join(out_dir, f"{index:02d}-{stem}"),
+                label,
+                args.lang,
+                args.chunk,
+                width,
+            )
+    for path in written:
+        print(f"{path} ({os.path.getsize(path) // 1024} KB)")
 
 if __name__ == "__main__":
     main()
