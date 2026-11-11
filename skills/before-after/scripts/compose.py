@@ -9,6 +9,7 @@ leaves in <folder>/compare/:
 
     <n>-<page>-0-overview-<part>.webp   desktop, mobile and tablet side by side
     <n>-<page>-<device>-<part>.webp     each device at a size that reads
+    <n>-<page>-<device>-<change>-<k>.webp  a close-up of each change
 
 A page with no before is shown as a preview. Requires Pillow and numpy.
 """
@@ -18,7 +19,7 @@ import os
 import re
 import sys
 
-from sheet import detail, device_rank, font, overview, prepare
+from sheet import closeups, detail, device_rank, font, overview, prepare
 
 LABELS = {"es": ("ANTES", "DESPUÉS"), "en": ("BEFORE", "AFTER")}
 NAMES = {
@@ -27,12 +28,14 @@ NAMES = {
         "devices": ["escritorio", "móvil", "tablet"],
         "preview": "VISTA PREVIA",
         "overview": "resumen",
+        "change": "cambio",
     },
     "en": {
         "labels": LABELS["en"],
         "devices": ["desktop", "mobile", "tablet"],
         "preview": "PREVIEW",
         "overview": "overview",
+        "change": "change",
     },
 }
 FILE_DEVICE = ["desktop", "mobile", "tablet"]
@@ -89,6 +92,9 @@ def main():
         for device in sorted(devices, key=lambda d: device_rank(d["width"])):
             suffix = FILE_DEVICE[device_rank(device["width"])]
             written += detail(device, f"{base}-{suffix}", page, names, args.lang, args.chunk, fonts)
+            written += closeups(
+                device, f"{base}-{suffix}-{names['change']}", page, names, args.lang, fonts
+            )
     for path in written:
         print(f"{path} ({os.path.getsize(path) // 1024} KB)")
 

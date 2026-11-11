@@ -62,6 +62,9 @@ test_compose_leaves_an_overview_and_a_readable_image_per_device() {
   assert_contains "$out" "01-home-desktop-1.webp" "and its desktop at a size that reads"
   assert_contains "$out" "01-home-mobile-1.webp" "its mobile"
   assert_contains "$out" "01-home-tablet-1.webp" "and its tablet"
+  assert_contains "$out" "01-home-desktop-change-1.webp" "a close-up of the first change"
+  assert_contains "$out" "01-home-desktop-change-2.webp" "and of the second"
+  assert_not_contains "$out" "02-same-desktop-change" "no close-up where nothing changed"
   local brief; brief="$(python3 "$(_ba_script compose.py)" "$dir" --lang en --overview-only 2>&1)"
   assert_not_contains "$brief" "home-desktop-1.webp" "--overview-only leaves only the overview"
 }

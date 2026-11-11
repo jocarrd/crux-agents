@@ -33,6 +33,14 @@ image and moves an edge one pixel, and on a real page that alone boxed a whole
 map. Changes thinner than 12 px are dropped, which is what such an edge leaves.
 The boxes are numbered top to bottom, so a person can point at one.
 
+How they are drawn is for a person who has a minute: what did not change fades a
+little (white on a light page, black on a dark one) so the change stands in full
+colour; the box is a thin red line with a white halo and a soft red glow outside
+it, never inside, so it reads on a map or on white without tinting what it
+marks; the number sits outside the box, not on top of the change. And each
+change gets its own close-up, before and after at a size where it is seen
+without looking for it.
+
 Limit: when the same large image appears several times on a page and one of
 them is removed, the pairing cannot tell which one went, and small extra boxes
 appear inside the others.
