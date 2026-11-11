@@ -218,13 +218,34 @@ fn section(ctx: &Ctx, argv: &[String]) -> Result<String, Exit> {
     Ok(out)
 }
 
-/// Replaces the section if it is already between the markers; otherwise
-/// appends it at the end.
+/// Replaces the section if it is already between the markers. Otherwise it
+/// goes before the first second-level heading, after the opening context and
+/// ahead of the implementation details, where a reviewer looks first; with no
+/// heading to anchor to, at the end, rather than splitting the prose.
 pub fn replace_section(body: &str, section: &str) -> String {
     match (body.find(START), body.find(END)) {
         (Some(a), Some(b)) if b > a => format!("{}{}{}", &body[..a], section.trim(), &body[b + END.len()..]),
-        _ => format!("{}\n\n{}\n", body.trim_end(), section.trim()),
+        _ => match first_heading(body) {
+            Some(at) if at > 0 => {
+                format!("{}\n\n{}\n\n{}", body[..at].trim_end(), section.trim(), &body[at..])
+            }
+            _ => format!("{}\n\n{}\n", body.trim_end(), section.trim()),
+        },
     }
+}
+
+fn first_heading(body: &str) -> Option<usize> {
+    let mut offset = 0;
+    let mut fenced = false;
+    for line in body.split_inclusive('\n') {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+        } else if !fenced && line.starts_with("## ") {
+            return Some(offset);
+        }
+        offset += line.len();
+    }
+    None
 }
 
 fn pr(ctx: &Ctx, argv: &[String]) -> Res {
@@ -285,5 +306,49 @@ pub fn run(argv: &[String]) -> Res {
             }
             exit(1)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SECTION: &str = "<!-- visual-review:start -->\n## Shots\n<!-- visual-review:end -->";
+
+    #[test]
+    fn the_review_goes_before_the_first_heading() {
+        let body = "Fixes the curtain.\n\n## Changes\n- a\n";
+        let out = replace_section(body, SECTION);
+        assert!(out.starts_with("Fixes the curtain.\n\n<!-- visual-review:start -->"));
+        assert!(out.find("## Shots").unwrap() < out.find("## Changes").unwrap());
+    }
+
+    #[test]
+    fn with_no_heading_it_goes_at_the_end() {
+        let out = replace_section("Only prose.", SECTION);
+        assert!(out.starts_with("Only prose.\n\n<!-- visual-review:start -->"));
+    }
+
+    #[test]
+    fn a_heading_inside_a_code_block_is_not_an_anchor() {
+        let body = "Intro.\n\n```\n## not a heading\n```\n\n## Testing\n";
+        let out = replace_section(body, SECTION);
+        assert!(out.find("<!-- visual-review:start -->").unwrap() > out.find("not a heading").unwrap());
+        assert!(out.find("<!-- visual-review:start -->").unwrap() < out.find("## Testing").unwrap());
+    }
+
+    #[test]
+    fn an_existing_review_is_replaced_in_place() {
+        let body = "Intro.\n\n<!-- visual-review:start -->\nold\n<!-- visual-review:end -->\n\n## Changes\n";
+        let out = replace_section(body, SECTION);
+        assert!(!out.contains("old"));
+        assert_eq!(out.matches("<!-- visual-review:start -->").count(), 1);
+        assert!(out.find("## Shots").unwrap() < out.find("## Changes").unwrap());
+    }
+
+    #[test]
+    fn a_body_that_opens_with_a_heading_keeps_it_first() {
+        let out = replace_section("## Summary\ntext\n", SECTION);
+        assert!(out.starts_with("## Summary"));
     }
 }

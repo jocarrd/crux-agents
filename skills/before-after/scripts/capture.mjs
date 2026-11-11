@@ -4,17 +4,27 @@
 //
 //   node capture.mjs --base <url> --head <url> --paths /,/ficha \
 //     --widths 1440,820,390 --out <folder> [--cookie name=value] [--wait 3000] \
-//     [--hide '<css selectors>']
+//     [--hide '<css selectors>'] [--selector '<css selector>'] [--repeat] [--hide-fixed]
 //
 // Leaves <folder>/before/<page>-<width>.png and <folder>/after/<page>-<width>.png.
+// --repeat captures the published version once more into <folder>/noise/: what
+// differs between two captures of the same version (live data, clocks) is not
+// a change, and compose.py leaves it unmarked. --selector captures only the
+// first element that matches, in both versions: a component or a section
+// instead of the whole page. Fixed layers (consent notices, bottom bars, chat
+// bubbles) are hidden when capturing an element, since they would cover it;
+// --hide-fixed hides them on whole pages too.
 // Requires `npm i playwright-core` in the cwd, like visual-test.
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 
+const FLAGS = new Set(['repeat', 'hide-fixed'])
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((pairs, arg, i, all) => {
-    if (arg.startsWith('--')) pairs.push([arg.slice(2), all[i + 1]])
+    if (!arg.startsWith('--')) return pairs
+    const name = arg.slice(2)
+    pairs.push([name, FLAGS.has(name) ? true : all[i + 1]])
     return pairs
   }, []),
 )
@@ -47,8 +57,19 @@ async function launch() {
   }
 }
 
-const slug = (path) =>
-  path.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'home'
+// The query goes into a short fingerprint: two views of the same page keep
+// different files, and the names stay readable.
+const fingerprint = (text) => {
+  let hash = 2166136261
+  for (const char of text) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0
+  return hash.toString(36).slice(0, 5)
+}
+const slug = (path) => {
+  const [route, query] = path.split('?')
+  const base =
+    route.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'home'
+  return query ? `${base}-${fingerprint(query)}` : base
+}
 
 async function capture(browser, url, width, file) {
   const mobile = width < 600
@@ -81,22 +102,66 @@ async function capture(browser, url, width, file) {
     }
     scrollTo(0, 0)
   })
+  if (args.selector || args['hide-fixed']) {
+    await page.evaluate(() => {
+      for (const node of document.querySelectorAll('body *')) {
+        if (getComputedStyle(node).position === 'fixed') node.style.visibility = 'hidden'
+      }
+    })
+  }
+  if (args.selector) {
+    const element = page.locator(args.selector).first()
+    if ((await element.count()) === 0) {
+      throw new Error(`${url}: nothing matches --selector ${args.selector}`)
+    }
+    await element.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(wait)
+    // What the element paints, children that stick out of its box included:
+    // a full-bleed map inside a padded section would otherwise be cut.
+    const clip = await element.evaluate((node) => {
+      let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity]
+      for (const part of [node, ...node.querySelectorAll('*')]) {
+        const box = part.getBoundingClientRect()
+        if (!box.width || !box.height) continue
+        left = Math.min(left, box.left)
+        top = Math.min(top, box.top)
+        right = Math.max(right, box.right)
+        bottom = Math.max(bottom, box.bottom)
+      }
+      const width = document.documentElement.clientWidth
+      left = Math.max(0, left)
+      right = Math.min(width, right)
+      return { x: left + scrollX, y: top + scrollY, width: right - left, height: bottom - top }
+    })
+    await page.screenshot({ path: file, clip, fullPage: true, animations: 'disabled' })
+    await ctx.close()
+    return Math.round(clip.height)
+  }
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   // A full-page capture resizes the window, and charts that redraw on resize
   // restart their animation: the shot catches them empty. It is enlarged
   // first, then it waits, and only then does it fire.
   await page.setViewportSize({ width, height })
   await page.waitForTimeout(wait)
-  await page.screenshot({ path: file, fullPage: true })
+  // Frozen animations: a floating mascot or a pulsing dot caught in two
+  // different frames would be marked as a change.
+  await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
   await ctx.close()
   return height
 }
 
+mkdirSync(args.out, { recursive: true })
+writeFileSync(
+  join(args.out, 'pages.json'),
+  `${JSON.stringify(Object.fromEntries(paths.map((path) => [slug(path), path])), null, 2)}\n`,
+)
+
 const browser = await launch()
 try {
-  for (const side of ['before', 'after']) {
+  const sides = args.repeat ? ['before', 'after', 'noise'] : ['before', 'after']
+  for (const side of sides) {
     mkdirSync(join(args.out, side), { recursive: true })
-    const base = side === 'before' ? args.base : args.head
+    const base = side === 'after' ? args.head : args.base
     for (const path of paths) {
       for (const width of widths) {
         const file = join(args.out, side, `${slug(path)}-${width}.png`)

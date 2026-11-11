@@ -21,8 +21,8 @@ each gotcha: `<this-skill-directory>/references/why.md`.
 ## When not to use
 
 - Changes that cannot be seen: logic, backend, data, documentation.
-- Iterating on a detail yourself while laying out: that is `/render-loop`.
-- Measuring the deviation against an official design: that is `/visual-diff`.
+- Iterating on a detail alone: `/render-loop`.
+- Measuring against an official design: `/visual-diff`.
 
 ## The procedure
 
@@ -47,8 +47,13 @@ cp "<this-skill-directory>/scripts/capture.mjs" .
 
 node capture.mjs --base https://<published> --head http://localhost:<port> \
   --paths /,/<other> --widths 1440,820,390 --out <folder> \
-  --hide '<selectors for cookie notices, chat and floating layers>'
+  --hide '<selectors for cookie notices, chat and floating layers>' --repeat
 ```
+
+Animations are frozen in every capture. `--repeat` captures the published
+version twice, so what changes on its own (live data, clocks) is not marked.
+`--selector '<css>'` captures only that component or section, in both versions:
+the right size for work on a single piece.
 
 ### 3. Assemble the comparisons
 
@@ -56,19 +61,30 @@ node capture.mjs --base https://<published> --head http://localhost:<port> \
 python3 "<this-skill-directory>/scripts/compose.py" <folder> --lang es
 ```
 
-It leaves in `<folder>/compare/` one montage per page and width (before on the
-left, after on the right, red bar), in sections of about 3,000 px and in WebP.
+It leaves in `<folder>/compare/`, for each page:
+
+| Image | What it is for |
+| ----- | -------------- |
+| `<n>-<page>-0-overview-<part>.webp` | Desktop, mobile and tablet side by side: where something changed |
+| `<n>-<page>-<device>-<part>.webp` | Each device at a size that reads (75 % desktop and tablet, 100 % mobile) |
+| `<n>-<page>-<device>-change-<k>.webp` | A close-up of each change, before and after |
+
+In all of them the before and the after are split by the red bar, padded at the
+bottom so their tops align, and **what changed is boxed and numbered in red** in both
+halves, with the rest slightly faded so the eye goes to it. A page with no before is shown as a preview. `--overview-only` leaves
+only the overview. How the boxes are found: `references/why.md`.
 
 ### 4. Look at them before sending them
 
-Open each montage. Whatever looks wrong is fixed before showing; tell capture
-artefacts apart (see Gotchas).
+Open each image. Whatever looks wrong is fixed before showing; tell capture
+artefacts apart (see Gotchas). A box where nothing changed on purpose is noise
+(capture again with `--repeat`) or a change nobody meant to make.
 
 ### 5. Show them and wait
 
 They are sent to whoever decides through the conversation channel, with one line
-on what changed. Desktop and mobile first; tablet if something specific to it
-changes. **Nothing is pushed** —neither push nor proposal— until they say yes.
+on what changed: the overview first, then the devices. Never a capture that
+shows a token, a session or an authenticated URL. **Nothing is pushed** —neither push nor proposal— until they say yes.
 
 ### 6. Record the yes
 
@@ -95,27 +111,21 @@ If the proposal is already open and is shown again after comments:
 
 ## Gotchas
 
-- **An empty chart in the capture** is usually the animation restarted when the
-  window is resized; `capture.mjs` already waits. Check it in the browser before
-  calling it a bug.
-- **What loads on entering the screen** needs the page to be scrolled through;
-  the script does it.
+- **An empty chart in the capture** is usually an animation restarted by the
+  resize; the script waits. Check it in the browser before calling it a bug.
 - **With a development server, the system Chrome may not paint;** the production
   build is better.
 - **Cookie notices, chat and floating layers:** `--hide` with their selectors,
   which go in the project's adapter.
-- **Fixed elements appear at the end** of the full capture: they belong to the
-  capture, not the design.
 - **Only the pages the diff touched:** nobody reviews twenty-seven images.
+- **Boxes on live data** (a countdown, the latest reading) mean the capture
+  ran without `--repeat`.
 
 ## Anti-patterns
 
-- Sending only desktop.
-- Showing the after without the before.
-- Pushing "so they can see it in the proposal": what is shown for approval goes
-  before pushing.
-- Publishing screenshots of an earlier commit (it is not dodged by deleting the
-  receipt).
+- Sending only desktop, or the after without the before.
+- Pushing "so they can see it in the proposal": approval comes before pushing.
+- Publishing screenshots of an earlier commit.
 
 ## Related
 
