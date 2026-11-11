@@ -20,11 +20,22 @@ change nobody intended is seen before it ships.
 ## How the boxes are found
 
 From the pixels, not from the diff of the code: what matters is what the screen
-shows, side effects included. The rows both captures share at the top and at
-the bottom are set aside first, so a block inserted in the middle boxes the
-block and not everything it pushes down; the rest is compared in 24 px cells,
-grouped into at most six boxes. When almost the whole page changes, the image
-says so instead of boxing everything.
+shows, side effects included. The rows of both captures are paired as a patience
+diff pairs lines: rows unique in both are anchors, and between anchors what is
+equal at the top and at the bottom is paired too. Blank rows are never anchors,
+so sections moved down by a change above them are still paired; the first
+version, which only set aside what was equal at the very top and bottom, boxed
+half a page when two sections changed at once.
+
+What has no pair is compared in 8 px blocks by their mean colour, at the closest
+of nine one-pixel nudges: a layout shift of a fraction of a pixel resamples an
+image and moves an edge one pixel, and on a real page that alone boxed a whole
+map. Changes thinner than 12 px are dropped, which is what such an edge leaves.
+The boxes are numbered top to bottom, so a person can point at one.
+
+Limit: when the same large image appears several times on a page and one of
+them is removed, the pairing cannot tell which one went, and small extra boxes
+appear inside the others.
 
 Two captures of the same version differ in live data and animations, so
 animations are frozen and, with `--repeat`, what changes on its own is left

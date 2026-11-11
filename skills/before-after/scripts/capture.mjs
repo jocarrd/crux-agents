@@ -4,20 +4,22 @@
 //
 //   node capture.mjs --base <url> --head <url> --paths /,/ficha \
 //     --widths 1440,820,390 --out <folder> [--cookie name=value] [--wait 3000] \
-//     [--hide '<css selectors>'] [--selector '<css selector>'] [--repeat]
+//     [--hide '<css selectors>'] [--selector '<css selector>'] [--repeat] [--hide-fixed]
 //
 // Leaves <folder>/before/<page>-<width>.png and <folder>/after/<page>-<width>.png.
 // --repeat captures the published version once more into <folder>/noise/: what
 // differs between two captures of the same version (live data, clocks) is not
 // a change, and compose.py leaves it unmarked. --selector captures only the
 // first element that matches, in both versions: a component or a section
-// instead of the whole page.
+// instead of the whole page. Fixed layers (consent notices, bottom bars, chat
+// bubbles) are hidden when capturing an element, since they would cover it;
+// --hide-fixed hides them on whole pages too.
 // Requires `npm i playwright-core` in the cwd, like visual-test.
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 
-const FLAGS = new Set(['repeat'])
+const FLAGS = new Set(['repeat', 'hide-fixed'])
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((pairs, arg, i, all) => {
     if (!arg.startsWith('--')) return pairs
@@ -89,6 +91,13 @@ async function capture(browser, url, width, file) {
     }
     scrollTo(0, 0)
   })
+  if (args.selector || args['hide-fixed']) {
+    await page.evaluate(() => {
+      for (const node of document.querySelectorAll('body *')) {
+        if (getComputedStyle(node).position === 'fixed') node.style.visibility = 'hidden'
+      }
+    })
+  }
   if (args.selector) {
     const element = page.locator(args.selector).first()
     if ((await element.count()) === 0) {

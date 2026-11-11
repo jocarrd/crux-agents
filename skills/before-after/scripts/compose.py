@@ -18,9 +18,7 @@ import os
 import re
 import sys
 
-from PIL import ImageFont
-
-from sheet import detail, device_rank, overview, prepare
+from sheet import detail, device_rank, font, overview, prepare
 
 LABELS = {"es": ("ANTES", "DESPUÉS"), "en": ("BEFORE", "AFTER")}
 NAMES = {
@@ -38,17 +36,6 @@ NAMES = {
     },
 }
 FILE_DEVICE = ["desktop", "mobile", "tablet"]
-
-
-def font(size):
-    for path in (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-        "/Library/Fonts/Arial Bold.ttf",
-    ):
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
 
 
 def pages_in(after_dir):

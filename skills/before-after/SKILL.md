@@ -69,7 +69,7 @@ It leaves in `<folder>/compare/`, for each page:
 | `<n>-<page>-<device>-<part>.webp` | Each device at a size that reads (75 % desktop and tablet, 100 % mobile) |
 
 In all of them the before and the after are split by the red bar, padded at the
-bottom so their tops align, and **what changed is boxed in red** in both
+bottom so their tops align, and **what changed is boxed and numbered in red** in both
 halves. A page with no before is shown as a preview. `--overview-only` leaves
 only the overview. How the boxes are found: `references/why.md`.
 

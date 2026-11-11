@@ -6,9 +6,10 @@ same at a size that reads on a phone. In both, the before and the after are
 split by the red bar and the regions that changed are boxed in red.
 """
 
-from PIL import Image, ImageDraw
+import os
 
 from changes import changes
+from PIL import Image, ImageDraw, ImageFont
 
 RED = (220, 38, 38)
 GREEN = (22, 163, 74)
@@ -24,9 +25,11 @@ DESKTOP_FROM = 1000
 TABLET_FROM = 600
 OVERVIEW_PANEL = {DESKTOP: 640, MOBILE: 260, TABLET: 340}
 DETAIL_SHARE = {DESKTOP: 0.75, MOBILE: 1.0, TABLET: 0.75}
-BOX_WIDTH = {"overview": 4, "detail": 5}
-BOX_PAD = 6
-BOX_RADIUS = 8
+BOX_WIDTH = {"overview": 3, "detail": 3}
+BOX_HALO = 2
+BOX_PAD = 8
+BOX_RADIUS = 6
+BADGE = {"overview": 18, "detail": 24}
 NOTE_ALL = {"es": "cambia casi todo", "en": "nearly everything changes"}
 NOTE_NEW = {"es": "página nueva", "en": "new page"}
 
@@ -75,30 +78,42 @@ def prepare(width, before_path, after_path, noise_path=None):
     }
 
 
-def _box(draw, box, scale, top, weight, panel):
+def _box(draw, box, scale, top, weight, panel, number, badge):
     left, y0, right, y1 = (v * scale for v in box)
-    edge = weight / 2
-    draw.rounded_rectangle(
-        [
-            max(edge, left - BOX_PAD),
-            y0 - top - BOX_PAD,
-            min(panel - edge, right + BOX_PAD),
-            y1 - top + BOX_PAD,
-        ],
-        radius=BOX_RADIUS,
-        outline=RED,
-        width=weight,
-    )
+    edge = weight / 2 + BOX_HALO
+    shape = [
+        max(edge, left - BOX_PAD),
+        y0 - top - BOX_PAD,
+        min(panel - edge, right + BOX_PAD),
+        y1 - top + BOX_PAD,
+    ]
+    draw.rounded_rectangle(shape, radius=BOX_RADIUS, outline="white", width=weight + BOX_HALO * 2)
+    draw.rounded_rectangle(shape, radius=BOX_RADIUS, outline=RED, width=weight)
+    cx = min(max(shape[0], badge / 2 + 2), panel - badge / 2 - 2)
+    cy = shape[1]
+    draw.ellipse([cx - badge / 2, cy - badge / 2, cx + badge / 2, cy + badge / 2], fill=RED, outline="white", width=2)
+    draw.text((cx, cy), str(number), fill="white", font=font(round(badge * 0.62)), anchor="mm")
 
 
-def _piece(image, panel, top, bottom, marks, weight):
+def _piece(image, panel, top, bottom, marks, weight, badge):
     scale = panel / image.width
     scaled = image.resize((panel, round(image.height * scale)))
     piece = scaled.crop((0, top, panel, min(scaled.height, bottom)))
     pen = ImageDraw.Draw(piece)
-    for box in marks:
-        _box(pen, box, scale, top, weight, panel)
+    for number, box in enumerate(sorted(marks, key=lambda b: (b[1], b[0])), start=1):
+        _box(pen, box, scale, top, weight, panel, number, badge)
     return piece
+
+
+def font(size):
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf",
+    ):
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
 
 
 def _label(device, names, lang):
@@ -108,13 +123,14 @@ def _label(device, names, lang):
     return text
 
 
-def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, weight):
+def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, kind):
+    weight, badge = BOX_WIDTH[kind], BADGE[kind]
     before_label, after_label = names["labels"]
     _, _, small = fonts
     if device["before"] is not None:
         draw.text((x, 110), before_label, fill=RED, font=small)
         canvas.paste(
-            _piece(device["before"], panel, top, bottom, device["marks"][0], weight),
+            _piece(device["before"], panel, top, bottom, device["marks"][0], weight, badge),
             (x, HEAD),
         )
         draw.rectangle([x + panel, HEAD - 40, x + panel + BAR - 1, canvas.height - MARGIN], fill=RED)
@@ -122,7 +138,7 @@ def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, weight):
     label = names["preview"] if device["before"] is None else after_label
     draw.text((after_x, 110), label, fill=GREEN, font=small)
     canvas.paste(
-        _piece(device["after"], panel, top, bottom, device["marks"][1], weight),
+        _piece(device["after"], panel, top, bottom, device["marks"][1], weight, badge),
         (after_x, HEAD),
     )
 
@@ -172,7 +188,7 @@ def overview(devices, out_base, title, names, lang, chunk, fonts):
             if index:
                 draw.rectangle([x - RULE + 8, 18, x - 8, canvas.height - 8], fill=INK)
             draw.text((x, 70), _label(device, names, lang), fill=GREY, font=mid)
-            _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, BOX_WIDTH["overview"])
+            _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, "overview")
             x += _span(device, panel) + RULE
         _save(canvas, f"{out_base}-{part + 1}.webp", written)
     return written
@@ -191,6 +207,6 @@ def detail(device, out_base, title, names, lang, chunk, fonts):
         draw = ImageDraw.Draw(canvas)
         draw.text((MARGIN, 18), _title(title, [device], lang, part, parts), fill=INK, font=big)
         draw.text((MARGIN, 70), _label(device, names, lang), fill=GREY, font=mid)
-        _pair(canvas, draw, device, MARGIN, panel, top, bottom, names, fonts, BOX_WIDTH["detail"])
+        _pair(canvas, draw, device, MARGIN, panel, top, bottom, names, fonts, "detail")
         _save(canvas, f"{out_base}-{part + 1}.webp", written)
     return written
