@@ -80,7 +80,9 @@ fn kind_of(command: &str) -> Option<&'static Kind> {
         },
         "go" if sub == "test" => &SUITE,
         "next" | "vite" | "docker" if sub == "build" => &BUILD,
-        "build" => &BUILD,
+        t if t == "build" || t.starts_with("build:") => &BUILD,
+        t if t == "typecheck" || t.starts_with("typecheck:") => &TYPES,
+        "lint" => &LINT,
         "test" => &SUITE,
         _ => return None,
     };
@@ -120,7 +122,13 @@ pub fn describe(lines: &[&str], language: &str) -> Vec<String> {
         let parts = commands(&text);
         let known: Vec<Option<&Kind>> = parts.iter().map(|p| kind_of(p)).collect();
         // A sentence nobody recognises as a command was written by a person
-        if known.iter().all(Option::is_none) && parts.len() == 1 && text.contains(' ') && !text.contains('/') {
+        let runs_a_tool = text.split_whitespace().next().is_some_and(|first| WRAPPERS.contains(&first));
+        if known.iter().all(Option::is_none)
+            && parts.len() == 1
+            && text.contains(' ')
+            && !text.contains('/')
+            && !runs_a_tool
+        {
             add(match &failed {
                 Some(code) => format!("{text} ({code})"),
                 None => text,
@@ -159,6 +167,14 @@ mod tests {
         assert_eq!(
             said(&["- ok · sh -c npx tsc --noEmit -p . && npx jest --silent --maxWorkers=4 (16s)"]),
             vec!["Types: no errors", "Tests: the whole suite passes"]
+        );
+    }
+
+    #[test]
+    fn package_scripts_read_as_checks() {
+        assert_eq!(
+            said(&["- ok · pnpm run check (97s)", "- ok · pnpm run build:web (7s)", "- ok · npm run typecheck (4s)"]),
+            vec!["`pnpm run check` passes", "Build: succeeds", "Types: no errors"]
         );
     }
 
