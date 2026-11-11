@@ -20,6 +20,8 @@ import os
 import re
 import sys
 
+sys.dont_write_bytecode = True
+
 from sheet import closeups, detail, device_rank, font, overview, prepare
 
 LABELS = {"es": ("ANTES", "DESPUÉS"), "en": ("BEFORE", "AFTER")}

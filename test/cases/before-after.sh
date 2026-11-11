@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export PYTHONDONTWRITEBYTECODE=1
+
 _ba_script() {
   echo "$CRUX_HOME/skills/before-after/scripts/$1"
 }
@@ -76,4 +78,25 @@ test_a_page_with_no_before_is_a_preview() {
   cp "$dir/after/home-390.png" "$dir/after/fresh-390.png"
   local out; out="$(python3 "$(_ba_script compose.py)" "$dir" --lang en 2>&1)"
   assert_contains "$out" "fresh-0-overview-1.webp" "a new page is shown instead of failing"
+}
+
+test_a_page_wider_in_one_version_is_reported_not_a_crash() {
+  sandbox >/dev/null
+  local dir="$SB/ba"
+  mkdir -p "$dir/before" "$dir/after"
+  python3 - "$dir" <<'PY'
+import sys
+from PIL import Image
+out = sys.argv[1]
+Image.new("RGB", (938, 800), (248, 250, 252)).save(f"{out}/before/wide-390.png")
+Image.new("RGB", (780, 800), (248, 250, 252)).save(f"{out}/after/wide-390.png")
+PY
+  local out; out="$(python3 "$(_ba_script compose.py)" "$dir" --lang en 2>&1)"
+  assert_contains "$out" "01-wide-0-overview-1.webp" "it still composes the page"
+  local note; note="$(cd "$(_ba_script '')" && python3 -c "
+from sheet import prepare
+d = prepare(390, '$dir/before/wide-390.png', '$dir/after/wide-390.png')
+print(d['overflow'])
+")"
+  assert_contains "$note" "(0, 79)" "the before overflows by 79 css px"
 }
