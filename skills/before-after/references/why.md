@@ -50,6 +50,14 @@ animations are frozen and, with `--repeat`, what changes on its own is left
 unmarked. Measured on two pages and three widths captured twice from the same
 version: 11 false marks without either guard, none with both.
 
+## Names and frames
+
+A path with a query becomes a short name, the path plus a fingerprint of the
+query, and `pages.json` keeps the real path for the titles: the first real
+capture produced file names of 120 characters. An element is captured with
+everything it paints, children that stick out of its box included; a
+full-bleed map inside a padded section came out with its close button cut.
+
 ## What was taken from vercel-labs/before-and-after
 
 Their skill only places existing captures in the proposal; capture and marks

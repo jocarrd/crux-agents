@@ -202,6 +202,14 @@ def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, kind):
     )
 
 
+def _fitted(draw, text, face, width):
+    if draw.textlength(text, font=face) <= width:
+        return text
+    while text and draw.textlength(f"{text}…", font=face) > width:
+        text = text[:-1]
+    return f"{text}…"
+
+
 def _title(title, devices, lang, part, parts):
     if any(d["before"] is None for d in devices):
         title = f"{title} · {NOTE_NEW[lang]}"
@@ -241,7 +249,7 @@ def overview(devices, out_base, title, names, lang, chunk, fonts):
         spans = [(-(-h // parts) * part, min(h, -(-h // parts) * (part + 1))) for h in scaled]
         canvas = Image.new("RGB", (width, HEAD + max(b - t for t, b in spans) + MARGIN), "white")
         draw = ImageDraw.Draw(canvas)
-        draw.text((MARGIN, 18), _title(title, devices, lang, part, parts), fill=INK, font=big)
+        draw.text((MARGIN, 18), _fitted(draw, _title(title, devices, lang, part, parts), big, canvas.width - MARGIN * 2), fill=INK, font=big)
         x = MARGIN
         for index, (device, panel, (top, bottom)) in enumerate(zip(devices, panels, spans, strict=True)):
             if index:
@@ -264,7 +272,7 @@ def detail(device, out_base, title, names, lang, chunk, fonts):
         bottom = height if part == parts - 1 else top + chunk
         canvas = Image.new("RGB", (MARGIN * 2 + _span(device, panel), HEAD + bottom - top + MARGIN), "white")
         draw = ImageDraw.Draw(canvas)
-        draw.text((MARGIN, 18), _title(title, [device], lang, part, parts), fill=INK, font=big)
+        draw.text((MARGIN, 18), _fitted(draw, _title(title, [device], lang, part, parts), big, canvas.width - MARGIN * 2), fill=INK, font=big)
         draw.text((MARGIN, 70), _label(device, names, lang), fill=GREY, font=mid)
         _pair(canvas, draw, device, MARGIN, panel, top, bottom, names, fonts, "detail")
         _save(canvas, f"{out_base}-{part + 1}.webp", written)
@@ -312,7 +320,7 @@ def closeups(device, out_base, title, names, lang, fonts):
         height = HEAD + max(c.height for c, _, _ in pieces) + MARGIN
         canvas = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(canvas)
-        draw.text((MARGIN, 18), f"{title} · {one} {number}/{len(marks)}", fill=INK, font=big)
+        draw.text((MARGIN, 18), _fitted(draw, f"{title} · {one} {number}/{len(marks)}", big, canvas.width - MARGIN * 2), fill=INK, font=big)
         device_name = names["devices"][device_rank(device["width"])]
         draw.text((MARGIN, 70), f"{device_name} · {device['width']} px", fill=GREY, font=mid)
         x = MARGIN

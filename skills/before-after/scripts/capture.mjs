@@ -15,7 +15,7 @@
 // bubbles) are hidden when capturing an element, since they would cover it;
 // --hide-fixed hides them on whole pages too.
 // Requires `npm i playwright-core` in the cwd, like visual-test.
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 
@@ -57,8 +57,19 @@ async function launch() {
   }
 }
 
-const slug = (path) =>
-  path.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'home'
+// The query goes into a short fingerprint: two views of the same page keep
+// different files, and the names stay readable.
+const fingerprint = (text) => {
+  let hash = 2166136261
+  for (const char of text) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0
+  return hash.toString(36).slice(0, 5)
+}
+const slug = (path) => {
+  const [route, query] = path.split('?')
+  const base =
+    route.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'home'
+  return query ? `${base}-${fingerprint(query)}` : base
+}
 
 async function capture(browser, url, width, file) {
   const mobile = width < 600
@@ -105,10 +116,26 @@ async function capture(browser, url, width, file) {
     }
     await element.scrollIntoViewIfNeeded()
     await page.waitForTimeout(wait)
-    await element.screenshot({ path: file, animations: 'disabled' })
-    const box = await element.boundingBox()
+    // What the element paints, children that stick out of its box included:
+    // a full-bleed map inside a padded section would otherwise be cut.
+    const clip = await element.evaluate((node) => {
+      let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity]
+      for (const part of [node, ...node.querySelectorAll('*')]) {
+        const box = part.getBoundingClientRect()
+        if (!box.width || !box.height) continue
+        left = Math.min(left, box.left)
+        top = Math.min(top, box.top)
+        right = Math.max(right, box.right)
+        bottom = Math.max(bottom, box.bottom)
+      }
+      const width = document.documentElement.clientWidth
+      left = Math.max(0, left)
+      right = Math.min(width, right)
+      return { x: left + scrollX, y: top + scrollY, width: right - left, height: bottom - top }
+    })
+    await page.screenshot({ path: file, clip, fullPage: true, animations: 'disabled' })
     await ctx.close()
-    return Math.round(box?.height ?? 0)
+    return Math.round(clip.height)
   }
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   // A full-page capture resizes the window, and charts that redraw on resize
@@ -122,6 +149,12 @@ async function capture(browser, url, width, file) {
   await ctx.close()
   return height
 }
+
+mkdirSync(args.out, { recursive: true })
+writeFileSync(
+  join(args.out, 'pages.json'),
+  `${JSON.stringify(Object.fromEntries(paths.map((path) => [slug(path), path])), null, 2)}\n`,
+)
 
 const browser = await launch()
 try {

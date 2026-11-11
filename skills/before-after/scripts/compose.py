@@ -15,6 +15,7 @@ A page with no before is shown as a preview. Requires Pillow and numpy.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -70,6 +71,11 @@ def main():
         path = os.path.join(folder, name)
         return path if os.path.exists(path) else None
 
+    titles_path = os.path.join(args.dir, "pages.json")
+    titles = {}
+    if os.path.exists(titles_path):
+        with open(titles_path, encoding="utf-8") as handle:
+            titles = json.load(handle)
     names = NAMES[args.lang]
     fonts = (font(40), font(26), font(24))
     written = []
@@ -84,16 +90,17 @@ def main():
             for width, name in shots
         ]
         base = os.path.join(out_dir, f"{index:02d}-{page}")
+        title = titles.get(page, page)
         written += overview(
-            devices, f"{base}-0-{names['overview']}", page, names, args.lang, args.chunk, fonts
+            devices, f"{base}-0-{names['overview']}", title, names, args.lang, args.chunk, fonts
         )
         if args.overview_only:
             continue
         for device in sorted(devices, key=lambda d: device_rank(d["width"])):
             suffix = FILE_DEVICE[device_rank(device["width"])]
-            written += detail(device, f"{base}-{suffix}", page, names, args.lang, args.chunk, fonts)
+            written += detail(device, f"{base}-{suffix}", title, names, args.lang, args.chunk, fonts)
             written += closeups(
-                device, f"{base}-{suffix}-{names['change']}", page, names, args.lang, fonts
+                device, f"{base}-{suffix}-{names['change']}", title, names, args.lang, fonts
             )
     for path in written:
         print(f"{path} ({os.path.getsize(path) // 1024} KB)")
