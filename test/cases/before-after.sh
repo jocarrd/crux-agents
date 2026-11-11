@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export PYTHONDONTWRITEBYTECODE=1
+
 _ba_script() {
   echo "$CRUX_HOME/skills/before-after/scripts/$1"
 }
