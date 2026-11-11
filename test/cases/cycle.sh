@@ -1879,7 +1879,8 @@ test_visual_section_counts_approved_images() {
   assert_contains "$out" "with 2 images" "only counts the images, not the text"
   out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual section --lang es 2>&1)"
   assert_contains "$out" "<!-- visual-review:start -->" "opens with its marker"
-  assert_contains "$out" "Revisión visual aprobada el" "says when it was approved"
+  assert_contains "$out" "## Screenshots" "in English whatever the language asked for"
+  assert_not_contains "$out" "aprobada" "and without an approval date"
   assert_contains "$out" "Cover reviewed." "carries the note"
   assert_not_contains "$out" "![" "without --publish it links no images"
 }
@@ -1896,7 +1897,7 @@ test_visual_publishes_on_separate_branch_without_touching_proposal() {
   before="$(git -C "$app" rev-parse HEAD)"
   out="$(cd "$app" && "$CRUX_HOME/bin/crux" visual section --publish --lang en 2>&1)"
   assert_contains "$out" "https://github.com/acme/web/blob/crux-review/feat/cover/01-cover-desktop.png?raw=true" "links the image on the review branch"
-  assert_contains "$out" "Before and after" "respects the language"
+  assert_contains "$out" "## Screenshots" "respects the language"
   assert_eq "$before" "$(git -C "$app" rev-parse HEAD)" "the proposal branch receives no commit"
   assert_eq "" "$(git -C "$app" status --porcelain | grep -v crux-visual)" "and the working tree stays clean"
   local files
@@ -1928,7 +1929,8 @@ test_visual_in_client_repo_pushes_no_images() {
   ( cd "$root/app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
   local out
   out="$(cd "$root/app" && "$CRUX_HOME/bin/crux" visual section --publish 2>&1)"
-  assert_contains "$out" "Visual review approved" "leaves the review note"
+  assert_contains "$out" "Reviewed at desktop, tablet and mobile widths" "says what was reviewed"
+  assert_not_contains "$out" "approved" "with no approver or approval date"
   assert_not_contains "$out" "![" "without images in the client repo"
   assert_not_contains "$out" "crux" "nor the name of our tooling"
 }
@@ -2022,7 +2024,7 @@ test_finish_without_gate_does_not_claim_it_passed() {
   ( cd "$ws" && "$CRUX_HOME/bin/crux" ship clear >/dev/null 2>&1 )
   env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace finish cover --skip-gate >/dev/null 2>&1
   local body; body="$(cat "$SB/body.md" 2>/dev/null)"
-  assert_contains "$body" "WITHOUT passing the quality gate" "the proposal says the gate was skipped"
+  assert_contains "$body" "Opened without the usual checks" "the proposal says the gate was skipped"
   assert_not_contains "$body" "gate passed" "and does not claim it passed"
 }
 
@@ -2234,6 +2236,20 @@ test_finish_in_a_client_repo_describes_the_branch_not_the_task() {
   assert_not_contains "$b" "portada nueva" "nor the steps done in other proposals"
   assert_not_contains "$b" "WhatsApp" "nor the decisions"
   assert_not_contains "$b" "@cliente" "nor the emails in them"
+  assert_contains "$b" "## Summary" "it follows the template: summary"
+  assert_contains "$b" $'## Changes\n\n- feat: add the cover sheet' "changes"
+  assert_contains "$b" "## How it was tested" "and how it was tested"
+  assert_not_contains "$b" "Quality gate passed" "without the gate's sha"
+}
+
+test_ship_body_blocks_the_author_named_in_their_own_proposal() {
+  sandbox >/dev/null
+  local ws; ws="$(_finish_in_client_repo)"
+  git -C "$ws" config user.name "Ada Lovelace"
+  printf 'Screenshots: Ada approved them.\n' > "$SB/named.md"
+  printf 'Adds the cover sheet before the summary\n' > "$SB/clean.md"
+  assert_exit 1 "the author's name" in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/named.md"
+  assert_exit 0 "a body that does not name them passes" in_dir "$ws" "$CRUX_HOME/bin/crux" ship body "$SB/clean.md"
 }
 
 test_client_filter_blocks_contact_details_and_the_wrong_language() {

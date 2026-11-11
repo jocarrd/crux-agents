@@ -779,7 +779,7 @@ pub fn summary(doc: &Doc) -> Summary {
 /// The proposal description comes from the record but does not quote it: in
 /// a client's repo we do not show how we work inside. Without an objective,
 /// what changes is told by the commits.
-pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
+pub fn proposal_body(doc: &Doc, commits: &str) -> String {
     let home = crate::env::var("HOME");
     let user_path = crate::regex!(r"/(home|Users)/[A-Za-z0-9._-]+");
     // The machine path is stripped from the whole body: each step's evidence
@@ -791,16 +791,8 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
         };
         user_path.replace_all(&v, "~").into_owned()
     };
-    let (changes, scope, focus_t, done_t, decisions_t, checked_t) = if language == "es" {
-        ("Qué cambia", "Alcance", "Foco de revisión", "Hecho", "Decisiones", "Cómo se ha comprobado")
-    } else {
-        ("What changes", "Scope", "Review focus", "Done", "Decisions", "How it was checked")
-    };
-    let block =
-        |title: &str, text: String| if text.is_empty() { String::new() } else { format!("## {title}\n\n{text}\n") };
+    let english = |text: String| if super::template::is_english(&text) { text } else { String::new() };
     let sec = |title: &str| content(doc.section(title));
-    // The evidence goes in parentheses and without the label: the label is in
-    // the record's language, and the description may be in another.
     let evidence = crate::regex!(r" · (?:evidencia|evidence): (.*)$");
     let done = steps(doc)
         .iter()
@@ -810,17 +802,26 @@ pub fn proposal_body(doc: &Doc, language: &str, commits: &str) -> String {
         .join("\n");
     let verification = sec("Verification");
     let receipt: Vec<&str> = verification.split('\n').filter(|l| l.starts_with("- ")).collect();
-    let checked = super::checks::section(&receipt, language);
-    let objective = sec("Objective");
-    let blocks = [
-        block(changes, without_paths(if objective.is_empty() { commits } else { &objective })),
-        block(scope, without_paths(&sec("Scope"))),
-        block(focus_t, without_paths(&review_focus(doc))),
-        block(done_t, without_paths(&done)),
-        block(decisions_t, without_paths(&sec("Deviations and decisions"))),
-        block(checked_t, without_paths(&checked)),
-    ];
-    blocks.into_iter().filter(|b| !b.is_empty()).collect::<Vec<_>>().join("\n")
+    let checked = super::checks::section(&receipt, super::template::LANGUAGE);
+    let objective = english(sec("Objective"));
+    let summary = if objective.is_empty() {
+        super::template::summary_from_title(commits.lines().next().unwrap_or("").trim_start_matches("- "))
+    } else {
+        objective
+    };
+    let done = english(done);
+    let notes = [sec("Scope"), review_focus(doc), sec("Deviations and decisions")]
+        .into_iter()
+        .map(english)
+        .filter(|n| !n.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    super::template::render(&[
+        (super::template::SUMMARY, without_paths(&summary)),
+        (super::template::CHANGES, without_paths(if done.is_empty() { commits } else { &done })),
+        (super::template::TESTED, without_paths(&checked)),
+        (super::template::NOTES, without_paths(&notes)),
+    ])
 }
 
 /// Takes into `dest` what is still alive in `src`: its pending steps, saying

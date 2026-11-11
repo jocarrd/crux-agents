@@ -133,7 +133,6 @@ pub fn finish(argv: &[String]) -> Res {
 
     let docs = project::find_docs_repo(&path);
     let profile = docs.as_deref().and_then(|d| project::contract_field(d, "profile")).unwrap_or_default();
-    let language = policy::commit_language(&profile, docs.as_deref());
     let log = git::out(&path, &["log", "--format=- %s", &format!("{base}..{branch}")]).unwrap_or_default();
     let gate = if skip_gate { None } else { Some(head.as_str()) };
     // In a client's repo the task record is ours: its objective, the steps of
@@ -141,7 +140,7 @@ pub fn finish(argv: &[String]) -> Res {
     let from_record = policy::flag(&profile, docs.as_deref(), "propose.fromRecord", true);
     let log = if from_record { log } else { commit_messages(&path, &format!("{base}..{branch}")) };
     let body_record = if from_record { record_file.as_deref() } else { None };
-    let body = proposal_body(&path, body_record, &language, &log, gate);
+    let body = proposal_body(&path, body_record, &log, gate);
     check_body(&path, &body, body_record)?;
     if let Some(d) = docs.as_deref() {
         check_origin(&path, &repo, d)?;
@@ -279,33 +278,40 @@ fn commit_messages(path: &Path, range: &str) -> String {
         .join("\n")
 }
 
-/// The description comes from the task if it says what changes; if not, from
-/// the commits. In the language of what is published in the repo. `gate` is
-/// the commit the gate passed on, or None when it was skipped: then the
-/// proposal says so, because false evidence misleads more than missing
-/// evidence.
-fn proposal_body(path: &Path, record_file: Option<&Path>, language: &str, log: &str, gate: Option<&str>) -> String {
+fn gate_checks(path: &Path) -> String {
+    let receipt = files::read_or_empty(&path.join(names::GATE_RECEIPT));
+    let lines = ship::receipt_checks(&receipt);
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    crate::task::checks::section(&lines, task::template::LANGUAGE)
+}
+
+/// Every proposal follows the template in task::template, always in English.
+/// `gate` is None when the checks were skipped: the proposal says so, because
+/// false evidence misleads more than missing evidence.
+fn proposal_body(path: &Path, record_file: Option<&Path>, log: &str, gate: Option<&str>) -> String {
     let mut body = record_file
         .and_then(|f| record::read(f).ok())
-        .map(|d| record::proposal_body(&d, language, log))
+        .map(|d| record::proposal_body(&d, log))
         .unwrap_or_default()
         .trim_end_matches('\n')
         .to_string();
-    let (changes, gate_line) = match (language, gate) {
-        ("es", None) => ("Cambios", "Abierta SIN pasar la puerta de calidad, a petición explícita.".to_string()),
-        ("es", Some(head)) => ("Cambios", format!("Puerta de calidad pasada sobre {}.", short(head))),
-        (_, None) => ("Changes", "Opened WITHOUT passing the quality gate, at explicit request.".to_string()),
-        (_, Some(head)) => ("Changes", format!("Quality gate passed on {}.", short(head))),
-    };
     if body.is_empty() {
-        body = format!("{changes}:\n\n{log}\n\n---\n{gate_line}");
+        let first_subject = log.lines().next().unwrap_or("").trim_start_matches("- ");
+        let tested = if gate.is_some() { gate_checks(path) } else { task::template::OPENED_WITHOUT_GATE.to_string() };
+        body = task::template::render(&[
+            (task::template::SUMMARY, task::template::summary_from_title(first_subject)),
+            (task::template::CHANGES, log.to_string()),
+            (task::template::TESTED, tested),
+        ])
+        .trim_end()
+        .to_string();
     } else if gate.is_none() {
-        body = format!("{body}\n\n---\n{gate_line}");
+        body = format!("{body}\n\n{}", task::template::OPENED_WITHOUT_GATE);
     }
     // The visual review goes in if it is for the commit being proposed; old
     // screenshots are not published as current, but they do not block.
     if path.join(names::VISUAL_RECEIPT).is_file() {
-        let r = crate::cmd::call_quiet(path, "visual", &["section", "--publish", "--lang", language]);
+        let r = crate::cmd::call_quiet(path, "visual", &["section", "--publish"]);
         let out = format!("{}{}", r.stdout, r.stderr);
         if r.ok() {
             body = format!("{body}\n\n{}", out.trim_end_matches('\n'));
