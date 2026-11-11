@@ -11,6 +11,7 @@
 use crate::args::Parser;
 use crate::error::{exit, Exit, Res};
 use crate::names;
+use crate::task::template;
 use crate::{die, files, git, policy, project, sh, ui};
 use std::path::{Path, PathBuf};
 
@@ -163,32 +164,20 @@ fn publish_review(repo: &Path, branch: &str, prefix: &str, dir: &Path) -> bool {
     result
 }
 
-fn text(lang: &str, key: &str) -> &'static str {
-    match (lang, key) {
-        ("es", "title") => "Antes y después",
-        (_, "title") => "Before and after",
-        ("es", "approved") => "Revisión visual aprobada el",
-        (_, "approved") => "Visual review approved on",
-        ("es", _) => "Antes a la izquierda, después a la derecha.",
-        _ => "Before on the left, after on the right.",
-    }
-}
-
 fn section(ctx: &Ctx, argv: &[String]) -> Result<String, Exit> {
-    let (mut publish, mut lang) = (false, "en".to_string());
+    let mut publish = false;
     let mut p = Parser::new(argv);
     while let Some(arg) = p.next() {
         match arg {
             "--publish" => publish = true,
-            "--lang" => lang = p.value_opt().unwrap_or_else(|| "en".into()),
+            "--lang" => {
+                p.value_opt();
+            }
             other => {
                 ui::err(format!("unknown option: {other}"));
                 return Err(Exit(1));
             }
         }
-    }
-    if lang != "es" {
-        lang = "en".into();
     }
     ctx.read_receipt()?;
     let (sha, head) = (ctx.value("sha"), ctx.head());
@@ -197,13 +186,9 @@ fn section(ctx: &Ctx, argv: &[String]) -> Result<String, Exit> {
         return Err(Exit(1));
     }
     let dir = ctx.value("dir");
-    let date: String = ctx.value("approved").chars().take(10).collect();
     let note = ctx.value("note");
-    let mut out = format!("{START}\n## {}\n\n{} {date}.", text(&lang, "title"), text(&lang, "approved"));
-    if !note.is_empty() {
-        out.push_str(&format!(" {note}"));
-    }
-    out.push('\n');
+    let summary = if note.is_empty() { template::SCREENSHOTS_REVIEWED.to_string() } else { note };
+    let mut out = format!("{START}\n## {}\n\n{summary}\n", template::SCREENSHOTS);
     if ctx.setting("visual.publish", "branch") == "branch" && publish {
         let Some(slug) = repo_github(&ctx.repo) else {
             ui::err("the remote is not on GitHub: I do not know where to link the images");
@@ -222,7 +207,7 @@ fn section(ctx: &Ctx, argv: &[String]) -> Result<String, Exit> {
             ui::err(format!("could not push the images to the {branch} branch"));
             return Err(Exit(1));
         }
-        out.push_str(&format!("\n{}\n", text(&lang, "caption")));
+        out.push_str(&format!("\n{}\n", template::SCREENSHOTS_CAPTION));
         for f in images_of(Path::new(&dir)) {
             let name = files::name(&f);
             let stem = name.rsplit_once('.').map(|(a, _)| a).unwrap_or(&name);
@@ -244,11 +229,10 @@ pub fn replace_section(body: &str, section: &str) -> String {
 
 fn pr(ctx: &Ctx, argv: &[String]) -> Res {
     let Some(pr) = argv.first().filter(|p| !p.is_empty()) else { die!("usage: crux visual pr <number|url>") };
-    let lang = argv.get(1).cloned().unwrap_or_else(|| "en".into());
     if !sh::exists("gh") {
         die!("gh is needed to edit the proposal");
     }
-    let new_section = section(ctx, &["--publish".into(), "--lang".into(), lang])?;
+    let new_section = section(ctx, &["--publish".into()])?;
     let body = sh::capture_in(&ctx.repo, "gh", &["pr", "view", pr, "--json", "body", "-q", ".body"]);
     if !body.ok() {
         die!("could not read proposal {pr}");

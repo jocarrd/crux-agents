@@ -736,8 +736,32 @@ what was checked and what remains, and that is where it ends.
 
 #### What a proposal's description carries
 
-**What changes, what is added and why.** Then, what was checked and what is
-pending. That is where it ends.
+**One template, always in English**, whatever the project or the language of
+its record. The sections are fixed and come from common pull request practice;
+an empty one is left out:
+
+```markdown
+## Summary
+One sentence: what the change does and why.
+
+## Changes
+The commits of the branch, or the steps done in the task.
+
+## How it was tested
+What passed, in plain words ("Types: no errors", "Tests: the whole suite passes").
+
+## Notes for reviewers
+Scope, where to look closely, and the decisions taken along the way.
+
+## Screenshots
+Only when the change can be seen.
+```
+
+The template lives in `rs/src/task/template.rs` and nobody fills it by hand:
+`workspace finish` builds it. Text from the task record that is not in English
+stays out, and the body filter refuses a description that names its author:
+it has to read as written by them, not as a report about them. It carries no
+approval date, no reviewer and no gate sha.
 
 It is not a log. It does not tell the path its writer took, nor the detours,
 nor which tool ran each step. The reviewer needs to judge the change, not
@@ -780,7 +804,7 @@ its profile in `crux.json`, and `client-repo` is the one that activates it.
 A change that touches the interface is shown before proposing it: the before
 and after on desktop, tablet and mobile (`/before-after`), and nothing is
 pushed until the yes. `crux visual approve` records that approval against
-HEAD's sha, and `workspace finish` adds it to the proposal —with images on a
+HEAD's sha, and `workspace finish` adds it to the Screenshots section —with images on a
 separate branch that is never merged, or only as a note if the profile declares
 `visual.publish: none`, which is what `client-repo` does—. If the approval is
 for another commit, `finish` says so and does not publish it.

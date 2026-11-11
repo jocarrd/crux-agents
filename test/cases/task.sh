@@ -130,7 +130,9 @@ test_the_proposal_comes_from_the_task_without_showing_the_scaffolding() {
   local body="$SB/BODY.md"
   "$CRUX_HOME/bin/crux" __task body --file "$f" --lang en > "$body"
   local b; b="$(cat "$body")"
-  assert_contains "$b" "## What changes" "the description says what changes"
+  assert_contains "$b" "## Summary" "the description follows the template: summary"
+  assert_contains "$b" "## Changes" "changes"
+  assert_contains "$b" "## Notes for reviewers" "and notes for reviewers"
   assert_contains "$b" "fix the world atlas (before and after screenshots)" "what was done, with its evidence in parentheses"
   assert_not_contains "$b" "evidence:" "without the record label"
   assert_contains "$b" "Kosovo inside Serbia" "and what was decided"
@@ -166,16 +168,17 @@ test_the_plan_keeps_its_headings_and_its_review_focus_reaches_the_proposal() {
   assert_contains "$(cd "$ws" && "$CRUX_HOME/bin/crux" task 2>&1)" "write the key" "the task's own steps are untouched"
 
   local b; b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)"
-  assert_contains "$b" $'## Review focus\n\n- A key written twice.' "the proposal carries the review focus"
+  assert_contains "$b" "## Notes for reviewers" "the review focus goes in the notes for reviewers"
+  assert_contains "$b" "- A key written twice." "with its points"
   assert_not_contains "$b" "The cache key." "and not the rest of the plan"
   assert_not_contains "$b" "not the task steps" "nor what comes after the focus"
-  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang es)" "## Foco de revisión" \
-    "with its heading in the proposal's language"
+  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang es)" "## Notes for reviewers" \
+    "the template is always in English"
 
   printf '## Qué cambia\n\nLa clave.\n\n## Foco de revisión\n\n- Una clave escrita dos veces.\n' > "$SB/plan.md"
   ( cd "$ws" && "$CRUX_HOME/bin/crux" task plan "$SB/plan.md" >/dev/null ) 2>&1
   b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)"
-  assert_contains "$b" "Una clave escrita dos veces." "a plan written in Spanish is found too"
+  assert_not_contains "$b" "Una clave escrita dos veces." "a plan written in Spanish stays out of the proposal"
   assert_not_contains "$b" "A key written twice." "and the new plan replaces the old one whole"
 }
 
@@ -214,7 +217,7 @@ test_a_record_saved_with_its_plan_split_still_gives_its_focus() {
   "$CRUX_HOME/bin/crux" workspace new old --repo "$root/app" >/dev/null 2>&1
   local f="$SB/tasks/proj/old.md"
   "$CRUX_HOME/bin/crux" __task set --file "$f" --section "Review focus" --text "- from before" >/dev/null
-  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)" $'## Review focus\n\n- from before' \
+  assert_contains "$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en)" $'## Notes for reviewers\n\n- from before' \
     "the focus split out by an older crux reaches the proposal"
 }
 
@@ -229,14 +232,15 @@ test_a_task_without_objective_says_what_changes_from_the_commits() {
     --text "- ok · test/run.sh (40s)" >/dev/null
 
   local b; b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en --commits "- fix: the guard skips heredocs")"
-  assert_contains "$b" $'## What changes\n\n- fix: the guard skips heredocs' "the commits stand in for the objective"
-  assert_contains "$b" "## How it was checked" "and what was checked is still there"
+  assert_contains "$b" $'## Summary\n\nThe guard skips heredocs.' "the first commit stands in for the objective"
+  assert_contains "$b" $'## Changes\n\n- fix: the guard skips heredocs' "and the commits are the changes"
+  assert_contains "$b" "## How it was tested" "and what was checked is still there"
   assert_contains "$b" '`test/run.sh` passes' "said as a check, not as a receipt line"
 
   "$CRUX_HOME/bin/crux" __task set --file "$f" --section Objective --text "Heredocs are text" >/dev/null
   b="$("$CRUX_HOME/bin/crux" __task body --file "$f" --lang en --commits "- fix: the guard skips heredocs")"
-  assert_contains "$b" "Heredocs are text" "with an objective, the objective wins"
-  assert_not_contains "$b" "- fix: the guard" "and the commits are not repeated"
+  assert_contains "$b" $'## Summary\n\nHeredocs are text' "with an objective, the objective is the summary"
+  assert_not_contains "$b" "The guard skips heredocs." "and the first commit no longer stands in for it"
 }
 
 test_the_client_filter_does_not_apply_to_our_own_docs_repo() {

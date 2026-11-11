@@ -13,7 +13,7 @@ use crate::error::{exit, Res};
 use crate::names;
 use crate::{die, env, files, git, policy, project, task, ui};
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
@@ -48,6 +48,19 @@ pub fn receipt_failures(text: &str) -> Vec<String> {
             let code = f.next()?;
             let _secs = f.next();
             (code != "0").then(|| format!("{} (exit {code})", f.next().unwrap_or("").trim_start()))
+        })
+        .collect()
+}
+
+pub fn receipt_checks(text: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|l| {
+            let mut f = l.splitn(4, ' ');
+            (f.next() == Some("run")).then_some(())?;
+            let code = f.next()?;
+            let _secs = f.next();
+            let command = f.next()?.trim();
+            Some(if code == "0" { format!("- ok · {command}") } else { format!("- exit {code} · {command}") })
         })
         .collect()
 }
@@ -216,6 +229,18 @@ fn numbered(text: &str, re: &regex::Regex) -> Vec<String> {
 
 /// A proposal's body is the one artifact of the flow that gets published, so
 /// it goes through the same filter as the commits: no tool signature.
+fn author_mentions(repo: &Path, text: &str) -> Vec<String> {
+    let full = git::out(repo, &["config", "user.name"]).unwrap_or_default().trim().to_string();
+    let first = full.split_whitespace().next().unwrap_or("").to_string();
+    let names: Vec<String> = [full, first].into_iter().filter(|n| n.chars().count() >= 3).collect();
+    if names.is_empty() {
+        return Vec::new();
+    }
+    let alternatives = names.iter().map(|n| regex::escape(n)).collect::<Vec<_>>().join("|");
+    let pattern = regex::Regex::new(&format!(r"\b({alternatives})\b")).unwrap();
+    numbered(text, &pattern)
+}
+
 fn body(ctx: &Ctx, args: &[String]) -> Res {
     let Some(file) = args.first().map(PathBuf::from).filter(|f| f.is_file()) else {
         die!("usage: crux ship body <file with the body>")
@@ -240,6 +265,10 @@ fn body(ctx: &Ctx, args: &[String]) -> Res {
     let creds = crate::secrets::fingerprints_in(&text);
     if !creds.is_empty() {
         report("something that looks like a credential".into(), creds.iter().map(|s| s.to_string()).collect());
+    }
+    let found = author_mentions(&ctx.repo, &text);
+    if !found.is_empty() {
+        report("the author is named in their own proposal".into(), found);
     }
     // The machine's path tells the reader nothing, and says too much about how
     // we work and for whom.

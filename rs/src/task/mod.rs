@@ -5,6 +5,7 @@ pub mod record;
 pub mod remind;
 pub mod stall;
 pub mod sync;
+pub mod template;
 
 use crate::args::Opts;
 use crate::error::{exit, Exit, Res};
@@ -185,7 +186,7 @@ pub fn internal(argv: &[String]) -> Res {
         },
         "body" => match record::read(&file) {
             Ok(d) => {
-                print!("{}", record::proposal_body(&d, &o.val("lang"), &o.val("commits")));
+                print!("{}", record::proposal_body(&d, &o.val("commits")));
                 Ok(())
             }
             Err(e) => fail(e),
