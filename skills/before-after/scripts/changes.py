@@ -183,3 +183,20 @@ def changes(before, after):
     if changed > WHOLE_PAGE_SHARE:
         return [], [], True
     return _boxes(mask_a, a.shape[1]), _boxes(mask_b, b.shape[1]), False
+
+
+def anchors(before, after):
+    """Rows paired across both captures, (before row, after row), in order."""
+    return _anchors(_keys(_rgb(before)), _keys(_rgb(after)))
+
+
+def shift_at(pairs, row, after_side=True):
+    """How far a row of one capture moved in the other, from the nearest anchor
+    above it; 0 when there is none."""
+    offset = 0
+    for before_row, after_row in pairs:
+        here = after_row if after_side else before_row
+        if here > row:
+            break
+        offset = before_row - after_row if after_side else after_row - before_row
+    return offset

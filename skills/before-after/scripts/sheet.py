@@ -8,7 +8,7 @@ split by the red bar and the regions that changed are boxed in red.
 
 import os
 
-from changes import changes
+from changes import anchors, changes, shift_at
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 RED = (220, 38, 38)
@@ -78,7 +78,9 @@ def prepare(width, before_path, after_path, noise_path=None):
         in_before = [b for b in in_before if not _overlaps(b, unstable)]
         in_after = [b for b in in_after if not _overlaps(b, unstable)]
     height = max(before.height, after.height)
+    pairs = anchors(before, after) if in_before or in_after else []
     return {
+        "pairs": pairs,
         "width": width,
         "before": _pad_bottom(before, height),
         "after": _pad_bottom(after, height),
@@ -269,39 +271,48 @@ def detail(device, out_base, title, names, lang, chunk, fonts):
     return written
 
 
+def _region(box, image, offset):
+    left, top, right, bottom = box
+    return (
+        max(0, left - CLOSEUP_MARGIN),
+        min(image.height - 1, max(0, top + offset - CLOSEUP_MARGIN)),
+        min(image.width, right + CLOSEUP_MARGIN),
+        max(1, min(image.height, bottom + offset + CLOSEUP_MARGIN)),
+    )
+
+
+def _fit(crop):
+    scale = min(1, CLOSEUP_MAX_WIDTH / crop.width, CLOSEUP_MAX_HEIGHT / crop.height)
+    return crop.resize((round(crop.width * scale), round(crop.height * scale)), Image.LANCZOS)
+
+
 def closeups(device, out_base, title, names, lang, fonts):
-    """One image per change: the before and the after of that region, cropped
-    and at a size where it can be read without looking for it."""
+    """One image per change: the same region before and after, found through
+    the paired rows so a change pushed down by another still lines up, cropped
+    at a size where it can be read without looking for it."""
     if device["before"] is None or device["whole"]:
         return []
     big, mid, small = fonts
     before_label, after_label = names["labels"]
     one, _ = NOTE_COUNT[lang]
-    before_marks, after_marks = (ordered(m) for m in device["marks"])
+    after_marks = ordered(device["marks"][1])
+    marks = [(box, True) for box in after_marks]
+    if not marks:
+        marks = [(box, False) for box in ordered(device["marks"][0])]
     written = []
-    for number in range(1, max(len(before_marks), len(after_marks)) + 1):
-        pieces = []
-        for image, marks, label, colour in (
-            (device["before"], before_marks, before_label, RED),
-            (device["after"], after_marks, after_label, GREEN),
-        ):
-            if number <= len(marks):
-                left, top, right, bottom = marks[number - 1]
-                crop = image.crop((
-                    max(0, left - CLOSEUP_MARGIN),
-                    max(0, top - CLOSEUP_MARGIN),
-                    min(image.width, right + CLOSEUP_MARGIN),
-                    min(image.height, bottom + CLOSEUP_MARGIN),
-                ))
-                scale = min(1, CLOSEUP_MAX_WIDTH / crop.width, CLOSEUP_MAX_HEIGHT / crop.height)
-                crop = crop.resize((round(crop.width * scale), round(crop.height * scale)), Image.LANCZOS)
-                pieces.append((crop, label, colour))
-        width = MARGIN * 2 + sum(c.width for c, _, _ in pieces) + BAR * (len(pieces) - 1) + RULE
+    for number, (box, on_after) in enumerate(marks, start=1):
+        shift = shift_at(device["pairs"], box[1], after_side=on_after)
+        before_box = _region(box, device["before"], shift if on_after else 0)
+        after_box = _region(box, device["after"], 0 if on_after else shift)
+        pieces = [
+            (_fit(device["before"].crop(before_box)), before_label, RED),
+            (_fit(device["after"].crop(after_box)), after_label, GREEN),
+        ]
+        width = MARGIN * 2 + sum(c.width for c, _, _ in pieces) + BAR + RULE
         height = HEAD + max(c.height for c, _, _ in pieces) + MARGIN
         canvas = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(canvas)
-        total = max(len(before_marks), len(after_marks))
-        draw.text((MARGIN, 18), f"{title} · {one} {number}/{total}", fill=INK, font=big)
+        draw.text((MARGIN, 18), f"{title} · {one} {number}/{len(marks)}", fill=INK, font=big)
         device_name = names["devices"][device_rank(device["width"])]
         draw.text((MARGIN, 70), f"{device_name} · {device['width']} px", fill=GREY, font=mid)
         x = MARGIN
@@ -313,7 +324,7 @@ def closeups(device, out_base, title, names, lang, fonts):
             draw.rounded_rectangle(
                 [x - 1, HEAD - 1, x + crop.width, HEAD + crop.height],
                 radius=4,
-                outline=(*RED,) if colour == GREEN else GREY,
+                outline=RED if colour == GREEN else GREY,
                 width=2,
             )
             x += crop.width + BAR + RULE
