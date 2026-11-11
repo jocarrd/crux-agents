@@ -40,6 +40,10 @@ CLOSEUP_MAX_HEIGHT = 1100
 BADGE = {"overview": 18, "detail": 24}
 NOTE_ALL = {"es": "cambia casi todo", "en": "nearly everything changes"}
 NOTE_NEW = {"es": "página nueva", "en": "new page"}
+NOTE_OVERFLOW = {
+    "es": "el {side} se desborda {px} px",
+    "en": "the {side} overflows by {px} px",
+}
 NOTE_COUNT = {"es": ("cambio", "cambios"), "en": ("change", "changes")}
 
 
@@ -57,10 +61,10 @@ def _overlaps(box, others):
     )
 
 
-def _pad_bottom(image, height):
-    if image.height >= height:
+def _pad(image, width, height):
+    if image.width >= width and image.height >= height:
         return image
-    padded = Image.new("RGB", (image.width, height), PAD_COLOUR)
+    padded = Image.new("RGB", (max(width, image.width), max(height, image.height)), PAD_COLOUR)
     padded.paste(image, (0, 0))
     return padded
 
@@ -72,9 +76,17 @@ def prepare(width, before_path, after_path, noise_path=None):
     if before_path is None:
         return {"width": width, "before": None, "after": after, "marks": ([], []), "whole": False}
     before = Image.open(before_path).convert("RGB")
+    overflow = None
+    if before.width != after.width:
+        narrow = min(before.width, after.width)
+        side = 0 if before.width > after.width else 1
+        overflow = (side, round(abs(before.width - after.width) * width / narrow))
+        widest = max(before.width, after.width)
+        before, after = _pad(before, widest, 0), _pad(after, widest, 0)
     in_before, in_after, whole = changes(before, after)
     if noise_path:
-        _, unstable, _ = changes(before, Image.open(noise_path).convert("RGB"))
+        noise = _pad(Image.open(noise_path).convert("RGB"), before.width, 0)
+        _, unstable, _ = changes(before, noise.crop((0, 0, before.width, noise.height)))
         in_before = [b for b in in_before if not _overlaps(b, unstable)]
         in_after = [b for b in in_after if not _overlaps(b, unstable)]
     height = max(before.height, after.height)
@@ -82,8 +94,9 @@ def prepare(width, before_path, after_path, noise_path=None):
     return {
         "pairs": pairs,
         "width": width,
-        "before": _pad_bottom(before, height),
-        "after": _pad_bottom(after, height),
+        "before": _pad(before, 0, height),
+        "after": _pad(after, 0, height),
+        "overflow": overflow,
         "marks": (in_before, in_after),
         "whole": whole,
     }
@@ -173,6 +186,9 @@ def font(size):
 
 def _label(device, names, lang):
     text = f"{names['devices'][device_rank(device['width'])]} · {device['width']} px"
+    if device.get("overflow"):
+        side, pixels = device["overflow"]
+        text = f"{text} · {NOTE_OVERFLOW[lang].format(side=names['labels'][side].lower(), px=pixels)}"
     if device["whole"]:
         return f"{text} · {NOTE_ALL[lang]}"
     count = len(device["marks"][1]) or len(device["marks"][0])
