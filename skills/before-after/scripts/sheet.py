@@ -40,10 +40,7 @@ CLOSEUP_MAX_HEIGHT = 1100
 BADGE = {"overview": 18, "detail": 24}
 NOTE_ALL = {"es": "cambia casi todo", "en": "nearly everything changes"}
 NOTE_NEW = {"es": "página nueva", "en": "new page"}
-NOTE_OVERFLOW = {
-    "es": "el {side} se desborda {px} px",
-    "en": "the {side} overflows by {px} px",
-}
+NOTE_OVERFLOW = {"es": "se desborda {px} px", "en": "overflows by {px} px"}
 NOTE_COUNT = {"es": ("cambio", "cambios"), "en": ("change", "changes")}
 
 
@@ -186,9 +183,6 @@ def font(size):
 
 def _label(device, names, lang):
     text = f"{names['devices'][device_rank(device['width'])]} · {device['width']} px"
-    if device.get("overflow"):
-        side, pixels = device["overflow"]
-        text = f"{text} · {NOTE_OVERFLOW[lang].format(side=names['labels'][side].lower(), px=pixels)}"
     if device["whole"]:
         return f"{text} · {NOTE_ALL[lang]}"
     count = len(device["marks"][1]) or len(device["marks"][0])
@@ -198,7 +192,18 @@ def _label(device, names, lang):
     return text
 
 
-def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, kind):
+def _overflow_pill(draw, device, side, x, panel, lang):
+    if not device.get("overflow") or device["overflow"][0] != side:
+        return
+    face = font(18)
+    text = _fitted(draw, NOTE_OVERFLOW[lang].format(px=device["overflow"][1]), face, panel - 40)
+    width = draw.textlength(text, font=face)
+    left = x + panel - width - 28
+    draw.rounded_rectangle([left, HEAD + 10, x + panel - 10, HEAD + 40], radius=15, fill=RED)
+    draw.text((left + 9, HEAD + 25), text, fill="white", font=face, anchor="lm")
+
+
+def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, kind, lang):
     badge = BADGE[kind]
     before_label, after_label = names["labels"]
     _, _, small = fonts
@@ -208,6 +213,8 @@ def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, kind):
             _piece(device["before"], panel, top, bottom, device["marks"][0], badge),
             (x, HEAD),
         )
+        if top == 0:
+            _overflow_pill(draw, device, 0, x, panel, lang)
         draw.rectangle([x + panel, HEAD - 40, x + panel + BAR - 1, canvas.height - MARGIN], fill=RED)
     after_x = x if device["before"] is None else x + panel + BAR
     label = names["preview"] if device["before"] is None else after_label
@@ -216,6 +223,8 @@ def _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, kind):
         _piece(device["after"], panel, top, bottom, device["marks"][1], badge),
         (after_x, HEAD),
     )
+    if top == 0:
+        _overflow_pill(draw, device, 1, after_x, panel, lang)
 
 
 def _fitted(draw, text, face, width):
@@ -270,8 +279,8 @@ def overview(devices, out_base, title, names, lang, chunk, fonts):
         for index, (device, panel, (top, bottom)) in enumerate(zip(devices, panels, spans, strict=True)):
             if index:
                 draw.rectangle([x - RULE + 8, 18, x - 8, canvas.height - 8], fill=INK)
-            draw.text((x, 70), _label(device, names, lang), fill=GREY, font=mid)
-            _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, "overview")
+            draw.text((x, 70), _fitted(draw, _label(device, names, lang), mid, _span(device, panel)), fill=GREY, font=mid)
+            _pair(canvas, draw, device, x, panel, top, bottom, names, fonts, "overview", lang)
             x += _span(device, panel) + RULE
         _save(canvas, f"{out_base}-{part + 1}.webp", written)
     return written
@@ -289,8 +298,8 @@ def detail(device, out_base, title, names, lang, chunk, fonts):
         canvas = Image.new("RGB", (MARGIN * 2 + _span(device, panel), HEAD + bottom - top + MARGIN), "white")
         draw = ImageDraw.Draw(canvas)
         draw.text((MARGIN, 18), _fitted(draw, _title(title, [device], lang, part, parts), big, canvas.width - MARGIN * 2), fill=INK, font=big)
-        draw.text((MARGIN, 70), _label(device, names, lang), fill=GREY, font=mid)
-        _pair(canvas, draw, device, MARGIN, panel, top, bottom, names, fonts, "detail")
+        draw.text((MARGIN, 70), _fitted(draw, _label(device, names, lang), mid, _span(device, panel)), fill=GREY, font=mid)
+        _pair(canvas, draw, device, MARGIN, panel, top, bottom, names, fonts, "detail", lang)
         _save(canvas, f"{out_base}-{part + 1}.webp", written)
     return written
 

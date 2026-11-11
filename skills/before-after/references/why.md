@@ -58,6 +58,11 @@ capture produced file names of 120 characters. An element is captured with
 everything it paints, children that stick out of its box included; a
 full-bleed map inside a padded section came out with its close button cut.
 
+A page wider in one version than in the other (the published /avisos on mobile
+scrolled 79 px sideways) used to stop the sheet. Now the narrower capture is
+padded on the right and a red pill on the side that overflows says by how much:
+as text in the device line it was cut on a 260 px mobile panel.
+
 ## What was taken from vercel-labs/before-and-after
 
 Their skill only places existing captures in the proposal; capture and marks
