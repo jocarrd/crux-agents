@@ -15,7 +15,6 @@ use crate::args::Parser;
 use crate::error::{Exit, Res};
 use crate::names;
 use crate::{env, git, sh};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -130,20 +129,20 @@ fn adapter(var: &str, script: &str) -> Option<String> {
 }
 
 fn run_adapter(cmd: &str, file: &Path, input: &str) -> Result<String, String> {
-    let child = Command::new("bash")
+    static TURN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let turn = TURN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let question = std::env::temp_dir().join(format!("crux-skill-question.{}.{turn}", std::process::id()));
+    std::fs::write(&question, input).map_err(|e| e.to_string())?;
+    let stdin = std::fs::File::open(&question).map_err(|e| e.to_string());
+    let _ = std::fs::remove_file(&question);
+    let o = Command::new("bash")
         .args(["-c", cmd])
         .env("CRUX_SKILL_FILE", file)
-        .stdin(Stdio::piped())
+        .stdin(Stdio::from(stdin?))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn();
-    let mut child = child.map_err(|e| e.to_string())?;
-    let mut stdin = child.stdin.take().unwrap();
-    let data = input.to_string();
-    std::thread::spawn(move || {
-        let _ = stdin.write_all(data.as_bytes());
-    });
-    let o = child.wait_with_output().map_err(|e| e.to_string())?;
+        .output()
+        .map_err(|e| e.to_string())?;
     let out = String::from_utf8_lossy(&o.stdout).trim().to_string();
     if !o.status.success() {
         let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
