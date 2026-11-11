@@ -54,7 +54,7 @@ jobs:
             test/two-machines.sh test/flows.sh test/fake-gh npm/pack.sh
 
       - name: Python libraries of the before-after skill
-        run: sudo apt-get install -y --no-install-recommends python3-pil python3-numpy
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends python3-pil python3-numpy
 
       - name: Kernel suite
         run: ./test/run.sh
