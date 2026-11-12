@@ -219,6 +219,24 @@ pub fn default_owner() -> String {
     sh::capture("gh", &["api", "user", "--jq", ".login"]).out()
 }
 
+/// The URL handed to `git clone`. Contracts name GitHub repos in SSH form,
+/// and a machine set up with `gh auth login` over HTTPS has no SSH key to
+/// reach them: what gh was told is how this machine talks to GitHub. The
+/// origin stays comparable, since `normalize_git_url` ignores the protocol.
+pub fn clone_url(url: &str) -> String {
+    match url.strip_prefix("git@github.com:") {
+        Some(rest) if gh_git_protocol() == "https" => format!("https://github.com/{rest}"),
+        _ => url.to_string(),
+    }
+}
+
+fn gh_git_protocol() -> String {
+    if !sh::exists("gh") {
+        return String::new();
+    }
+    sh::capture("gh", &["config", "get", "git_protocol", "-h", "github.com"]).out()
+}
+
 /// The machine's clone template pointing at another owner, keeping its shape.
 pub fn template_for_owner(owner: &str) -> String {
     template_with_owner(&remote_template().unwrap_or_default(), owner)

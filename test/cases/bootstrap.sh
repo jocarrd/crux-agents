@@ -258,3 +258,104 @@ test_the_machine_check_counts_only_skills() {
   assert_contains "$out" "($n in the kernel)" "the kernel count leaves out files that are not skills"
   teardown
 }
+
+_github_remotes() {
+  # A project alpha on "GitHub" under jocarrd: the docs repo, whose contract
+  # names its code repo in SSH form, and the code repo. Both are local bare
+  # repos; $1 is the URL prefix git rewrites to them, so a clone only works
+  # if it asks for the URL form this machine can reach.
+  local prefix="$1"
+  local docs; docs="$(new_project alpha --repos app)"
+  jq '.remote = {"url": "git@github.com:jocarrd/{repo}.git", "visibility": "private"}' "$docs/crux.json" \
+    > "$SB/c.json" && mv "$SB/c.json" "$docs/crux.json"
+  git -C "$docs" add -A && git -C "$docs" commit -q -m "remote"
+  mkdir -p "$SB/gh/jocarrd"
+  git init -q --bare -b main "$SB/gh/jocarrd/alpha-docs.git"
+  git -C "$docs" push -q "$SB/gh/jocarrd/alpha-docs.git" HEAD:main 2>/dev/null
+  git init -q -b main "$SB/app-seed" && git -C "$SB/app-seed" commit -q --allow-empty -m "app"
+  git clone -q --bare "$SB/app-seed" "$SB/gh/jocarrd/app.git"
+  printf '[url "%s/gh/jocarrd/"]\n\tinsteadOf = %s\n' "$SB" "$prefix" > "$SB/gitconfig"
+}
+
+_fake_gh_protocol() {
+  # $1 = the git protocol gh was set up with on this machine
+  mkdir -p "$SB/bin"
+  cat > "$SB/bin/gh" <<GH
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "auth "*) exit 0 ;;
+  "config get") echo "$1"; exit 0 ;;
+  "repo list") echo alpha-docs; exit 0 ;;
+  "api user") echo jocarrd; exit 0 ;;
+  "api "*) [[ "\$2" == *"/alpha-docs/"* ]] && exit 0; exit 1 ;;
+esac
+exit 0
+GH
+  chmod +x "$SB/bin/gh"
+  export PATH="$SB/bin:$PATH"
+}
+
+test_bootstrap_on_a_blank_machine_needs_no_remote_template() {
+  sandbox >/dev/null
+  _ready_machine
+  # A machine fresh from `crux install` has no CRUX_REMOTE: bootstrap found
+  # the projects and then said it did not know where to fetch them from.
+  : > "$CRUX_CONFIG"
+  _github_remotes "git@github.com:jocarrd/"
+  _fake_gh_protocol ssh
+
+  local out
+  out="$(GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" --only alpha 2>&1)"
+
+  assert_not_contains "$out" "do not know where to fetch" "the account it searched is where it fetches from"
+  assert_file "$SB/B/alpha/alpha-docs/crux.json" "the docs repo arrives"
+  assert_file "$SB/B/alpha/app/.git/HEAD" "and its code repo"
+  teardown
+}
+
+test_clone_uses_https_when_gh_talks_https() {
+  sandbox >/dev/null
+  _ready_machine
+  # gh logged in over HTTPS and no SSH key: the contracts name their repos as
+  # git@github.com:..., which this machine cannot reach.
+  _github_remotes "https://github.com/jocarrd/"
+  _fake_gh_protocol https
+
+  local out
+  out="$(GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" --only alpha 2>&1)"
+
+  assert_file "$SB/B/alpha/alpha-docs/crux.json" "the docs repo arrives over HTTPS"
+  assert_file "$SB/B/alpha/app/.git/HEAD" "and so does the code repo the contract names in SSH form"
+  teardown
+}
+
+test_clone_keeps_ssh_when_gh_talks_ssh() {
+  sandbox >/dev/null
+  _ready_machine
+  _github_remotes "git@github.com:jocarrd/"
+  _fake_gh_protocol ssh
+
+  GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" --only alpha >/dev/null 2>&1
+  assert_file "$SB/B/alpha/app/.git/HEAD" "an SSH machine keeps cloning over SSH"
+  teardown
+}
+
+test_bootstrap_does_not_call_a_project_repo_loose() {
+  sandbox >/dev/null
+  _ready_machine
+  : > "$CRUX_CONFIG"
+  _github_remotes "git@github.com:jocarrd/"
+  # The account also lists the docs repo and the code repo: both belong to
+  # alpha, so neither is "a repo that belongs to no project".
+  _fake_gh_protocol ssh
+  sed -i.bak 's/echo alpha-docs; exit 0/printf "%s\\n" alpha-docs app loose-one; exit 0/' "$SB/bin/gh"
+
+  local out
+  out="$(GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" 2>&1)"
+  local loose; loose="$(printf '%s' "$out" | grep -A1 'belong to no project')"
+
+  assert_contains "$loose" "loose-one" "the loose repo is named"
+  assert_not_contains "$loose" "alpha-docs" "the docs repo of a project is not loose"
+  assert_not_contains "$loose" "app" "nor is a code repo a project brought"
+  teardown
+}

@@ -68,7 +68,7 @@ pub fn run(argv: &[String]) -> Res {
             ui::info("or set a default with CRUX_REMOTE in ~/.crux/config");
             return exit(1);
         }
-        let url = tmpl.replace("{repo}", &format!("{project_name}-docs"));
+        let url = project::clone_url(&tmpl.replace("{repo}", &format!("{project_name}-docs")));
         if sh::status(std::process::Command::new("git").args(["clone", "-q", &url]).arg(&docs)) != 0 {
             die!("could not clone from {url}");
         }
@@ -109,7 +109,7 @@ pub fn run(argv: &[String]) -> Res {
             ));
             continue;
         }
-        if sh::capture("git", &["clone", "-q", &url, &dir.to_string_lossy()]).ok() {
+        if sh::capture("git", &["clone", "-q", &project::clone_url(&url), &dir.to_string_lossy()]).ok() {
             ui::ok(&repo);
         } else {
             failed.push(format!("{repo}  ({url})"));
