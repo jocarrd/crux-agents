@@ -101,10 +101,24 @@ assert_exit() {
   fi
 }
 
+# BSD wc pads its count with spaces ("       3"); GNU prints "3". The cases
+# compare counts as text, so the padding goes.
+wc() { command wc "$@" | sed 's/^ *//'; }
+
+# In-place sed that works with GNU and BSD sed alike: `sed -i` takes its
+# backup suffix differently on each, and macOS ships the BSD one.
+sed_i() {
+  local f="${*: -1}"
+  sed "${@:1:$#-1}" "$f" > "$f.sed-tmp" && cat "$f.sed-tmp" > "$f" && rm -f "$f.sed-tmp"
+}
+
 # --- Sandbox -----------------------------------------------------------------
 
 sandbox() {
-  SB="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-XXXXXX")"
+  # Resolved: on macOS the temporary directory sits under a symlink
+  # (/var -> /private/var), and a command run from inside the sandbox sees the
+  # resolved path while the variables below would keep the other one.
+  SB="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/crux-test-XXXXXX")" && pwd -P)"
   export CRUX_PROJECTS_DIR="$SB/Proyectos"
   export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
   # Without this, the memory cases would read the real memories of whoever runs
@@ -156,8 +170,11 @@ needs() { command -v "$1" >/dev/null 2>&1 && return 0; echo "  (no $1 on the PAT
 
 # replace_text <file> <old> <new>: the first occurrence, literally.
 replace_text() {
+  # Without ${c/old/new}: bash 3.2, the one macOS ships, keeps the quotes of a
+  # quoted replacement as text, and bash 5.2 expands & in an unquoted one.
   local c; c="$(cat "$1"; printf x)"; c="${c%x}"
-  printf '%s' "${c/"$2"/"$3"}" > "$1"
+  [[ "$c" == *"$2"* ]] || return 0
+  printf '%s%s%s' "${c%%"$2"*}" "$3" "${c#*"$2"}" > "$1"
 }
 
 # replace_block <file> <start> <end> <new>: from <start> to the first <end>.

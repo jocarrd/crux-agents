@@ -107,7 +107,9 @@ pub(super) fn run(argv: &[String]) -> Res {
     let names: BTreeSet<&str> =
         lines.iter().filter_map(|l| declaration.captures(l).map(|c| c.get(3).map_or("", |m| m.as_str()))).collect();
     for n in names {
-        let pattern = format!(r"(export |pub |static )?const {n}\b");
+        // No \b: `git grep -E` uses the system's regex, and macOS's does not
+        // know it.
+        let pattern = format!(r"(export |pub |static )?const {n}([^A-Za-z0-9_]|$)");
         let others: Vec<String> = git::out(&cwd, &["grep", "-lE", &pattern])
             .unwrap_or_default()
             .lines()

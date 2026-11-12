@@ -265,9 +265,9 @@ def overview(devices, out_base, title, names, lang, chunk, fonts):
     devices = sorted(devices, key=lambda d: device_rank(d["width"]))
     big, mid, _ = fonts
     panels = [_panel(d, OVERVIEW_PANEL[device_rank(d["width"])]) for d in devices]
-    scaled = [round(d["after"].height * p / d["after"].width) for d, p in zip(devices, panels, strict=True)]
+    scaled = [round(d["after"].height * p / d["after"].width) for d, p in zip(devices, panels)]
     parts = _parts(max(scaled), chunk)
-    width = MARGIN * 2 + sum(_span(d, p) for d, p in zip(devices, panels, strict=True))
+    width = MARGIN * 2 + sum(_span(d, p) for d, p in zip(devices, panels))
     width += RULE * (len(devices) - 1)
     written = []
     for part in range(parts):
@@ -276,7 +276,7 @@ def overview(devices, out_base, title, names, lang, chunk, fonts):
         draw = ImageDraw.Draw(canvas)
         draw.text((MARGIN, 18), _fitted(draw, _title(title, devices, lang, part, parts), big, canvas.width - MARGIN * 2), fill=INK, font=big)
         x = MARGIN
-        for index, (device, panel, (top, bottom)) in enumerate(zip(devices, panels, spans, strict=True)):
+        for index, (device, panel, (top, bottom)) in enumerate(zip(devices, panels, spans)):
             if index:
                 draw.rectangle([x - RULE + 8, 18, x - 8, canvas.height - 8], fill=INK)
             draw.text((x, 70), _fitted(draw, _label(device, names, lang), mid, _span(device, panel)), fill=GREY, font=mid)

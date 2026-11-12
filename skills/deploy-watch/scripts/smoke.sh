@@ -101,7 +101,7 @@ if [[ -n "$EXPECT" ]]; then
     request "$first" >/dev/null
     grep -qF -- "$EXPECT" "$body" && { ok "the new version is already responding at $first"; break; }
     if (( $(date +%s) - start >= TIMEOUT )); then
-      err "after ${TIMEOUT}s, $first still does not contain «$EXPECT»"
+      err "after ${TIMEOUT}s, $first still does not contain «${EXPECT}»"
       info "either the deployment has not finished, or it failed and the previous version is still live"
       exit 3
     fi

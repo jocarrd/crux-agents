@@ -56,7 +56,7 @@ case "$1 ${2:-}" in
       && git -C "$tmp/m" merge -q --squash FETCH_HEAD >/dev/null \
       && git -C "$tmp/m" -c user.email=gh@localhost -c user.name=gh commit -qm "$(field "$f" title) (#$(field "$f" number))" \
       && git -C "$tmp/m" push -q origin HEAD:main || exit 1
-    sed -i "s/^mergedAt=.*/mergedAt=2026-10-12T12:00:00Z/" "$f"; rm -rf "$tmp" ;;
+    sed "s/^mergedAt=.*/mergedAt=2026-10-12T12:00:00Z/" "$f" > "$f.tmp" && mv "$f.tmp" "$f"; rm -rf "$tmp" ;;
   "pr list")
     if [[ "$*" == *headRefName* ]]; then
       for f in "$S"/pr.*; do [[ -f "$f" && -n "$(field "$f" mergedAt)" ]] && field "$f" branch; done; exit 0

@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MAP="$HERE/mapa.txt"
 [[ -f "$MAP" ]] || { echo "mapa.txt is missing next to this script"; exit 1; }
 
-NAME="$(head -1 "$MAP" | sed -n 's/^# \(project\|proyecto\): //p')"
+NAME="$(head -1 "$MAP" | sed -nE 's/^# (project|proyecto): //p')"
 DO_IT=0; TARGET=""
 for a in "$@"; do
   if [[ "$a" == "--hazlo" || "$a" == "--apply" ]]; then DO_IT=1; else TARGET="$a"; fi

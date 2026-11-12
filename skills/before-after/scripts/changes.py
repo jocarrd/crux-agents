@@ -86,7 +86,7 @@ def _grow(grid, steps):
 def _groups(grid):
     seen = np.zeros_like(grid)
     groups = []
-    for r, c in zip(*np.nonzero(grid), strict=True):
+    for r, c in zip(*np.nonzero(grid)):
         if seen[r, c]:
             continue
         queue = deque([(r, c)])
@@ -150,7 +150,7 @@ def _unpaired(ka, kb):
     """Stretches (i0, i1, j0, j1) of rows that have no pair in the other capture."""
     stretches = []
     edges = [(-1, -1), *_anchors(ka, kb), (len(ka), len(kb))]
-    for (pa, pb), (na, nb) in zip(edges, edges[1:], strict=False):
+    for (pa, pb), (na, nb) in zip(edges, edges[1:]):
         i0, i1, j0, j1 = pa + 1, na, pb + 1, nb
         while i0 < i1 and j0 < j1 and ka[i0] == kb[j0]:
             i0, j0 = i0 + 1, j0 + 1
