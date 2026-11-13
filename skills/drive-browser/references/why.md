@@ -74,3 +74,27 @@ Measured on 2026-10-04 at 02:47 with the desktop locked: headed Chrome
 navigated, took screenshots, answered `requestAnimationFrame` and took a real
 click. What a locked screen does not stop, a reboot does: the keyring stays
 closed until the user logs in, and the cookies cannot be decrypted.
+
+## Why a passkey does not come across
+
+The copy carries the cookies, which are files in the profile. A passkey lives
+in the user's Google account or in the system's keychain, bound to their own
+browser, and the copy has neither. A site that asks for one in the middle of a
+flow (npm before changing a package's settings, a bank) gets it from the user
+in their own Chrome; once that step is done, the copy carries on with the
+session it already had.
+
+## Why the copy is private and leaves the passwords
+
+The copy holds live sessions: cookies, and Local Storage where many web apps
+keep their tokens in the clear. It goes to the user's own temporary directory
+($TMPDIR on macOS, private to them; /tmp elsewhere) with umask 077, and the
+script refuses a work directory that belongs to someone else, which on a shared
+/tmp could be planted to receive the copy. It only deletes a work directory it
+recognises as a copy, so a mistyped path does not take a real folder with it.
+Login Data, the saved passwords, is not copied: the session lives in the
+cookies, and a page the agent drives does not need the passwords at hand.
+
+Full Disk Access is granted to a whole app, and everything that app runs
+inherits it. It is what lets the copy be read on macOS; once the task is done,
+switching it off in System Settings returns the machine to how it was.

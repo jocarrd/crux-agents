@@ -29,33 +29,39 @@ Everything goes under one folder in your home: no Android Studio, no `sudo`,
 no system packages. Around 4 GB to run apps; 7 GB with what compiling needs.
 
 ```bash
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) OS=linux JDK_ARCH=x64     IMG=x86_64 ;;
+  Darwin-arm64) OS=mac   JDK_ARCH=aarch64 IMG=arm64-v8a ;;
+  *) echo "no emulator route for $(uname -sm)" >&2 ;;
+esac
 A=~/.local/android; mkdir -p "$A/sdk/cmdline-tools"
 # JDK 17, portable
 curl -sSL -o /tmp/jdk.tgz \
-  "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
+  "https://api.adoptium.net/v3/binary/latest/17/ga/$OS/$JDK_ARCH/jdk/hotspot/normal/eclipse"
 mkdir -p "$A/jdk" && tar xzf /tmp/jdk.tgz -C "$A/jdk" --strip-components=1
 # command-line tools: the current zip is on developer.android.com/studio,
 # section "Command line tools only"
-curl -sSL -o /tmp/clt.zip "<commandlinetools-linux-…_latest.zip>"
+curl -sSL -o /tmp/clt.zip "<commandlinetools-$OS-…_latest.zip>"
 unzip -q /tmp/clt.zip -d /tmp/clt && mv /tmp/clt/cmdline-tools "$A/sdk/cmdline-tools/latest"
 ```
 
-The environment, in every shell that uses it (or in the shell profile):
+The environment, in every shell that uses it:
 
 ```bash
 export JAVA_HOME=~/.local/android/jdk ANDROID_HOME=~/.local/android/sdk
+# macOS: the JDK home is inside its bundle
+[ -d "$JAVA_HOME/Contents/Home" ] && export JAVA_HOME="$JAVA_HOME/Contents/Home"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ```
 
-The pieces and the virtual device. The image and the API level are the
-project's; these are an example:
+The pieces and the virtual device (image and API level are the project's):
 
 ```bash
 yes | sdkmanager --licenses >/dev/null
 sdkmanager "platform-tools" "emulator" "platforms;android-35" \
-  "system-images;android-35;google_apis;x86_64"
+  "system-images;android-35;google_apis;$IMG"
 avdmanager create avd -n <avd-name> -d pixel_7 \
-  -k "system-images;android-35;google_apis;x86_64"
+  -k "system-images;android-35;google_apis;$IMG"
 ```
 
 To compile a development build, add what the project's Gradle asks for (build
@@ -66,11 +72,11 @@ tools, NDK, CMake): the first build says which versions are missing.
 Without it the emulator runs in software and is unusable. Check it:
 
 ```bash
-emulator -accel-check     # must say KVM is usable
+emulator -accel-check     # Linux: KVM is usable; macOS: Hypervisor.Framework
 ```
 
-If `/dev/kvm` is not accessible, the user runs `sudo usermod -aG kvm $USER` in
-a real terminal and logs in again. The agent cannot: `sudo` needs a TTY.
+Linux without `/dev/kvm`: the user runs `sudo usermod -aG kvm $USER` and
+logs in again; the agent has no TTY for `sudo`. macOS needs nothing.
 
 ## 2. Start it
 
@@ -136,7 +142,7 @@ compiled. The usual route with Expo:
 
 ```bash
 npx expo prebuild -p android --no-install
-(cd android && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64)
+(cd android && ./gradlew assembleDebug -PreactNativeArchitectures="$IMG")
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -174,16 +180,14 @@ adb logcat -d -t 200 | grep -iE "ReactNative|Exception|FATAL"
 ```
 
 To reload code that only runs on mounting, close the app with
-`adb shell am kill <package>` from the home screen and open it again. Not with
-`am force-stop`: the app would stop receiving widget and notification events.
+`adb shell am kill <package>` from the home screen, not `am force-stop`, and
+open it again.
 
 ## Anti-patterns
 
 - **Accepting a change without a screenshot that confirms it.** It is the whole
   point of the skill.
 - **Installing Android Studio, or system packages, to get an emulator.**
-- **Running the emulator without hardware acceleration.** It looks like the app
-  is slow when it is the emulator.
 
 ## Related
 

@@ -6,16 +6,19 @@
 //
 // sweep: quick pass over all the controls, lists the suspects.
 // probe: reloads, narrows to the component and presses a single one twice.
+import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
 
 const CHROME =
   process.env.CHROME_BIN ||
-  ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(
-    (p) => {
-      try { return require('node:fs').existsSync(p) } catch { return false }
-    },
-  ) ||
+  [
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  ].find((p) => existsSync(p)) ||
   '/usr/bin/google-chrome'
 
 const MOBILE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }

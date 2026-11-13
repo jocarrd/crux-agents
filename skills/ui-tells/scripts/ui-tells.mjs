@@ -5,7 +5,7 @@
 //   node ui-tells.mjs detail <url>           # shows each case with its text
 // (revisar / detalle still work)
 //
-// Requires: google-chrome installed and `npm i playwright-core` in the cwd.
+// Requires: Chrome or Chromium installed and `npm i playwright-core` in the cwd.
 import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
@@ -15,6 +15,8 @@ const CHROME =
     '/usr/bin/google-chrome',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
   ].find((p) => existsSync(p)) ||
   '/usr/bin/google-chrome'
 

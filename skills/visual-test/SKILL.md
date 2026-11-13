@@ -12,7 +12,8 @@ behind each check and the full gotchas are in
 
 ## Setup, once
 
-It needs `google-chrome` or `chromium` (autodetected; forced with `CHROME_BIN`)
+It needs Chrome or Chromium, on Linux or as the macOS app (autodetected;
+forced with `CHROME_BIN`)
 and the application running locally.
 
 ```bash

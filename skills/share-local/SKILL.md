@@ -80,7 +80,7 @@ database (favicon, canonical) are usually cosmetic.
 ## If it has to last
 
 Supervise it: a loop that reopens the connection when it drops, with growing
-back-off, decoupled from the session (`setsid`) and that **rereads the address
+back-off, decoupled from the session (`setsid`; macOS has none: `nohup` and `disown`) and that **rereads the address
 while the connection lives** and writes the current one to a file (the last one
 that appears in the output, not the first). The address can change without the
 connection dropping. The example supervisor is in the reference.

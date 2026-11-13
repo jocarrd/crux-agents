@@ -37,7 +37,7 @@ browser blocks.
 A tunnel session drops by itself. Leaving the process bare means that half an
 hour later the person you were showing it to sees an error and you do not find
 out. Without `setsid` the process dies with you: it has to hang from `init`, not
-from your terminal.
+from your terminal. macOS has no `setsid`; `nohup` and `disown` do the same.
 
 Do not look for the process with `pkill -f`: the pattern also appears in the
 command line of the shell that runs the `pkill`, which kills itself. Filter by
