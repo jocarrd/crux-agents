@@ -6,7 +6,7 @@
 //! nor the documentation one, which is for what lasts. See ADR-012.
 
 use crate::args::Parser;
-use crate::error::{Exit, Res};
+use crate::error::{exit, Exit, Res};
 use crate::task::{self, record, stall};
 use crate::{die, env, git, project, registry, sh, ui};
 use std::path::{Path, PathBuf};
@@ -584,7 +584,13 @@ pub fn run(argv: &[String]) -> Res {
                 }
                 Ok(())
             })?;
-            ui::ok(format!("status: {}", record::read(&f).map(|d| d.text("status")).unwrap_or_default()));
+            let now = record::read(&f).map(|d| d.text("status")).unwrap_or_default();
+            if now != status.as_str() {
+                ui::err(format!("the status stays {now}: it does not go back on its own"));
+                ui::info(format!("to set it anyway: crux task status {to} --force"));
+                return exit(1);
+            }
+            ui::ok(format!("status: {now}"));
             Ok(())
         }
         "wait" => {

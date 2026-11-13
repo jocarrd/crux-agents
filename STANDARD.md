@@ -1068,7 +1068,9 @@ weeks after the work stopped (no commit and no edited file for 7 days,
 `CRUX_STALE_WORKSPACE_DAYS`, or 3 if its branch is gone from the remote), its
 proposal can be merged with a step left, or every step can be done with the task
 still open. One waiting on someone, or with its proposal under review, has not
-stalled. The reminder and `crux task list` then propose:
+stalled. `crux status` lists a merged task with steps left in its own block, so
+it does not drop out of sight when its proposal lands. The reminder and
+`crux task list` then propose:
 
 - **merging** two or more stalled tasks of a project with steps left, into the
   task still alive there or a new `pending`, closing their forgotten workspaces
