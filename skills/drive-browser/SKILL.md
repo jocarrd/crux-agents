@@ -17,11 +17,22 @@ repeat this, install one (it loads when the agent restarts):
 
 ## Needed
 
-- `google-chrome` and a **desktop session** (`echo $DISPLAY` non-empty). A
-  locked screen does not stop headed Chrome; a reboot does, until the user logs
-  in and the keyring opens.
-- `python3` with `websockets`.
-- The keyring unlocked (it is if the user has Chrome open).
+- Chrome and a **desktop session**. On Linux, `google-chrome` and
+  `echo $DISPLAY` non-empty; a locked screen does not stop headed Chrome, a
+  reboot does, until the user logs in and the keyring opens. On macOS, the app
+  in `/Applications`, and **Full Disk Access** for the terminal app the agent
+  runs in (System Settings → Privacy & Security), or the profile cannot be
+  read: `Operation not permitted`.
+- `python3` with `websockets` (`python3 -m pip install --user websockets`).
+- The keyring unlocked (it is if the user has Chrome open). On macOS it is the
+  Keychain: Chrome may ask once to read "Chrome Safe Storage".
+
+Where the profiles are:
+
+| System | Chrome's data | A profile |
+| ------ | ------------- | --------- |
+| Linux | `~/.config/google-chrome` | `~/.config/google-chrome/"Profile 1"` |
+| macOS | `~/Library/Application Support/Google/Chrome` | `.../Chrome/Default` |
 
 ## Procedure
 
@@ -29,8 +40,9 @@ repeat this, install one (it loads when the agent restarts):
 
    ```bash
    python3 - <<'PY'
-   import sqlite3, glob, os
-   ch=os.path.expanduser("~/.config/google-chrome")
+   import sqlite3, glob, os, sys
+   ch=os.path.expanduser("~/Library/Application Support/Google/Chrome"
+                         if sys.platform == "darwin" else "~/.config/google-chrome")
    for p in glob.glob(ch+"/*/Cookies"):
        c=sqlite3.connect(p)
        n=c.execute("select count(*) from cookies where host_key like '%vercel%'").fetchone()[0]
@@ -40,7 +52,8 @@ repeat this, install one (it loads when the agent restarts):
 
 2. **Launch headed Chrome on a copy of the profile**, as a persistent background
    task:
-   `<this-skill-directory>/scripts/chrome-session.sh ~/.config/google-chrome/"Profile 1"`.
+   `<this-skill-directory>/scripts/chrome-session.sh <profile>`, with the
+   profile from the table above. It finds Chrome on its own (`CHROME_BIN` forces it).
    Wait for `curl -s http://127.0.0.1:9222/json/version`.
 
 3. **Check that the session came across:**
@@ -67,7 +80,8 @@ repeat this, install one (it loads when the agent restarts):
    unless it is the fixed one you keep for repeating:
 
    ```bash
-   fuser -k 9222/tcp; rm -rf /tmp/cdp-profile
+   fuser -k 9222/tcp; rm -rf /tmp/cdp-profile                       # Linux
+   lsof -ti tcp:9222 -sTCP:LISTEN | xargs kill; rm -rf /tmp/cdp-profile   # macOS
    ```
 
 **To repeat**, keep the copy in a fixed directory and relaunch it with
@@ -104,7 +118,12 @@ python3 .../cdp.py writefile 'window.__X__' /tmp/secret
 - **If `eval` hangs,** do not kill Chrome: open a new tab
   (`curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"`) and close the old one
   (`/json/close/<targetId>`).
-- **Kill by port (`fuser -k 9222/tcp`), never with `pkill`.**
+- **Kill by port (`fuser -k 9222/tcp`; on macOS `lsof -ti tcp:9222`), never
+  with `pkill`.**
+- **A passkey does not come across.** The copy has the cookies, not the
+  passkeys the user keeps in their Google account or in the system. A site
+  that asks for one in the middle of the flow (npm, a bank) is finished by the
+  user in their own Chrome; the copy carries on afterwards.
 - **The environment kills background processes** when each call ends: Chrome
   goes as a persistent task.
 - `urllib` to `127.0.0.1` may go out through a proxy; `cdp.py` already avoids it.
