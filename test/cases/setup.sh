@@ -76,7 +76,8 @@ test_setup_clones_the_new_project_over_https_when_gh_was_set_up_with_it() {
   local home="$SB/h"; mkdir -p "$home/.crux" "$home/.config/gh"
   # The machine's template is SSH, as the contracts are; gh was set up over
   # HTTPS and there is no SSH key: fetching works only over HTTPS, and SSH
-  # fails at once instead of asking for a host key.
+  # fails at once instead of asking for a host key. GH_CONFIG_DIR, because a
+  # runner may set XDG_CONFIG_HOME, which gh, and crux, read before HOME.
   printf 'CRUX_REMOTE="git@github.com:ana/{repo}.git"\n' > "$home/.crux/config"
   printf 'github.com:\n    git_protocol: https\n    user: ana\n' > "$home/.config/gh/hosts.yml"
   cat > "$home/.gitconfig" <<GIT
@@ -95,7 +96,7 @@ GIT
 
   # profile: no; first project: yes, shop, its repo, our own
   local out
-  out="$(GIT_SSH_COMMAND=false setup_as "$home" 'n\ny\nshop\nshop-web\n1\n' --projects-dir "$home/p")"
+  out="$(GIT_SSH_COMMAND=false GH_CONFIG_DIR="$home/.config/gh" setup_as "$home" 'n\ny\nshop\nshop-web\n1\n' --projects-dir "$home/p")"
   assert_file "$home/p/shop/shop-web/.git/HEAD" "the code repo the template names in SSH form arrives over HTTPS"
   assert_contains "$out" "shop-web cloned" "and setup says so"
 }
