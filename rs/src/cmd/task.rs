@@ -497,12 +497,33 @@ pub fn run(argv: &[String]) -> Res {
         }
         "done" => {
             let f = current_file(&chosen)?;
-            if arg(0).is_empty() {
-                die!("usage: crux task done <Tn> [\"evidence\"]");
+            let step = arg(0);
+            if step.is_empty() || step.starts_with("--") {
+                die!("usage: crux task done <Tn> [\"evidence\"] (or --evidence \"…\")");
             }
-            mutate(&f, |d| record::complete(d, &arg(0), &arg(1)))?;
-            ui::ok(format!("{} done", arg(0)));
-            if arg(1).is_empty() {
+            let mut evidence = String::new();
+            let mut j = 1;
+            while j < args.len() {
+                let (value, next) = match args[j].as_str() {
+                    "--evidence" => {
+                        let v = args.get(j + 1).cloned().unwrap_or_default();
+                        if v.is_empty() || v.starts_with("--") {
+                            die!("--evidence needs a text");
+                        }
+                        (v, j + 2)
+                    }
+                    other if other.starts_with("--") => die!("unknown option: {other}"),
+                    other => (other.to_string(), j + 1),
+                };
+                if !evidence.is_empty() {
+                    die!("the evidence goes once: crux task done {step} \"evidence\"");
+                }
+                evidence = value;
+                j = next;
+            }
+            mutate(&f, |d| record::complete(d, &step, &evidence))?;
+            ui::ok(format!("{step} done"));
+            if evidence.is_empty() {
                 ui::info("no evidence: a step marked without what proves it is a declaration");
             }
             Ok(())

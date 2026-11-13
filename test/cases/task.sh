@@ -84,6 +84,27 @@ test_task_records_steps_evidence_and_next() {
     in_dir "$ws" "$CRUX_HOME/bin/crux" task "done" T9 "something"
 }
 
+test_task_done_takes_the_evidence_flag_and_refuses_unknown_ones() {
+  sandbox >/dev/null
+  _tasks_project >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/flags >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "one" --task proj/flags >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "two" --task proj/flags >/dev/null 2>&1
+  local f="$SB/tasks/proj/flags.md"
+
+  "$CRUX_HOME/bin/crux" task "done" T1 --evidence "the suite is green" --task proj/flags >/dev/null 2>&1
+  assert_contains "$(cat "$f")" "- [x] T1 one · evidence: the suite is green" "--evidence carries the text"
+  assert_not_contains "$(cat "$f")" "evidence: --evidence" "the flag itself is never saved as evidence"
+
+  assert_exit 1 "an unknown option is refused" \
+    "$CRUX_HOME/bin/crux" task "done" T2 --proof "x" --task proj/flags
+  assert_exit 1 "--evidence without a text is refused" \
+    "$CRUX_HOME/bin/crux" task "done" T2 --evidence --task proj/flags
+  assert_exit 1 "the evidence goes once" \
+    "$CRUX_HOME/bin/crux" task "done" T2 "a" --evidence "b" --task proj/flags
+  assert_contains "$(cat "$f")" "- [ ] T2 two" "a refused call leaves the step as it was"
+}
+
 test_task_outside_a_workspace_says_what_to_do() {
   sandbox >/dev/null
   local root; root="$(_tasks_project)"
