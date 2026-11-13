@@ -11,7 +11,7 @@ import { chromium } from 'playwright-core'
 
 const CHROME =
   process.env.CHROME_BIN ||
-  ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(
+  ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium'].find(
     (p) => {
       try { return require('node:fs').existsSync(p) } catch { return false }
     },

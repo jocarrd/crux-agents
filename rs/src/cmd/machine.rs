@@ -160,7 +160,14 @@ pub fn run(_argv: &[String]) -> Res {
     t.optional("docker", "deploy-fallback and the per-workspace databases");
     t.optional("adb", "device-loop, testing on an Android emulator");
     t.optional("rsync", "publish a demo with crux stg");
-    if ["google-chrome", "google-chrome-stable", "chromium"].iter().any(|c| sh::exists(c)) {
+    // On macOS the browser is an app bundle, not a command on the PATH.
+    let app_bundle = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ];
+    if ["google-chrome", "google-chrome-stable", "chromium"].iter().any(|c| sh::exists(c))
+        || app_bundle.iter().any(|p| sh::exists(p))
+    {
         ui::ok("browser for headless");
     } else {
         t.note("no Chrome or Chromium — you will not be able to: visual-test");

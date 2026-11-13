@@ -15,6 +15,8 @@ const CHROME =
     '/usr/bin/google-chrome',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
   ].find((p) => existsSync(p)) ||
   '/usr/bin/google-chrome'
 
