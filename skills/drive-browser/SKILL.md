@@ -22,7 +22,7 @@ repeat this, install one (it loads when the agent restarts):
   reboot does, until the user logs in and the keyring opens. On macOS, the app
   in `/Applications`, and **Full Disk Access** for the terminal app the agent
   runs in (System Settings → Privacy & Security), or the profile cannot be
-  read: `Operation not permitted`.
+  read: `Operation not permitted`. Switch it off when done.
 - `python3` with `websockets` (`python3 -m pip install --user websockets`).
 - The keyring unlocked (it is if the user has Chrome open). On macOS it is the
   Keychain: Chrome may ask once to read "Chrome Safe Storage".
@@ -81,7 +81,7 @@ Where the profiles are:
 
    ```bash
    fuser -k 9222/tcp; rm -rf /tmp/cdp-profile                       # Linux
-   lsof -ti tcp:9222 -sTCP:LISTEN | xargs kill; rm -rf /tmp/cdp-profile   # macOS
+   lsof -ti tcp:9222 -sTCP:LISTEN | xargs kill; rm -rf "$TMPDIR/cdp-profile"  # macOS
    ```
 
 **To repeat**, keep the copy in a fixed directory and relaunch it with
@@ -110,7 +110,7 @@ python3 .../cdp.py writefile 'window.__X__' /tmp/secret
   (`--password-store=gnome-libsecret` and `Local State`, which the script
   copies), but sites behind a bot check (Cloudflare's "Verify you are human")
   stop it. Then it is headed, and the check is not to be got around.
-- **If every call hangs, look at the screen** (`gnome-screenshot -f /tmp/s.png`).
+- **If every call hangs, look at the screen** (`gnome-screenshot -f /tmp/s.png`; macOS `screencapture /tmp/s.png`).
   It was a native "Leave site?" dialog after a publish button: the page waits
   for an answer and its own JS cannot see it. `cdp.py` accepts that kind after
   its own clicks; one opened outside it, the user answers. `cdp.py` gives up
@@ -118,8 +118,8 @@ python3 .../cdp.py writefile 'window.__X__' /tmp/secret
 - **If `eval` hangs,** do not kill Chrome: open a new tab
   (`curl -s -X PUT "http://127.0.0.1:9222/json/new?<url>"`) and close the old one
   (`/json/close/<targetId>`).
-- **Kill by port (`fuser -k 9222/tcp`; on macOS `lsof -ti tcp:9222`), never
-  with `pkill`.**
+- **Kill by port, never with `pkill`.** On macOS `lsof -ti tcp:9222 -sTCP:LISTEN`:
+  without `-sTCP:LISTEN` it also names the clients.
 - **A passkey does not come across** with the copy: the user finishes that
   step in their own Chrome.
 - **The environment kills background processes** when each call ends: Chrome

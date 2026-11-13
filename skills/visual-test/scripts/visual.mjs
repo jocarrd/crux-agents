@@ -7,7 +7,7 @@
 //   node visual.mjs checks <url>                   # mobile design/usability signals
 //   node visual.mjs a11y   <url> [--desktop]       # WCAG audit with axe-core (CDN)
 //
-// Requires: google-chrome installed and `npm i playwright-core` in the cwd.
+// Requires: Chrome or Chromium installed and `npm i playwright-core` in the cwd.
 // The a11y mode injects axe-core from a CDN (needs network).
 import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'

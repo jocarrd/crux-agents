@@ -32,6 +32,7 @@ no system packages. Around 4 GB to run apps; 7 GB with what compiling needs.
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) OS=linux JDK_ARCH=x64     IMG=x86_64 ;;
   Darwin-arm64) OS=mac   JDK_ARCH=aarch64 IMG=arm64-v8a ;;
+  *) echo "no emulator route for $(uname -sm)" >&2 ;;
 esac
 A=~/.local/android; mkdir -p "$A/sdk/cmdline-tools"
 # JDK 17, portable
@@ -44,7 +45,7 @@ curl -sSL -o /tmp/clt.zip "<commandlinetools-$OS-…_latest.zip>"
 unzip -q /tmp/clt.zip -d /tmp/clt && mv /tmp/clt/cmdline-tools "$A/sdk/cmdline-tools/latest"
 ```
 
-The environment, in every shell that uses it (or in the shell profile):
+The environment, in every shell that uses it:
 
 ```bash
 export JAVA_HOME=~/.local/android/jdk ANDROID_HOME=~/.local/android/sdk
@@ -53,8 +54,7 @@ export JAVA_HOME=~/.local/android/jdk ANDROID_HOME=~/.local/android/sdk
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ```
 
-The pieces and the virtual device. The image and the API level are the
-project's; these are an example:
+The pieces and the virtual device (image and API level are the project's):
 
 ```bash
 yes | sdkmanager --licenses >/dev/null
