@@ -219,6 +219,63 @@ pub fn default_owner() -> String {
     sh::capture("gh", &["api", "user", "--jq", ".login"]).out()
 }
 
+/// The URL handed to `git clone`. Contracts name GitHub repos in SSH form,
+/// and a machine set up with `gh auth login` over HTTPS has no SSH key to
+/// reach them. Only a choice actually made moves the clone to HTTPS: a machine
+/// that never chose keeps cloning as the contract says. The origin stays
+/// comparable, since `normalize_git_url` ignores the protocol.
+pub fn clone_url(url: &str) -> String {
+    let rest = url.strip_prefix("git@github.com:").or_else(|| url.strip_prefix("ssh://git@github.com/"));
+    match rest {
+        Some(rest) if gh_chosen_protocol().as_deref() == Some("https") => format!("https://github.com/{rest}"),
+        _ => url.to_string(),
+    }
+}
+
+/// The git protocol chosen for GitHub. gh answers https when nothing was
+/// chosen, so only ssh is a choice on its word; https counts when gh recorded
+/// it for the host, which is what `gh auth login` and
+/// `gh config set -h github.com` do.
+pub fn gh_chosen_protocol() -> Option<String> {
+    if !sh::exists("gh") {
+        return None;
+    }
+    match sh::capture("gh", &["config", "get", "git_protocol", "-h", "github.com"]).out().as_str() {
+        "ssh" => Some("ssh".into()),
+        "https" if https_recorded_for_github() => Some("https".into()),
+        _ => None,
+    }
+}
+
+fn https_recorded_for_github() -> bool {
+    let dir = env::var("GH_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env::var("XDG_CONFIG_HOME").map(|x| PathBuf::from(x).join("gh")))
+        .unwrap_or_else(|| env::home().join(".config/gh"));
+    let mut in_github = false;
+    for line in files::read_or_empty(&dir.join("hosts.yml")).lines() {
+        if !line.starts_with(' ') {
+            in_github = line.trim_end() == "github.com:";
+        } else if in_github && line.trim() == "git_protocol: https" {
+            return true;
+        }
+    }
+    false
+}
+
+/// The directories a repo can sit in under the projects root: a project
+/// folder, or a repo inside one.
+pub fn repo_dirs(parent: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![];
+    for a in subdirs(parent) {
+        dirs.push(parent.join(&a));
+        for b in subdirs(&parent.join(&a)) {
+            dirs.push(parent.join(&a).join(b));
+        }
+    }
+    dirs
+}
+
 /// The machine's clone template pointing at another owner, keeping its shape.
 pub fn template_for_owner(owner: &str) -> String {
     template_with_owner(&remote_template().unwrap_or_default(), owner)

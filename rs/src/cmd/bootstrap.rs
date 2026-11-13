@@ -16,6 +16,19 @@ use crate::{die, env, person, project, sh, ui};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// The origins of the repos under the projects root, as written in each
+/// repo's config: a repo cloned under another directory name still belongs to
+/// its project, and the URL git would rewrite with insteadOf is not the one
+/// that names the repo.
+fn origins_under(parent: &Path) -> Vec<String> {
+    project::repo_dirs(parent)
+        .iter()
+        .filter(|d| d.join(".git").exists())
+        .filter_map(|d| crate::git::out(d, &["config", "--get", "remote.origin.url"]).filter(|u| !u.is_empty()))
+        .map(|u| project::normalize_git_url(&u))
+        .collect()
+}
+
 fn bring_profile(parent: &Path, owner: &str, all_repos: &[String], dry: bool) {
     let name = person::repo_name();
     println!();
@@ -175,9 +188,11 @@ pub fn run(argv: &[String]) -> Res {
     for (p, o) in &projects {
         println!();
         println!("── {p}");
-        // Your own projects use the machine template as is.
+        // Your own projects use the machine template as is. A machine fresh
+        // from `crux install` has none, and the account the project was found
+        // under is then where it is fetched from.
         let mut args = vec![p.clone(), "--parent".into(), parent.to_string_lossy().into_owned()];
-        if *o != owner {
+        if *o != owner || project::remote_template().is_none_or(|t| t.is_empty()) {
             args.push("--from".into());
             args.push(project::template_for_owner(o));
         }
@@ -216,9 +231,13 @@ pub fn run(argv: &[String]) -> Res {
     // --only the rest is left out on purpose.
     let name = person::repo_name();
     let standalone: Vec<&String> = if only.is_empty() {
+        let docs_repos: Vec<String> = projects.iter().map(|(p, _)| format!("{p}-docs")).collect();
+        let on_disk = origins_under(&parent);
         all_repos
             .iter()
             .filter(|r| **r != name)
+            .filter(|r| !docs_repos.contains(r))
+            .filter(|r| !on_disk.contains(&project::normalize_git_url(&format!("github.com/{owner}/{r}"))))
             .filter(|r| {
                 !parent.join(r).is_dir() && !project::subdirs(&parent).iter().any(|d| parent.join(d).join(r).is_dir())
             })

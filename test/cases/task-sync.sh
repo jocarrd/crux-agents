@@ -78,7 +78,7 @@ test_tasks_if_both_change_the_recent_wins_and_the_other_is_kept() {
   replicate B >/dev/null
   engine A set --file "$(task_record A t1)" --section "Next step" --text "version of A"
   # A is the most recent: the minutes clock would tie.
-  sed -i 's/^updated: .*/updated: 2099-01-01T00:00/' "$(task_record A t1)"
+  sed_i 's/^updated: .*/updated: 2099-01-01T00:00/' "$(task_record A t1)"
 
   local out
   out="$(replicate A)"
@@ -286,7 +286,7 @@ test_tasks_reusing_an_archived_name_does_not_delete_it() {
   sandbox >/dev/null
   _tasks_two_machines
   _new_task A release "the old one"
-  sed -i 's/^created: .*/created: 2026-01-01T10:00/' "$(task_record A release)"
+  sed_i 's/^created: .*/created: 2026-01-01T10:00/' "$(task_record A release)"
   replicate A >/dev/null; replicate B >/dev/null
   engine A archive --file "$(task_record A release)" >/dev/null
   replicate A >/dev/null; replicate B >/dev/null

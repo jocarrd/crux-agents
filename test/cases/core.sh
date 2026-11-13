@@ -289,7 +289,7 @@ test_client_profile_doctor_detects_the_unexcluded_pointer() {
   local vendor="$CRUX_PROJECTS_DIR/client7/vendor"
   new_client_repo "$vendor"
   "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
-  sed -i '/CLAUDE.local.md/d' "$vendor/.git/info/exclude"
+  sed_i '/CLAUDE.local.md/d' "$vendor/.git/info/exclude"
 
   local out; out="$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)"
   assert_contains "$out" "is not excluded from git" "detects that it could be committed"
@@ -1604,7 +1604,7 @@ test_install_deduces_the_root_from_the_clone_not_the_kernels_directory() {
   # The clone lives at <root>/crux, as on a real machine.
   local root="$SB/projects-root"; local kernel="$root/crux"
   mkdir -p "$kernel"
-  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+  ( cd "$CRUX_HOME" && tar cf - bin skills templates profiles adapters VERSION install.sh ) \
     | ( cd "$kernel" && tar xf - )
 
   env HOME="$matches" bash "$kernel/install.sh" >/dev/null 2>&1
@@ -1619,7 +1619,7 @@ test_install_deduces_the_root_from_a_clone_inside_its_own_project() {
   # The kernel as a project: <root>/crux/crux, next to <root>/crux/crux-docs.
   local root="$SB/projects-root"; local kernel="$root/crux/crux"
   mkdir -p "$kernel" "$root/crux/crux-docs"
-  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+  ( cd "$CRUX_HOME" && tar cf - bin skills templates profiles adapters VERSION install.sh ) \
     | ( cd "$kernel" && tar xf - )
 
   env HOME="$matches" bash "$kernel/install.sh" >/dev/null 2>&1
@@ -1637,7 +1637,7 @@ test_install_fixes_the_root_inherited_from_the_kernels_directory() {
 
   local root="$SB/projects-inherited"; local kernel="$root/crux"
   mkdir -p "$kernel"
-  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+  ( cd "$CRUX_HOME" && tar cf - bin skills templates profiles adapters VERSION install.sh ) \
     | ( cd "$kernel" && tar xf - )
 
   env HOME="$matches" bash "$kernel/install.sh" >/dev/null 2>&1
@@ -1700,7 +1700,7 @@ test_install_dev_links_to_the_working_copy() {
   # runs from one when the kernel is being developed.
   local kernel="$SB/kernel"
   mkdir -p "$kernel"
-  ( cd "$CRUX_HOME" && tar cf - bin lib skills templates profiles adapters VERSION install.sh ) \
+  ( cd "$CRUX_HOME" && tar cf - bin skills templates profiles adapters VERSION install.sh ) \
     | ( cd "$kernel" && tar xf - )
 
   env HOME="$matches" bash "$kernel/install.sh" --dev --projects-dir "$matches/projects" >/dev/null 2>&1
@@ -2171,7 +2171,7 @@ test_the_old_profile_block_marker_is_still_recognized() {
   local docs; docs="$(new_project rpold)"
 
   "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
-  sed -i 's/crux:begin profile/crux:begin perfil/' "$docs/AGENTS.md"
+  sed_i 's/crux:begin profile/crux:begin perfil/' "$docs/AGENTS.md"
 
   assert_not_contains "$("$CRUX_HOME/bin/crux" doctor "$docs" 2>&1)" "profile rules are not in AGENTS.md" \
     "doctor accepts the old marker"

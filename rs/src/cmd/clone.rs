@@ -17,16 +17,7 @@ use std::path::{Path, PathBuf};
 /// and sync keeps advancing the old one.
 fn clone_elsewhere(parent: &Path, url: &str) -> Option<PathBuf> {
     let wanted = project::normalize_git_url(url);
-    let mut candidates = vec![];
-    for a in project::subdirs(parent) {
-        candidates.push(parent.join(&a));
-    }
-    for a in project::subdirs(parent) {
-        for b in project::subdirs(&parent.join(&a)) {
-            candidates.push(parent.join(&a).join(b));
-        }
-    }
-    candidates.into_iter().find(|d| {
+    project::repo_dirs(parent).into_iter().find(|d| {
         d.join(".git").is_dir()
             && project::normalize_git_url(&git::remote_url(d, "origin").unwrap_or_default()) == wanted
     })
@@ -68,7 +59,7 @@ pub fn run(argv: &[String]) -> Res {
             ui::info("or set a default with CRUX_REMOTE in ~/.crux/config");
             return exit(1);
         }
-        let url = tmpl.replace("{repo}", &format!("{project_name}-docs"));
+        let url = project::clone_url(&tmpl.replace("{repo}", &format!("{project_name}-docs")));
         if sh::status(std::process::Command::new("git").args(["clone", "-q", &url]).arg(&docs)) != 0 {
             die!("could not clone from {url}");
         }
@@ -109,7 +100,7 @@ pub fn run(argv: &[String]) -> Res {
             ));
             continue;
         }
-        if sh::capture("git", &["clone", "-q", &url, &dir.to_string_lossy()]).ok() {
+        if sh::capture("git", &["clone", "-q", &project::clone_url(&url), &dir.to_string_lossy()]).ok() {
             ui::ok(&repo);
         } else {
             failed.push(format!("{repo}  ({url})"));

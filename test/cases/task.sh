@@ -417,7 +417,7 @@ test_a_forgotten_workspace_with_unsaved_work_is_only_warned() {
   "$CRUX_HOME/bin/crux" workspace new draft --repo "$root/app" >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add "write it" --task proj/draft >/dev/null 2>&1
   echo "half done" > "$root/app-ws-draft/notes.txt"
-  touch -d "2020-01-01 10:00" "$root/app-ws-draft/notes.txt"
+  touch -t 202001011000 "$root/app-ws-draft/notes.txt"
   sed -i.bak 's/^updated: .*/updated: 2020-01-01T10:00:00/' "$SB/tasks/proj/draft.md"
 
   local out; out="$("$CRUX_HOME/bin/crux" task list --all 2>&1)"
@@ -694,7 +694,7 @@ test_waiting_tasks_get_their_own_block_in_the_reminder() {
   busy="${user%%proj/busy*}"; waiting="${user%%Waiting for an answer*}"
   assert_eq 1 "$([[ ${#busy} -lt ${#user} && ${#busy} -lt ${#waiting} ]] && echo 1 || echo 0)" \
     "own work goes before what waits on someone else"
-  sed -i 's/^waiting_since: .*/waiting_since: 2020-01-01/' "$SB/tasks/proj/idle.md"
+  sed_i 's/^waiting_since: .*/waiting_since: 2020-01-01/' "$SB/tasks/proj/idle.md"
   r="$("$CRUX_HOME/bin/crux" __task-sync remind --cwd "$root/app")"
   assert_contains "$r" "worth a nudge" "past the deadline it suggests nudging"
   r="$(CRUX_WAIT_NUDGE_DAYS=100000 "$CRUX_HOME/bin/crux" __task-sync remind --cwd "$root/app")"

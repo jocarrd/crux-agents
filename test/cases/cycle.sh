@@ -667,12 +667,12 @@ test_receipt_records_crux_version_that_sealed_it() {
   assert_contains "$out" "pins crux 0.1.0" "warns if the project pins another version"
 
   # A receipt sealed with another version is not valid: the rules may differ.
-  sed -i "s/^kernel .*/kernel 0.0.1/" "$ws/.crux-ship"
+  sed_i "s/^kernel .*/kernel 0.0.1/" "$ws/.crux-ship"
   out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"
   assert_contains "$out" "was sealed with crux 0.0.1" "rejects a receipt from another version"
 
   # Nor is one without a version, from the previous format.
-  sed -i "/^kernel /d" "$ws/.crux-ship"
+  sed_i "/^kernel /d" "$ws/.crux-ship"
   out="$("$CRUX_HOME/bin/crux" workspace finish t 2>&1)"
   assert_contains "$out" "does not say which crux version" "rejects a receipt without a version"
 }
@@ -816,7 +816,7 @@ test_merge_does_not_report_a_branch_the_provider_already_deleted() {
   sandbox >/dev/null
   _merge_scenario '{"number":7,"title":"t","url":"u","mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[{"name":"verify","status":"COMPLETED","conclusion":"SUCCESS"}]}' >/dev/null
   # This gh deletes the branch on merge, as GitHub does with delete_branch_on_merge.
-  sed -i "s|\"pr merge\") |\"pr merge\") git --git-dir=$SB/mrg-remote.git update-ref -d refs/heads/ws/m; |" "$SB/bin/gh"
+  sed_i "s|\"pr merge\") |\"pr merge\") git --git-dir=$SB/mrg-remote.git update-ref -d refs/heads/ws/m; |" "$SB/bin/gh"
   local out; out="$(env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" workspace merge m --yes 2>&1)"
   assert_eq "" "$(git --git-dir="$SB/mrg-remote.git" for-each-ref refs/heads/ws/m)" "the provider deleted it"
   assert_contains "$out" "remote branch deleted" "and crux says so"

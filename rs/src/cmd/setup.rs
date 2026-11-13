@@ -178,8 +178,8 @@ enum Protocol {
 impl Protocol {
     /// The one the account clones with, so the remote works without asking.
     fn of_account() -> Self {
-        match sh::capture("gh", &["config", "get", "git_protocol"]).out().as_str() {
-            "ssh" => Protocol::Ssh,
+        match project::gh_chosen_protocol().as_deref() {
+            Some("ssh") => Protocol::Ssh,
             _ => Protocol::Https,
         }
     }
@@ -437,7 +437,9 @@ impl Setup {
         for repo in repos.split(',').filter(|r| !r.is_empty() && project::valid_name(r)) {
             let target = self.root.join(&name).join(repo);
             let url = self.remote.replace("{repo}", repo);
-            if target.exists() || sh::capture("git", &["clone", "-q", &url, &target.to_string_lossy()]).ok() {
+            if target.exists()
+                || sh::capture("git", &["clone", "-q", &project::clone_url(&url), &target.to_string_lossy()]).ok()
+            {
                 done(format!("{repo} cloned"));
             } else {
                 note(format!("{repo} could not be cloned from {url}"));

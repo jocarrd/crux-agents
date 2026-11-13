@@ -12,6 +12,7 @@ without it antialiasing dominates the signal and everything looks different.
 With it the real defects of position, size and color survive.
 """
 
+from __future__ import annotations
 import argparse
 import json
 import subprocess
