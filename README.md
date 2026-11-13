@@ -380,7 +380,7 @@ In `~/.crux/config`. They belong to the machine, not to the project:
 | A repo lives in another account | Declare it in `crux.json` → `remote.repos["<repo>"]`. Without it, `clone` does not know where to fetch it from. |
 | `crux init` does not know where to push | No remote template: pass `--remote 'git@github.com:<org>/{repo}.git'`, set `CRUX_REMOTE`, or use `--no-remote`. |
 | `bootstrap` finds no projects | Discovery needs `gh`: run `gh auth login` and repeat. |
-| Clones fail on a machine with no SSH key | The contracts name repos in SSH form; crux clones them over HTTPS when `gh` talks HTTPS: `gh config set git_protocol https` and `gh auth setup-git`. |
+| Clones fail on a machine with no SSH key | The contracts name repos in SSH form; crux clones them over HTTPS when that is the protocol chosen for GitHub in `gh` (`gh auth login` asks; or `gh config set -h github.com git_protocol https`), with `gh auth setup-git` so git uses its credentials. |
 | `sync` names a repo whose origin differs from the contract | The repo moved. Run the `git remote set-url` it prints. |
 
 ### Uninstalling

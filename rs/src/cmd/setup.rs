@@ -178,8 +178,8 @@ enum Protocol {
 impl Protocol {
     /// The one the account clones with, so the remote works without asking.
     fn of_account() -> Self {
-        match sh::capture("gh", &["config", "get", "git_protocol"]).out().as_str() {
-            "ssh" => Protocol::Ssh,
+        match project::gh_chosen_protocol().as_deref() {
+            Some("ssh") => Protocol::Ssh,
             _ => Protocol::Https,
         }
     }

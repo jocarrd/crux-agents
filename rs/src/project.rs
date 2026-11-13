@@ -221,20 +221,53 @@ pub fn default_owner() -> String {
 
 /// The URL handed to `git clone`. Contracts name GitHub repos in SSH form,
 /// and a machine set up with `gh auth login` over HTTPS has no SSH key to
-/// reach them: what gh was told is how this machine talks to GitHub. The
-/// origin stays comparable, since `normalize_git_url` ignores the protocol.
+/// reach them. Only a choice actually made moves the clone to HTTPS: a machine
+/// that never chose keeps cloning as the contract says. The origin stays
+/// comparable, since `normalize_git_url` ignores the protocol.
 pub fn clone_url(url: &str) -> String {
-    match url.strip_prefix("git@github.com:") {
-        Some(rest) if gh_git_protocol() == "https" => format!("https://github.com/{rest}"),
+    let rest = url.strip_prefix("git@github.com:").or_else(|| url.strip_prefix("ssh://git@github.com/"));
+    match rest {
+        Some(rest) if gh_chosen_protocol().as_deref() == Some("https") => format!("https://github.com/{rest}"),
         _ => url.to_string(),
     }
 }
 
-fn gh_git_protocol() -> String {
-    if !sh::exists("gh") {
-        return String::new();
+/// The git protocol chosen for GitHub, as gh records it. `gh config get` cannot
+/// tell a choice from its default, https, which it answers on a machine that
+/// never chose: the choice of `gh auth login` lives per host in hosts.yml, and
+/// the generic config.yml carries https from its own template, so only ssh
+/// there is something someone set.
+pub fn gh_chosen_protocol() -> Option<String> {
+    let dir = env::var("GH_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env::var("XDG_CONFIG_HOME").map(|x| PathBuf::from(x).join("gh")))
+        .unwrap_or_else(|| env::home().join(".config/gh"));
+    let mut in_github = false;
+    for line in files::read_or_empty(&dir.join("hosts.yml")).lines() {
+        if !line.starts_with(' ') {
+            in_github = line.trim_end() == "github.com:";
+        } else if let Some(v) = line.trim().strip_prefix("git_protocol:").filter(|_| in_github) {
+            return Some(v.trim().to_string());
+        }
     }
-    sh::capture("gh", &["config", "get", "git_protocol", "-h", "github.com"]).out()
+    files::read_or_empty(&dir.join("config.yml"))
+        .lines()
+        .find_map(|l| l.strip_prefix("git_protocol:"))
+        .map(|v| v.trim().to_string())
+        .filter(|v| v == "ssh")
+}
+
+/// The directories a repo can sit in under the projects root: a project
+/// folder, or a repo inside one.
+pub fn repo_dirs(parent: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![];
+    for a in subdirs(parent) {
+        dirs.push(parent.join(&a));
+        for b in subdirs(&parent.join(&a)) {
+            dirs.push(parent.join(&a).join(b));
+        }
+    }
+    dirs
 }
 
 /// The machine's clone template pointing at another owner, keeping its shape.

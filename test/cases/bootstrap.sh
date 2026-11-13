@@ -263,29 +263,38 @@ _github_remotes() {
   # A project alpha on "GitHub" under jocarrd: the docs repo, whose contract
   # names its code repo in SSH form, and the code repo. Both are local bare
   # repos; $1 is the URL prefix git rewrites to them, so a clone only works
-  # if it asks for the URL form this machine can reach.
-  local prefix="$1"
+  # if it asks for the URL form this machine can reach. $2 names the code
+  # repo on the remote when it differs from its folder, app.
+  local prefix="$1" src="${2:-app}"
   local docs; docs="$(new_project alpha --repos app)"
-  jq '.remote = {"url": "git@github.com:jocarrd/{repo}.git", "visibility": "private"}' "$docs/crux.json" \
-    > "$SB/c.json" && mv "$SB/c.json" "$docs/crux.json"
+  jq --arg src "$src" '.remote = {"url": "git@github.com:jocarrd/{repo}.git", "visibility": "private"}
+    | if $src != "app" then .remote.repos = {"app": ("git@github.com:jocarrd/" + $src + ".git")} else . end' \
+    "$docs/crux.json" > "$SB/c.json" && mv "$SB/c.json" "$docs/crux.json"
   git -C "$docs" add -A && git -C "$docs" commit -q -m "remote"
   mkdir -p "$SB/gh/jocarrd"
   git init -q --bare -b main "$SB/gh/jocarrd/alpha-docs.git"
   git -C "$docs" push -q "$SB/gh/jocarrd/alpha-docs.git" HEAD:main 2>/dev/null
   git init -q -b main "$SB/app-seed" && git -C "$SB/app-seed" commit -q --allow-empty -m "app"
-  git clone -q --bare "$SB/app-seed" "$SB/gh/jocarrd/app.git"
+  git clone -q --bare "$SB/app-seed" "$SB/gh/jocarrd/$src.git"
   printf '[url "%s/gh/jocarrd/"]\n\tinsteadOf = %s\n' "$SB" "$prefix" > "$SB/gitconfig"
 }
 
 _fake_gh_protocol() {
-  # $1 = the git protocol gh was set up with on this machine
-  mkdir -p "$SB/bin"
+  # $1 = the protocol chosen at `gh auth login`, written where gh keeps it;
+  # empty = never chosen. Its generic config always says https, as gh's own
+  # template does. $2 = the repos the account lists.
+  mkdir -p "$SB/bin" "$SB/gh-config"
+  printf '# What protocol to use when performing git operations.\ngit_protocol: https\n' \
+    > "$SB/gh-config/config.yml"
+  rm -f "$SB/gh-config/hosts.yml"
+  [[ -n "$1" ]] && printf 'github.com:\n    git_protocol: %s\n    user: jocarrd\n' "$1" \
+    > "$SB/gh-config/hosts.yml"
   cat > "$SB/bin/gh" <<GH
 #!/usr/bin/env bash
 case "\$1 \$2" in
   "auth "*) exit 0 ;;
-  "config get") echo "$1"; exit 0 ;;
-  "repo list") echo alpha-docs; exit 0 ;;
+  "config get") echo https; exit 0 ;;
+  "repo list") printf '%s\n' ${2:-alpha-docs}; exit 0 ;;
   "api user") echo jocarrd; exit 0 ;;
   "api "*) [[ "\$2" == *"/alpha-docs/"* ]] && exit 0; exit 1 ;;
 esac
@@ -293,6 +302,12 @@ exit 0
 GH
   chmod +x "$SB/bin/gh"
   export PATH="$SB/bin:$PATH"
+}
+
+_bootstrap_as_github() {
+  # bootstrap with git and gh reading the sandbox's config, not the machine's
+  GIT_CONFIG_GLOBAL="$SB/gitconfig" GH_CONFIG_DIR="$SB/gh-config" \
+    crux bootstrap --owner jocarrd --parent "$SB/B" "$@" 2>&1
 }
 
 test_bootstrap_on_a_blank_machine_needs_no_remote_template() {
@@ -304,8 +319,7 @@ test_bootstrap_on_a_blank_machine_needs_no_remote_template() {
   _github_remotes "git@github.com:jocarrd/"
   _fake_gh_protocol ssh
 
-  local out
-  out="$(GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" --only alpha 2>&1)"
+  local out; out="$(_bootstrap_as_github --only alpha)"
 
   assert_not_contains "$out" "do not know where to fetch" "the account it searched is where it fetches from"
   assert_file "$SB/B/alpha/alpha-docs/crux.json" "the docs repo arrives"
@@ -313,7 +327,7 @@ test_bootstrap_on_a_blank_machine_needs_no_remote_template() {
   teardown
 }
 
-test_clone_uses_https_when_gh_talks_https() {
+test_clone_uses_https_when_gh_was_set_up_with_it() {
   sandbox >/dev/null
   _ready_machine
   # gh logged in over HTTPS and no SSH key: the contracts name their repos as
@@ -321,22 +335,33 @@ test_clone_uses_https_when_gh_talks_https() {
   _github_remotes "https://github.com/jocarrd/"
   _fake_gh_protocol https
 
-  local out
-  out="$(GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" --only alpha 2>&1)"
-
+  _bootstrap_as_github --only alpha >/dev/null
   assert_file "$SB/B/alpha/alpha-docs/crux.json" "the docs repo arrives over HTTPS"
   assert_file "$SB/B/alpha/app/.git/HEAD" "and so does the code repo the contract names in SSH form"
   teardown
 }
 
-test_clone_keeps_ssh_when_gh_talks_ssh() {
+test_clone_keeps_ssh_when_gh_was_set_up_with_it() {
   sandbox >/dev/null
   _ready_machine
   _github_remotes "git@github.com:jocarrd/"
   _fake_gh_protocol ssh
 
-  GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" --only alpha >/dev/null 2>&1
+  _bootstrap_as_github --only alpha >/dev/null
   assert_file "$SB/B/alpha/app/.git/HEAD" "an SSH machine keeps cloning over SSH"
+  teardown
+}
+
+test_clone_keeps_ssh_when_no_protocol_was_chosen() {
+  sandbox >/dev/null
+  _ready_machine
+  # `gh config get git_protocol` answers https on a machine that never chose
+  # one: taking that for a choice moved working SSH machines to HTTPS.
+  _github_remotes "git@github.com:jocarrd/"
+  _fake_gh_protocol ""
+
+  _bootstrap_as_github --only alpha >/dev/null
+  assert_file "$SB/B/alpha/app/.git/HEAD" "with no choice made, the contract's SSH stays"
   teardown
 }
 
@@ -344,18 +369,17 @@ test_bootstrap_does_not_call_a_project_repo_loose() {
   sandbox >/dev/null
   _ready_machine
   : > "$CRUX_CONFIG"
-  _github_remotes "git@github.com:jocarrd/"
-  # The account also lists the docs repo and the code repo: both belong to
-  # alpha, so neither is "a repo that belongs to no project".
-  _fake_gh_protocol ssh
-  sed -i.bak 's/echo alpha-docs; exit 0/printf "%s\\n" alpha-docs app loose-one; exit 0/' "$SB/bin/gh"
+  # The code repo is app-src on the remote and app on disk: only its origin
+  # says it belongs to alpha.
+  _github_remotes "git@github.com:jocarrd/" app-src
+  _fake_gh_protocol ssh "alpha-docs app-src loose-one"
 
-  local out
-  out="$(GIT_CONFIG_GLOBAL="$SB/gitconfig" crux bootstrap --owner jocarrd --parent "$SB/B" 2>&1)"
+  local out; out="$(_bootstrap_as_github)"
   local loose; loose="$(printf '%s' "$out" | grep -A1 'belong to no project')"
 
+  assert_file "$SB/B/alpha/app/.git/HEAD" "the code repo arrives under its folder name"
   assert_contains "$loose" "loose-one" "the loose repo is named"
   assert_not_contains "$loose" "alpha-docs" "the docs repo of a project is not loose"
-  assert_not_contains "$loose" "app" "nor is a code repo a project brought"
+  assert_not_contains "$loose" "app-src" "nor is a code repo cloned under another name"
   teardown
 }

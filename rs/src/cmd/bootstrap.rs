@@ -16,19 +16,15 @@ use crate::{die, env, person, project, sh, ui};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The origins of the repos under the projects root, normalized: a repo
-/// cloned under another directory name still belongs to its project.
+/// The origins of the repos under the projects root, as written in each
+/// repo's config: a repo cloned under another directory name still belongs to
+/// its project, and the URL git would rewrite with insteadOf is not the one
+/// that names the repo.
 fn origins_under(parent: &Path) -> Vec<String> {
-    let mut dirs = vec![];
-    for a in project::subdirs(parent) {
-        dirs.push(parent.join(&a));
-        for b in project::subdirs(&parent.join(&a)) {
-            dirs.push(parent.join(&a).join(b));
-        }
-    }
-    dirs.iter()
+    project::repo_dirs(parent)
+        .iter()
         .filter(|d| d.join(".git").exists())
-        .filter_map(|d| crate::git::remote_url(d, "origin"))
+        .filter_map(|d| crate::git::out(d, &["config", "--get", "remote.origin.url"]).filter(|u| !u.is_empty()))
         .map(|u| project::normalize_git_url(&u))
         .collect()
 }

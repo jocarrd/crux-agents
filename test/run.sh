@@ -105,8 +105,8 @@ assert_exit() {
 # compare counts as text, so the padding goes.
 wc() { command wc "$@" | sed 's/^ *//'; }
 
-# In-place sed that works with GNU and BSD sed alike: `sed -i` takes its
-# backup suffix differently on each, and macOS ships the BSD one.
+# In-place sed on one file that works with GNU and BSD sed alike: `sed -i`
+# takes its backup suffix differently on each, and macOS ships the BSD one.
 sed_i() {
   local f="${*: -1}"
   sed "${@:1:$#-1}" "$f" > "$f.sed-tmp" && cat "$f.sed-tmp" > "$f" && rm -f "$f.sed-tmp"

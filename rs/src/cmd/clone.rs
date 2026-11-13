@@ -17,16 +17,7 @@ use std::path::{Path, PathBuf};
 /// and sync keeps advancing the old one.
 fn clone_elsewhere(parent: &Path, url: &str) -> Option<PathBuf> {
     let wanted = project::normalize_git_url(url);
-    let mut candidates = vec![];
-    for a in project::subdirs(parent) {
-        candidates.push(parent.join(&a));
-    }
-    for a in project::subdirs(parent) {
-        for b in project::subdirs(&parent.join(&a)) {
-            candidates.push(parent.join(&a).join(b));
-        }
-    }
-    candidates.into_iter().find(|d| {
+    project::repo_dirs(parent).into_iter().find(|d| {
         d.join(".git").is_dir()
             && project::normalize_git_url(&git::remote_url(d, "origin").unwrap_or_default()) == wanted
     })
