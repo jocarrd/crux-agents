@@ -232,12 +232,22 @@ pub fn clone_url(url: &str) -> String {
     }
 }
 
-/// The git protocol chosen for GitHub, as gh records it. `gh config get` cannot
-/// tell a choice from its default, https, which it answers on a machine that
-/// never chose: the choice of `gh auth login` lives per host in hosts.yml, and
-/// the generic config.yml carries https from its own template, so only ssh
-/// there is something someone set.
+/// The git protocol chosen for GitHub. gh answers https when nothing was
+/// chosen, so only ssh is a choice on its word; https counts when gh recorded
+/// it for the host, which is what `gh auth login` and
+/// `gh config set -h github.com` do.
 pub fn gh_chosen_protocol() -> Option<String> {
+    if !sh::exists("gh") {
+        return None;
+    }
+    match sh::capture("gh", &["config", "get", "git_protocol", "-h", "github.com"]).out().as_str() {
+        "ssh" => Some("ssh".into()),
+        "https" if https_recorded_for_github() => Some("https".into()),
+        _ => None,
+    }
+}
+
+fn https_recorded_for_github() -> bool {
     let dir = env::var("GH_CONFIG_DIR")
         .map(PathBuf::from)
         .or_else(|| env::var("XDG_CONFIG_HOME").map(|x| PathBuf::from(x).join("gh")))
@@ -246,15 +256,11 @@ pub fn gh_chosen_protocol() -> Option<String> {
     for line in files::read_or_empty(&dir.join("hosts.yml")).lines() {
         if !line.starts_with(' ') {
             in_github = line.trim_end() == "github.com:";
-        } else if let Some(v) = line.trim().strip_prefix("git_protocol:").filter(|_| in_github) {
-            return Some(v.trim().to_string());
+        } else if in_github && line.trim() == "git_protocol: https" {
+            return true;
         }
     }
-    files::read_or_empty(&dir.join("config.yml"))
-        .lines()
-        .find_map(|l| l.strip_prefix("git_protocol:"))
-        .map(|v| v.trim().to_string())
-        .filter(|v| v == "ssh")
+    false
 }
 
 /// The directories a repo can sit in under the projects root: a project

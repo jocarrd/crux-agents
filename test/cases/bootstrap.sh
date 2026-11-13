@@ -281,8 +281,9 @@ _github_remotes() {
 
 _fake_gh_protocol() {
   # $1 = the protocol chosen at `gh auth login`, written where gh keeps it;
-  # empty = never chosen. Its generic config always says https, as gh's own
-  # template does. $2 = the repos the account lists.
+  # empty = never chosen, and then gh answers its default, https. Its generic
+  # config always says https, as gh's own template does. $2 = the repos the
+  # account lists.
   mkdir -p "$SB/bin" "$SB/gh-config"
   printf '# What protocol to use when performing git operations.\ngit_protocol: https\n' \
     > "$SB/gh-config/config.yml"
@@ -293,7 +294,7 @@ _fake_gh_protocol() {
 #!/usr/bin/env bash
 case "\$1 \$2" in
   "auth "*) exit 0 ;;
-  "config get") echo https; exit 0 ;;
+  "config get") echo "${1:-https}"; exit 0 ;;
   "repo list") printf '%s\n' ${2:-alpha-docs}; exit 0 ;;
   "api user") echo jocarrd; exit 0 ;;
   "api "*) [[ "\$2" == *"/alpha-docs/"* ]] && exit 0; exit 1 ;;
