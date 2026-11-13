@@ -1951,6 +1951,57 @@ test_visual_second_publication_keeps_other_proposals_images() {
   assert_contains "$files" "feat/sheet/01-cover-desktop.png" "and the second one's is added"
 }
 
+_visual_pr_scenario() {
+  # An approved review in a repo posing as GitHub, and a gh whose `pr edit`
+  # fails the way the Projects (classic) deprecation makes it fail. The REST
+  # edit answers what $1 says: ok, or a GitHub error.
+  local app; app="$(_visual_scenario)"
+  git -C "$app" config "url.$SB/remote.git.insteadOf" "https://github.com/acme/web.git"
+  git -C "$app" remote set-url origin "https://github.com/acme/web.git"
+  ( cd "$app" && "$CRUX_HOME/bin/crux" visual approve ../captures >/dev/null 2>&1 )
+  mkdir -p "$SB/bin"
+  cat > "$SB/bin/gh" <<STUB
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "pr view")
+    case "\$*" in
+      *"--json body"*) printf 'Fixes the cover.\n\n## Changes\n- a\n' ;;
+      *"--json url"*) echo "https://github.com/acme/web/pull/7" ;;
+    esac ;;
+  "pr edit") echo "GraphQL: Projects (classic) is being deprecated" >&2; exit 1 ;;
+  "api "*)
+    echo "\$*" > "$SB/api-args"
+    if [[ "$1" != ok ]]; then echo "gh: Not Found (HTTP 404)" >&2; exit 1; fi
+    for a in "\$@"; do case "\$a" in body=@*) cp "\${a#body=@}" "$SB/patched.md" ;; esac; done ;;
+  *) exit 0 ;;
+esac
+STUB
+  chmod +x "$SB/bin/gh"
+  echo "$app"
+}
+
+test_visual_pr_edits_the_proposal_through_the_rest_api() {
+  sandbox >/dev/null
+  local app; app="$(_visual_pr_scenario ok)"
+  local out
+  out="$(cd "$app" && env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" visual pr 7 2>&1)"
+  assert_contains "$out" "visual review put in proposal 7" "the review reaches the proposal"
+  assert_contains "$(cat "$SB/api-args" 2>/dev/null)" "--hostname github.com -X PATCH repos/acme/web/pulls/7" \
+    "through the pull request's REST endpoint, not gh pr edit"
+  local body; body="$(cat "$SB/patched.md" 2>/dev/null)"
+  assert_contains "$body" "visual-review:start" "the new body carries the review"
+  assert_contains "$body" "Fixes the cover." "and keeps what was already written"
+}
+
+test_visual_pr_shows_why_github_refused_the_edit() {
+  sandbox >/dev/null
+  local app; app="$(_visual_pr_scenario refused)"
+  local out rc=0
+  out="$(cd "$app" && env PATH="$SB/bin:$PATH" "$CRUX_HOME/bin/crux" visual pr 7 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "a refused edit fails"
+  assert_contains "$out" "Not Found (HTTP 404)" "and says what GitHub answered"
+}
+
 _finish_with_visual() {
   # A workspace with the gate passed, a remote posing as GitHub and a fake gh
   # that saves the proposal body in $SB/body.md.
