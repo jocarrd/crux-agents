@@ -9,6 +9,7 @@ crux task — the record of the task of the workspace you are in.
   crux task plan <file>            dumps an approved plan and marks it planned
   crux task add "<step>" [...]     adds steps and returns their id (T1, T2…)
   crux task done <Tn> ["evidence"] marks a step done with what proves it
+                                   (or --evidence "…"); any other option is refused
   crux task next "<text>"          the next thing to do
   crux task note "<what>" [--why "…"] [--where "…"] [--learned "…"]
                                    a deviation or a decision taken along the way;
