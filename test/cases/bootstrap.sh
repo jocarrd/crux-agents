@@ -267,9 +267,11 @@ _github_remotes() {
   # repo on the remote when it differs from its folder, app.
   local prefix="$1" src="${2:-app}"
   local docs; docs="$(new_project alpha --repos app)"
-  jq --arg src "$src" '.remote = {"url": "git@github.com:jocarrd/{repo}.git", "visibility": "private"}
-    | if $src != "app" then .remote.repos = {"app": ("git@github.com:jocarrd/" + $src + ".git")} else . end' \
-    "$docs/crux.json" > "$SB/c.json" && mv "$SB/c.json" "$docs/crux.json"
+  local repos="" contract
+  [[ "$src" != app ]] && repos=", \"repos\": {\"app\": \"git@github.com:jocarrd/$src.git\"}"
+  contract="$(cat "$docs/crux.json")"
+  printf '%s,\n  "remote": {"url": "git@github.com:jocarrd/{repo}.git", "visibility": "private"%s}\n}\n' \
+    "${contract%\}}" "$repos" > "$docs/crux.json"
   git -C "$docs" add -A && git -C "$docs" commit -q -m "remote"
   mkdir -p "$SB/gh/jocarrd"
   git init -q --bare -b main "$SB/gh/jocarrd/alpha-docs.git"
