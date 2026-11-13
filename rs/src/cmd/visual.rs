@@ -248,6 +248,17 @@ fn first_heading(body: &str) -> Option<usize> {
     None
 }
 
+fn pull_api_path(url: &str) -> Option<(String, String)> {
+    let url = url.trim().trim_end_matches('/');
+    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
+    match rest.split('/').collect::<Vec<_>>().as_slice() {
+        [host, owner, repo, "pull", n] if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => {
+            Some((host.to_string(), format!("repos/{owner}/{repo}/pulls/{n}")))
+        }
+        _ => None,
+    }
+}
+
 fn pr(ctx: &Ctx, argv: &[String]) -> Res {
     let Some(pr) = argv.first().filter(|p| !p.is_empty()) else { die!("usage: crux visual pr <number|url>") };
     if !sh::exists("gh") {
@@ -258,6 +269,10 @@ fn pr(ctx: &Ctx, argv: &[String]) -> Res {
     if !body.ok() {
         die!("could not read proposal {pr}");
     }
+    let url = sh::capture_in(&ctx.repo, "gh", &["pr", "view", pr, "--json", "url", "-q", ".url"]);
+    let Some((host, path)) = url.ok().then(|| pull_api_path(&url.out())).flatten() else {
+        die!("could not find the address of proposal {pr}: {}", url.stderr.trim());
+    };
     let new_body = replace_section(&body.out(), &new_section);
     let tmp = std::env::temp_dir().join(format!("crux-visual-body.{}", std::process::id()));
     if let Err(e) = crate::files::write(&tmp, &format!("{new_body}\n")) {
@@ -268,8 +283,10 @@ fn pr(ctx: &Ctx, argv: &[String]) -> Res {
             ui::err("the new body does not pass the proposal filter");
             return false;
         }
-        if !sh::capture_in(&ctx.repo, "gh", &["pr", "edit", pr, "--body-file", &tmp.to_string_lossy()]).ok() {
-            ui::err(format!("could not edit proposal {pr}"));
+        let field = format!("body=@{}", tmp.to_string_lossy());
+        let edit = sh::capture_in(&ctx.repo, "gh", &["api", "--hostname", &host, "-X", "PATCH", &path, "-F", &field]);
+        if !edit.ok() {
+            ui::err(format!("could not edit proposal {pr}: {}", edit.stderr.trim()));
             return false;
         }
         true
@@ -312,6 +329,21 @@ pub fn run(argv: &[String]) -> Res {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pull_url_becomes_its_rest_path() {
+        assert_eq!(
+            pull_api_path("https://github.com/acme/web/pull/12\n"),
+            Some(("github.com".into(), "repos/acme/web/pulls/12".into()))
+        );
+        assert_eq!(
+            pull_api_path("https://git.example.org/team/app/pull/3/"),
+            Some(("git.example.org".into(), "repos/team/app/pulls/3".into()))
+        );
+        assert_eq!(pull_api_path("https://github.com/acme/web/issues/12"), None);
+        assert_eq!(pull_api_path("https://github.com/acme/web/pull/x"), None);
+        assert_eq!(pull_api_path(""), None);
+    }
 
     const SECTION: &str = "<!-- visual-review:start -->\n## Shots\n<!-- visual-review:end -->";
 
