@@ -120,10 +120,8 @@ python3 .../cdp.py writefile 'window.__X__' /tmp/secret
   (`/json/close/<targetId>`).
 - **Kill by port (`fuser -k 9222/tcp`; on macOS `lsof -ti tcp:9222`), never
   with `pkill`.**
-- **A passkey does not come across.** The copy has the cookies, not the
-  passkeys the user keeps in their Google account or in the system. A site
-  that asks for one in the middle of the flow (npm, a bank) is finished by the
-  user in their own Chrome; the copy carries on afterwards.
+- **A passkey does not come across** with the copy: the user finishes that
+  step in their own Chrome.
 - **The environment kills background processes** when each call ends: Chrome
   goes as a persistent task.
 - `urllib` to `127.0.0.1` may go out through a proxy; `cdp.py` already avoids it.

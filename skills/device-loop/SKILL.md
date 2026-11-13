@@ -28,9 +28,6 @@ package and the deep links are project data.
 Everything goes under one folder in your home: no Android Studio, no `sudo`,
 no system packages. Around 4 GB to run apps; 7 GB with what compiling needs.
 
-The JDK, the tools and the image depend on the machine: Linux on x86_64 or
-macOS on Apple Silicon.
-
 ```bash
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) OS=linux JDK_ARCH=x64     IMG=x86_64 ;;
@@ -51,7 +48,7 @@ The environment, in every shell that uses it (or in the shell profile):
 
 ```bash
 export JAVA_HOME=~/.local/android/jdk ANDROID_HOME=~/.local/android/sdk
-# the macOS JDK keeps its home inside a bundle
+# macOS: the JDK home is inside its bundle
 [ -d "$JAVA_HOME/Contents/Home" ] && export JAVA_HOME="$JAVA_HOME/Contents/Home"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ```
@@ -78,10 +75,8 @@ Without it the emulator runs in software and is unusable. Check it:
 emulator -accel-check     # Linux: KVM is usable; macOS: Hypervisor.Framework
 ```
 
-On Linux, if `/dev/kvm` is not accessible, the user runs
-`sudo usermod -aG kvm $USER` in a real terminal and logs in again. The agent
-cannot: `sudo` needs a TTY. On macOS the hypervisor comes with the system and
-asks for nothing; an image for another architecture is what makes it slow.
+Linux without `/dev/kvm`: the user runs `sudo usermod -aG kvm $USER` and
+logs in again; the agent has no TTY for `sudo`. macOS needs nothing.
 
 ## 2. Start it
 
@@ -185,16 +180,14 @@ adb logcat -d -t 200 | grep -iE "ReactNative|Exception|FATAL"
 ```
 
 To reload code that only runs on mounting, close the app with
-`adb shell am kill <package>` from the home screen and open it again. Not with
-`am force-stop`: the app would stop receiving widget and notification events.
+`adb shell am kill <package>` from the home screen, not `am force-stop`, and
+open it again.
 
 ## Anti-patterns
 
 - **Accepting a change without a screenshot that confirms it.** It is the whole
   point of the skill.
 - **Installing Android Studio, or system packages, to get an emulator.**
-- **Running the emulator without hardware acceleration.** It looks like the app
-  is slow when it is the emulator.
 
 ## Related
 
