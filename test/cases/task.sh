@@ -540,6 +540,30 @@ test_an_unfinished_task_is_not_archived_when_its_workspace_closes() {
   assert_no_file "$SB/tasks/proj/b.md" "and leaves the open ones"
 }
 
+test_a_folder_that_cannot_be_removed_keeps_the_workspace_and_its_task() {
+  sandbox >/dev/null
+  [[ "$(id -u)" == 0 ]] && return 0
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new stuck --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-stuck" f="$SB/tasks/proj/stuck.md"
+  "$CRUX_HOME/bin/crux" __task status --file "$f" --to merged >/dev/null
+  echo "locked/" >> "$root/app/.git/info/exclude"
+  mkdir -p "$ws/locked"; echo x > "$ws/locked/upload.jpg"; chmod 555 "$ws/locked"
+
+  local out rc=0
+  out="$("$CRUX_HOME/bin/crux" workspace rm stuck --include-ignored 2>&1)" || rc=$?
+  chmod 755 "$ws/locked"
+  assert_eq "1" "$rc" "a folder left on disk is a failed removal"
+  assert_contains "$out" "could not be removed completely" "it says so"
+  assert_not_contains "$out" "directory removed" "instead of claiming it removed it"
+  assert_contains "$(cat "$CRUX_REGISTRY")" '"stuck": {' "the workspace stays registered"
+  assert_file "$f" "and its task is not archived"
+
+  out="$("$CRUX_HOME/bin/crux" workspace rm stuck --include-ignored 2>&1)"
+  assert_contains "$out" "task 'stuck' archived" "once the files can go, the same rm finishes the job"
+  assert_no_file "$ws" "and the folder is gone"
+}
+
 test_gc_deletes_archived_tasks_that_have_expired() {
   sandbox >/dev/null
   local done_dir="$SB/tasks/proj/done"
