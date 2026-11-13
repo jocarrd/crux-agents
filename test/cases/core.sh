@@ -1595,6 +1595,54 @@ test_the_kernel_does_not_use_bash_4() {
   assert_eq "" "$uses" "no script depends on bash 4"
 }
 
+_fake_cargo_kernel() {
+  # A kernel with a stale build in rs/target and a cargo on PATH that builds
+  # somewhere else and answers `metadata` with what $1 says.
+  local kernel="$SB/target-root/crux" tools="$SB/fake-cargo" built="$SB/elsewhere" ran="$SB/ran"
+  mkdir -p "$kernel/rs/target/release" "$tools"
+  ( cd "$CRUX_HOME" && tar cf - install.sh VERSION ) | ( cd "$kernel" && tar xf - )
+  : > "$kernel/rs/Cargo.toml"
+  printf '#!/usr/bin/env bash\necho stale >> "%s"\n' "$ran" > "$kernel/rs/target/release/crux"
+  chmod +x "$kernel/rs/target/release/crux"
+  cat > "$tools/cargo" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  build)
+    mkdir -p "$built/release"
+    printf '#!/usr/bin/env bash\necho "fresh \$*" >> "%s"\n' "$ran" > "$built/release/crux"
+    chmod +x "$built/release/crux" ;;
+  metadata) printf '%s\n' '$1' ;;
+esac
+EOF
+  chmod +x "$tools/cargo"
+}
+
+test_install_runs_the_binary_cargo_built_not_a_stale_one() {
+  sandbox >/dev/null
+  _fake_cargo_kernel "{\"packages\":[],\"target_directory\":\"$SB/elsewhere\",\"version\":1}"
+  mkdir -p "$SB/home-target"
+
+  env -u CRUX_BIN HOME="$SB/home-target" PATH="$SB/fake-cargo:$PATH" \
+    bash "$SB/target-root/crux/install.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$SB/ran" 2>/dev/null)" "fresh __install" \
+    "the install hands over to the binary in the target dir cargo used"
+  assert_not_contains "$(cat "$SB/ran" 2>/dev/null)" "stale" "not to an older one left in rs/target"
+}
+
+test_install_stops_when_cargo_does_not_say_where_it_built() {
+  sandbox >/dev/null
+  _fake_cargo_kernel '{"packages":[],"version":1}'
+  mkdir -p "$SB/home-target"
+
+  local out
+  out="$(env -u CRUX_BIN HOME="$SB/home-target" PATH="$SB/fake-cargo:$PATH" \
+    bash "$SB/target-root/crux/install.sh" 2>&1)"
+  assert_eq "1" "$?" "the install stops"
+  assert_contains "$out" "did not say where" "and says why"
+  assert_not_contains "$(cat "$SB/ran" 2>/dev/null)" "stale" "without falling back to rs/target"
+}
+
 # A wrongly deduced root breaks nothing visibly: it makes `crux release` find
 # no consumers and publish saying there is nothing to verify. The rest of the
 # install tests pass --projects-dir, so none of them looked at the deduction.

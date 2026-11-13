@@ -34,7 +34,13 @@ if [[ -z "$bin" ]]; then
   fi
   echo "building crux (once per version)…"
   "$cargo" build --release --quiet --manifest-path "$here/rs/Cargo.toml"
-  bin="$here/rs/target/release/crux"
+  target="$("$cargo" metadata --no-deps --format-version 1 --manifest-path "$here/rs/Cargo.toml" \
+    | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')" || target=""
+  if [[ -z "$target" || ! -x "$target/release/crux" ]]; then
+    echo "cargo built crux but did not say where, or the binary is not there: ${target:-?}/release/crux" >&2
+    exit 1
+  fi
+  bin="$target/release/crux"
 fi
 
 CRUX_HOME="$here" exec "$bin" __install "$@"
