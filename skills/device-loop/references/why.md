@@ -33,7 +33,9 @@ Android marks a force-stopped app as stopped and does not deliver it broadcasts
 —widget taps, scheduled notifications— until the user opens it by hand. `am
 kill` from the home screen ends the process without that mark.
 
-## Why compile only for x86_64
+## Why compile only for the emulator's architecture
 
-The emulator image is x86_64. Building the four architectures multiplies the
-native compile time for code the emulator never runs.
+The emulator image is x86_64 on Linux and arm64-v8a on Apple Silicon, the
+machine's own: an image for the other one runs translated and is unusable.
+Building the four architectures multiplies the native compile time for code
+the emulator never runs.
