@@ -223,6 +223,26 @@ fn tasks_elsewhere(live: &[registry::Workspace]) {
         }
         ui::info("resume them with: crux workspace resume <task>");
     }
+    let leftovers: Vec<remind::OpenTask> = remind::unfinished_tasks(None)
+        .into_iter()
+        .filter(|t| t.waiting.is_none() && matches!(t.status.as_str(), "merged" | "deployed"))
+        .collect();
+    if !leftovers.is_empty() {
+        println!();
+        println!("merged with steps still to do");
+        println!();
+        for t in &leftovers {
+            println!(
+                "  {:<34} {:<12} {}",
+                format!("{}/{}", t.project, t.task),
+                format!("{} left", t.pending),
+                cut(&t.next, 60)
+            );
+        }
+        ui::info(
+            "finish them (crux task status open --force --task <p/t>), gather them (crux task merge) or archive them",
+        );
+    }
     let waiting: Vec<(&remind::OpenTask, &crate::task::record::Waiting)> =
         tasks.iter().filter_map(|t| t.waiting.as_ref().map(|w| (t, w))).collect();
     if waiting.is_empty() {

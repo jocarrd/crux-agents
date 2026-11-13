@@ -453,6 +453,44 @@ test_finished_reviewed_and_merged_tasks_are_told_apart() {
   assert_not_contains "$out" "proj/done-one proj" "nor is a finished one"
 }
 
+test_status_shows_a_merged_task_with_steps_left() {
+  sandbox >/dev/null
+  _tasks_project >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/landed >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "ship it" --task proj/landed >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "ask for the key" --task proj/landed >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" T1 "merged" --task proj/landed >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" __task status --file "$SB/tasks/proj/landed.md" --to merged >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/whole >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add "ship it" --task proj/whole >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" T1 "merged" --task proj/whole >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" __task status --file "$SB/tasks/proj/whole.md" --to merged >/dev/null
+
+  local out; out="$("$CRUX_HOME/bin/crux" status 2>&1)"
+  assert_contains "$out" "merged with steps still to do" "a merged task with work left does not vanish"
+  assert_contains "$out" "proj/landed" "it is named"
+  assert_contains "$out" "1 left" "with how much is left"
+  assert_not_contains "$out" "proj/whole" "a merged task with every step done is not"
+}
+
+test_task_status_says_when_it_does_not_go_back() {
+  sandbox >/dev/null
+  _tasks_project >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/back >/dev/null 2>&1
+  local f="$SB/tasks/proj/back.md"
+  "$CRUX_HOME/bin/crux" __task status --file "$f" --to merged >/dev/null
+
+  local out rc=0
+  out="$("$CRUX_HOME/bin/crux" task status open --task proj/back 2>&1)" || rc=$?
+  assert_eq "1" "$rc" "going back without --force fails"
+  assert_contains "$out" "stays merged" "and says the status did not change"
+  assert_not_contains "$out" "ok" "instead of an ok"
+  assert_contains "$(cat "$f")" "status: merged" "the record is untouched"
+
+  "$CRUX_HOME/bin/crux" task status open --force --task proj/back >/dev/null 2>&1
+  assert_contains "$(cat "$f")" "status: open" "with --force it goes back"
+}
+
 test_an_unreadable_record_is_reported_and_stops() {
   sandbox >/dev/null
   local f="$SB/tasks/proj/broken.md"

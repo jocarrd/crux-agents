@@ -15,6 +15,8 @@ crux task — the record of the task of the workspace you are in.
                                    with --why it is a decision, and when the task is
                                    archived it goes to repos/<repo>/notes.md of the docs repo
   crux task status <status> [--force]
+                                   statuses only move forward: going back fails
+                                   unless --force says it is meant
   crux task wait --on "<who>" --ask "<what>" [--ref "<where>"] [--keep]
                                    the task waits on another person: notes it and removes
                                    the workspaces and branches that no longer add anything
