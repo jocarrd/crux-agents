@@ -70,6 +70,36 @@ test_setup_creates_the_first_project_of_a_new_account() {
   assert_not_contains "$out" "first project" "nor offers to create the first one"
 }
 
+test_setup_clones_the_new_project_over_https_when_gh_was_set_up_with_it() {
+  sandbox >/dev/null
+  _setup_gh ana "" https
+  local home="$SB/h"; mkdir -p "$home/.crux" "$home/.config/gh"
+  # The machine's template is SSH, as the contracts are; gh was set up over
+  # HTTPS and there is no SSH key: fetching works only over HTTPS, and SSH
+  # fails at once instead of asking for a host key.
+  printf 'CRUX_REMOTE="git@github.com:ana/{repo}.git"\n' > "$home/.crux/config"
+  printf 'github.com:\n    git_protocol: https\n    user: ana\n' > "$home/.config/gh/hosts.yml"
+  cat > "$home/.gitconfig" <<GIT
+[user]
+	email = ana@localhost
+	name = ana
+[init]
+	defaultBranch = main
+[url "$SB/remotes/ana/"]
+	insteadOf = https://github.com/ana/
+	pushInsteadOf = git@github.com:ana/
+GIT
+  for r in shop-web shop-docs; do git init -q --bare -b main "$SB/remotes/ana/$r.git"; done
+  git init -q -b main "$SB/web-seed" && git -C "$SB/web-seed" commit -q --allow-empty -m web
+  git -C "$SB/web-seed" push -q "$SB/remotes/ana/shop-web.git" HEAD:main 2>/dev/null
+
+  # profile: no; first project: yes, shop, its repo, our own
+  local out
+  out="$(GIT_SSH_COMMAND=false setup_as "$home" 'n\ny\nshop\nshop-web\n1\n' --projects-dir "$home/p")"
+  assert_file "$home/p/shop/shop-web/.git/HEAD" "the code repo the template names in SSH form arrives over HTTPS"
+  assert_contains "$out" "shop-web cloned" "and setup says so"
+}
+
 test_setup_writes_the_remote_of_the_organisation_chosen() {
   sandbox >/dev/null
   _setup_gh ana "acme" ssh
