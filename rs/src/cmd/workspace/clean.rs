@@ -116,14 +116,31 @@ pub fn rm(argv: &[String]) -> Res {
             }
         }
         let p = path.to_string_lossy();
+        let mut why = String::new();
         if git::ok(&repo, &["worktree", "remove", &p]) || git::ok(&repo, &["worktree", "remove", "--force", &p]) {
             ui::ok("worktree removed");
         } else {
             // git stops recognising it if someone deleted its record some
             // other way; the directory still occupies the slot.
-            let _ = std::fs::remove_dir_all(&path);
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                why = e.to_string();
+            }
             git::run(&repo, &["worktree", "prune"]);
-            ui::ok("directory removed (git no longer had it as a worktree)");
+            if !path.exists() {
+                ui::ok("directory removed (git no longer had it as a worktree)");
+            }
+        }
+        if path.exists() {
+            ui::err(format!(
+                "{} could not be removed completely{}",
+                path.display(),
+                if why.is_empty() { String::new() } else { format!(": {why}") }
+            ));
+            ui::info(
+                "files owned by another user (a container, root) stay behind: delete them with that user's permissions",
+            );
+            ui::info(format!("the workspace stays registered and its task untouched; then retry: crux workspace rm {name} --include-ignored"));
+            return exit(1);
         }
     }
     let removed = {
