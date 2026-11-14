@@ -70,7 +70,7 @@ struct Prompt {
 impl Prompt {
     fn new() -> Self {
         // In tests the answers come on stdin, as a person would type them.
-        let test_tty = env::in_tests() && env::var("CRUX_TEST_TTY").is_some();
+        let test_tty = env::in_tests() && env::var(crate::names::vars::TEST_TTY).is_some();
         Prompt { interactive: std::io::stdin().is_terminal() || test_tty }
     }
 
@@ -256,7 +256,7 @@ impl Setup {
 
     fn account(&mut self, owner_arg: &str) -> Res {
         self.step(2, "where your projects live");
-        if let Some(r) = env::config_value_in(&self.config, "CRUX_REMOTE").filter(|r| !r.is_empty()) {
+        if let Some(r) = env::config_value_in(&self.config, crate::names::vars::REMOTE).filter(|r| !r.is_empty()) {
             done(format!("the remote this machine already has: {r}"));
             self.remote = r;
         } else if self.github != GitHub::Ready {

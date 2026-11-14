@@ -170,7 +170,7 @@ pub fn run(argv: &[String]) -> Res {
     // Folders that are not the profile owner's: on a shared machine another
     // person works with the agent too.
     let home = env::home().to_string_lossy().into_owned();
-    let ignored: Vec<String> = env::preference("CRUX_MEMORY_IGNORE", "")
+    let ignored: Vec<String> = env::preference(crate::names::vars::MEMORY_IGNORE, "")
         .split(',')
         .map(str::trim)
         .filter(|p| !p.is_empty())

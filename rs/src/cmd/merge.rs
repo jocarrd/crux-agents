@@ -30,7 +30,7 @@ pub fn run(argv: &[String]) -> Res {
     let cwd = std::env::current_dir().unwrap_or_default();
     let Some(repo_dir) = git::toplevel(&cwd) else { die!("this is not a git repository") };
     project::refuse_if_archived(&repo_dir)?;
-    let Some(origin) = git::remote_url(&repo_dir, "origin") else {
+    let Some(origin) = git::remote_url(&repo_dir, crate::names::git::REMOTE) else {
         die!("the repository has no origin: I do not know where to look")
     };
     let slug = crate::regex!(r"^.*github\.com[:/]").replace(&origin, "");

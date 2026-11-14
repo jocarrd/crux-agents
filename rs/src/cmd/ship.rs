@@ -400,7 +400,7 @@ fn gate(ctx: &Ctx) -> Res {
         for c in &commands {
             println!("      {c}");
         }
-        if env::var("CRUX_GATE_ASSUME_YES").as_deref() != Some("1") && std::io::stdin().is_terminal() {
+        if env::var(crate::names::vars::GATE_ASSUME_YES).as_deref() != Some("1") && std::io::stdin().is_terminal() {
             print!("      Run them? [y/N] ");
             let _ = std::io::Write::flush(&mut std::io::stdout());
             let mut answer = String::new();

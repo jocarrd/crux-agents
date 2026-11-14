@@ -169,7 +169,7 @@ pub fn run(argv: &[String]) -> Res {
         declared_version: field("crux", "?"),
         language: field("language", "es"),
         declared: files::str_list(contract.get("repos")).into_iter().filter(|r| !r.is_empty()).collect(),
-        origin_docs: git::remote_url(&docs, "origin").unwrap_or_default(),
+        origin_docs: git::remote_url(&docs, crate::names::git::REMOTE).unwrap_or_default(),
         gh: gh_ready(),
         writes: policy::flag(&profile, Some(&docs), "pointers.write", true),
         profile,
@@ -495,7 +495,7 @@ fn check_remotes(t: &mut Tally, c: &Checkup) {
         return;
     }
     for repo in c.declared.iter().filter(|r| c.root.join(r).join(".git").is_dir()) {
-        let Some(real) = git::remote_url(&c.root.join(repo), "origin") else { continue };
+        let Some(real) = git::remote_url(&c.root.join(repo), crate::names::git::REMOTE) else { continue };
         match project::remote_url(&c.contract, repo) {
             None => {
                 t.note(format!("{repo}: no remote in the contract — 'crux clone' will not know where to fetch it from"))

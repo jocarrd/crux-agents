@@ -137,7 +137,7 @@ fn self_command(name: &str, args: &[&str]) -> std::process::Command {
     let mut c = std::process::Command::new(exe);
     c.arg(name).args(args);
     if let Some(home) = crate::env::crux_home() {
-        c.env("CRUX_HOME", home);
+        c.env(crate::names::vars::HOME, home);
     }
     c
 }

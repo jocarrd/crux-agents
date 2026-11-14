@@ -94,15 +94,15 @@ pub fn main_branch(dir: &Path) -> String {
             return b;
         }
     }
-    let mut declared = git::out(dir, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .map(|b| b.trim_start_matches("origin/").to_string())
+    let mut declared = git::out(dir, &["symbolic-ref", "--short", crate::names::git::REMOTE_HEAD])
+        .map(|b| b.trim_start_matches(&crate::names::git::remote_short("")).to_string())
         .unwrap_or_default();
     if declared.is_empty() {
         // The current branch only as a last resort: from a worktree it is the
         // work branch, and taking it as the main one leaves the hook blocking
         // exactly that.
         for c in ["main", "master"] {
-            if git::has_ref(dir, &format!("refs/heads/{c}")) {
+            if git::has_ref(dir, &crate::names::git::head(c)) {
                 declared = c.into();
                 break;
             }
@@ -181,7 +181,7 @@ pub fn remote_url(contract: &Value, repo: &str) -> Option<String> {
 /// replacing all of them gives a broken template.
 pub fn remote_from_git(dir: &Path) -> Option<String> {
     let name = dir.file_name()?.to_str()?;
-    let url = git::remote_url(dir, "origin")?;
+    let url = git::remote_url(dir, crate::names::git::REMOTE)?;
     Some(match url.rfind(name) {
         Some(i) => format!("{}{{repo}}{}", &url[..i], &url[i + name.len()..]),
         None => url,
@@ -206,7 +206,7 @@ pub fn owner_from_template(tmpl: &str) -> String {
 }
 
 pub fn remote_template() -> Option<String> {
-    env::config_value_in(&env::config_file_redirectable(), "CRUX_REMOTE")
+    env::config_value_in(&env::config_file_redirectable(), crate::names::vars::REMOTE)
 }
 
 /// From the same place as the clone URLs, so there are not two sources of

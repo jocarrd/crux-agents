@@ -137,7 +137,7 @@ fn run_adapter(cmd: &str, file: &Path, input: &str) -> Result<String, String> {
     let _ = std::fs::remove_file(&question);
     let o = Command::new("bash")
         .args(["-c", cmd])
-        .env("CRUX_SKILL_FILE", file)
+        .env(crate::names::vars::SKILL_FILE, file)
         .stdin(Stdio::from(stdin?))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -240,10 +240,10 @@ pub fn run(argv: &[String]) -> Res {
     if scenarios.is_empty() {
         return fail(format!("{} has no scenario («## name»)", scenarios_file.display()), 2);
     }
-    let Some(runner) = adapter("CRUX_SKILL_RUNNER", "skill-runner.sh") else {
+    let Some(runner) = adapter(crate::names::vars::SKILL_RUNNER, "skill-runner.sh") else {
         return fail("nobody to answer: set CRUX_SKILL_RUNNER or install the default adapter's agent", 2);
     };
-    let tokens_cmd = adapter("CRUX_SKILL_TOKENS", "skill-tokens.sh");
+    let tokens_cmd = adapter(crate::names::vars::SKILL_TOKENS, "skill-tokens.sh");
     let name = crate::files::name(skill.parent().unwrap());
     let skill_text = match std::fs::read_to_string(&skill) {
         Ok(t) => t,

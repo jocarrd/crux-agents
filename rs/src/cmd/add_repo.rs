@@ -78,7 +78,7 @@ pub fn run(argv: &[String]) -> Res {
     // compose, clone would not know where to fetch it from.
     let repo_dir = root.join(&repo);
     if repo_dir.join(".git").is_dir() {
-        let origin = git::remote_url(&repo_dir, "origin").unwrap_or_default();
+        let origin = git::remote_url(&repo_dir, crate::names::git::REMOTE).unwrap_or_default();
         let expected = project::remote_url(&contract, &repo).unwrap_or_default();
         if !origin.is_empty() && origin != expected {
             let obj = contract.as_object_mut().unwrap();

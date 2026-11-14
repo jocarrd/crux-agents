@@ -137,13 +137,12 @@ fn numstat_lines(line: &str) -> usize {
 }
 
 fn default_base(repo: &Path) -> Option<String> {
-    if let Some(r) = git::out(repo, &["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]) {
-        return Some(r.trim_start_matches("refs/remotes/").to_string());
+    if let Some(r) = git::out(repo, &["symbolic-ref", "--quiet", crate::names::git::REMOTE_HEAD]) {
+        return Some(r.trim_start_matches(crate::names::git::REMOTES).to_string());
     }
-    ["origin/main", "origin/master", "main", "master"]
+    [crate::names::git::remote_short("main"), crate::names::git::remote_short("master"), "main".into(), "master".into()]
         .into_iter()
         .find(|c| git::ok(repo, &["rev-parse", "--verify", "--quiet", c]))
-        .map(String::from)
 }
 
 /// The contract that rules where this runs: the first crux.json walking up, in

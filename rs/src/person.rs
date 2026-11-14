@@ -7,7 +7,7 @@ use crate::{env, template};
 use std::path::{Path, PathBuf};
 
 pub fn repo_name() -> String {
-    env::preference("CRUX_PROFILE_REPO", "agent-profile")
+    env::preference(crate::names::vars::PROFILE_REPO, "agent-profile")
 }
 
 pub fn expected_dir() -> PathBuf {

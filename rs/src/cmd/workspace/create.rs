@@ -64,7 +64,7 @@ pub fn new(argv: &[String]) -> Res {
         force: false,
         task: String::new(),
         goal: String::new(),
-        defer_cd: env::var("CRUX_DEFER_CD").is_some(),
+        defer_cd: env::var(crate::names::vars::DEFER_CD).is_some(),
     };
     let mut p = Parser::new(&argv[1..]);
     while let Some(arg) = p.next() {
@@ -258,9 +258,7 @@ fn created(name: &str) {
 fn add_worktree(repo: &Path, path: &Path, branch: &str, base: &str) -> Res {
     let path = path.to_string_lossy();
     if !base.is_empty() {
-        if !git::has_ref(repo, &format!("refs/heads/{base}"))
-            && !git::has_ref(repo, &format!("refs/remotes/origin/{base}"))
-        {
+        if !git::has_ref(repo, &names::git::head(base)) && !git::has_ref(repo, &names::git::remote_branch(base)) {
             die!("the base {base} does not exist in {}", repo.display());
         }
         let r = git::run(repo, &["worktree", "add", "-b", branch, &path, base]);
@@ -609,7 +607,7 @@ pub fn resume(argv: &[String]) -> Res {
             continue;
         }
         if !git::has_ref(&dir_repo, &names::git::head(&branch))
-            && !git::has_ref(&dir_repo, &format!("refs/remotes/{remote}/{branch}"))
+            && !git::has_ref(&dir_repo, &names::git::remote_branch(&branch))
         {
             ui::err(format!("{repo_name}: the branch {branch} is neither here nor on the remote"));
             ui::info("on the other machine: crux sync --leave tells you what is left to push");
@@ -657,7 +655,7 @@ pub fn resume(argv: &[String]) -> Res {
 /// chosen between: that is a merge for the person.
 fn bring_published(repo: &Path, branch: &str, repo_name: &str) -> bool {
     let local = names::git::head(branch);
-    let tracked = format!("refs/remotes/{}/{branch}", names::git::REMOTE);
+    let tracked = names::git::remote_branch(branch);
     let sha = |r: &str| git::out(repo, &["rev-parse", "-q", "--verify", r]);
     let (here, there) = (sha(&local), sha(&tracked));
     let mut candidates = crate::publish::fetch_published(repo, branch);

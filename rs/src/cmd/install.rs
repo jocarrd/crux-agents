@@ -127,12 +127,12 @@ pub fn run(argv: &[String]) -> Res {
         }
     }
     if dry {
-        std::env::set_var("CRUX_DRY_RUN", "1");
+        std::env::set_var(crate::names::vars::DRY_RUN, "1");
     }
     // The installed command points CRUX_HOME at the kernel copy it runs: that
     // is not a clone, and taking it for one deleted it before copying from it.
     let installed = env::home().join(".crux/kernel");
-    let clone = env::var("CRUX_HOME")
+    let clone = env::var(crate::names::vars::HOME)
         .map(PathBuf::from)
         .filter(|h| h.join(names::VERSION).is_file())
         .filter(|h| !h.canonicalize().unwrap_or_else(|_| h.clone()).starts_with(&installed));
@@ -178,8 +178,10 @@ pub fn run(argv: &[String]) -> Res {
         // The binary goes with the copy: the kernel of a version runs the
         // commands of that version. Read before the target is emptied, since
         // installing again from the installed command runs from inside it.
-        let binary =
-            env::var("CRUX_BIN").map(PathBuf::from).or_else(|| std::env::current_exe().ok()).unwrap_or_default();
+        let binary = env::var(crate::names::vars::BIN)
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_exe().ok())
+            .unwrap_or_default();
         let binary_bytes = match std::fs::read(&binary) {
             Ok(b) => b,
             Err(e) => die!("cannot read the binary {}: {e}", binary.display()),
@@ -205,7 +207,7 @@ pub fn run(argv: &[String]) -> Res {
         }
         let _ = std::fs::set_permissions(&core, std::os::unix::fs::PermissionsExt::from_mode(0o755));
         kernel = target;
-        std::env::set_var("CRUX_HOME", &kernel);
+        std::env::set_var(crate::names::vars::HOME, &kernel);
     }
     println!("crux {version} — {}", kernel.display());
     if dev {

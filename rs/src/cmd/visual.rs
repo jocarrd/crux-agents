@@ -126,7 +126,7 @@ fn repo_github(repo: &Path) -> Option<String> {
 /// Writes the images to the review branch without a checkout: temporary
 /// index, tree and commit by hand.
 fn publish_review(repo: &Path, branch: &str, prefix: &str, dir: &Path) -> bool {
-    let parent = if git::ok(repo, &["fetch", "-q", "origin", branch]) {
+    let parent = if git::ok(repo, &["fetch", "-q", crate::names::git::REMOTE, branch]) {
         git::out(repo, &["rev-parse", "FETCH_HEAD"])
     } else {
         None
@@ -158,7 +158,7 @@ fn publish_review(repo: &Path, branch: &str, prefix: &str, dir: &Path) -> bool {
         args.push("-m");
         args.push(&msg);
         let Some(commit) = git::out(repo, &args) else { return false };
-        git::ok(repo, &["push", "-q", "origin", &format!("{commit}:refs/heads/{branch}")])
+        git::ok(repo, &["push", "-q", crate::names::git::REMOTE, &format!("{commit}:refs/heads/{branch}")])
     })();
     let _ = std::fs::remove_file(&index);
     result

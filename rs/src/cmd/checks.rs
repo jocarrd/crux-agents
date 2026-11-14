@@ -149,7 +149,7 @@ fn failure_log(job: &str, n: usize) -> String {
 
 pub fn run(argv: &[String]) -> Res {
     let (mut num, mut wait, mut timeout, mut lines) = (String::new(), false, "900".to_string(), "60".to_string());
-    let interval: u64 = env::var("CRUX_CHECKS_INTERVAL").and_then(|v| v.parse().ok()).unwrap_or(15);
+    let interval: u64 = env::var(crate::names::vars::CHECKS_INTERVAL).and_then(|v| v.parse().ok()).unwrap_or(15);
     let mut p = Parser::new(argv);
     while let Some(arg) = p.next() {
         match arg {

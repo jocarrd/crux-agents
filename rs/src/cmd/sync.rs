@@ -103,8 +103,8 @@ fn tracking_remote(repo: &Path) -> String {
         return r;
     }
     let remotes = git::out(repo, &["remote"]).unwrap_or_default();
-    if remotes.lines().any(|r| r == "origin") {
-        return "origin".into();
+    if remotes.lines().any(|r| r == crate::names::git::REMOTE) {
+        return crate::names::git::REMOTE.into();
     }
     remotes.lines().next().unwrap_or("").to_string()
 }
@@ -174,7 +174,7 @@ fn departure(ctx: &Ctx) -> Res {
         // review below does not see it.
         if !git::ok(repo, &["symbolic-ref", "-q", "HEAD"])
             && git::ok(repo, &["rev-parse", "-q", "--verify", "HEAD"])
-            && git::out(repo, &["for-each-ref", "--contains", "HEAD", "refs/heads", "refs/remotes"])
+            && git::out(repo, &["for-each-ref", "--contains", "HEAD", names::git::HEADS, names::git::REMOTES])
                 .unwrap_or_default()
                 .is_empty()
         {
@@ -187,7 +187,7 @@ fn departure(ctx: &Ctx) -> Res {
         if git::is_worktree(repo) {
             continue;
         }
-        for line in git::out(repo, &["for-each-ref", "--format=%(refname:short)\t%(upstream:short)", "refs/heads"])
+        for line in git::out(repo, &["for-each-ref", "--format=%(refname:short)\t%(upstream:short)", names::git::HEADS])
             .unwrap_or_default()
             .lines()
         {
@@ -386,8 +386,9 @@ fn advance_the_rest(ctx: &Ctx, repo: &Path) -> Vec<String> {
     let name = ctx.name_of(repo);
     let current = git::out(repo, &["symbolic-ref", "-q", "HEAD"]).unwrap_or_default();
     let mut out = vec![];
-    for line in
-        git::out(repo, &["for-each-ref", "--format=%(refname)\t%(upstream)", "refs/heads"]).unwrap_or_default().lines()
+    for line in git::out(repo, &["for-each-ref", "--format=%(refname)\t%(upstream)", names::git::HEADS])
+        .unwrap_or_default()
+        .lines()
     {
         let (b, up) = line.split_once('\t').unwrap_or((line, ""));
         if up.is_empty() || b == current || !git::ok(repo, &["rev-parse", "-q", "--verify", up]) {
@@ -403,7 +404,7 @@ fn advance_the_rest(ctx: &Ctx, repo: &Path) -> Vec<String> {
         if git::ok(repo, &["fetch", "-q", ".", &format!("{up}:{b}")]) {
             out.push(format!(
                 "ok\t{name}: {}, {}",
-                b.trim_start_matches("refs/heads/"),
+                b.trim_start_matches(names::git::HEADS),
                 ui::count(behind, "new commit", "new commits")
             ));
         }
@@ -504,7 +505,8 @@ fn moved_remotes(ctx: &Ctx) -> Vec<String> {
             if !dir.join(".git").exists() {
                 continue;
             }
-            let (Some(real), Some(declared)) = (git::remote_url(&dir, "origin"), project::remote_url(&contract, &repo))
+            let (Some(real), Some(declared)) =
+                (git::remote_url(&dir, crate::names::git::REMOTE), project::remote_url(&contract, &repo))
             else {
                 continue;
             };
@@ -524,30 +526,33 @@ fn kernel_up_to_date(ctx: &Ctx) -> Option<String> {
     let current = env::crux_version();
     if !project::is_semver(&new)
         || !project::version_greater_than(&new, &current)
-        || !git::ok(&clone, &["rev-parse", "-q", "--verify", &format!("refs/tags/v{new}")])
+        || !git::ok(&clone, &["rev-parse", "-q", "--verify", &names::git::tag(&format!("v{new}"))])
     {
         return None;
     }
-    if env::var("CRUX_SYNC_NO_INSTALL").as_deref() == Some("1") {
+    if env::var(crate::names::vars::SYNC_NO_INSTALL).as_deref() == Some("1") {
         return Some(format!("kernel\tcrux {new} available (installation disabled)"));
     }
     // In dev mode the kernel already is the clone.
-    if env::config_value_in(&env::config_file_redirectable(), "CRUX_MODE").is_some_and(|m| m.starts_with("dev")) {
+    if env::config_value_in(&env::config_file_redirectable(), crate::names::vars::MODE)
+        .is_some_and(|m| m.starts_with("dev"))
+    {
         return None;
     }
     // This process has its own CRUX_HOME; inherited, the new hooks would
     // point at the old kernel.
     let home = env::home();
-    let installed =
-        sh::capture_cmd(Command::new("bash").arg(clone.join("install.sh")).current_dir(&home).env_remove("CRUX_HOME"))
-            .ok();
+    let installed = sh::capture_cmd(
+        Command::new("bash").arg(clone.join("install.sh")).current_dir(&home).env_remove(crate::names::vars::HOME),
+    )
+    .ok();
     let kernel = home.join(format!(".crux/kernel/{new}"));
     let hooked = installed
         && sh::capture_cmd(
             Command::new(kernel.join("bin/crux"))
                 .args(["hooks", "install"])
                 .current_dir(&home)
-                .env("CRUX_HOME", &kernel),
+                .env(crate::names::vars::HOME, &kernel),
         )
         .ok();
     Some(if hooked {
@@ -882,7 +887,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
     // Several sessions opened at once would launch the same round: with a
     // marker, the first one syncs and the rest do not.
     let marker = state.join("sync-last");
-    let every: u64 = env::var("CRUX_SYNC_EVERY_MIN").and_then(|v| v.parse().ok()).unwrap_or(10);
+    let every: u64 = env::var(crate::names::vars::SYNC_EVERY_MIN).and_then(|v| v.parse().ok()).unwrap_or(10);
     let fresh = std::fs::metadata(&marker)
         .and_then(|m| m.modified())
         .ok()

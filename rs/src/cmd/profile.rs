@@ -187,7 +187,7 @@ fn init(argv: &[String]) -> Res {
     }
     let dir = person::expected_dir();
     let name = person::repo_name();
-    let has_origin = |d: &Path| git::remote_url(d, "origin").is_some();
+    let has_origin = |d: &Path| git::remote_url(d, crate::names::git::REMOTE).is_some();
     // Se comprueba antes de escribir nada: si no, queda un perfil a medias que la
     // segunda vez se da por bueno.
     if remote && !has_origin(&dir) && !uses_gh() && project::remote_template().is_none() {
@@ -211,8 +211,8 @@ fn init(argv: &[String]) -> Res {
             die!("no remote: set CRUX_REMOTE in ~/.crux/config, install gh for GitHub, or pass --no-remote")
         };
         let url = template.replace("{repo}", &name);
-        git::run(&dir, &["remote", "add", "origin", &url]);
-        if git::ok(&dir, &["push", "-q", "-u", "origin", "HEAD"]) {
+        git::run(&dir, &["remote", "add", crate::names::git::REMOTE, &url]);
+        if git::ok(&dir, &["push", "-q", "-u", crate::names::git::REMOTE, "HEAD"]) {
             ui::ok(format!("pushed to {url}"));
         } else {
             ui::warn("the remote repo does not exist yet: create it on your provider as **private**");

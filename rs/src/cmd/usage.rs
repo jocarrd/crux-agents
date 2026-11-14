@@ -18,7 +18,7 @@ use unicode_normalization::UnicodeNormalization;
 fn transcripts_dir() -> PathBuf {
     // CLAUDE_SKILLS_DIR is redirected by the suite: if the transcripts came
     // from the real HOME, the machine would be measured, not the sandbox.
-    if let Some(t) = env::var("CRUX_TRANSCRIPTS") {
+    if let Some(t) = env::var(crate::names::vars::TRANSCRIPTS) {
         return PathBuf::from(t);
     }
     match env::var("CLAUDE_SKILLS_DIR") {

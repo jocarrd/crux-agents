@@ -7,7 +7,7 @@ use crate::names;
 use std::path::{Path, PathBuf};
 
 /// The variable, and the machine config key, that says where projects live.
-pub const PROJECTS_DIR_KEY: &str = "CRUX_PROJECTS_DIR";
+pub const PROJECTS_DIR_KEY: &str = crate::names::vars::PROJECTS_DIR;
 /// Under $HOME, when nobody has said otherwise.
 pub const DEFAULT_PROJECTS_DIR: &str = "Projects";
 
@@ -27,7 +27,7 @@ pub fn config_file() -> PathBuf {
 /// The same file, but redirectable with CRUX_CONFIG. Only the remote template
 /// has always honoured that variable; the rest read the file in $HOME.
 pub fn config_file_redirectable() -> PathBuf {
-    var("CRUX_CONFIG").map(PathBuf::from).unwrap_or_else(config_file)
+    var(crate::names::vars::CONFIG).map(PathBuf::from).unwrap_or_else(config_file)
 }
 
 /// The last `KEY=` line of a config file, without quotes.
@@ -67,13 +67,13 @@ pub fn preference_flag(key: &str, default: bool) -> bool {
 /// —<kernel>/bin/crux-core installed, <kernel>/rs/target/... built—, so a
 /// symlink on the PATH needs no variable to find it.
 pub fn crux_home() -> Option<PathBuf> {
-    if let Some(h) = var("CRUX_HOME") {
+    if let Some(h) = var(crate::names::vars::HOME) {
         return Some(PathBuf::from(h));
     }
     if let Some(k) = own_kernel() {
         return Some(k);
     }
-    config_value_in(&config_file(), "CRUX_HOME").map(PathBuf::from)
+    config_value_in(&config_file(), crate::names::vars::HOME).map(PathBuf::from)
 }
 
 fn own_kernel() -> Option<PathBuf> {
@@ -136,20 +136,20 @@ pub fn default_projects_root() -> PathBuf {
 }
 
 pub fn registry_file() -> PathBuf {
-    var("CRUX_REGISTRY").map(PathBuf::from).unwrap_or_else(|| home().join(".crux/workspaces.json"))
+    var(crate::names::vars::REGISTRY).map(PathBuf::from).unwrap_or_else(|| home().join(".crux/workspaces.json"))
 }
 
 /// Next to the workspace registry: if a test redirects that registry to its
 /// sandbox, the tasks follow without having to remember another variable.
 pub fn tasks_dir() -> PathBuf {
-    if let Some(d) = var("CRUX_TASKS_DIR") {
+    if let Some(d) = var(crate::names::vars::TASKS_DIR) {
         return PathBuf::from(d);
     }
     registry_file().parent().unwrap_or(Path::new("/")).join("tasks")
 }
 
 pub fn state_dir() -> PathBuf {
-    var("CRUX_STATE_DIR").map(PathBuf::from).unwrap_or_else(|| home().join(".crux/state"))
+    var(crate::names::vars::STATE_DIR).map(PathBuf::from).unwrap_or_else(|| home().join(".crux/state"))
 }
 
 pub fn claude_config_dir() -> PathBuf {
@@ -194,11 +194,11 @@ pub fn hostname() -> String {
 }
 
 pub fn dry_run() -> bool {
-    var("CRUX_DRY_RUN").as_deref() == Some("1")
+    var(crate::names::vars::DRY_RUN).as_deref() == Some("1")
 }
 
 pub fn in_tests() -> bool {
-    var("CRUX_IN_TESTS").as_deref() == Some("1")
+    var(crate::names::vars::IN_TESTS).as_deref() == Some("1")
 }
 
 #[cfg(test)]
