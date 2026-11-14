@@ -265,6 +265,11 @@ fn departure(ctx: &Ctx) -> Res {
         ));
         stuck += 1;
     }
+    match super::usage::publish_this_machine(true) {
+        Ok(true) => ui::ok("skill usage: this machine's sessions reached the profile repo"),
+        Ok(false) => {}
+        Err(e) => ui::warn(format!("skill usage did not reach the profile repo: {}", e.trim())),
+    }
     println!();
     if warnings > 0 {
         ui::info(format!(
@@ -928,6 +933,9 @@ fn rest(ctx: &Ctx, state: &Path) -> Res {
             die!("cannot write {}: {e}", file.display());
         }
     }
+    // After the report, which the next session reads. Statistics: a round
+    // that cannot publish them leaves the mark untouched, so the next tries.
+    let _ = super::usage::publish_this_machine(false);
     Ok(())
 }
 

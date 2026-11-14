@@ -2,8 +2,9 @@
 //! configured (credentials, hooks, insteadOf), and a library would bypass it.
 
 use crate::sh::{self, Run};
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub fn cmd(dir: &Path) -> Command {
     let mut c = Command::new("git");
@@ -96,4 +97,72 @@ pub fn remote_url(dir: &Path, remote: &str) -> Option<String> {
 
 pub fn head_sha(dir: &Path) -> Option<String> {
     out(dir, &["rev-parse", "HEAD"])
+}
+
+/// git for what runs with no one at the terminal: published in the
+/// background, fed on stdin, and never left waiting for a prompt.
+pub struct Batch<'a> {
+    repo: &'a Path,
+    env: Vec<(String, String)>,
+}
+
+impl<'a> Batch<'a> {
+    pub fn new(repo: &'a Path) -> Self {
+        Batch { repo, env: vec![] }
+    }
+    pub fn with(repo: &'a Path, env: &[(&str, &str)]) -> Self {
+        Batch { repo, env: env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect() }
+    }
+    /// Commits crux writes on its own are signed by it, not by the person.
+    pub fn as_crux(repo: &'a Path, env: &[(&str, &str)]) -> Self {
+        let mut b = Self::with(
+            repo,
+            &[
+                ("GIT_AUTHOR_NAME", "crux"),
+                ("GIT_AUTHOR_EMAIL", "crux@localhost"),
+                ("GIT_COMMITTER_NAME", "crux"),
+                ("GIT_COMMITTER_EMAIL", "crux@localhost"),
+            ],
+        );
+        b.env.extend(env.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        b
+    }
+    fn command(&self, args: &[&str]) -> Command {
+        let mut c = Command::new("git");
+        c.arg("-C").arg(self.repo).args(args);
+        c.env("LC_ALL", "C").env("GIT_TERMINAL_PROMPT", "0");
+        // With no terminal to answer, an ssh prompt would hang the publication.
+        let ssh = std::env::var("GIT_SSH_COMMAND").unwrap_or_else(|_| "ssh".into());
+        c.env("GIT_SSH_COMMAND", format!("{ssh} -o BatchMode=yes"));
+        for (k, v) in &self.env {
+            c.env(k, v);
+        }
+        c
+    }
+    /// stdout on success; stderr as the error.
+    pub fn run(&self, args: &[&str], input: Option<&str>) -> Result<String, String> {
+        let mut c = self.command(args);
+        c.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        });
+        let mut child = c.spawn().map_err(|e| e.to_string())?;
+        if let Some(i) = input {
+            let mut stdin = child.stdin.take().unwrap();
+            let data = i.to_string();
+            std::thread::spawn(move || {
+                let _ = stdin.write_all(data.as_bytes());
+            });
+        }
+        let out = child.wait_with_output().map_err(|e| e.to_string())?;
+        if out.status.success() {
+            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).into_owned())
+        }
+    }
+    pub fn get(&self, args: &[&str]) -> Option<String> {
+        self.run(args, None).ok().map(|s| s.trim().to_string())
+    }
 }

@@ -17,6 +17,10 @@ pub const SKILL: &str = "SKILL.md";
 pub const CLAUDE_SKILLS: &str = ".claude/skills";
 /// Where a docs repo keeps its project's skills.
 pub const PROJECT_SKILLS: &str = ".claude/skills/project";
+/// The file of the usage log, one line per session.
+pub const USAGE_LOG: &str = "usage.jsonl";
+/// When this machine last published its usage, in the state directory.
+pub const USAGE_PUBLISHED: &str = "usage-published";
 /// What marks a directory as a kernel, with VERSION.
 pub const STANDARD: &str = "STANDARD.md";
 pub const VERSION: &str = "VERSION";
@@ -34,6 +38,11 @@ pub mod git {
     pub const WIP_ON_REMOTE: &str = "refs/crux/wip/";
     pub const WIP_HERE: &str = "refs/crux/wip-here/";
     pub const WIP_FETCHED: &str = "refs/crux/wip-fetched/";
+
+    /// Which skills each session used, per machine, in the person's profile
+    /// repo (ADR-024). Each machine writes only its own.
+    pub const USAGE_ON_REMOTE: &str = "refs/crux/usage/";
+    pub const USAGE_FETCHED: &str = "refs/crux/usage-fetched/";
 
     /// The branch tasks travel on, in each docs repo (ADR-016).
     pub const TASKS_BRANCH: &str = "crux/tasks";
@@ -76,6 +85,10 @@ pub mod git {
 
     pub fn wip_on_remote(machine: &str, branch: &str) -> String {
         format!("{WIP_ON_REMOTE}{machine}/{branch}")
+    }
+
+    pub fn usage_on_remote(machine: &str) -> String {
+        format!("{USAGE_ON_REMOTE}{machine}")
     }
 
     pub fn wip_here(branch: &str) -> String {

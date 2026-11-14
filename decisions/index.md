@@ -939,3 +939,50 @@
 - **Reversibility**: low cost: going back to the global link is one call in
   `link`; the per-repo links are removed with the excluded folder.
 - **Related**: `ADR-009`, `ADR-014`
+
+---
+
+### ADR-024: A machine is a cache; what matters lives on a remote
+
+- **Date**: 2026-11-14
+- **Status**: Accepted
+- **Context**: knowledge, tasks, commits and uncommitted work already leave
+  each machine through git (ADR-016, ADR-018, ADR-020, ADR-022), but nothing
+  said which pieces must. Skill usage did not: `crux usage` read only the
+  transcripts of the machine it ran on, and the agent deletes those after 30
+  days by default (`cleanupPeriodDays`). On a machine set up the day before it
+  reported 2 sessions in 90 days. The day the agent runs on a server and the
+  laptop is only where the person types, everything kept on one machine is lost
+  or invisible.
+- **Decision**:
+  - Every piece belongs to a class, and the class decides how it travels:
+    knowledge (docs, decisions, the profile) and work in progress (tasks,
+    commits, uncommitted work) travel through git; the trace of use travels
+    as below; the machine's own state (slots, ports, markers, the installed
+    kernel) does not, and each machine rebuilds it; secrets never go to git.
+  - Skill usage: each machine keeps one line per session —its id, day,
+    machine, project and the skills it called or followed— in `usage.jsonl`,
+    committed to `refs/crux/usage/<machine>` in the profile repo and pushed
+    there. Each machine writes only its own ref, so there is nothing to merge;
+    the report fetches every machine's and joins them by session.
+  - What travels carries no words of the session. A session in a project with
+    `code.foreign` travels as project `client`, and every skill it used that is
+    not the kernel's as `client-skill`: a project's own skill names the client
+    as well as its name would. A fingerprint of the name was discarded: a list
+    of company names reverses it. The words the report uses to say how a skill
+    was asked for stay on the machine that read them.
+  - Lines accumulate, so a session the agent has deleted stays counted.
+  - The log builds on what the remote holds and is never force-pushed: a
+    machine reinstalled under the same name clones the profile without the
+    hidden refs, and a forced push from it would erase its history. What a
+    push without network left only here is sent the next time.
+  - The arrival round publishes at most once a day, `sync --leave` always, and
+    `crux usage` before reading. `--here` keeps to this machine.
+- **Consequences**: a year of one machine at 20 sessions a day, simulated,
+  is a 1.2 MB file and 2.9 MB of packed history. The refs are outside
+  `refs/heads`, so cloning or syncing the profile does not download them and no
+  workflow runs for them. A session opened outside every project counts with
+  no project.
+- **Reversibility**: low cost: the refs are read by nothing else and are
+  deleted with one push; `--here` gives the old report.
+- **Related**: `ADR-006`, `ADR-018`, `ADR-020`, `ADR-022`
