@@ -162,3 +162,23 @@ test_publish_forgetting_a_branch_keeps_one_whose_name_ends_like_it() {
     git -C "$SB/remotes/app.git" rev-parse -q --verify refs/crux/branches/here/ws/pub
   assert_exit 0 "and here" git -C "$app" rev-parse -q --verify refs/crux/published/ws/pub
 }
+
+test_publish_a_clients_repo_receives_no_hidden_ref() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project client-repo)"
+  git init -q --bare -b main "$SB/remotes/app.git"
+  git -C "$root/app" remote add origin "$SB/remotes/app.git"
+  git -C "$root/app" push -q origin HEAD:main
+  "$CRUX_HOME/bin/crux" workspace new theirs --repo "$root/app" >/dev/null 2>&1
+  local ws="$root/app-ws-theirs"
+  _commit_in "$ws" "work for the client"
+  ( cd "$ws" && CRUX_TASK_SYNC=1 CRUX_MACHINE=here "$CRUX_HOME/bin/crux" hook post-commit )
+  echo "halfway" >> "$ws/f.txt"
+  printf '{"cwd":"%s"}' "$ws" | CRUX_TASK_SYNC=1 CRUX_MACHINE=here "$CRUX_HOME/bin/crux" hook wip-save
+
+  sleep 1
+  assert_eq "" "$(git -C "$SB/remotes/app.git" for-each-ref refs/crux)" \
+    "neither the commit nor the uncommitted work leaves our tooling's name in the client's remote"
+  local out; out="$(cd "$CRUX_PROJECTS_DIR" && CRUX_TASK_SYNC=1 "$CRUX_HOME/bin/crux" sync --leave 2>&1)"
+  assert_contains "$out" "error proj/app-ws-theirs: 1 uncommitted file" "and leaving says the work stays here"
+}
