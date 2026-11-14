@@ -940,6 +940,8 @@
   `link`; the per-repo links are removed with the excluded folder.
 - **Related**: `ADR-009`, `ADR-014`
 
+---
+
 ### ADR-024: A machine is a cache; what matters lives on a remote
 
 - **Date**: 2026-11-14
