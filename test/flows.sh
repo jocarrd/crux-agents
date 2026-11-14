@@ -126,12 +126,15 @@ truthy '[[ ! -f "$HOME/.crux/tasks/demo/checkout.md" ]]' "the task is archived"
 truthy 'grep -q "One step, no cart" "$D/repos/api/notes.md"' "and its decision reached the docs repo"
 
 step "leaving the machine"
-out="$(cd "$P" && crux sync --leave 2>&1)"; rc=$?
-truthy '[[ $rc -ne 0 && "$out" == *"demo-docs"* ]]' "the decisions not yet pushed keep it from being left"
-git -C "$D" push -q
+for _ in $(seq 40); do
+  git -C "$HOME/remotes/demo-docs.git" log main --format=%s 2>/dev/null | grep -q "decisions from task" && break
+  sleep 0.25
+done
+truthy 'git -C "$HOME/remotes/demo-docs.git" log main --format=%s | grep -q "decisions from task"' \
+  "archiving published the decisions with no push by hand"
 git -C "$A" pull -q --ff-only 2>/dev/null
 out="$(cd "$P" && crux sync --leave 2>&1)"; rc=$?
-truthy '[[ $rc -eq 0 ]]' "pushed, it can be left"
+truthy '[[ $rc -eq 0 ]]' "so nothing keeps it from being left"
 
 # --- 2. A client's repo -----------------------------------------------------
 step "a client's project: nothing of ours in their repo"
