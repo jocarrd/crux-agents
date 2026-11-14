@@ -219,7 +219,35 @@ CLEAN_KERNEL_HOOKS="$(kernel_hooks)"
 # and from the repo that meant a case writing a red gate receipt into the
 # developer's own worktree.
 STRAY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-cwd.XXXXXX")"
-trap 'rm -rf "$STRAY_DIR"' EXIT
+trap 'rm -rf "$STRAY_DIR" "$STRAY_DIR.timed-out"' EXIT
+
+# A case that hung stopped the whole suite in silence, once for half an hour.
+# Past CRUX_CASE_LIMIT seconds a watchdog stops the case's processes, and the
+# case fails by its name. A case takes seconds; the limit only bounds a hang.
+CASE_LIMIT="${CRUX_CASE_LIMIT:-300}"
+SUITE_PID=$$
+TIMED_OUT="$STRAY_DIR.timed-out"
+# The whole tree, not only the children: what a case runs inside $(...) is a
+# grandchild, and the suite waits for it to close its output.
+stop_tree() {
+  local child
+  for child in $(pgrep -P "$1"); do
+    [[ "$child" == "$2" ]] && continue
+    stop_tree "$child" "$2"
+    kill -TERM "$child" 2>/dev/null
+  done
+}
+watch_case() {
+  (
+    trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+    sleep "$CASE_LIMIT" & nap=$!
+    wait "$nap" || exit 0
+    : > "$TIMED_OUT"
+    # macOS ships bash 3.2, which has no BASHPID: a child shell reports its parent.
+    stop_tree "$SUITE_PID" "$(exec sh -c 'echo "$PPID"')"
+  ) &
+  WATCHDOG=$!
+}
 
 for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   [[ -n "$PATTERN" && "$fn" != *"$PATTERN"* ]] && continue
@@ -231,7 +259,14 @@ for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   echo "${T_DIM}· ${CURRENT//_/ }${T_OFF}"
   before=$FAIL
   cd "$STRAY_DIR" || exit 1
+  rm -f "$TIMED_OUT"
+  watch_case
   "$fn"
+  kill "$WATCHDOG" 2>/dev/null; wait "$WATCHDOG" 2>/dev/null
+  if [[ -e "$TIMED_OUT" ]]; then
+    _fail "the case did not end in ${CASE_LIMIT}s: its processes were stopped"
+    rm -f "$TIMED_OUT"
+  fi
   # A case that loads a strict script would leave 'set -e' on and kill the
   # suite at the first negative assertion, without saying why.
   set +e; set -uo pipefail
