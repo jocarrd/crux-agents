@@ -37,10 +37,13 @@ bad()   { FAILURES=$((FAILURES + 1)); echo "   ${R}fail${O} $*"; }
 truthy(){ if eval "$1"; then good "$2"; else bad "$2"; fi; }
 
 # What publishes in the background may still be writing into the sandbox.
+# It is looked for by both spellings of the path: on macOS the temporary
+# folder sits behind a symlink, and those processes run with the resolved one.
 settle() {
-  local _
+  local _ real
+  real="$(cd "$SB" 2>/dev/null && pwd -P)"
   for _ in $(seq 40); do
-    pgrep -f -- "$SB" >/dev/null || return 0
+    pgrep -f -- "$SB" >/dev/null || pgrep -f -- "${real:-$SB}" >/dev/null || return 0
     sleep 0.25
   done
 }
