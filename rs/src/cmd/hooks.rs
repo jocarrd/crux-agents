@@ -201,6 +201,9 @@ pub fn hooks_out_of_date(docs: &Path, repo: Option<&str>, dir: &Path) -> bool {
         let main = hooks.join(n);
         crux_hook_at(&main) && files::read_or_empty(&main) != DISPATCHER
     });
+    let missing_one = repo.is_some()
+        && hooks.join(format!("{COMMIT_MSG}.crux")).exists()
+        && !hooks.join(format!("{POST_COMMIT}.crux")).exists();
     let declared = repo.map(|r| project_hooks(docs, r)).unwrap_or_default();
     let stale_project = declared
         .iter()
@@ -208,7 +211,7 @@ pub fn hooks_out_of_date(docs: &Path, repo: Option<&str>, dir: &Path) -> bool {
         || GIT_HOOK_NAMES
             .iter()
             .any(|n| hooks.join(format!("{n}.project")).exists() && !declared.iter().any(|(d, _)| d == n));
-    stale_dispatcher || stale_project
+    stale_dispatcher || stale_project || missing_one
 }
 
 pub fn take_hook(hooks: &Path, name: &str) -> bool {

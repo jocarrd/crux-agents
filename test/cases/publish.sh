@@ -112,3 +112,17 @@ test_publish_closing_a_merged_workspace_deletes_its_hidden_refs() {
     git -C "$SB/remotes/app.git" rev-parse -q --verify refs/crux/branches/here/ws/gone
   assert_exit 1 "nor this machine its copy" git -C "$root/app" rev-parse -q --verify refs/crux/published/ws/gone
 }
+
+test_publish_arrival_installs_the_post_commit_a_repo_lacks() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omicron --repos "api")"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  git init -q "$api"
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  assert_file "$api/.git/hooks/post-commit.crux" "hooks install puts the post-commit in the code repo"
+  rm "$api/.git/hooks/post-commit.crux"
+
+  local out; out="$(cd "$CRUX_PROJECTS_DIR" && "$CRUX_HOME/bin/crux" sync 2>&1)"
+  assert_contains "$out" "git hooks brought up to date" "arriving notices a repo hooked by an older crux"
+  assert_file "$api/.git/hooks/post-commit.crux" "and puts the missing hook back with nobody asking"
+}
