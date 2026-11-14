@@ -841,6 +841,12 @@ local metric sees that, and it is worth remembering before drawing conclusions.
 It distinguishes **having no data** from **having no use**, which is the easy
 way to lie with this metric.
 
+It counts **every machine**, not only the one it runs on. Each machine adds one
+line per session to a log of its own in the profile repo —day, project and
+skills, never the words of the session— and the report joins them (ADR-024).
+The lines accumulate, so the month after which the agent deletes its
+transcripts no longer empties the statistics. `--here` keeps to this machine.
+
 ### What to do when something fails
 
 | Symptom | Probable cause | Fix |
