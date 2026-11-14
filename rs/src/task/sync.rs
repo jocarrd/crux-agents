@@ -290,17 +290,6 @@ fn conflict_copy(local: &Path, who: &str) -> PathBuf {
     PathBuf::from(format!("{stem}.conflict-{who}.md"))
 }
 
-fn machine() -> String {
-    let h = env::hostname();
-    let short = h.split('.').next().unwrap_or("");
-    let clean: String = short.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
-    if clean.is_empty() {
-        "machine".into()
-    } else {
-        clean
-    }
-}
-
 struct Merged {
     commit: Option<String>,
     fin: BTreeMap<String, String>,
@@ -364,7 +353,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
         // that was archived and the remote one a new task with the same name.
         if l.is_some() && is_removed(&removed, &path, &files::read_if_exists(&local)?) {
             if b.is_some() && l != b {
-                let aside = conflict_copy(&local, &machine());
+                let aside = conflict_copy(&local, &env::machine());
                 write_local(&aside, &files::read_if_exists(&local)?)?;
                 warnings
                     .push(format!("{p}/{path}: it was archived on another machine and had changes here — saved aside"));
@@ -421,7 +410,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
                     let remote_text = blob(repo, rs);
                     let remote_wins = updated(&remote_text) > updated(&local_text) && still(&path, Some(ls));
                     let loser = if remote_wins { &local_text } else { &remote_text };
-                    let suffix = if remote_wins { machine() } else { "remote".into() };
+                    let suffix = if remote_wins { env::machine() } else { "remote".into() };
                     let aside = conflict_copy(&local, &suffix);
                     write_local(&aside, loser)?;
                     if remote_wins {
@@ -472,7 +461,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
         };
         let mut commit = None;
         if Some(&tree) != current_tree.as_ref() && !entries.is_empty() {
-            let msg = format!("[skip ci] tasks: {}", machine());
+            let msg = format!("[skip ci] tasks: {}", env::machine());
             let mut args = vec!["commit-tree", "--no-gpg-sign", tree.as_str()];
             if let Some(h) = &head {
                 args.push("-p");

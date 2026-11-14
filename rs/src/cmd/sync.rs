@@ -158,7 +158,9 @@ fn departure(ctx: &Ctx) -> Res {
             let (b, up) = line.split_once('\t').unwrap_or((line, ""));
             if up.is_empty() {
                 // Untracked: only safe if some remote already contains it.
-                if git::out(repo, &["branch", "-r", "--contains", b]).unwrap_or_default().is_empty() {
+                if git::out(repo, &["branch", "-r", "--contains", b]).unwrap_or_default().is_empty()
+                    && !crate::publish::is_published(repo, b)
+                {
                     ui::err(format!("{name}: branch {b} is in no remote"));
                     stuck += 1;
                 }
@@ -170,7 +172,7 @@ fn departure(ctx: &Ctx) -> Res {
                 let ahead: usize = git::out(repo, &["rev-list", "--count", &format!("{up}..{b}")])
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
-                if ahead > 0 {
+                if ahead > 0 && !crate::publish::is_published(repo, b) {
                     ui::err(format!("{name}: {b} has {} not pushed", ui::count(ahead, "commit", "commits")));
                     stuck += 1;
                 }

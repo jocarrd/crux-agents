@@ -238,6 +238,7 @@ A rule written in a file is advice. These are installed by
 | Destructive guard | Stops `git reset --hard`, `push --force`, `clean -fd`, discarding the tree, `rm -r` on `/`, `~`, `.` or `*`, `pkill`/`killall`, and reading private keys. A person who really wants it runs it themselves |
 | `pre-push` | Pushing to the main branch of a code repo without a proposal |
 | `commit-msg` | Commit messages outside the project's language, and tool signatures in them |
+| `post-commit` | A workspace's commits staying on one machine: each one is published in the background to a hidden ref of that machine (`refs/crux/branches/<machine>/<branch>`), not a branch, so `crux workspace resume` brings it on the other without a push |
 | Proposal guard | Opening a proposal by hand, skipping the receipt `finish` demands |
 | Wait guard | Running a long suite, a build or a CI watch in the foreground while other work waits |
 | Worktree guard | Deleting a registered space by hand and leaving the registry lying |
@@ -368,6 +369,7 @@ In `~/.crux/config`. They belong to the machine, not to the project:
 | `CRUX_PROJECTS_DIR` | the parent of the kernel clone | Where projects live |
 | `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Closes the space on merge |
 | `CRUX_RM_DELETE_BRANCH` | `false` | On close, also deletes a branch already in the main one with no merged proposal behind it. A branch whose proposal was merged, squash included, is always deleted if it holds nothing beyond what was merged |
+| `CRUX_MACHINE` | the short hostname | This machine's name in what it publishes; set it when two machines share a hostname |
 | `CRUX_UNMANAGED` | — | Paths under the root that are not yours, separated by `:` |
 | `CRUX_TASKS_IDLE_HOURS` | `3` | After this long idle, a session catches up as if it had just opened |
 | `CRUX_TASKS_RETENTION_DAYS` | `180` | How long archived tasks are kept |

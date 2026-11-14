@@ -25,3 +25,10 @@ and on the remote, when its proposal was merged —squash included— and the
 branch holds nothing beyond what was merged. A commit made after the merge
 keeps it. The task stops naming the closed workspace, and a deleted branch is
 kept as retired so that resuming the task opens a new one.
+
+A workspace's commits leave the machine as they are made: the post-commit
+hook publishes the branch in the background to refs/crux/branches/<machine>/
+on the remote, which no list of branches shows and no workflow reacts to.
+resume brings the most advanced of what the machines published; if the
+copies diverged it says so and chooses none. CRUX_MACHINE names the machine
+when two share a hostname.

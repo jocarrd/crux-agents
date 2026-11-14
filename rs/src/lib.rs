@@ -38,6 +38,7 @@ pub mod names;
 pub mod person;
 pub mod policy;
 pub mod project;
+pub mod publish;
 pub mod registry;
 pub mod script_api;
 pub mod secrets;
