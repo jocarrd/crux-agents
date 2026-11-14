@@ -106,8 +106,8 @@ pub fn unreadable_tasks() -> Vec<std::path::PathBuf> {
 // expressly not to push them.
 
 fn project_of(cwd: &Path) -> Option<String> {
-    let root = crate::project::normalize(&env::projects_root());
-    let cwd = crate::project::normalize(cwd);
+    let root = crate::project::real(&env::projects_root());
+    let cwd = crate::project::real(cwd);
     let rel = cwd.strip_prefix(&root).ok()?;
     let first = rel.components().next()?.as_os_str().to_string_lossy().into_owned();
     Some(crate::regex!(r"-ws-.*$").replace(&first, "").into_owned())

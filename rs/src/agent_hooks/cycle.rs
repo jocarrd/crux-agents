@@ -33,7 +33,7 @@ pub(super) fn cycle_guard() -> Res {
         root = Path::new(&kernel).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
     }
     // A trailing slash would leave the pattern unmatched and the guard silent.
-    let root = root.trim_end_matches('/').to_string();
+    let root = crate::project::real(Path::new(root.trim_end_matches('/'))).to_string_lossy().into_owned();
     let Some(top) = git::toplevel(&here) else { return Ok(()) };
     let top_s = top.to_string_lossy().into_owned();
     // In the docs repo you work on main and push directly.

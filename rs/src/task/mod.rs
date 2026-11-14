@@ -377,9 +377,9 @@ fn publish_docs(docs: &Path) -> bool {
 /// The project from the layout: <root>/<project>/<repo>. A repo that hangs
 /// directly from the root —the kernel itself— is its own project.
 pub fn project_name_for(path: &Path) -> String {
-    let root = crate::env::projects_root();
+    let root = crate::project::real(&crate::env::projects_root());
     let strip_ws = |s: &str| s.split("-ws-").next().unwrap_or(s).to_string();
-    match path.strip_prefix(&root) {
+    match crate::project::real(path).strip_prefix(&root) {
         Ok(rel) => {
             let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
             match parts.len() {

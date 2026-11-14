@@ -1017,3 +1017,14 @@ test_an_own_repo_with_local_pointers_is_not_treated_as_a_clients() {
   out="$("$CRUX_HOME/bin/crux" workspace new theirs --repo "$cli/vendor" 2>&1)"
   assert_contains "$out" "client's repo" "a client's repo still gets the warning"
 }
+
+test_a_workspace_reached_through_a_symlink_belongs_to_its_project() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  # git answers with the resolved path and the projects root kept the one it
+  # was given: behind a symlink, as macOS's temporary folder is, the repo was
+  # taken for the project and its task never reached the docs repo.
+  ln -s "$CRUX_PROJECTS_DIR" "$SB/link"
+  ( cd "$SB/link/proj/app" && CRUX_PROJECTS_DIR="$SB/link" "$CRUX_HOME/bin/crux" workspace new linked >/dev/null 2>&1 )
+  assert_file "$SB/tasks/proj/linked.md" "the task belongs to the project, not to the repo"
+}
