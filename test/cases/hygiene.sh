@@ -445,6 +445,7 @@ test_the_wait_guard_sends_long_commands_to_the_background() {
   assert_eq "2" "$(_wait_guard "npx eas-cli build --platform android")" "a waited cloud build"
   assert_eq "2" "$(_wait_guard "bash test/run.sh | tail -3")" "the suite run through bash, its output piped"
   assert_eq "2" "$(_wait_guard "env HOME=/tmp/h bash ~/crux/test/run.sh")" "the suite behind env"
+  assert_eq "2" "$(_wait_guard "/bin/bash test/run.sh")" "the suite through a shell named by its path"
   assert_eq "2" "$(_wait_guard "./test/e2e.sh")" "the end-to-end battery"
   assert_eq "2" "$(_wait_guard "cd crux && bash test/e2e.sh > out.txt 2>&1")" "the battery through bash, redirected"
 }

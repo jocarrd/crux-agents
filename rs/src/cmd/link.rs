@@ -154,22 +154,20 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    /// The declared repos that are on disk; the rest are named, not skipped in silence.
-    fn present_repos(&self, repos: &[String]) -> Vec<(String, PathBuf)> {
-        let mut out = vec![];
-        for repo in repos.iter().filter(|r| !r.is_empty()) {
-            if !project::valid_name(repo) {
-                ui::warn(format!("invalid repo name in the contract: {repo}"));
-                continue;
-            }
-            let dir = self.root.join(repo);
-            if !dir.is_dir() {
-                ui::warn(format!("declared in crux.json but not on disk: {repo}"));
-                continue;
-            }
-            out.push((repo.clone(), dir));
+    /// A declared repo's folder if it is on disk; otherwise it is named, not
+    /// skipped in silence. Asked repo by repo, so each warning comes out next
+    /// to the work on the repos around it.
+    fn present(&self, repo: &str) -> Option<PathBuf> {
+        if !project::valid_name(repo) {
+            ui::warn(format!("invalid repo name in the contract: {repo}"));
+            return None;
         }
-        out
+        let dir = self.root.join(repo);
+        if !dir.is_dir() {
+            ui::warn(format!("declared in crux.json but not on disk: {repo}"));
+            return None;
+        }
+        Some(dir)
     }
 
     fn template(&self, file: &str) -> PathBuf {
@@ -183,10 +181,11 @@ impl Ctx<'_> {
     /// AGENTS.md and CLAUDE.md in each code repo, as a block crux owns inside
     /// files that are otherwise the repo's.
     fn versioned_pointers(&self, repos: &[String], refresh: bool) -> Res {
-        let (mut created, mut updated) = (0, 0);
+        let (mut created, mut updated, mut seen) = (0, 0, 0);
         let mut without_markers: Vec<(String, String)> = vec![];
-        let present = self.present_repos(repos);
-        for (repo, dir) in &present {
+        for repo in repos.iter().filter(|r| !r.is_empty()) {
+            let Some(dir) = self.present(repo) else { continue };
+            seen += 1;
             let tagline = tagline_of(self.docs, repo, self.project_name);
             for file in [names::AGENTS, names::CLAUDE] {
                 let vars = self.render_vars(repo, &tagline);
@@ -220,10 +219,10 @@ impl Ctx<'_> {
                 ui::info("'crux link --refresh' rewrites them keeping their content below");
             }
         }
-        if present.is_empty() {
+        if seen == 0 {
             ui::info("no code repo on disk yet");
         } else if created + updated == 0 && without_markers.is_empty() {
-            ui::ok(format!("pointers up to date ({})", ui::count(present.len(), "repo", "repos")));
+            ui::ok(format!("pointers up to date ({})", ui::count(seen, "repo", "repos")));
         }
         Ok(())
     }
@@ -254,7 +253,8 @@ impl Ctx<'_> {
     /// versioned in the code repos.
     fn local_pointers(&self, repos: &[String]) {
         let docs_name = self.docs_name;
-        for (repo, dir) in self.present_repos(repos) {
+        for repo in repos.iter().filter(|r| !r.is_empty()) {
+            let Some(dir) = self.present(repo) else { continue };
             match template::write_local_pointer(&dir, docs_name) {
                 Ok(LocalPointer::Written) => {
                     ui::ok(format!("{repo}/{LOCAL_POINTER} points to {docs_name} (excluded from git)"))

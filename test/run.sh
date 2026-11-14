@@ -219,7 +219,7 @@ CLEAN_KERNEL_HOOKS="$(kernel_hooks)"
 # and from the repo that meant a case writing a red gate receipt into the
 # developer's own worktree.
 STRAY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-cwd.XXXXXX")"
-trap 'rm -rf "$STRAY_DIR" "$STRAY_DIR.timed-out" "$STRAY_DIR.watchdog"' EXIT
+trap 'kill "${WATCHDOG:-}" 2>/dev/null; rm -rf "$STRAY_DIR" "$STRAY_DIR.timed-out" "$STRAY_DIR.watchdog"' EXIT
 
 # A case that hung stopped the whole suite in silence, once for half an hour.
 # Past CRUX_CASE_LIMIT seconds a watchdog stops the case's processes, and the
@@ -246,7 +246,11 @@ watch_case() {
       trap 'kill "$nap" 2>/dev/null; exit 0' TERM
       sleep "$CASE_LIMIT" & nap=$!
       wait "$nap" || exit 0
+      # A suite interrupted meanwhile is gone, and its pid may be someone else's.
+      kill -0 "$SUITE_PID" 2>/dev/null || exit 0
       : > "$TIMED_OUT"
+      # Once: what the case runs is stopped, not a builtin of the suite's own
+      # shell, so a case hung in a read of its own still hangs the suite.
       stop_tree "$SUITE_PID"
     ) &
     echo $! > "$WATCHDOG_PID"

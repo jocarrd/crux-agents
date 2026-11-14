@@ -1672,13 +1672,12 @@ test_the_kernel_does_not_use_bash_4() {
            "$CRUX_HOME/install.sh" "$CRUX_HOME"/test/*.sh "$CRUX_HOME"/adapters/*/*.sh \
            "$CRUX_HOME"/adapters/*/hooks/*.sh "$CRUX_HOME"/skills/*/scripts/*.sh "$CRUX_HOME"/test/cases/*.sh; do
     [[ -f "$f" ]] || continue
-    # This file holds the pattern itself.
-    [[ "$(basename "$f")" == "$(basename "${BASH_SOURCE[0]}")" ]] && continue
     # Not anchored to the start of the line: bash 4's lowercase expansion
     # appears inside a pipeline or a [[ ]], and with the anchor the two there
     # were went unnoticed. Comments are stripped before looking, because this
     # very note names them.
-    sed 's/#.*$//' "$f" |
+    # The line that holds this very pattern is left out, not its whole file.
+    sed 's/#.*$//' "$f" | grep -vF '(mapfile|readarray|coproc)' |
       grep -qE '(^|[^[:alnum:]_])(mapfile|readarray|coproc)[[:space:]]|(declare|local) -A|wait -n|\$\{?(BASHPID|EPOCHSECONDS|EPOCHREALTIME)|\$\{[A-Za-z_][A-Za-z_0-9]*(,,|\^\^)\}' \
       && uses+=" $(basename "$f")"
   done
