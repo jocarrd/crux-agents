@@ -1435,7 +1435,8 @@ test_workspaces_created_at_once_all_stay_in_the_registry() {
     if [[ -n "$(json_value "$CRUX_REGISTRY" "workspaces.at-once-$i")" ]]; then
       kept=$((kept + 1))
     else
-      # Seen once in CI and never here: what the lost one said is the lead.
+      # Seen in CI only: git, adding a worktree, read another one's half
+      # written commondir. What the lost one said is kept for the next time.
       lost+=" [at-once-$i: $(tr '\n' ' ' < "$SB/at-once-$i.err")]"
     fi
   done

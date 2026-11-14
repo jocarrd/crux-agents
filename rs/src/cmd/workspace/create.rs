@@ -256,6 +256,14 @@ fn created(name: &str) {
 /// working for hours on the wrong base. Without one, an existing branch is
 /// checked out, or a new one is created from HEAD.
 fn add_worktree(repo: &Path, path: &Path, branch: &str, base: &str) -> Res {
+    // git reads every worktree's metadata when it adds one, and another being
+    // added at that moment is half written: "failed to read .../commondir".
+    // Only this call is serialized; installing afterwards takes minutes.
+    let common = git::common_dir(repo).unwrap_or_else(|| repo.join(".git"));
+    let _lock = match record::lock(&common.join("crux").join("worktree-add")) {
+        Ok(l) => l,
+        Err(e) => die!("{e}"),
+    };
     let path = path.to_string_lossy();
     if !base.is_empty() {
         if !git::has_ref(repo, &names::git::head(base)) && !git::has_ref(repo, &names::git::remote_branch(base)) {
