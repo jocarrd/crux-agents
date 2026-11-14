@@ -56,4 +56,9 @@ pub mod vars {
     pub const RM_DELETE_BRANCH: &str = "CRUX_RM_DELETE_BRANCH";
     /// This machine's name in what it publishes, when two share a hostname.
     pub const MACHINE: &str = "CRUX_MACHINE";
+    /// `0` runs the whole session-start sync before the session opens; `1`
+    /// leaves all but the session's project for afterwards, even in the suite.
+    pub const SYNC_BACKGROUND: &str = "CRUX_SYNC_BACKGROUND";
+    /// Minutes between two refreshes of the tasks during a session.
+    pub const TASKS_REFRESH_MIN: &str = "CRUX_TASKS_REFRESH_MIN";
 }

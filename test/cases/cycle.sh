@@ -1413,14 +1413,19 @@ test_workspaces_created_at_once_all_stay_in_the_registry() {
   rm -f "$CRUX_REGISTRY"
   local i
   for i in 1 2 3 4 5 6 7 8; do
-    "$CRUX_HOME/bin/crux" workspace new "at-once-$i" --repo "$root/app" >/dev/null 2>&1 &
+    "$CRUX_HOME/bin/crux" workspace new "at-once-$i" --repo "$root/app" >/dev/null 2>"$SB/at-once-$i.err" &
   done
   wait
-  local kept=0
+  local kept=0 lost=""
   for i in 1 2 3 4 5 6 7 8; do
-    [[ -n "$(json_value "$CRUX_REGISTRY" "workspaces.at-once-$i")" ]] && kept=$((kept + 1))
+    if [[ -n "$(json_value "$CRUX_REGISTRY" "workspaces.at-once-$i")" ]]; then
+      kept=$((kept + 1))
+    else
+      # Seen once in CI and never here: what the lost one said is the lead.
+      lost+=" [at-once-$i: $(tr '\n' ' ' < "$SB/at-once-$i.err")]"
+    fi
   done
-  assert_eq "8" "$kept" "eight created at the same time are eight in the registry"
+  assert_eq "8" "$kept" "eight created at the same time are eight in the registry$lost"
 }
 
 test_heal_keeps_a_reservation_whose_creator_is_running() {

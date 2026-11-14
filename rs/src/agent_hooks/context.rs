@@ -56,11 +56,14 @@ pub(super) fn memory_guard() -> Res {
 /// and as the agent is told not to push them.
 fn synced_and_reminder(cwd: &str) -> (String, Option<Value>) {
     let me = std::env::current_exe().unwrap_or_default();
-    let r = crate::sh::capture_cmd(
-        std::process::Command::new(&me).args(["sync", "--hook"]).stdin(std::process::Stdio::null()),
-    );
-    let synced = r.out();
     let dir = if cwd.is_empty() { self::cwd() } else { PathBuf::from(cwd) };
+    let mut sync = std::process::Command::new(&me);
+    sync.args(["sync", "--hook"]).stdin(std::process::Stdio::null());
+    // The session's project is the one synced before it opens.
+    if dir.is_dir() {
+        sync.current_dir(&dir);
+    }
+    let synced = crate::sh::capture_cmd(&mut sync).out();
     (synced, remind::reminder(&dir, 6))
 }
 
@@ -129,6 +132,7 @@ pub(super) fn session_idle() -> Res {
         .is_some_and(|a| a > Duration::from_secs(hours * 3600));
     crate::files::touch_marker(&m, "");
     if !stopped {
+        crate::task::sync::refresh_in_background();
         return Ok(());
     }
     let (synced, reminder) = synced_and_reminder(&field(&event, "cwd"));

@@ -2,8 +2,8 @@ crux sync — work on two machines without either falling behind.
 
   crux sync            on arrival: what is on this machine, up to date, and the kernel
   crux sync --leave    on leaving: fails if something would stay only on this machine
-  crux sync --hook     the same as on arrival, silent except for news;
-                       it is what the session-start hook runs
+  crux sync --hook     the same, silent except for news, and only the session's
+                       project before it opens: the session-start hook
 
 `bootstrap` sets up an empty machine and `clone` brings a project that is
 missing, but neither updates what is already there: on returning to a
@@ -19,7 +19,14 @@ a clean branch that is behind its remote. If there are uncommitted changes
 or the branches have diverged, it says so and touches nothing. It never
 merges or rewrites.
 
-Tasks travel too, in the crux/tasks branch of each docs repo (ADR-016).
+At session start (--hook) only the project the session opens in and the
+profile are brought up to date before it starts; the rest is synced right
+after, in the background, and what it found is shown at the next session
+start (ADR-021). That round also deletes the local branches whose remote is
+gone and whose merged proposal holds all they have.
+
+Tasks travel too, in the crux/tasks branch of each docs repo (ADR-016). During
+a session, a message brings the other machine's tasks every 15 minutes.
 
 The person's profile (ADR-018) is one more repo in the root: it is brought up
 to date like the rest and loaded again into the agents, because Codex keeps a

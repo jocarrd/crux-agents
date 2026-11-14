@@ -521,3 +521,44 @@ test_tasks_a_fetch_older_than_the_last_publication_is_not_adopted() {
     "the older fetch does not bring the task back to how it was"
   teardown
 }
+
+test_tasks_a_sync_with_nothing_new_reads_no_remote_task() {
+  sandbox >/dev/null
+  _tasks_two_machines
+  local t
+  for t in t1 t2 t3 t4 t5; do _new_task A "$t" "do $t"; done
+  replicate A >/dev/null
+  replicate B >/dev/null
+
+  local real; real="$(command -v git)"
+  mkdir -p "$SB/count"
+  printf '#!/bin/sh\necho "$*" >> "%s/git-calls"\nexec "%s" "$@"\n' "$SB" "$real" > "$SB/count/git"
+  chmod +x "$SB/count/git"
+  PATH="$SB/count:$PATH" replicate B >/dev/null
+
+  assert_eq 0 "$(grep -c 'cat-file blob' "$SB/git-calls")" \
+    "with the remote unchanged, no task is read one process at a time"
+  teardown
+}
+
+test_tasks_of_the_other_machine_arrive_during_a_long_session() {
+  sandbox >/dev/null
+  _tasks_two_machines
+  local hook="$CRUX_HOME/adapters/claude/hooks/session-idle.sh"
+  local msg; msg="$(printf '{"session_id":"s3","cwd":"%s"}' "$SB/B/P/alpha")"
+  printf '%s' "$msg" | en B env HOME="$SB" CRUX_TASK_SYNC=1 bash "$hook" >/dev/null
+  _new_task A t1 "do X"
+  replicate A >/dev/null
+
+  printf '%s' "$msg" | en B env HOME="$SB" CRUX_TASK_SYNC=1 CRUX_TASKS_REFRESH_MIN=0 bash "$hook" >/dev/null
+  local _
+  for _ in $(seq 40); do [[ -f "$(task_record B t1)" ]] && break; sleep 0.25; done
+  assert_file "$(task_record B t1)" "a message mid-session brings the task created on the other machine"
+
+  _new_task A t2 "do Y"
+  replicate A >/dev/null
+  printf '%s' "$msg" | en B env HOME="$SB" CRUX_TASK_SYNC=1 bash "$hook" >/dev/null
+  sleep 1
+  assert_no_file "$(task_record B t2)" "but not on every message: once per interval"
+  teardown
+}

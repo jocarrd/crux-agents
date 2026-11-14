@@ -67,16 +67,21 @@ pub fn is_published(repo: &Path, branch: &str) -> bool {
     git::has_ref(repo, &mine) && git::ok(repo, &["merge-base", "--is-ancestor", &refs::head(branch), &mine])
 }
 
+/// Whether `full` is `<prefix><machine>/<branch>` for exactly this branch: by
+/// its ending alone, `fix` would also take what `ws/fix` published.
+fn is_branch_ref(full: &str, prefix: &str, branch: &str) -> bool {
+    full.strip_prefix(prefix).and_then(|r| r.split_once('/')).is_some_and(|(_, b)| b == branch)
+}
+
 /// What every machine published of `branch`, fetched now.
 pub fn fetch_published(repo: &Path, branch: &str) -> Vec<String> {
     let spec = format!("+{}*/{branch}:{}*/{branch}", refs::PUBLISHED_ON_REMOTE, refs::FETCHED);
     git::run(repo, &["fetch", "-q", "--no-write-fetch-head", refs::REMOTE, &spec]);
-    let suffix = format!("/{branch}");
     git::out(repo, &["for-each-ref", "--format=%(refname) %(objectname)", refs::FETCHED])
         .unwrap_or_default()
         .lines()
         .filter_map(|l| l.split_once(' '))
-        .filter(|(name, _)| name.ends_with(&suffix))
+        .filter(|(name, _)| is_branch_ref(name, refs::FETCHED, branch))
         .map(|(_, sha)| sha.to_string())
         .collect()
 }
@@ -97,12 +102,11 @@ pub fn most_advanced(repo: &Path, commits: &[String]) -> Result<Option<String>, 
 
 /// After the merge nothing of `branch` should keep travelling.
 pub fn forget(repo: &Path, branch: &str) {
-    let suffix = format!("/{branch}");
     let remote: Vec<String> = git::out(repo, &["ls-remote", refs::REMOTE, &format!("{}*", refs::PUBLISHED_ON_REMOTE)])
         .unwrap_or_default()
         .lines()
         .filter_map(|l| l.split_once('\t').map(|(_, r)| r.to_string()))
-        .filter(|r| r.ends_with(&suffix))
+        .filter(|r| is_branch_ref(r, refs::PUBLISHED_ON_REMOTE, branch))
         .collect();
     if !remote.is_empty() {
         let mut args: Vec<String> = vec!["push".into(), "-q".into(), "--no-verify".into(), refs::REMOTE.into()];
@@ -110,11 +114,30 @@ pub fn forget(repo: &Path, branch: &str) {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         git::run(repo, &args);
     }
-    for local in git::out(repo, &["for-each-ref", "--format=%(refname)", refs::PUBLISHED_HERE, refs::FETCHED])
+    let here = refs::published_here(branch);
+    if git::has_ref(repo, &here) {
+        git::run(repo, &["update-ref", "-d", &here]);
+    }
+    for fetched in git::out(repo, &["for-each-ref", "--format=%(refname)", refs::FETCHED])
         .unwrap_or_default()
         .lines()
-        .filter(|r| r.ends_with(&suffix))
+        .filter(|r| is_branch_ref(r, refs::FETCHED, branch))
     {
-        git::run(repo, &["update-ref", "-d", local]);
+        git::run(repo, &["update-ref", "-d", fetched]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_branch_ref;
+
+    #[test]
+    fn a_branch_ref_is_matched_by_machine_and_whole_name() {
+        let p = "refs/crux/branches/";
+        assert!(is_branch_ref("refs/crux/branches/desk/ws/fix", p, "ws/fix"));
+        assert!(is_branch_ref("refs/crux/branches/desk/fix", p, "fix"));
+        assert!(!is_branch_ref("refs/crux/branches/desk/ws/fix", p, "fix"));
+        assert!(!is_branch_ref("refs/crux/branches/desk/fix", p, "ws/fix"));
+        assert!(!is_branch_ref("refs/crux/fetched/desk/fix", p, "fix"));
     }
 }
