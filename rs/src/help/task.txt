@@ -1,6 +1,7 @@
 crux task — the record of the task of the workspace you are in.
 
   crux task                        status, steps and next step
+  crux task show <project>/<task>  the same, for a task outside its workspace
   crux task path                   where the record is
   crux task new <project>/<task> [--goal "<text>"]
                                    a task with no workspace yet; if it was archived, reopens it
