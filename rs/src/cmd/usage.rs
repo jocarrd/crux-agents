@@ -85,9 +85,7 @@ fn catalog_scripts(home: &Path) -> Vec<(String, String)> {
 }
 
 /// What a session delegates hangs under <session>/subagents/ and counts as
-/// that session. The session's own file comes first in its group: by name,
-/// the folder `<session>` sorts before `<session>.jsonl`, and whoever reads
-/// the group from the start would take a subagent's opening as the person's.
+/// that session. Files first: by name, `<session>/` sorts before `<session>.jsonl`.
 fn sessions_of(project: &Path) -> BTreeMap<String, Vec<PathBuf>> {
     let mut groups: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     fn visit(dir: &Path, root: Option<&str>, groups: &mut BTreeMap<String, Vec<PathBuf>>) {
@@ -118,9 +116,7 @@ const EMPTY: &str = "esto esta este eso ese aqui alli para porque cuando donde
   would could should about into your just like make made only over such than
   them then were will your";
 
-/// What the person wrote in one line of a transcript. A tool's output also
-/// arrives as a message of type "user", but its content is a list of
-/// `tool_result` blocks: only plain text, or text blocks, are the person's.
+/// A tool's output also arrives as type "user", as `tool_result` blocks: only text is the person's.
 fn said_by_person(line: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(line).ok()?;
     if v.get("type").and_then(|t| t.as_str()) != Some("user") {

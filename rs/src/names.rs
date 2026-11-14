@@ -204,9 +204,7 @@ mod tests {
         assert!(found.is_empty(), "questions to GitHub copied instead of asked through gh.rs:\n{}", found.join("\n"));
     }
 
-    /// The local state directory comes from `env::state_dir`, which the suite
-    /// redirects. Rebuilt from HOME, three commands wrote the suite's marks
-    /// into the ~/.crux of whoever ran it.
+    /// Rebuilt from HOME, the path escaped the suite's redirection into the real ~/.crux.
     #[test]
     fn the_state_directory_is_not_rebuilt_from_home() {
         let found = written_outside(r#""\.crux/state"#, "env.rs");

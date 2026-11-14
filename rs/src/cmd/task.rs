@@ -366,7 +366,6 @@ pub fn run(argv: &[String]) -> Res {
     let arg = |n: usize| args.get(n).cloned().unwrap_or_default();
     match op.as_str() {
         "show" => {
-            // `crux task new p/t` names the task without --task; show takes it the same way.
             let named = if chosen.is_empty() { arg(0) } else { chosen.clone() };
             let f = current_file(&named)?;
             if !f.is_file() {
