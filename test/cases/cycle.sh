@@ -306,6 +306,20 @@ JSON
   assert_contains "$out" "machine-checks.json cannot be read" "a broken file is named, not taken as empty"
 }
 
+test_machine_says_when_the_browser_skill_lacks_its_python_module() {
+  sandbox >/dev/null
+  local fakehome="$SB/home" bin="$SB/bin"
+  mkdir -p "$fakehome/.claude/skills" "$fakehome/.crux" "$bin"
+  echo "CRUX_HOME=\"$CRUX_HOME\"" > "$fakehome/.crux/config"
+  # A python3 that has numpy and Pillow but not websockets: the browser skill
+  # failed with a traceback while the doctor said only docker was missing.
+  printf '#!/usr/bin/env bash\n[[ "$*" == *websockets* ]] && exit 1\nexit 0\n' > "$bin/python3"
+  chmod +x "$bin/python3"
+  local out; out="$(PATH="$bin:$PATH" _machine_in "$fakehome" 2>&1)"
+  assert_contains "$out" "no websockets" "it says the module is missing"
+  assert_contains "$out" "drive-browser" "and which skill cannot work without it"
+}
+
 test_machine_detects_broken_hook() {
   sandbox >/dev/null
   local fakehome="$SB/home"

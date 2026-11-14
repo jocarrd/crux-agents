@@ -155,6 +155,13 @@ pub fn run(_argv: &[String]) -> Res {
         } else {
             t.note("no numpy or Pillow — you will not be able to: compare or measure images");
         }
+        if sh::capture("python3", &["-c", "import websockets"]).ok() {
+            ui::ok("websockets");
+        } else {
+            t.note(
+                "no websockets — you will not be able to: drive-browser ('python3 -m pip install --user websockets')",
+            );
+        }
     }
     t.optional("pdftoppm", "compare PDFs with visual-diff");
     t.optional("docker", "deploy-fallback and the per-workspace databases");
