@@ -137,6 +137,16 @@ fn missing_remotes(repos: &[PathBuf]) -> Vec<(char, PathBuf)> {
     .collect()
 }
 
+/// A workspace's uncommitted work is saved now, in case the last turn did not:
+/// what counts is that the other machine can bring it as it is.
+fn carried_uncommitted(repo: &Path) -> bool {
+    let Some(branch) = git::current_branch(repo) else { return false };
+    if !tsync::publishing_enabled() || !crate::publish::is_workspace_branch(repo, &branch) {
+        return false;
+    }
+    crate::wip::save_now(repo, &branch) && crate::wip::is_current(repo, &branch)
+}
+
 fn departure(ctx: &Ctx) -> Res {
     let mut stuck = 0;
     let mut warnings = 0;
@@ -151,7 +161,12 @@ fn departure(ctx: &Ctx) -> Res {
             continue;
         }
         let dirty = git::out(repo, &["status", "--porcelain"]).map(|s| s.lines().count()).unwrap_or(0);
-        if dirty > 0 {
+        if dirty > 0 && carried_uncommitted(repo) {
+            ui::ok(format!(
+                "{name}: {} travelled as work in progress",
+                ui::count(dirty, "uncommitted file", "uncommitted files")
+            ));
+        } else if dirty > 0 {
             ui::err(format!("{name}: {}", ui::count(dirty, "uncommitted file", "uncommitted files")));
             stuck += 1;
         }

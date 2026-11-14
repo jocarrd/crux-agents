@@ -123,6 +123,23 @@ fn contract_preference(repo: &Path) -> Result<Option<bool>, String> {
 /// data: in a public repo it would be published for anyone. For GitHub the
 /// visibility is asked and remembered; if it cannot be known, nothing is
 /// published. Other remotes cannot be asked.
+#[derive(PartialEq, Eq)]
+pub enum Visibility {
+    Public,
+    Private,
+    Unknown,
+}
+
+/// The same answer tasks obey, for anything else that would leave the machine:
+/// a remote that is not GitHub cannot be asked and counts as private.
+pub fn visibility_of(repo: &Path) -> Visibility {
+    match visibility(repo).as_str() {
+        "public" => Visibility::Public,
+        "unknown" => Visibility::Unknown,
+        _ => Visibility::Private,
+    }
+}
+
 fn visibility(repo: &Path) -> String {
     // As configured: get-url applies insteadOf and could hide GitHub.
     let url = Git::new(repo).get(&["config", "--get", "remote.origin.url"]).unwrap_or_default();

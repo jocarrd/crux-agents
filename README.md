@@ -239,6 +239,7 @@ A rule written in a file is advice. These are installed by
 | `pre-push` | Pushing to the main branch of a code repo without a proposal |
 | `commit-msg` | Commit messages outside the project's language, and tool signatures in them |
 | `post-commit` | A workspace's commits staying on one machine: each one is published in the background to a hidden ref of that machine (`refs/crux/branches/<machine>/<branch>`), not a branch, so `crux workspace resume` brings it on the other without a push |
+| Work in progress | What a workspace has not committed staying on one machine: at the end of each agent turn it is saved as a commit on its HEAD to `refs/crux/wip/<machine>/<branch>`, and `crux workspace resume` applies it on the other. Ignored files, secret-looking ones (`.env`, keys), files over 5 MB and dependency folders nobody ignored stay; a public repo saves nothing |
 | Proposal guard | Opening a proposal by hand, skipping the receipt `finish` demands |
 | Wait guard | Running a long suite, a build or a CI watch in the foreground while other work waits |
 | Worktree guard | Deleting a registered space by hand and leaving the registry lying |

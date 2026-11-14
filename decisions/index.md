@@ -873,3 +873,35 @@
 - **Reversibility**: low cost: `CRUX_SYNC_BACKGROUND=0` per machine, or one
   function to remove.
 - **Related**: `ADR-016`, `ADR-020`
+
+### ADR-022: A workspace's uncommitted work travels at the end of each agent turn
+
+- **Date**: 2026-11-14
+- **Status**: Accepted
+- **Context**: ADR-020 made commits travel, but a change half made when the
+  person stands up from one machine stayed there. `git stash` does not leave
+  the machine, and asking for a commit before switching is the kind of thing
+  that gets forgotten.
+- **Decision**:
+  - A `Stop` hook of the agent starts, detached, a snapshot of the workspace's
+    working tree: an index of its own (the person's staging is untouched),
+    tracked changes plus new files the repo does not ignore, as a commit whose
+    parent is HEAD. It goes to `refs/crux/wip/<machine>/<branch>` and is kept
+    locally in `refs/crux/wip-here/<branch>`.
+  - Nothing is saved in a public repo, halfway through a merge, cherry-pick or
+    revert, or when the new files exceed a thousand or 20 MB. Files that look
+    like a secret or exceed 5 MB are left out and named in the commit.
+  - With nothing uncommitted the saved work is withdrawn, so it is never
+    applied over work that already has it.
+  - `workspace resume` applies the newest one saved on the same commit,
+    through the trees and not a text patch, and leaves nothing staged. One
+    saved on another commit is only pointed at, with the command to see it.
+  - `sync --leave` saves it too and counts it as travelled when it is
+    current. Closing a merged workspace deletes it with the other hidden refs.
+- **Consequences**: switching machines halfway through a change loses
+  nothing that was in the tree at the end of the last turn. What is edited by
+  hand after it, outside an agent, travels only if `sync --leave` runs. The
+  remote holds one extra ref per machine and workspace until the merge.
+- **Reversibility**: low cost: remove the hook; the refs are ignored by
+  everything else and can be deleted with one push.
+- **Related**: `ADR-020`, `ADR-021`

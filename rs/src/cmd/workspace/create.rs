@@ -615,8 +615,11 @@ pub fn resume(argv: &[String]) -> Res {
             ui::info("on the other machine: crux sync --leave tells you what is left to push");
             continue;
         }
-        if create(args(branch, String::new())).is_ok() {
-            opened.extend(workspace_path(&ws_name));
+        if create(args(branch.clone(), String::new())).is_ok() {
+            if let Some(path) = workspace_path(&ws_name) {
+                crate::wip::bring(&path, &branch, repo_name);
+                opened.push(path);
+            }
             done += 1;
         }
     }

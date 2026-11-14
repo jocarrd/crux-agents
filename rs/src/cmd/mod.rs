@@ -106,6 +106,7 @@ pub fn dispatch(argv: &[String]) -> i32 {
         "__task" => crate::task::internal(rest),
         "__task-sync" => crate::task::internal_sync(rest),
         crate::publish::INTERNAL => crate::publish::internal(rest),
+        crate::wip::INTERNAL => crate::wip::internal(rest),
         other => {
             crate::ui::err(format!("unknown subcommand: {other}"));
             println!();
