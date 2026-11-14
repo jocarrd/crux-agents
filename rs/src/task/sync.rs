@@ -7,6 +7,7 @@
 //! be halfway through something else.
 
 use super::record;
+use crate::git::Batch as Git;
 use crate::names;
 use crate::{env, files};
 use serde_json::{json, Map, Value};
@@ -14,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 pub const BRANCH: &str = crate::names::git::TASKS_BRANCH;
 const REMOTE_REF: &str = crate::names::git::TASKS_TRACKED;
@@ -39,60 +40,6 @@ pub fn transport(project: &str) -> Option<PathBuf> {
     }
     let standalone = root.join(project);
     is_repo(&standalone).then_some(standalone)
-}
-
-// --- git ------------------------------------------------------------------------
-
-struct Git<'a> {
-    repo: &'a Path,
-    env: Vec<(String, String)>,
-}
-
-impl<'a> Git<'a> {
-    fn new(repo: &'a Path) -> Self {
-        Git { repo, env: vec![] }
-    }
-    fn with(repo: &'a Path, env: &[(&str, &str)]) -> Self {
-        Git { repo, env: env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect() }
-    }
-    fn command(&self, args: &[&str]) -> Command {
-        let mut c = Command::new("git");
-        c.arg("-C").arg(self.repo).args(args);
-        c.env("LC_ALL", "C").env("GIT_TERMINAL_PROMPT", "0");
-        // With no terminal to answer, an ssh prompt would hang the publication.
-        let ssh = std::env::var("GIT_SSH_COMMAND").unwrap_or_else(|_| "ssh".into());
-        c.env("GIT_SSH_COMMAND", format!("{ssh} -o BatchMode=yes"));
-        for (k, v) in &self.env {
-            c.env(k, v);
-        }
-        c
-    }
-    /// stdout on success; stderr as the error.
-    fn run(&self, args: &[&str], input: Option<&str>) -> Result<String, String> {
-        let mut c = self.command(args);
-        c.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(if input.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        });
-        let mut child = c.spawn().map_err(|e| e.to_string())?;
-        if let Some(i) = input {
-            let mut stdin = child.stdin.take().unwrap();
-            let data = i.to_string();
-            std::thread::spawn(move || {
-                let _ = stdin.write_all(data.as_bytes());
-            });
-        }
-        let out = child.wait_with_output().map_err(|e| e.to_string())?;
-        if out.status.success() {
-            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-        } else {
-            Err(String::from_utf8_lossy(&out.stderr).into_owned())
-        }
-    }
-    fn get(&self, args: &[&str]) -> Option<String> {
-        self.run(args, None).ok().map(|s| s.trim().to_string())
-    }
 }
 
 fn origin_url(repo: &Path, push: bool) -> Option<String> {
