@@ -464,6 +464,9 @@ test_the_wait_guard_lets_short_or_decided_commands_through() {
   assert_eq "0" "$(_wait_guard "sed -n 1,40p test/run.sh")" "nor is printing part of it"
   assert_eq "0" "$(_wait_guard "sed -n 120,150p test/e2e.sh")" "nor is reading the battery"
   assert_eq "0" "$(_wait_guard "grep -n HOME test/e2e.sh | head")" "or searching it"
+  # The .sh of the file before it read as a shell running it.
+  assert_eq "0" "$(_wait_guard "grep -n X test/two-machines.sh test/e2e.sh")" "nor searching it after another script"
+  assert_eq "0" "$(_wait_guard "cat flows.sh test/run.sh")" "nor reading the suite after another script"
 }
 
 test_hooks_install_recognises_hooks_by_file_name_not_path() {

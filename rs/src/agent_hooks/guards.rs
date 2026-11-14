@@ -53,8 +53,16 @@ pub(super) fn wait_guard() -> Res {
     let text = runnable(&command, true, false);
     let long: [(&str, &str); 9] = [
         // Only where it runs: as an argument of grep or sed it is being read.
-        (r"(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/run\.sh(?=\s*($|[;&|)<>]))", "the whole test suite"),
-        (r"(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/e2e\.sh(?=\s*($|[;&|)<>]))", "the end-to-end battery"),
+        // The shell is a word of its own: `\bsh` also matched the end of
+        // another script's name, two-machines.sh, and took a grep for a run.
+        (
+            r"(^|[;&|(]|(?<![\w./-])(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/run\.sh(?=\s*($|[;&|)<>]))",
+            "the whole test suite",
+        ),
+        (
+            r"(^|[;&|(]|(?<![\w./-])(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/e2e\.sh(?=\s*($|[;&|)<>]))",
+            "the end-to-end battery",
+        ),
         // The gate is as long as the command it runs: a git diff, a grep or a syntax check is instant.
         (
             r"\bcrux\s+ship\s+run\s+--\s+(?=\S)(?!(git|true|echo|test|ls|cat|grep|rg|wc|diff|head|tail|jq)\b|(?:ba)?sh\s+-n\b)",
