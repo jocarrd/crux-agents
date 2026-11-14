@@ -9,6 +9,7 @@
 use crate::files::glob_match;
 use crate::git;
 use crate::names;
+use crate::policy;
 use std::path::{Path, PathBuf};
 
 /// How much ceremony the project asks for, declared in its contract.
@@ -354,7 +355,7 @@ pub fn report(repo: &Path, start: &Path, base: Option<&str>) -> Result<String, S
     // paid by whoever merges. Elsewhere the rigor moves the threshold.
     let merge = if unreadable {
         "a person decides — the project's crux.json cannot be read".to_string()
-    } else if profile == "client-repo" || rigor == Rigor::Strict {
+    } else if policy::code_is_foreign(&profile, contract.as_deref().and_then(Path::parent)) || rigor == Rigor::Strict {
         "a person decides".to_string()
     } else if not_text == 0 {
         "can be merged without asking — text only".to_string()

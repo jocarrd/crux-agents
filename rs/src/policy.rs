@@ -56,6 +56,12 @@ pub fn flag(name: &str, docs: Option<&Path>, key: &str, default: bool) -> bool {
     get(name, docs, key).map_or(default, |v| v == "true")
 }
 
+/// Whether the code belongs to someone else. Keeping pointers out of git does
+/// not say so: a public repo of ours does it too.
+pub fn code_is_foreign(name: &str, docs: Option<&Path>) -> bool {
+    flag(name, docs, "code.foreign", false)
+}
+
 /// The language commits and proposals are written in: the contract wins,
 /// then the profile, and with nobody saying anything, English.
 pub fn commit_language(profile: &str, docs: Option<&Path>) -> String {

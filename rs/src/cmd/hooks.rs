@@ -769,8 +769,7 @@ fn install(p: &Paths) -> Res {
     // where the tool's signature must not appear without the net.
     let contract = project::contract_lenient(&docs).unwrap_or_default();
     let profile = files::get_str(&contract, "profile").unwrap_or_else(|| "multi-repo".into());
-    let scope =
-        if policy::flag(&profile, Some(&docs), "pointers.write", true) { Scope::Full } else { Scope::Signature };
+    let scope = if policy::code_is_foreign(&profile, Some(&docs)) { Scope::Signature } else { Scope::Full };
     let language = policy::commit_language(&profile, Some(&docs));
     let root = docs.parent().unwrap();
     for repo in files::str_list(contract.get("repos")).into_iter().filter(|r| !r.is_empty()) {

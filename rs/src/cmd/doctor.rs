@@ -429,7 +429,7 @@ fn check_profile_rules(t: &mut Tally, c: &Checkup) {
 /// Pointers are also switched off for a repo of ours that keeps its own
 /// AGENTS.md, like a public one: calling it the client's misled.
 fn owner(c: &Checkup) -> &'static str {
-    if c.profile == "client-repo" {
+    if policy::code_is_foreign(&c.profile, Some(&c.docs)) {
         "belongs to the client"
     } else {
         "is the repo's own"
@@ -524,7 +524,7 @@ fn check_visibility(t: &mut Tally, c: &Checkup) {
         t.note(format!("could not query the visibility of {slug}"));
     } else if actual == "public" && expected != "public" {
         t.fail(format!("the docs repo is PUBLIC and the contract expects {expected}"));
-        if c.profile == "client-repo" {
+        if policy::code_is_foreign(&c.profile, Some(&c.docs)) {
             ui::err("and it contains a client's documentation");
         }
     } else if actual != expected {

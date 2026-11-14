@@ -1,6 +1,9 @@
 {
   "name": "client-repo",
   "description": "The docs repo is ours, but the code belongs to a client. The standard's documentation is not written into the client's repo: no versioned pointers, no AGENTS.md, no folders. Only an unversioned CLAUDE.local.md that leads to the docs repo. Working on their code —branches, worktrees, commits— is the assignment and remains normal.",
+  "code": {
+    "foreign": true
+  },
   "pointers": {
     "write": false,
     "local": true,

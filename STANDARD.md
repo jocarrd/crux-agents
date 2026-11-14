@@ -365,6 +365,7 @@ does not require touching the kernel repo, which is replaced on every version.
 
 | Field | Default | What it changes |
 | --- | --- | --- |
+| `code.foreign` | `false` | Whether the code belongs to someone else: the commit hook checks only signature and language, a person always merges, and `workspace new` warns that the branch is seen in their repo. Keeping pointers out of git does not imply it |
 | `pointers.write` | `true` | Whether pointers are written in the code repos |
 | `pointers.local` | `false` | With `pointers.write` set to `false`, whether the local pointer `CLAUDE.local.md`, excluded from git, is written |
 | `propose.forbid` | the tool's signature | What cannot appear in the body of a proposal, with its reason |

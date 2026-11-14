@@ -995,3 +995,25 @@ test_task_show_names_the_task_like_new_does_and_lists_what_is_left() {
   assert_contains "$out" "T2 fix the footer" "and lists the steps still to do"
   assert_not_contains "$out" "measure the page" "not the ones already done"
 }
+
+test_an_own_repo_with_local_pointers_is_not_treated_as_a_clients() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  # A public repo of ours keeps its pointers out of git, like a client's: that
+  # made crux warn about "the client's repo" and skip our commit format there.
+  printf '{"pointers":{"write":false,"local":true}}\n' > "$root/proj-docs/profile.json"
+  git -C "$root/proj-docs" init -q
+
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new own --repo "$root/app" 2>&1)"
+  assert_not_contains "$out" "client" "creating a workspace says nothing about a client"
+
+  ( cd "$root/proj-docs" && "$CRUX_HOME/bin/crux" hooks install ) >/dev/null 2>&1
+  local f="$SB/MSG"; printf 'Update the readme\n' > "$f"
+  assert_exit 1 "and its commits follow our format" bash "$root/app/.git/hooks/commit-msg" "$f"
+
+  local cli; cli="$CRUX_PROJECTS_DIR/cli"; mkdir -p "$cli/vendor" "$cli/cli-docs"
+  git -C "$cli/vendor" init -q; git -C "$cli/vendor" commit -q --allow-empty -m init
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' > "$cli/cli-docs/crux.json"
+  out="$("$CRUX_HOME/bin/crux" workspace new theirs --repo "$cli/vendor" 2>&1)"
+  assert_contains "$out" "client's repo" "a client's repo still gets the warning"
+}
