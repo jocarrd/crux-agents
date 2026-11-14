@@ -211,7 +211,19 @@ pub fn hooks_out_of_date(docs: &Path, repo: Option<&str>, dir: &Path) -> bool {
         || GIT_HOOK_NAMES
             .iter()
             .any(|n| hooks.join(format!("{n}.project")).exists() && !declared.iter().any(|(d, _)| d == n));
-    stale_dispatcher || stale_project || missing_one
+    stale_dispatcher || stale_project || missing_one || lost_kernel(&hooks)
+}
+
+/// A hook installed from a kernel that is no longer there —a worktree deleted
+/// after testing, an old version cleaned up— has no way back to crux when it
+/// is not on the PATH.
+fn lost_kernel(hooks: &Path) -> bool {
+    GIT_HOOK_NAMES.iter().any(|n| {
+        files::read_or_empty(&hooks.join(format!("{n}.crux")))
+            .lines()
+            .find_map(|l| l.strip_prefix("KERNEL=\"").and_then(|r| r.strip_suffix('"')))
+            .is_some_and(|k| !Path::new(k).join("bin/crux").exists())
+    })
 }
 
 pub fn take_hook(hooks: &Path, name: &str) -> bool {

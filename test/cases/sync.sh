@@ -560,3 +560,87 @@ test_sync_replaces_git_hooks_from_the_shell_version() {
   assert_contains "$out" "eta: git hooks" "and says so"
   teardown
 }
+
+test_sync_hook_brings_the_session_project_and_leaves_the_rest_for_after() {
+  sandbox >/dev/null
+  _two_machines
+  mkdir -p "$SB/home" "$CRUX_PROJECTS_DIR/beta"
+  git clone -q "$SB/remote.git" "$CRUX_PROJECTS_DIR/beta/lib"
+  _work_on_the_other done-there
+
+  local out
+  out="$(cd "$CRUX_PROJECTS_DIR/alpha/app" && HOME="$SB/home" CRUX_SYNC_BACKGROUND=1 crux sync --hook </dev/null 2>&1)"
+  assert_contains "$out" "alpha/app: 1 new commit" "the project the session opens in arrives before it starts"
+  assert_not_contains "$out" "beta/lib" "the others are not waited for"
+
+  local _
+  for _ in $(seq 40); do [[ -f "$CRUX_STATE_DIR/sync-report" ]] && break; sleep 0.25; done
+  assert_file "$CRUX_PROJECTS_DIR/beta/lib/done-there" "they arrive right after, in the background"
+
+  out="$(cd "$CRUX_PROJECTS_DIR/alpha/app" && HOME="$SB/home" CRUX_SYNC_BACKGROUND=1 crux sync --hook </dev/null 2>&1)"
+  assert_contains "$out" "beta/lib: 1 new commit" "and the next session is told what they brought"
+  out="$(cd "$CRUX_PROJECTS_DIR/alpha/app" && HOME="$SB/home" crux sync --hook </dev/null 2>&1)"
+  assert_eq "" "$out" "once"
+  teardown
+}
+
+test_sync_hook_does_not_wait_for_a_slow_remote_of_another_project() {
+  sandbox >/dev/null
+  _two_machines
+  mkdir -p "$SB/home" "$CRUX_PROJECTS_DIR/beta"
+  git init -q "$CRUX_PROJECTS_DIR/beta/slow"
+  git -C "$CRUX_PROJECTS_DIR/beta/slow" remote add origin "ssh://slow.invalid/slow.git"
+
+  local start end
+  start=$(date +%s%N)
+  (cd "$CRUX_PROJECTS_DIR/alpha/app" && HOME="$SB/home" CRUX_SYNC_BACKGROUND=1 GIT_SSH_COMMAND="sleep 3; false" \
+    crux sync --hook </dev/null >/dev/null 2>&1)
+  end=$(date +%s%N)
+  assert_exit 0 "the session opens well before the 3 s the other remote takes" test $(((end - start) / 1000000)) -lt 1500
+  for _ in $(seq 40); do [[ -d "$CRUX_STATE_DIR/sync.lock" ]] || break; sleep 0.25; done
+  teardown
+}
+
+_merged_and_deleted_there() {
+  # _merged_and_deleted_there <branch>: pushed from here, then merged and its
+  # remote branch deleted from the other machine.
+  local app="$CRUX_PROJECTS_DIR/alpha/app"
+  git -C "$app" switch -q -c "$1"
+  git -C "$app" commit -q --allow-empty -m "$1"
+  git -C "$app" push -q -u origin "$1" 2>/dev/null
+  git -C "$app" switch -q main
+  git -C "$OTHER" push -q origin --delete "$1"
+}
+
+test_sync_deletes_a_branch_merged_and_deleted_on_the_other_machine() {
+  sandbox >/dev/null
+  _two_machines
+  local app="$CRUX_PROJECTS_DIR/alpha/app"
+  _merged_and_deleted_there done
+  _merged_and_deleted_there more
+  git -C "$app" switch -q more
+  git -C "$app" commit -q --allow-empty -m "after the merge"
+  git -C "$app" switch -q main
+  _merged_and_deleted_there unmerged
+  local fake; fake="$(_gh_with_merged_proposal)"
+  printf '7 %s\n' "$(git -C "$app" rev-parse done)" > "$SB/merged"
+
+  local out
+  out="$(PATH="$fake:$PATH" crux sync 2>&1)"
+  assert_exit 1 "the merged one is gone" git -C "$app" rev-parse -q --verify refs/heads/done
+  assert_contains "$out" "done deleted, merged in #7" "and it says so"
+  assert_exit 0 "one with a commit after the merge stays" git -C "$app" rev-parse -q --verify refs/heads/more
+  teardown
+}
+
+test_sync_keeps_a_gone_branch_with_no_merged_proposal() {
+  sandbox >/dev/null
+  _two_machines
+  _merged_and_deleted_there abandoned
+  local fake; fake="$(_gh_with_merged_proposal)"
+
+  PATH="$fake:$PATH" crux sync >/dev/null 2>&1
+  assert_exit 0 "a branch deleted there but never merged is kept" \
+    git -C "$CRUX_PROJECTS_DIR/alpha/app" rev-parse -q --verify refs/heads/abandoned
+  teardown
+}

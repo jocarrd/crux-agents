@@ -2,8 +2,8 @@
 //!
 //!   crux sync            on arrival: what is on this machine, up to date, and the kernel
 //!   crux sync --leave    on leaving: fails if something would stay only on this machine
-//!   crux sync --hook     the same as on arrival, silent except for news;
-//!                        it is what the session-start hook runs
+//!   crux sync --hook     the same, silent except for news, and only the session's
+//!                        project before it opens: the session-start hook
 //!
 //! On arrival it only advances what can be advanced without deciding
 //! anything: a clean branch behind its remote. Uncommitted changes or diverged
@@ -41,9 +41,18 @@ fn parallel<T: Sync, R: Send>(items: &[T], n: usize, f: impl Fn(&T) -> R + Sync)
     results.into_inner().unwrap().into_iter().map(|r| r.unwrap()).collect()
 }
 
+/// The session's project is brought up to date before the agent starts; the
+/// rest, after, so that one slow remote does not hold every session up.
+enum Scope {
+    All,
+    Only(Vec<PathBuf>),
+    Except(Vec<PathBuf>),
+}
+
 struct Ctx {
     root: PathBuf,
     mode: &'static str,
+    scope: Scope,
 }
 
 impl Ctx {
@@ -54,6 +63,18 @@ impl Ctx {
     }
     /// The repos in the root and those inside each project, and separately the
     /// worktrees, which share their main repo's fetch.
+    fn in_scope(&self, d: &Path) -> bool {
+        let d = real(d);
+        let under = |dirs: &[PathBuf]| dirs.iter().any(|x| d.starts_with(x));
+        match &self.scope {
+            Scope::All => true,
+            Scope::Only(dirs) => under(dirs),
+            Scope::Except(dirs) => !under(dirs),
+        }
+    }
+    fn whole(&self) -> bool {
+        !matches!(self.scope, Scope::Only(_))
+    }
     fn repos(&self) -> (Vec<PathBuf>, Vec<PathBuf>) {
         let mut candidates = vec![];
         for a in project::subdirs(&self.root) {
@@ -65,7 +86,7 @@ impl Ctx {
             }
         }
         let (mut main, mut worktrees) = (vec![], vec![]);
-        for d in candidates.into_iter().filter(|d| d.join(".git").exists()) {
+        for d in candidates.into_iter().filter(|d| d.join(".git").exists() && self.in_scope(d)) {
             if git::is_worktree(&d) {
                 worktrees.push(d);
             } else {
@@ -375,6 +396,34 @@ fn advance_the_rest(ctx: &Ctx, repo: &Path) -> Vec<String> {
     out
 }
 
+/// A branch whose remote is gone and whose proposal was merged with all it
+/// holds: on the other machine it was merged and deleted, and here it stayed.
+fn merged_and_gone(ctx: &Ctx, repo: &Path) -> Vec<String> {
+    let name = ctx.name_of(repo);
+    let main = project::main_branch(repo);
+    let in_use: Vec<String> = git::out(repo, &["worktree", "list", "--porcelain"])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.strip_prefix("branch ").and_then(|r| r.strip_prefix(names::git::HEADS)).map(String::from))
+        .collect();
+    let mut out = vec![];
+    for line in git::out(repo, &["for-each-ref", "--format=%(refname:short)\t%(upstream:track)", names::git::HEADS])
+        .unwrap_or_default()
+        .lines()
+    {
+        let Some((b, "[gone]")) = line.split_once('\t') else { continue };
+        if b == main || in_use.iter().any(|u| u == b) {
+            continue;
+        }
+        let Some(number) = super::workspace::merged_proposal(repo, b) else { continue };
+        if git::ok(repo, &["branch", "-D", b]) {
+            crate::publish::forget(repo, b);
+            out.push(format!("ok\t{name}: {b} deleted, merged in #{number} and gone from the remote"));
+        }
+    }
+    out
+}
+
 fn docs_repos(root: &Path) -> Vec<(String, PathBuf)> {
     let mut out = vec![];
     for p in project::subdirs(root) {
@@ -522,9 +571,9 @@ fn old_git_hooks(ctx: &Ctx) -> Vec<String> {
     out
 }
 
-fn tasks_up_to_date() -> Vec<String> {
+fn tasks_up_to_date(ctx: &Ctx) -> Vec<String> {
     let mut out = vec![];
-    for p in tsync::projects_with_tasks() {
+    for p in tsync::projects_with_tasks().into_iter().filter(|p| ctx.in_scope(&ctx.root.join(p))) {
         let mut s = match tsync::sync_project(&p, true) {
             Ok(s) => s,
             Err(e) => {
@@ -688,7 +737,8 @@ fn behind_projects(ctx: &Ctx) -> Vec<String> {
     out
 }
 
-fn arrival(ctx: &Ctx) -> Res {
+/// What changed or asks for a decision, and whether no remote answered.
+fn arrival_lines(ctx: &Ctx) -> (Vec<String>, Vec<PathBuf>, usize) {
     let (main, worktrees) = ctx.repos();
     let offline = fetch_all(&main);
     let mut lines: Vec<String> = vec![];
@@ -700,35 +750,49 @@ fn arrival(ctx: &Ctx) -> Res {
     for repo in &worktrees {
         lines.extend(advance(ctx, repo));
     }
-    lines.extend(fetch_new_repos(ctx));
-    lines.extend(moved_remotes(ctx));
-    lines.extend(kernel_up_to_date(ctx));
-    lines.extend(old_git_hooks(ctx));
-    lines.extend(tasks_up_to_date());
-    lines.extend(profile_up_to_date(ctx));
-    lines.extend(missing_projects(ctx));
-    lines.extend(closed_workspaces(ctx, &worktrees));
-    lines.extend(task_conflicts(ctx));
-    lines.extend(behind_projects(ctx));
-    lines.retain(|l| !l.is_empty());
-
-    if ctx.mode == "hook" {
-        // In the hook, what is printed enters the agent's context: only what
-        // changed or asks for a decision. A repo whose remote was deleted
-        // never answers: here only none answering counts, which is offline.
-        let all_offline = !offline.is_empty() && offline.len() == main.len();
-        if lines.is_empty() && !all_offline {
-            return Ok(());
+    if ctx.whole() && crate::gh::authenticated() {
+        for repo in &main {
+            lines.extend(merged_and_gone(ctx, repo));
         }
-        println!("crux sync, at session start:");
-        for l in &lines {
-            println!("  {}", l.split_once('\t').map(|(_, t)| t).unwrap_or(l));
-        }
-        if all_offline {
-            println!("  offline: no remote answered, the repos may not be up to date");
-        }
-        return Ok(());
     }
+    if ctx.whole() {
+        lines.extend(fetch_new_repos(ctx));
+        lines.extend(moved_remotes(ctx));
+        lines.extend(kernel_up_to_date(ctx));
+        lines.extend(old_git_hooks(ctx));
+    }
+    lines.extend(tasks_up_to_date(ctx));
+    if ctx.whole() {
+        lines.extend(profile_up_to_date(ctx));
+        lines.extend(missing_projects(ctx));
+        lines.extend(closed_workspaces(ctx, &worktrees));
+        lines.extend(task_conflicts(ctx));
+        lines.extend(behind_projects(ctx));
+    }
+    lines.retain(|l| !l.is_empty());
+    (lines, offline, main.len())
+}
+
+/// In the hook, what is printed enters the agent's context: only what changed
+/// or asks for a decision. A repo whose remote was deleted never answers: here
+/// only none answering counts, which is offline.
+fn hook_text(header: &str, lines: &[String], offline: usize, repos: usize) -> String {
+    let all_offline = offline > 0 && offline == repos;
+    if lines.is_empty() && !all_offline {
+        return String::new();
+    }
+    let mut out = format!("{header}\n");
+    for l in lines {
+        out.push_str(&format!("  {}\n", l.split_once('\t').map(|(_, t)| t).unwrap_or(l)));
+    }
+    if all_offline {
+        out.push_str("  offline: no remote answered, the repos may not be up to date\n");
+    }
+    out
+}
+
+fn arrival(ctx: &Ctx) -> Res {
+    let (lines, offline, _) = arrival_lines(ctx);
     println!("up to date with the remote — {}", ctx.root.display());
     println!();
     if lines.is_empty() {
@@ -754,6 +818,100 @@ fn arrival(ctx: &Ctx) -> Res {
     // carry on as if everything were up to date.
     if lines.iter().any(|l| ["diverged\t", "dirty\t", "failed\t", "warning\t"].iter().any(|k| l.starts_with(k))) {
         return exit(1);
+    }
+    Ok(())
+}
+
+/// The project the session opens in, and the profile, which the agent reads.
+fn session_dirs(root: &Path) -> Vec<PathBuf> {
+    let root = real(root);
+    let cwd = real(&std::env::current_dir().unwrap_or_default());
+    let mut dirs: Vec<PathBuf> = cwd
+        .strip_prefix(&root)
+        .ok()
+        .and_then(|rel| rel.components().next())
+        .map(|first| vec![root.join(first)])
+        .unwrap_or_default();
+    dirs.extend(person::dir().map(|d| real(&d)));
+    dirs
+}
+
+/// A projects root reached through a symbolic link is still the same root.
+fn real(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| project::normalize(p))
+}
+
+/// The rest of the arrival runs detached and leaves what it found for the next
+/// session; inside the suite it runs in place unless asked otherwise.
+fn rest_in_background() -> bool {
+    match env::var(names::vars::SYNC_BACKGROUND).as_deref() {
+        Some("0") => false,
+        Some("1") => true,
+        _ => !env::in_tests(),
+    }
+}
+
+fn report_file(state: &Path) -> PathBuf {
+    state.join("sync-report")
+}
+
+fn take_report(state: &Path) -> String {
+    let file = report_file(state);
+    let text = files::read_or_empty(&file);
+    let _ = std::fs::remove_file(&file);
+    text
+}
+
+fn hook(ctx: &Ctx, state: &Path) -> Res {
+    print!("{}", take_report(state));
+    // Several sessions opened at once would launch the same round: with a
+    // marker, the first one syncs and the rest do not.
+    let marker = state.join("sync-last");
+    let every: u64 = env::var("CRUX_SYNC_EVERY_MIN").and_then(|v| v.parse().ok()).unwrap_or(10);
+    let fresh = std::fs::metadata(&marker)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|e| e < Duration::from_secs(every * 60));
+    if fresh {
+        return Ok(());
+    }
+    let Some(lock) = take_lock(state, true) else { return Ok(()) };
+    crate::files::touch_marker(&marker, "");
+    let here = session_dirs(&ctx.root);
+    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Scope::Only(here.clone()) };
+    let (mut lines, offline, mut repos) = arrival_lines(&first);
+    let mut offline = offline.len();
+    if rest_in_background() {
+        drop(lock);
+        if let Ok(exe) = std::env::current_exe() {
+            let mut c = Command::new(exe);
+            c.args(["sync", REST]).args(&here).current_dir(&ctx.root);
+            sh::detach(c);
+        }
+    } else {
+        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Scope::Except(here) };
+        let (more, more_offline, more_repos) = arrival_lines(&rest);
+        lines.extend(more);
+        offline += more_offline.len();
+        repos += more_repos;
+    }
+    print!("{}", hook_text("crux sync, at session start:", &lines, offline, repos));
+    Ok(())
+}
+
+/// Hidden: what the session-start hook leaves running when it returns.
+const REST: &str = "--rest";
+
+fn rest(ctx: &Ctx, state: &Path) -> Res {
+    let _lock = take_lock(state, false);
+    let (lines, offline, repos) = arrival_lines(ctx);
+    let text = hook_text("crux sync, found after the last session started:", &lines, offline.len(), repos);
+    if !text.is_empty() {
+        let file = report_file(state);
+        if let Err(e) = files::write_atomic(&file, &text, Some(0o600)) {
+            die!("cannot write {}: {e}", file.display());
+        }
     }
     Ok(())
 }
@@ -800,7 +958,7 @@ pub fn run(argv: &[String]) -> Res {
     let mode = match argv.first().map(String::as_str) {
         None | Some("") => "arrive",
         Some("--leave") => "leave",
-        Some("--hook") => "hook",
+        Some("--hook") | Some(REST) => "hook",
         _ => die!("usage: crux sync [--leave|--hook]"),
     };
     let root = env::projects_root();
@@ -814,35 +972,26 @@ pub fn run(argv: &[String]) -> Res {
         "GIT_SSH_COMMAND",
         format!("{} -o BatchMode=yes", env::var("GIT_SSH_COMMAND").unwrap_or_else(|| "ssh".into())),
     );
-    let ctx = Ctx { root, mode };
     let state = env::state_dir();
     let _ = files::mkdir_private(&state);
+    if argv.first().map(String::as_str) == Some(REST) {
+        let except = argv[1..].iter().map(PathBuf::from).collect();
+        return rest(&Ctx { root, mode, scope: Scope::Except(except) }, &state);
+    }
+    let ctx = Ctx { root, mode, scope: Scope::All };
     match mode {
         "hook" => {
             // By hand and in a terminal, reading stdin would wait for a Ctrl-D.
             if !std::io::stdin().is_terminal() {
                 let _ = std::io::Read::read_to_end(&mut std::io::stdin(), &mut vec![]);
             }
-            // Several sessions opened at once would launch the same round: with
-            // a marker, the first one syncs and the rest do not.
-            let marker = state.join("sync-last");
-            let every: u64 = env::var("CRUX_SYNC_EVERY_MIN").and_then(|v| v.parse().ok()).unwrap_or(10);
-            let fresh = std::fs::metadata(&marker)
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.elapsed().ok())
-                .is_some_and(|e| e < Duration::from_secs(every * 60));
-            if fresh {
-                return Ok(());
-            }
-            let Some(_lock) = take_lock(&state, true) else { return Ok(()) };
-            crate::files::touch_marker(&marker, "");
-            let _ = arrival(&ctx);
-            Ok(())
+            hook(&ctx, &state)
         }
         "leave" => departure(&ctx),
         _ => {
             let _lock = take_lock(&state, false);
+            // A report left by the hook would repeat what this run says now.
+            let _ = std::fs::remove_file(report_file(&state));
             arrival(&ctx)
         }
     }

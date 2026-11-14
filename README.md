@@ -372,6 +372,8 @@ In `~/.crux/config`. They belong to the machine, not to the project:
 | `CRUX_MACHINE` | the short hostname | This machine's name in what it publishes; set it when two machines share a hostname |
 | `CRUX_UNMANAGED` | — | Paths under the root that are not yours, separated by `:` |
 | `CRUX_TASKS_IDLE_HOURS` | `3` | After this long idle, a session catches up as if it had just opened |
+| `CRUX_TASKS_REFRESH_MIN` | `15` | During a session, how often a message brings the other machine's tasks |
+| `CRUX_SYNC_BACKGROUND` | `1` | `0` syncs every project before a session opens, not only its own |
 | `CRUX_TASKS_RETENTION_DAYS` | `180` | How long archived tasks are kept |
 
 ### When something does not go as expected

@@ -841,3 +841,35 @@
 - **Reversibility**: low cost. Removing the hook stops it; the refs are
   ignored by everything else and can be deleted with one push.
 - **Related**: `ADR-015`, `ADR-016`
+
+### ADR-021: A session opens after its own project; the rest of the machine syncs behind it
+
+- **Date**: 2026-11-14
+- **Status**: Accepted
+- **Context**: the session-start hook brought every repo of the machine up to
+  date before the agent could start: 4.4 s measured on 14-11 with 27 repos, of
+  which 3.4 s were fetches and 0.55 s tasks. One slow or unreachable remote of
+  any project held every session up to its timeout. Reading each remote task
+  one `git cat-file` at a time cost one process per task on every sync. And
+  tasks written on the other machine arrived only when a session opened.
+- **Decision**:
+  - At session start, only the project the session opens in and the person's
+    profile are fetched, advanced and their tasks synced. The rest runs
+    detached (`crux sync --rest`, hidden), under the same lock.
+  - What the detached round finds is written to `sync-report` in the state
+    directory and shown by the next session start, once. A manual `crux sync`
+    discards it, because it says everything again.
+  - The detached round also deletes local branches whose remote is gone and
+    whose merged proposal holds everything they have.
+  - Every message of a session refreshes the tasks in the background, at most
+    every `CRUX_TASKS_REFRESH_MIN` minutes (15).
+  - A remote task is read only when a removal could match its path.
+  - `CRUX_SYNC_BACKGROUND=0` keeps the old behaviour; the suite runs in place
+    unless a test asks for the background.
+- **Consequences**: a session opens in about the time of one fetch. News from
+  other projects arrives one session late, which is when the person would go
+  to them anyway. A detached round that dies leaves nothing worse than today:
+  the lock goes stale in ten minutes and the next session retries.
+- **Reversibility**: low cost: `CRUX_SYNC_BACKGROUND=0` per machine, or one
+  function to remove.
+- **Related**: `ADR-016`, `ADR-020`

@@ -186,11 +186,13 @@ truthy '[[ ! -e "$CRUX_PROJECTS_DIR/outside" ]]' "and nothing is created outside
 # --- 6. Idempotence ----------------------------------------------------------
 
 step "repeating link and hooks changes nothing"
+hooks_now() { find "$DOCS/.git/hooks" "$REPO/.git/hooks" -type f ! -name "*.sample" -print0 | sort -z | xargs -0 md5sum; }
 before="$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)"
+hooks_before="$(hooks_now)"
 crux link "$DOCS" >/dev/null 2>&1
 ( cd "$DOCS" && crux hooks install >/dev/null 2>&1 )
 truthy '[[ "$before" == "$(md5sum "$REPO/AGENTS.md" | cut -d" " -f1)" ]]' "the pointer is the same"
-truthy '[[ "$(grep -c "crux workspace" "$DOCS/.git/hooks/pre-push")" -le 2 ]]' "the hook is not duplicated"
+truthy '[[ -s "$REPO/.git/hooks/pre-push.crux" && "$hooks_before" == "$(hooks_now)" ]]' "the hooks are the same, byte for byte"
 
 # --- 7. A project that already existed ---------------------------------------
 

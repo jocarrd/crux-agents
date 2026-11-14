@@ -126,3 +126,39 @@ test_publish_arrival_installs_the_post_commit_a_repo_lacks() {
   assert_contains "$out" "git hooks brought up to date" "arriving notices a repo hooked by an older crux"
   assert_file "$api/.git/hooks/post-commit.crux" "and puts the missing hook back with nobody asking"
 }
+
+test_publish_arrival_repairs_hooks_whose_kernel_is_gone() {
+  sandbox >/dev/null
+  local docs; docs="$(new_project omicron --repos "api")"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  git init -q "$api"
+  (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
+  sed -i "s|^KERNEL=.*|KERNEL=\"$SB/deleted-worktree\"|" "$api/.git/hooks/commit-msg.crux"
+
+  local out; out="$(cd "$CRUX_PROJECTS_DIR" && "$CRUX_HOME/bin/crux" sync 2>&1)"
+  assert_contains "$out" "git hooks brought up to date" "arriving notices a hook that points at a kernel no longer there"
+  assert_not_contains "$(cat "$api/.git/hooks/commit-msg.crux")" "deleted-worktree" "and points it back at one that is"
+}
+
+test_publish_forgetting_a_branch_keeps_one_whose_name_ends_like_it() {
+  sandbox >/dev/null
+  local root; root="$(_publish_project)"
+  local app="$root/app"
+  "$CRUX_HOME/bin/crux" workspace new pub --repo "$app" >/dev/null 2>&1
+  _commit_in "$root/app-ws-pub" "workspace work"
+  ( cd "$root/app-ws-pub" && CRUX_TASK_SYNC=1 CRUX_MACHINE=here "$CRUX_HOME/bin/crux" hook post-commit )
+  _wait_for_ref "$SB/remotes/app.git" refs/crux/branches/here/ws/pub
+  git -C "$app" switch -q -c pub
+  _commit_in "$app" "a plain branch called pub"
+  git -C "$app" push -q -u origin pub 2>/dev/null
+  git -C "$app" switch -q main
+  git -C "$app" push -q origin --delete pub
+  local fake; fake="$(_gh_with_merged_proposal)"
+  echo "3 $(git -C "$app" rev-parse pub)" > "$SB/merged"
+
+  (cd "$CRUX_PROJECTS_DIR" && PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" sync >/dev/null 2>&1)
+  assert_exit 1 "the merged branch pub is cleaned" git -C "$app" rev-parse -q --verify refs/heads/pub
+  assert_exit 0 "and what ws/pub published stays on the remote" \
+    git -C "$SB/remotes/app.git" rev-parse -q --verify refs/crux/branches/here/ws/pub
+  assert_exit 0 "and here" git -C "$app" rev-parse -q --verify refs/crux/published/ws/pub
+}

@@ -230,6 +230,12 @@ fn is_removed(removed: &BTreeSet<String>, path: &str, text: &str) -> bool {
     removed.contains(&removal_key(path, text)) || (created(text).is_empty() && removed.contains(path))
 }
 
+/// Whether the text has to be read at all: reading every remote task, one
+/// process each, was most of the session-start hook.
+fn may_be_removed(removed: &BTreeSet<String>, path: &str) -> bool {
+    removed.iter().any(|k| k == path || k.strip_prefix(path).is_some_and(|rest| rest.starts_with(' ')))
+}
+
 fn read_removed(text: &str) -> BTreeSet<String> {
     text.split('\n').map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect()
 }
@@ -362,7 +368,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
             l = None;
         }
         if let Some(rs) = &r {
-            if is_removed(&removed, &path, &blob(repo, rs)) {
+            if may_be_removed(&removed, &path) && is_removed(&removed, &path, &blob(repo, rs)) {
                 r = None;
             }
         }
@@ -788,6 +794,32 @@ pub fn publish_in_background(file: &Path) {
     if let Ok(exe) = std::env::current_exe() {
         let mut c = Command::new(exe);
         c.args(["__task-sync", "sync", "--project", &p]);
+        crate::sh::detach(c);
+    }
+}
+
+/// During a long session the other machine's tasks would only arrive at the
+/// next one: each message brings them, at most once per interval, without the
+/// person waiting. What stayed pending here is retried on the way.
+pub fn refresh_in_background() {
+    if !publishing_enabled() {
+        return;
+    }
+    let every: u64 = env::var(names::vars::TASKS_REFRESH_MIN).and_then(|v| v.parse().ok()).unwrap_or(15);
+    let marker = state_dir().join("refreshed");
+    let fresh = fs::metadata(&marker)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|e| e < std::time::Duration::from_secs(every * 60));
+    if fresh {
+        return;
+    }
+    let _ = files::mkdir_private(&state_dir());
+    crate::files::touch_marker(&marker, "");
+    if let Ok(exe) = std::env::current_exe() {
+        let mut c = Command::new(exe);
+        c.args(["__task-sync", "sync", "--all"]);
         crate::sh::detach(c);
     }
 }
