@@ -191,7 +191,7 @@ pub fn run(argv: &[String]) -> Res {
     sh::status(git::cmd(&repo).args(["push", "-q", crate::names::git::REMOTE, &format!("v{new}")]));
     ui::ok(format!("v{new} published"));
     // Without this the notes only exist in the tag message, which nobody reads.
-    if sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok() {
+    if crate::gh::authenticated() {
         if sh::capture_in(&repo, "gh", &["release", "create", &format!("v{new}"), "--title", &new, "--notes", &notes])
             .ok()
         {

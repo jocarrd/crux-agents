@@ -381,8 +381,8 @@ pub fn search_owners() -> Vec<String> {
 
 /// The owner's `<something>-docs` repos, without the suffix.
 pub fn candidate_projects(owner: &str) -> Vec<String> {
-    let r = crate::sh::capture("gh", &["repo", "list", owner, "--limit", "300", "--json", "name", "--jq", ".[].name"]);
-    let mut v: Vec<String> = r.stdout.lines().filter_map(|n| n.strip_suffix("-docs")).map(String::from).collect();
+    let mut v: Vec<String> =
+        crate::gh::repo_names(owner).iter().filter_map(|n| n.strip_suffix("-docs")).map(String::from).collect();
     v.sort();
     v.dedup();
     v
@@ -390,7 +390,7 @@ pub fn candidate_projects(owner: &str) -> Vec<String> {
 
 /// Without crux.json, any repo ending in -docs would count as a project.
 pub fn has_contract(owner: &str, project: &str) -> bool {
-    crate::sh::capture("gh", &["api", &format!("repos/{owner}/{project}-docs/contents/crux.json"), "--silent"]).ok()
+    crate::gh::has_file(&format!("{owner}/{project}-docs"), crate::names::CONTRACT)
 }
 
 #[cfg(test)]

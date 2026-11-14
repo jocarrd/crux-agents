@@ -281,7 +281,7 @@ fn clone(argv: &[String]) -> Res {
     if owner.is_empty() {
         die!("I do not know which account to look under — pass it with --owner");
     }
-    if !sh::capture("gh", &["repo", "view", &format!("{owner}/{name}")]).ok() {
+    if !crate::gh::repo_exists(&format!("{owner}/{name}")) {
         ui::warn(format!("{owner}/{name} does not exist — 'crux profile init' creates it"));
         return Ok(());
     }

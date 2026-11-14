@@ -24,7 +24,7 @@ pub fn run(argv: &[String]) -> Res {
     if !sh::exists("gh") {
         die!("gh is needed to talk to the remote");
     }
-    if !sh::capture("gh", &["auth", "status"]).ok() {
+    if !crate::gh::authenticated() {
         die!("gh is not authenticated");
     }
     let cwd = std::env::current_dir().unwrap_or_default();

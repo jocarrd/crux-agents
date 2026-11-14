@@ -656,14 +656,14 @@ fn profile_up_to_date(ctx: &Ctx) -> Option<String> {
     }
     let owner = project::default_owner();
     let name = person::repo_name();
-    (!owner.is_empty() && sh::capture("gh", &["repo", "view", &format!("{owner}/{name}")]).ok())
+    (!owner.is_empty() && crate::gh::repo_exists(&format!("{owner}/{name}")))
         .then(|| format!("warning\tthe profile {owner}/{name} is not on this machine — 'crux profile clone'"))
 }
 
 /// Projects on the remote this machine does not have. Only by hand: it asks
 /// the remote once per candidate.
 fn missing_projects(ctx: &Ctx) -> Vec<String> {
-    if ctx.mode != "arrive" || !sh::exists("gh") || !sh::capture("gh", &["auth", "status"]).ok() {
+    if ctx.mode != "arrive" || !crate::gh::authenticated() {
         return vec![];
     }
     let mut out = vec![];

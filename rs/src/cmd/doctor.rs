@@ -57,7 +57,7 @@ impl Tally {
 }
 
 fn gh_ready() -> bool {
-    sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok()
+    crate::gh::authenticated()
 }
 
 /// The system's, the bundler's own and libraries' debug switches.
@@ -363,10 +363,7 @@ fn archived_repos(t: &mut Tally, c: &Checkup) -> Vec<String> {
 fn undeclared_on_remote(t: &mut Tally, c: &Checkup, archived: &[String]) {
     let owner =
         crate::regex!(r"^.*github\.com[:/]").replace(&c.origin_docs, "").split('/').next().unwrap_or("").to_string();
-    // Archived on GitHub is read-only: nothing more can land there.
-    let jq = ".[] | select(.isArchived | not) | .name";
-    let list =
-        sh::capture("gh", &["repo", "list", &owner, "--limit", "200", "--json", "name,isArchived", "--jq", jq]).stdout;
+    let list = crate::gh::active_repo_names(&owner).join("\n");
     // A declared repo can live under another name: its URL in the contract says which.
     let remote_names: Vec<String> = c
         .declared
@@ -522,8 +519,7 @@ fn check_visibility(t: &mut Tally, c: &Checkup) {
     let expected = c.field("remote.visibility", "private");
     let slug = crate::regex!(r"^.*github\.com[:/]").replace(&c.origin_docs, "").into_owned();
     let slug = slug.strip_suffix(".git").unwrap_or(&slug).to_string();
-    let actual =
-        sh::capture("gh", &["repo", "view", &slug, "--json", "visibility", "-q", ".visibility"]).out().to_lowercase();
+    let actual = crate::gh::visibility(&slug).unwrap_or_default();
     if actual.is_empty() {
         t.note(format!("could not query the visibility of {slug}"));
     } else if actual == "public" && expected != "public" {

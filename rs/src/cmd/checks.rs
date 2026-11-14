@@ -95,11 +95,10 @@ fn read_checks(num: &str) -> Result<Vec<Check>, ()> {
 /// distributions, so the job's log comes from the API and is trimmed here:
 /// what precedes the last error, without the cleanup at the end.
 fn failure_log(job: &str, n: usize) -> String {
-    let repo = sh::capture("gh", &["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
-    if !repo.ok() {
+    let Some(repo) = crate::gh::repo_slug(&std::env::current_dir().unwrap_or_default()) else {
         return "(could not determine the repository to request the log)".into();
-    }
-    let log = sh::capture("gh", &["api", &format!("repos/{}/actions/jobs/{job}/logs", repo.out())]);
+    };
+    let log = sh::capture("gh", &["api", &format!("repos/{repo}/actions/jobs/{job}/logs")]);
     if !log.ok() {
         return "(the log is no longer available)".into();
     }
@@ -173,7 +172,7 @@ pub fn run(argv: &[String]) -> Res {
     if !sh::exists("gh") {
         die!("gh is needed to read the checks");
     }
-    if !sh::capture("gh", &["auth", "status"]).ok() {
+    if !crate::gh::authenticated() {
         die!("gh is not authenticated");
     }
     if num.is_empty() {

@@ -169,14 +169,14 @@ mod tests {
         raw.replace_all(text, "").into_owned()
     }
 
-    #[test]
-    fn no_name_is_written_outside_this_file() {
+    /// Every match of `pattern` in the code of `rs/src`, except in `owner`.
+    fn written_outside(pattern: &str, owner: &str) -> Vec<String> {
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = vec![];
         rust_files(&src, &mut files);
-        let literal = regex::Regex::new(r#""(CRUX_[A-Z0-9_]+"|origin"|origin/|refs/)"#).unwrap();
+        let literal = regex::Regex::new(pattern).unwrap();
         let mut found = vec![];
-        for f in files.iter().filter(|f| !f.ends_with("names.rs")) {
+        for f in files.iter().filter(|f| !f.ends_with(owner)) {
             let text = code(&std::fs::read_to_string(f).unwrap());
             for (n, line) in text.lines().enumerate() {
                 for m in literal.find_iter(line) {
@@ -184,7 +184,24 @@ mod tests {
                 }
             }
         }
+        found
+    }
+
+    #[test]
+    fn no_name_is_written_outside_this_file() {
+        let found = written_outside(r#""(CRUX_[A-Z0-9_]+"|origin"|origin/|refs/)"#, "names.rs");
         assert!(found.is_empty(), "names written by hand instead of taken from names.rs:\n{}", found.join("\n"));
+    }
+
+    /// The questions asked of GitHub in more than one place have one function
+    /// in `gh.rs`; copied, one copy ends up reading the answer differently.
+    #[test]
+    fn no_repeated_github_question_is_copied_outside_gh_rs() {
+        let found = written_outside(
+            r#""auth", "status"|"repo", "list"|"repo", "view"|"--json", "visibility"|contents/crux\.json"#,
+            "gh.rs",
+        );
+        assert!(found.is_empty(), "questions to GitHub copied instead of asked through gh.rs:\n{}", found.join("\n"));
     }
 
     #[test]

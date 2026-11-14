@@ -69,8 +69,7 @@ pub fn run(argv: &[String]) -> Res {
     // Creating the remote repo does depend on the provider. GitHub is covered
     // because there is an official CLI; for the rest the repo is left ready
     // and it says what to do.
-    let create_remote =
-        remote && url_docs.contains("github.com") && sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok();
+    let create_remote = remote && url_docs.contains("github.com") && crate::gh::authenticated();
     println!("creating {project_name}-docs · profile {profile}");
     if remote {
         println!("remote: {url_docs}");

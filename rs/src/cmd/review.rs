@@ -98,7 +98,7 @@ pub fn run(argv: &[String]) -> Res {
         indent(&dirty.join("\n"));
     }
 
-    if sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok() {
+    if crate::gh::authenticated() {
         let pr = sh::capture(
             "gh",
             &["pr", "view", &branch, "--json", "number,title,mergeable,mergeStateStatus,statusCheckRollup"],

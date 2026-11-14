@@ -17,6 +17,49 @@ pub fn authenticated() -> bool {
     exists() && sh::capture(GH, &["auth", "status"]).ok()
 }
 
+/// More repos than this in one owner are not looked at.
+const REPO_LIST_LIMIT: &str = "300";
+
+/// The names of an owner's repos.
+pub fn repo_names(owner: &str) -> Vec<String> {
+    sh::capture(GH, &["repo", "list", owner, "--limit", REPO_LIST_LIMIT, "--json", "name", "--jq", ".[].name"])
+        .stdout
+        .lines()
+        .map(String::from)
+        .collect()
+}
+
+/// The same, without the archived ones: read-only on GitHub, nothing more can
+/// land there.
+pub fn active_repo_names(owner: &str) -> Vec<String> {
+    let jq = ".[] | select(.isArchived | not) | .name";
+    sh::capture(GH, &["repo", "list", owner, "--limit", REPO_LIST_LIMIT, "--json", "name,isArchived", "--jq", jq])
+        .stdout
+        .lines()
+        .map(String::from)
+        .collect()
+}
+
+/// `owner/name` exists and this account can see it.
+pub fn repo_exists(slug: &str) -> bool {
+    sh::capture(GH, &["repo", "view", slug]).ok()
+}
+
+/// `public`, `private` or `internal`; None when it could not be asked. With a
+/// timeout: it is asked from a background sync that must not hang.
+pub fn visibility(slug: &str) -> Option<String> {
+    let mut c = std::process::Command::new(GH);
+    c.args(["repo", "view", slug, "--json", "visibility", "--jq", ".visibility"]);
+    let r = sh::with_timeout(&mut c, 15);
+    let v = r.stdout.trim().to_lowercase();
+    (r.ok() && !v.is_empty()).then_some(v)
+}
+
+/// Whether the repo `slug` has the file `path` on its default branch.
+pub fn has_file(slug: &str, path: &str) -> bool {
+    sh::capture(GH, &["api", &format!("repos/{slug}/contents/{path}"), "--silent"]).ok()
+}
+
 /// A proposal that was merged, and the commit its branch pointed to when it
 /// was: what a local branch has to contain nothing beyond to be deletable.
 pub struct Merged {

@@ -152,7 +152,7 @@ pub fn finish(argv: &[String]) -> Res {
         die!("could not push {branch}");
     }
     ui::ok(format!("{branch} pushed ({})", ui::count(commits, "commit", "commits")));
-    let url = if sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok() {
+    let url = if crate::gh::authenticated() {
         open_proposal(&path, &base, &branch, &title, commits, &body)
     } else {
         String::new()
@@ -422,7 +422,7 @@ pub fn merge(argv: &[String]) -> Res {
             other => die!("unknown option: {other}"),
         }
     }
-    if !(sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok()) {
+    if !(crate::gh::authenticated()) {
         die!("an authenticated gh is needed to query and merge the proposal");
     }
     let w = find(&name)?;

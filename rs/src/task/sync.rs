@@ -147,13 +147,7 @@ fn visibility(repo: &Path) -> String {
     if let Some(v) = seen.get(&name).and_then(Value::as_str) {
         return v.to_string();
     }
-    let mut c = Command::new("gh");
-    c.args(["repo", "view", &name, "--json", "visibility", "--jq", ".visibility"]);
-    let r = crate::sh::with_timeout(&mut c, 15);
-    let v = r.stdout.trim().to_lowercase();
-    if !r.ok() || v.is_empty() {
-        return "unknown".into();
-    }
+    let Some(v) = crate::gh::visibility(&name) else { return "unknown".into() };
     seen.insert(name, json!(v));
     let _ = files::mkdir_private(&state_dir());
     // A cache: if it is not written, the visibility is asked again next time.

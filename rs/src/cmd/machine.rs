@@ -140,7 +140,7 @@ pub fn run(_argv: &[String]) -> Res {
     println!();
     t.optional("gh", "create repos with crux init (use --no-remote meanwhile)");
     if sh::exists("gh") {
-        if sh::capture("gh", &["auth", "status"]).ok() {
+        if crate::gh::authenticated() {
             ui::ok("gh authenticated")
         } else {
             t.note("gh not authenticated — 'gh auth login'")
