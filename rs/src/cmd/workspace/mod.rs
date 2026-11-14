@@ -236,9 +236,10 @@ pub fn find(name: &str) -> Result<registry::Workspace, Exit> {
     if let Err(e) = registry::init() {
         die!("cannot prepare the registry: {e}");
     }
-    match registry::find(name) {
-        Some(w) => Ok(w),
-        None => die!("the workspace '{name}' does not exist"),
+    if let Some(w) = registry::find(name) {
+        Ok(w)
+    } else {
+        die!("the workspace '{name}' does not exist")
     }
 }
 
@@ -259,7 +260,7 @@ pub fn run(argv: &[String]) -> Res {
         return Ok(());
     }
     let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
-    match argv.first().map(String::as_str).unwrap_or("") {
+    match argv.first().map_or("", String::as_str) {
         "new" => create::new(rest),
         "list" => {
             clean::heal(true)?;

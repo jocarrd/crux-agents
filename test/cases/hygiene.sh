@@ -445,6 +445,7 @@ test_the_wait_guard_sends_long_commands_to_the_background() {
   assert_eq "2" "$(_wait_guard "npx eas-cli build --platform android")" "a waited cloud build"
   assert_eq "2" "$(_wait_guard "bash test/run.sh | tail -3")" "the suite run through bash, its output piped"
   assert_eq "2" "$(_wait_guard "env HOME=/tmp/h bash ~/crux/test/run.sh")" "the suite behind env"
+  assert_eq "2" "$(_wait_guard "/bin/bash test/run.sh")" "the suite through a shell named by its path"
   assert_eq "2" "$(_wait_guard "./test/e2e.sh")" "the end-to-end battery"
   assert_eq "2" "$(_wait_guard "cd crux && bash test/e2e.sh > out.txt 2>&1")" "the battery through bash, redirected"
 }
@@ -464,6 +465,9 @@ test_the_wait_guard_lets_short_or_decided_commands_through() {
   assert_eq "0" "$(_wait_guard "sed -n 1,40p test/run.sh")" "nor is printing part of it"
   assert_eq "0" "$(_wait_guard "sed -n 120,150p test/e2e.sh")" "nor is reading the battery"
   assert_eq "0" "$(_wait_guard "grep -n HOME test/e2e.sh | head")" "or searching it"
+  # The .sh of the file before it read as a shell running it.
+  assert_eq "0" "$(_wait_guard "grep -n X test/two-machines.sh test/e2e.sh")" "nor searching it after another script"
+  assert_eq "0" "$(_wait_guard "cat flows.sh test/run.sh")" "nor reading the suite after another script"
 }
 
 test_hooks_install_recognises_hooks_by_file_name_not_path() {

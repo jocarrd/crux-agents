@@ -113,7 +113,7 @@ fn contract_from(start: &Path) -> Option<PathBuf> {
 }
 
 pub(super) fn run(argv: &[String]) -> Res {
-    let base = argv.first().map(String::as_str).unwrap_or("HEAD");
+    let base = argv.first().map_or("HEAD", String::as_str);
     let files = changed_files(base, None);
     if files.is_empty() {
         println!("scope: empty");
@@ -210,18 +210,18 @@ pub(super) fn run(argv: &[String]) -> Res {
 
     // Gate 1 only asks whether the red was already there, and the affected
     // tests answer that; the whole suite is gate 5.
-    let filter = if !touched_tests.is_empty() {
-        touched_tests.iter().take(5).copied().collect::<Vec<_>>().join(" ")
-    } else {
+    let filter = if touched_tests.is_empty() {
         let stems: BTreeSet<String> = touched_code
             .iter()
             .take(3)
             .map(|f| {
                 let name = f.rsplit('/').next().unwrap_or(f);
-                name.rsplit_once('.').map(|(a, _)| a).unwrap_or(name).to_string()
+                name.rsplit_once('.').map_or(name, |(a, _)| a).to_string()
             })
             .collect();
         stems.into_iter().collect::<Vec<_>>().join(" ")
+    } else {
+        touched_tests.iter().take(5).copied().collect::<Vec<_>>().join(" ")
     };
 
     // The concrete command is the project's: the kernel does not know whether

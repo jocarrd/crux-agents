@@ -17,6 +17,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Another sync of the same docs repo is waited for a minute at most: it
+/// pushes over the network, and past that it is stuck, not slow.
+const SYNC_RETRY: std::time::Duration = std::time::Duration::from_millis(100);
+const SYNC_WAIT_TRIES: u32 = 600;
+
 pub const BRANCH: &str = crate::names::git::TASKS_BRANCH;
 const REMOTE_REF: &str = crate::names::git::TASKS_TRACKED;
 const TRACK_REF: &str = crate::names::git::TASKS_SEEN;
@@ -541,10 +546,10 @@ fn lock(p: &str) -> Result<ProjectLock, String> {
             continue;
         }
         i += 1;
-        if i > 600 {
+        if i > SYNC_WAIT_TRIES {
             return Err(format!("{p}: another task sync does not finish"));
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(SYNC_RETRY);
     }
 }
 

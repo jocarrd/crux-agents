@@ -52,7 +52,7 @@ impl Fingerprint {
             if !LOCAL.iter().any(|h| after.starts_with(h)) {
                 return true;
             }
-            from = m.start() + text[m.start()..].chars().next().map(char::len_utf8).unwrap_or(1);
+            from = m.start() + text[m.start()..].chars().next().map_or(1, char::len_utf8);
         }
         false
     }

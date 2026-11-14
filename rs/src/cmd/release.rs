@@ -33,7 +33,7 @@ pub fn notes(subjects: &str) -> String {
     let mut groups: Vec<(&str, Vec<String>)> = order.iter().map(|t| (*t, vec![])).collect();
     for line in subjects.lines().filter(|l| !l.is_empty()) {
         let (kind, text) = match re.captures(line) {
-            Some(c) => (types.iter().find(|(k, _)| *k == &c[1]).map(|(_, t)| *t).unwrap_or("Other"), c[2].to_string()),
+            Some(c) => (types.iter().find(|(k, _)| *k == &c[1]).map_or("Other", |(_, t)| *t), c[2].to_string()),
             None => ("Other", line.to_string()),
         };
         groups.iter_mut().find(|(t, _)| *t == kind).unwrap().1.push(text);
@@ -74,8 +74,7 @@ pub fn run(argv: &[String]) -> Res {
     let current =
         std::fs::read_to_string(repo.join(names::VERSION)).unwrap_or_default().split_whitespace().collect::<String>();
     let last_tag = git::out(&repo, &["describe", "--tags", "--abbrev=0"])
-        .map(|t| t.trim_start_matches('v').to_string())
-        .unwrap_or_else(|| "0.0.0".into());
+        .map_or_else(|| "0.0.0".into(), |t| t.trim_start_matches('v').to_string());
     let last_tag = if last_tag.is_empty() { "0.0.0".to_string() } else { last_tag };
     if !project::version_greater_than(&new, &last_tag) {
         die!("{new} is not later than the last published ({last_tag})");

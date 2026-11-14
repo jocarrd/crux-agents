@@ -8,6 +8,10 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// One mark per session tells it apart from a new one; no session lasts a
+/// month, so older marks are leftovers.
+const SESSION_MARKS_KEPT: Duration = Duration::from_secs(31 * 86400);
+
 /// Inside a workspace, reminds where its task was left, once per session and
 /// workspace: a compaction or coming back the next day loses it.
 pub(super) fn task_context() -> Res {
@@ -131,7 +135,7 @@ pub(super) fn session_idle() -> Res {
     if files::mkdir_private(&dir).is_err() {
         return Ok(());
     }
-    sweep(&dir, "", Duration::from_secs(31 * 86400));
+    sweep(&dir, "", SESSION_MARKS_KEPT);
     let m = dir.join(safe_id(&session));
     let hours: u64 = env::var(crate::names::vars::TASKS_IDLE_HOURS).and_then(|h| h.parse().ok()).unwrap_or(3);
     // No marker means the first message: session start took care of it.

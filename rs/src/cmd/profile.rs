@@ -98,7 +98,7 @@ pub fn link() -> Res {
             die!("cannot write Codex's context: {e}");
         }
         ui::ok(format!("Codex: {}/AGENTS.md carries a copy of the index", codex.display()));
-        let size = std::fs::metadata(codex.join(names::AGENTS)).map(|m| m.len()).unwrap_or(0);
+        let size = std::fs::metadata(codex.join(names::AGENTS)).map_or(0, |m| m.len());
         if size > 24576 {
             ui::warn(format!(
                 "Codex's AGENTS.md weighs {size} bytes: it stops reading at 32 KiB, keep the index short"
@@ -125,15 +125,14 @@ fn status() -> Res {
     for sub in ["preferences", "about", "machines"] {
         // git does not keep empty folders: a cloned profile may lack them.
         let n = std::fs::read_dir(dir.join(sub))
-            .map(|e| e.flatten().filter(|x| x.file_name().to_string_lossy().ends_with(".md")).count())
-            .unwrap_or(0);
+            .map_or(0, |e| e.flatten().filter(|x| x.file_name().to_string_lossy().ends_with(".md")).count());
         ui::info(format!("{sub}: {n}"));
     }
     match person::machine_note(&dir) {
         Some(n) => ui::info(format!("this machine: {}", crate::files::name(&n))),
         None => ui::info("this machine has no note of its own"),
     }
-    let dirty = git::out(&dir, &["status", "--porcelain"]).map(|s| s.lines().count()).unwrap_or(0);
+    let dirty = git::out(&dir, &["status", "--porcelain"]).map_or(0, |s| s.lines().count());
     let ahead = git::out(&dir, &["rev-list", "--count", "@{u}..HEAD"]).unwrap_or_else(|| "?".into());
     if dirty > 0 {
         ui::warn(format!("{} not committed", ui::count(dirty, "file", "files")));
@@ -300,7 +299,7 @@ fn clone(argv: &[String]) -> Res {
 
 pub fn run(argv: &[String]) -> Res {
     let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
-    match argv.first().map(String::as_str).unwrap_or("status") {
+    match argv.first().map_or("status", String::as_str) {
         "status" => status(),
         "link" => link(),
         "init" => init(rest),

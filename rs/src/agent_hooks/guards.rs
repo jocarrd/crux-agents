@@ -53,8 +53,17 @@ pub(super) fn wait_guard() -> Res {
     let text = runnable(&command, true, false);
     let long: [(&str, &str); 9] = [
         // Only where it runs: as an argument of grep or sed it is being read.
-        (r"(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/run\.sh(?=\s*($|[;&|)<>]))", "the whole test suite"),
-        (r"(^|[;&|(]|\b(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/e2e\.sh(?=\s*($|[;&|)<>]))", "the end-to-end battery"),
+        // The shell is a word of its own, by name or by path (/bin/bash):
+        // `\bsh` also matched the end of another script's name,
+        // two-machines.sh, and took a grep for a run.
+        (
+            r"(^|[;&|(]|(?<![\w.-])(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/run\.sh(?=\s*($|[;&|)<>]))",
+            "the whole test suite",
+        ),
+        (
+            r"(^|[;&|(]|(?<![\w.-])(?:bash|sh)\s+)\s*(?:[\w.~/-]*/)?test/e2e\.sh(?=\s*($|[;&|)<>]))",
+            "the end-to-end battery",
+        ),
         // The gate is as long as the command it runs: a git diff, a grep or a syntax check is instant.
         (
             r"\bcrux\s+ship\s+run\s+--\s+(?=\S)(?!(git|true|echo|test|ls|cat|grep|rg|wc|diff|head|tail|jq)\b|(?:ba)?sh\s+-n\b)",
@@ -89,15 +98,14 @@ pub(super) fn proposal_guard() -> Res {
     }
     // If the command first enters another folder, that is the one that counts.
     let cd = fancy(r"(?:^|[;&|]\s*)cd\s+(\S+)\s*&&[^;&|\n]*\bgh\b[^;&|\n]*\bpr\s+(create|new)\b");
-    let target = match cd.captures(&text).ok().flatten() {
-        Some(c) => c.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-        None => {
-            let c = field(&event, "cwd");
-            if c.is_empty() {
-                cwd().to_string_lossy().into_owned()
-            } else {
-                c
-            }
+    let target = if let Some(c) = cd.captures(&text).ok().flatten() {
+        c.get(1).map(|m| m.as_str().to_string()).unwrap_or_default()
+    } else {
+        let c = field(&event, "cwd");
+        if c.is_empty() {
+            cwd().to_string_lossy().into_owned()
+        } else {
+            c
         }
     };
     let target = target.strip_prefix('~').map(|r| format!("{}{r}", env::home().display())).unwrap_or(target);

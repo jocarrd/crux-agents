@@ -1666,15 +1666,19 @@ test_upgrade_completes_an_adopted_project() {
 test_the_kernel_does_not_use_bash_4() {
   sandbox >/dev/null
   local uses=""
+  # The hooks, the skills' scripts and the cases run on macOS too: a watchdog
+  # written with BASHPID did nothing there, silently.
   for f in "$CRUX_HOME"/bin/*.sh "$CRUX_HOME"/bin/crux "$CRUX_HOME"/lib/*.sh \
-           "$CRUX_HOME/install.sh" "$CRUX_HOME"/test/*.sh "$CRUX_HOME"/adapters/*/*.sh; do
+           "$CRUX_HOME/install.sh" "$CRUX_HOME"/test/*.sh "$CRUX_HOME"/adapters/*/*.sh \
+           "$CRUX_HOME"/adapters/*/hooks/*.sh "$CRUX_HOME"/skills/*/scripts/*.sh "$CRUX_HOME"/test/cases/*.sh; do
     [[ -f "$f" ]] || continue
     # Not anchored to the start of the line: bash 4's lowercase expansion
     # appears inside a pipeline or a [[ ]], and with the anchor the two there
     # were went unnoticed. Comments are stripped before looking, because this
     # very note names them.
-    sed 's/#.*$//' "$f" |
-      grep -qE '(^|[^[:alnum:]_])(mapfile|readarray)[[:space:]]|declare -A|\$\{[A-Za-z_][A-Za-z_0-9]*(,,|\^\^)\}' \
+    # The line that holds this very pattern is left out, not its whole file.
+    sed 's/#.*$//' "$f" | grep -vF '(mapfile|readarray|coproc)' |
+      grep -qE '(^|[^[:alnum:]_])(mapfile|readarray|coproc)[[:space:]]|(declare|local) -A|wait -n|\$\{?(BASHPID|EPOCHSECONDS|EPOCHREALTIME)|\$\{[A-Za-z_][A-Za-z_0-9]*(,,|\^\^)\}' \
       && uses+=" $(basename "$f")"
   done
   assert_eq "" "$uses" "no script depends on bash 4"

@@ -58,8 +58,7 @@ struct Ctx {
 impl Ctx {
     fn name_of(&self, p: &Path) -> String {
         p.strip_prefix(&self.root)
-            .map(|r| r.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| p.to_string_lossy().into_owned())
+            .map_or_else(|_| p.to_string_lossy().into_owned(), |r| r.to_string_lossy().into_owned())
     }
     /// The repos in the root and those inside each project, and separately the
     /// worktrees, which share their main repo's fetch.
@@ -160,7 +159,7 @@ fn departure(ctx: &Ctx) -> Res {
             stuck += 1;
             continue;
         }
-        let dirty = git::out(repo, &["status", "--porcelain"]).map(|s| s.lines().count()).unwrap_or(0);
+        let dirty = git::out(repo, &["status", "--porcelain"]).map_or(0, |s| s.lines().count());
         if dirty > 0 && carried_uncommitted(repo) {
             ui::ok(format!(
                 "{name}: {} travelled as work in progress",
@@ -214,7 +213,7 @@ fn departure(ctx: &Ctx) -> Res {
                 }
             }
         }
-        let stash = git::out(repo, &["stash", "list"]).map(|s| s.lines().count()).unwrap_or(0);
+        let stash = git::out(repo, &["stash", "list"]).map_or(0, |s| s.lines().count());
         if stash > 0 {
             ui::warn(format!(
                 "{name}: {} — they do not travel; turn them into a branch if you want them there",
@@ -705,8 +704,7 @@ fn closed_workspaces(ctx: &Ctx, worktrees: &[PathBuf]) -> Vec<String> {
             continue;
         }
         let archived = std::fs::read_dir(dir.join(&project).join("done"))
-            .map(|e| e.flatten().any(|x| x.file_name().to_string_lossy().ends_with(&format!("-{task}.md"))))
-            .unwrap_or(false);
+            .is_ok_and(|e| e.flatten().any(|x| x.file_name().to_string_lossy().ends_with(&format!("-{task}.md"))));
         if archived {
             out.push(format!(
                 "notice\t{}: its task is archived — 'crux workspace rm {task}' once nothing in it is pending",
@@ -808,7 +806,7 @@ fn hook_text(header: &str, lines: &[String], offline: usize, repos: usize) -> St
     }
     let mut out = format!("{header}\n");
     for l in lines {
-        out.push_str(&format!("  {}\n", l.split_once('\t').map(|(_, t)| t).unwrap_or(l)));
+        out.push_str(&format!("  {}\n", l.split_once('\t').map_or(l.as_str(), |(_, t)| t)));
     }
     if all_offline {
         out.push_str("  offline: no remote answered, the repos may not be up to date\n");
@@ -920,6 +918,10 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
     Ok(())
 }
 
+/// A lock older than this belongs to a process that died: an arrival over every
+/// repo of the machine takes seconds, not minutes.
+const STALE_LOCK: Duration = Duration::from_secs(600);
+
 /// Hidden: what the session-start hook leaves running when it returns.
 const REST: &str = "--rest";
 
@@ -956,12 +958,11 @@ fn take_lock(state: &Path, hook: bool) -> Option<SyncLock> {
         if std::fs::create_dir(&lock).is_ok() {
             return Some(SyncLock(lock));
         }
-        // A lock older than ten minutes belongs to a process that died.
         let old = std::fs::metadata(&lock)
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.elapsed().ok())
-            .is_some_and(|e| e > Duration::from_secs(600));
+            .is_some_and(|e| e > STALE_LOCK);
         if old {
             let _ = std::fs::remove_dir(&lock);
             continue;

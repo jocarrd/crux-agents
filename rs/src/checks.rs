@@ -30,7 +30,7 @@ fn walk(dir: &Path, skip: &dyn Fn(&str) -> bool) -> Vec<PathBuf> {
 }
 
 fn rel(base: &Path, p: &Path) -> String {
-    p.strip_prefix(base).map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| p.to_string_lossy().into_owned())
+    p.strip_prefix(base).map_or_else(|_| p.to_string_lossy().into_owned(), |r| r.to_string_lossy().into_owned())
 }
 
 // --- ADRs ---------------------------------------------------------------------
@@ -576,7 +576,7 @@ pub fn drift(docs: &Path) -> Vec<String> {
 /// the hooks that use one.
 pub fn internal(argv: &[String]) -> crate::error::Res {
     let arg = |i: usize| PathBuf::from(argv.get(i).cloned().unwrap_or_default());
-    match argv.first().map(String::as_str).unwrap_or("") {
+    match argv.first().map_or("", String::as_str) {
         "decisions" => {
             let (notes, problems) = decisions(&arg(1));
             for n in &notes {
@@ -601,7 +601,7 @@ pub fn internal(argv: &[String]) -> crate::error::Res {
             }
         }
         "skill-description" => {
-            for f in skill_descriptions(&arg(1), argv.get(2).map(String::as_str).unwrap_or("es")) {
+            for f in skill_descriptions(&arg(1), argv.get(2).map_or("es", String::as_str)) {
                 println!("{f}");
             }
             Ok(())

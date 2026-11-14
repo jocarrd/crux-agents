@@ -271,6 +271,18 @@ mod tests {
         );
     }
 
+    /// The prefix of a warning or an error is ui's: copied by hand, seven
+    /// times, one copy is enough to make the suite read it differently.
+    #[test]
+    fn warnings_and_errors_are_printed_through_ui() {
+        let found = written_outside(r#"palette\(\)\.(yellow|red)|p\.(yellow|red), p\.off"#, &["ui.rs", "setup.rs"]);
+        assert!(
+            found.is_empty(),
+            "warning or error prefixes built by hand instead of through ui:\n{}",
+            found.join("\n")
+        );
+    }
+
     #[test]
     fn the_tasks_tracking_ref_is_the_remote_copy_of_their_branch() {
         assert_eq!(super::git::TASKS_TRACKED, super::git::remote_branch(super::git::TASKS_BRANCH));

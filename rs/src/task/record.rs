@@ -221,7 +221,7 @@ pub fn parse(text: &str) -> Result<Doc, String> {
 
 fn trim_lines(lines: &[String]) -> &[String] {
     let start = lines.iter().position(|l| !l.trim().is_empty()).unwrap_or(lines.len());
-    let end = lines.iter().rposition(|l| !l.trim().is_empty()).map(|i| i + 1).unwrap_or(start);
+    let end = lines.iter().rposition(|l| !l.trim().is_empty()).map_or(start, |i| i + 1);
     &lines[start..end.max(start)]
 }
 
@@ -283,6 +283,10 @@ impl Drop for Lock {
 /// once left one step and all eight said ok. A directory, as in the registry,
 /// because it is the one primitive every system has; one older than the
 /// longest edit belongs to a process that died.
+/// How often a record held by another command is tried again; a hundred tries
+/// are ten seconds, longer than any edit of a record.
+const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(100);
+
 pub fn lock(file: &Path) -> Result<Lock, String> {
     let dir = file.with_file_name(format!(".{}.lock", files::name(file)));
     if let Some(d) = file.parent() {
@@ -305,7 +309,7 @@ pub fn lock(file: &Path) -> Result<Lock, String> {
             let _ = std::fs::remove_dir_all(&dir);
             continue;
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(LOCK_RETRY);
     }
     Err(format!("{} is being written by another command; remove {} if none is running", file.display(), dir.display()))
 }
@@ -553,7 +557,7 @@ impl Fence {
     fn code(&mut self, line: &str) -> bool {
         let t = line.trim_start();
         let first = t.chars().next().filter(|c| *c == '`' || *c == '~');
-        let run = first.map(|c| t.chars().take_while(|x| *x == c).count()).unwrap_or(0);
+        let run = first.map_or(0, |c| t.chars().take_while(|x| *x == c).count());
         match self.0 {
             None if run >= 3 => {
                 self.0 = first.map(|c| (c, run));
@@ -776,7 +780,7 @@ pub fn summary(doc: &Doc) -> Summary {
         task: doc.text("task"),
         status: doc.text("status"),
         steps: if ps.is_empty() { String::new() } else { format!("{done}/{}", ps.len()) },
-        next: if !next.is_empty() { next } else { pending.map(|p| format!("{} {}", p.id, p.text)).unwrap_or_default() },
+        next: if next.is_empty() { pending.map(|p| format!("{} {}", p.id, p.text)).unwrap_or_default() } else { next },
         objective: first_line(&content(doc.section("Objective"))),
         waiting: waiting_of(doc),
     }

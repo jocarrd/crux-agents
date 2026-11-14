@@ -29,12 +29,7 @@ struct Check {
 fn read_checks(num: &str) -> Result<Vec<Check>, ()> {
     let r = sh::capture("gh", &["pr", "view", num, "--json", "statusCheckRollup"]);
     if !r.ok() {
-        eprintln!(
-            "{}error{} could not read the checks of #{num} (code {})",
-            ui::palette().red,
-            ui::palette().off,
-            r.code
-        );
+        ui::err_stderr(format!("could not read the checks of #{num} (code {})", r.code));
         for l in format!("{}{}", r.stdout, r.stderr).lines().take(5) {
             eprintln!("      {l}");
         }
@@ -44,11 +39,7 @@ fn read_checks(num: &str) -> Result<Vec<Check>, ()> {
         .ok()
         .and_then(|v| v.get("statusCheckRollup").and_then(Value::as_array).cloned())
     else {
-        eprintln!(
-            "{}error{} gh returned something that is not the rollup of #{num}",
-            ui::palette().red,
-            ui::palette().off
-        );
+        ui::err_stderr(format!("gh returned something that is not the rollup of #{num}"));
         return Err(());
     };
     let s = |c: &Value, k: &str| c.get(k).and_then(Value::as_str).unwrap_or("").to_string();
@@ -104,16 +95,15 @@ fn failure_log(job: &str, n: usize) -> String {
     }
     let stamp = crate::regex!(r"^\S+Z ");
     let lines: Vec<String> = log.stdout.split('\n').map(|l| stamp.replace(l, "").into_owned()).collect();
-    let last = match lines.iter().rposition(|l| l.contains("##[error]")) {
-        Some(i) => i as i64,
-        None => {
-            let cleanup = lines.iter().position(|l| l.starts_with("Post job cleanup"));
-            (match cleanup {
-                Some(c) if c > 0 => c,
-                _ => lines.len(),
-            }) as i64
-                - 1
-        }
+    let last = if let Some(i) = lines.iter().rposition(|l| l.contains("##[error]")) {
+        i as i64
+    } else {
+        let cleanup = lines.iter().position(|l| l.starts_with("Post job cleanup"));
+        (match cleanup {
+            Some(c) if c > 0 => c,
+            _ => lines.len(),
+        }) as i64
+            - 1
     };
     // Stack traces eat the trim and the message ends up outside: two lines of
     // each stack are kept and the rest is counted.

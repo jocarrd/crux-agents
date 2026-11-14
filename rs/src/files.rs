@@ -111,8 +111,7 @@ pub fn read_optional(path: &Path) -> Option<String> {
         Ok(t) => Some(t),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => {
-            let p = crate::ui::palette();
-            eprintln!("{}warn{}  cannot read {}: {e}", p.yellow, p.off, path.display());
+            crate::ui::warn_stderr(format!("cannot read {}: {e}", path.display()));
             None
         }
     }

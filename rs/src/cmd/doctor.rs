@@ -149,7 +149,7 @@ pub fn run(argv: &[String]) -> Res {
     if argv.first().map(String::as_str) == Some("--machine") {
         return super::machine::run(&argv[1..]);
     }
-    let start = argv.first().map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let start = argv.first().map_or_else(|| std::env::current_dir().unwrap_or_default(), PathBuf::from);
     let Some(docs) = project::find_docs_repo(&start) else { die!("no docs repo found from {}", start.display()) };
     let mut t = Tally::default();
     let docs_name = files::name(&docs);
@@ -246,7 +246,7 @@ fn check_contract(t: &mut Tally, c: &Checkup) {
         }
     }
     // Only the series: a patch brings no templates or checks.
-    let series = |v: &str| v.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_else(|| v.to_string());
+    let series = |v: &str| v.rsplit_once('.').map_or_else(|| v.to_string(), |(a, _)| a.to_string());
     let (declared, kernel) = (&c.declared_version, env::crux_version());
     if series(declared) != series(&kernel) {
         if project::version_greater_than(declared, &kernel) {

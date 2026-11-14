@@ -49,7 +49,7 @@ pub fn capture_cmd(cmd: &mut Command) -> Run {
 /// Runs with the terminal attached: the person sees git's or the tool's own
 /// output as it happens.
 pub fn status(cmd: &mut Command) -> i32 {
-    cmd.status().map(|s| s.code().unwrap_or(128)).unwrap_or(127)
+    cmd.status().map_or(127, |s| s.code().unwrap_or(128))
 }
 
 pub fn exists(program: &str) -> bool {
@@ -66,7 +66,7 @@ pub fn exists(program: &str) -> bool {
 
 fn is_executable(p: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(p).map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+    std::fs::metadata(p).is_ok_and(|m| m.permissions().mode() & 0o111 != 0)
 }
 
 /// Like `timeout`: 124 when time runs out, the command's own code otherwise.

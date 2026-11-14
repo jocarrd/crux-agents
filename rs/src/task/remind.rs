@@ -164,16 +164,14 @@ fn nudge_after_days() -> i64 {
     env::var(crate::names::vars::WAIT_NUDGE_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
-        .map(|n| n as i64)
-        .unwrap_or(7)
+        .map_or(7, |n| n as i64)
 }
 
 pub fn idle_after_days() -> i64 {
     env::var(crate::names::vars::IDLE_TASK_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
-        .map(|n| n as i64)
-        .unwrap_or(3)
+        .map_or(3, |n| n as i64)
 }
 
 /// How long an open task has gone untouched with no workspace on this
@@ -229,7 +227,7 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
                 "name": t.task,
                 "status": if t.waiting.is_some() { "waiting".to_string() } else { t.status.clone() },
                 "when": ago(&t.updated),
-                "next": t.waiting.as_ref().map(|w| w.ask.clone()).unwrap_or_else(|| t.next.clone()),
+                "next": t.waiting.as_ref().map_or_else(|| t.next.clone(), |w| w.ask.clone()),
                 "here": t.workspaces.iter().any(|w| live.contains(w)),
                 "waiting": waiting,
             })

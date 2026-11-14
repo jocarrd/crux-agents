@@ -96,7 +96,7 @@ pub fn dispatch(argv: &[String]) -> i32 {
         "__skill-scenarios" => skill::scenarios_report(rest),
         "stg" => stg::run(rest),
         "__check-mcp" => {
-            for f in crate::mcp::check(std::path::Path::new(rest.first().map(String::as_str).unwrap_or("."))) {
+            for f in crate::mcp::check(std::path::Path::new(rest.first().map_or(".", String::as_str))) {
                 println!("{f}");
             }
             Ok(())

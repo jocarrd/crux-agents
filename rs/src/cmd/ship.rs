@@ -96,17 +96,16 @@ fn run_cmd(ctx: &Ctx, args: &[String], label: Option<&str>) -> Res {
         }
     }
     let start = Instant::now();
-    let rc = match Command::new(&args[0]).args(&args[1..]).status() {
-        Ok(s) => s.code().unwrap_or(128),
-        Err(_) => {
-            eprintln!("crux: {}: command not found", args[0]);
-            127
-        }
+    let rc = if let Ok(s) = Command::new(&args[0]).args(&args[1..]).status() {
+        s.code().unwrap_or(128)
+    } else {
+        eprintln!("crux: {}: command not found", args[0]);
+        127
     };
     let secs = start.elapsed().as_secs();
     // The receipt records the command as declared, not the wrapper. Running it
     // again replaces its earlier result: the fix of a red run is to run it green.
-    let label = label.map(String::from).unwrap_or_else(|| args.join(" "));
+    let label = label.map_or_else(|| args.join(" "), String::from);
     let kept: Vec<String> = ctx
         .text()
         .lines()
@@ -264,7 +263,10 @@ fn body(ctx: &Ctx, args: &[String]) -> Res {
     // The same fingerprints as the documentation and the .mcp.json files.
     let creds = crate::secrets::fingerprints_in(&text);
     if !creds.is_empty() {
-        report("something that looks like a credential".into(), creds.iter().map(|s| s.to_string()).collect());
+        report(
+            "something that looks like a credential".into(),
+            creds.iter().map(std::string::ToString::to_string).collect(),
+        );
     }
     let found = author_mentions(&ctx.repo, &text);
     if !found.is_empty() {
@@ -436,7 +438,7 @@ pub fn run(argv: &[String]) -> Res {
     let cwd = std::env::current_dir().unwrap_or_default();
     let Some(repo) = git::toplevel(&cwd) else { die!("this is not a git repository") };
     let ctx = Ctx { receipt: repo.join(names::GATE_RECEIPT), repo };
-    match argv.first().map(String::as_str).unwrap_or("") {
+    match argv.first().map_or("", String::as_str) {
         "run" => run_cmd(&ctx, rest, env::var("LABEL").as_deref()),
         "gate" => gate(&ctx),
         "seal" => seal(&ctx),

@@ -44,7 +44,7 @@ fn added(base: &str, files: &[&str]) -> Vec<String> {
 }
 
 pub(super) fn run(argv: &[String]) -> Res {
-    let base = argv.first().map(String::as_str).unwrap_or("HEAD");
+    let base = argv.first().map_or("HEAD", String::as_str);
     let cwd = std::env::current_dir().unwrap_or_default();
     let docs = docs_repo(&cwd);
     let source = crate::regex!(r"\.(ts|tsx|js|jsx|mjs|rs|go|py|rb|java|kt|swift|php)$");

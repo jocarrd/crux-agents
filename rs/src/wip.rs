@@ -72,7 +72,7 @@ fn snapshot(repo: &Path) -> Option<(String, Vec<String>)> {
         let mut carried = vec![];
         let mut bytes = 0;
         for path in untracked.stdout.split('\0').filter(|p| !p.is_empty()) {
-            let size = std::fs::metadata(repo.join(path)).map(|m| m.len()).unwrap_or(0);
+            let size = std::fs::metadata(repo.join(path)).map_or(0, |m| m.len());
             if looks_secret(path) || size > MAX_FILE {
                 left_out.push(path.to_string());
             } else {

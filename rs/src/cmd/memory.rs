@@ -174,7 +174,7 @@ pub fn run(argv: &[String]) -> Res {
         .split(',')
         .map(str::trim)
         .filter(|p| !p.is_empty())
-        .map(|p| slug_of(&p.strip_prefix('~').map(|r| format!("{home}{r}")).unwrap_or_else(|| p.to_string())))
+        .map(|p| slug_of(&p.strip_prefix('~').map_or_else(|| p.to_string(), |r| format!("{home}{r}"))))
         .collect();
     let is_ignored = |s: &str| ignored.iter().any(|i| s == i || s.starts_with(&format!("{i}-")));
 
@@ -261,7 +261,10 @@ pub fn run(argv: &[String]) -> Res {
 
     println!("agent memories — {total} in {} scope(s)", scopes.len());
     println!();
-    if !unpromoted.is_empty() {
+    if unpromoted.is_empty() {
+        ui::ok("nothing unpromoted");
+        println!();
+    } else {
         ui::warn(format!("unpromoted ({})", unpromoted.len()));
         println!();
         for (kind, name, target) in &unpromoted {
@@ -274,9 +277,6 @@ pub fn run(argv: &[String]) -> Res {
             ui::info("those shown with a scope instead of a docs repo come from a");
             ui::info("directory that is not any project: the destination is up to you.");
         }
-        println!();
-    } else {
-        ui::ok("nothing unpromoted");
         println!();
     }
     if !untyped.is_empty() {
@@ -306,22 +306,21 @@ pub fn run(argv: &[String]) -> Res {
             ui::count(n_ignored, "memory", "memories")
         ));
     }
-    match &profile {
-        Some(p) => ui::ok(format!("no personal memory outside the profile ({})", p.display())),
-        None => {
-            let mut summary = vec![];
-            if n_user > 0 {
-                summary.push(format!("{n_user} user"));
-            }
-            if n_feedback > 0 {
-                summary.push(format!("{n_feedback} feedback"));
-            }
-            if !summary.is_empty() {
-                ui::info(format!(
-                    "local, with no profile to go to: {} — 'crux profile init' gives them a repo that travels",
-                    summary.join(" · ")
-                ));
-            }
+    if let Some(p) = &profile {
+        ui::ok(format!("no personal memory outside the profile ({})", p.display()))
+    } else {
+        let mut summary = vec![];
+        if n_user > 0 {
+            summary.push(format!("{n_user} user"));
+        }
+        if n_feedback > 0 {
+            summary.push(format!("{n_feedback} feedback"));
+        }
+        if !summary.is_empty() {
+            ui::info(format!(
+                "local, with no profile to go to: {} — 'crux profile init' gives them a repo that travels",
+                summary.join(" · ")
+            ));
         }
     }
     Ok(())
