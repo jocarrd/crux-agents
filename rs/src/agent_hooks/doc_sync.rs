@@ -80,8 +80,8 @@ pub(super) fn doc_sync() -> Res {
     if !activity {
         return Ok(());
     }
-    let state = env::home().join(".crux/state");
-    let _ = std::fs::create_dir_all(&state);
+    let state = env::state_dir();
+    let _ = crate::files::mkdir_private(&state);
     let id: String =
         session.chars().map(|c| if c.is_ascii_alphanumeric() || "_.-".contains(c) { c } else { '_' }).collect();
     let m = state.join(format!("doc-gate-{id}"));
