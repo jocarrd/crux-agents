@@ -55,7 +55,7 @@ fn claude_link(src: &Path, name: &str) {
         }
     }
     if target.symlink_metadata().is_ok() {
-        if target.is_dir() && target.symlink_metadata().map(|m| !m.file_type().is_symlink()).unwrap_or(false) {
+        if target.is_dir() && target.symlink_metadata().is_ok_and(|m| !m.file_type().is_symlink()) {
             // A real directory with that name is the person's: `ln -sfn` would
             // have put the link inside it.
             let _ = std::os::unix::fs::symlink(src, target.join(name));
@@ -228,7 +228,7 @@ pub fn prune() {
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
         let link = e.path();
-        if link.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) && !link.exists() {
+        if link.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) && !link.exists() {
             if env::dry_run() {
                 println!("      [dry-run] claude: prune {name}");
             } else {

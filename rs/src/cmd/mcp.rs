@@ -253,7 +253,7 @@ pub fn run(argv: &[String]) -> Res {
     let profile = files::get_str(&contract, "profile").unwrap_or_else(|| "multi-repo".into());
     let root = docs.parent().unwrap().to_path_buf();
     let ctx = Ctx { docs, root, contract, profile };
-    match argv.first().map(String::as_str).unwrap_or("status") {
+    match argv.first().map_or("status", String::as_str) {
         "status" => status(&ctx),
         "install" => install(&ctx),
         "remove" => remove(&ctx),

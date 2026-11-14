@@ -102,9 +102,7 @@ pub fn run(argv: &[String]) -> Res {
     // itself while it exists, and if the project deleted it, it is not
     // reinvented.
     let index = docs.join("repos/README.md");
-    if !index.exists() {
-        ui::warn(format!("there is no repos/README.md — {repo} is declared, without a row in an index"));
-    } else {
+    if index.exists() {
         let text = match std::fs::read_to_string(&index) {
             Ok(t) => t,
             Err(e) => die!("repos/README.md cannot be read: {e}"),
@@ -126,6 +124,8 @@ pub fn run(argv: &[String]) -> Res {
                 ui::ok("registered in repos/README.md");
             }
         }
+    } else {
+        ui::warn(format!("there is no repos/README.md — {repo} is declared, without a row in an index"));
     }
     println!();
     super::call("link", &[&docs.to_string_lossy()]);

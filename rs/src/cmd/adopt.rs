@@ -81,7 +81,7 @@ pub fn run(argv: &[String]) -> Res {
     // command would then try to walk.
     let list =
         |v: &[String]| v.iter().filter(|x| !x.is_empty()).map(|x| format!("\"{x}\"")).collect::<Vec<_>>().join(", ");
-    let sections_owned: Vec<String> = sections.iter().map(|s| s.to_string()).collect();
+    let sections_owned: Vec<String> = sections.iter().map(std::string::ToString::to_string).collect();
     let text = format!(
         "{{\n  \"crux\": \"{}\",\n  \"project\": \"{project_name}\",\n  \"profile\": \"{profile}\",\n  \"language\": \"es\",\n{remote_json}\n  \"repos\": [{}],\n  \"sections\": [{}],\n  \"conventions\": {{\n    \"checks\": []\n  }}\n}}\n",
         env::crux_version(),

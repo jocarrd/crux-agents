@@ -85,8 +85,7 @@ fn written_lines(path: &Path, range: &str) -> usize {
 
 fn plan_lines(record_file: &Path) -> usize {
     record::read(record_file)
-        .map(|d| record::content(d.section("Plan")).lines().filter(|l| !l.trim().is_empty()).count())
-        .unwrap_or(0)
+        .map_or(0, |d| record::content(d.section("Plan")).lines().filter(|l| !l.trim().is_empty()).count())
 }
 
 pub fn finish(argv: &[String]) -> Res {
@@ -199,8 +198,7 @@ fn ensure_committed(path: &Path) -> Res {
 /// copy does not count: a finish cut off after pushing leaves it there.
 fn unproposed_commits(path: &Path, branch: &str) -> usize {
     git::out(path, &["log", "--oneline", branch, "--not", &format!("--exclude=*/{branch}"), "--remotes"])
-        .map(|s| s.lines().count())
-        .unwrap_or(0)
+        .map_or(0, |s| s.lines().count())
 }
 
 /// This is where context is lost: the session that knew why each thing was
@@ -464,8 +462,7 @@ pub fn merge(argv: &[String]) -> Res {
         _ => die!("there is no open proposal for {} — run 'crux workspace finish {name}'", w.branch),
     };
     // All the signals before deciding: green checks can come with conflicts.
-    let s =
-        |k: &str| d.get(k).map(|v| v.as_str().map(String::from).unwrap_or_else(|| v.to_string())).unwrap_or_default();
+    let s = |k: &str| d.get(k).map(|v| v.as_str().map_or_else(|| v.to_string(), String::from)).unwrap_or_default();
     let checks = d.get("statusCheckRollup").and_then(Value::as_array).cloned().unwrap_or_default();
     let failing: Vec<String> = checks
         .iter()

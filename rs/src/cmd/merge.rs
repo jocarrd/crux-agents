@@ -59,7 +59,7 @@ pub fn run(argv: &[String]) -> Res {
     if field("isDraft") == "true" {
         die!("the proposal is a draft");
     }
-    let dirty = git::out(&repo_dir, &["status", "--porcelain"]).map(|s| s.lines().count()).unwrap_or(0);
+    let dirty = git::out(&repo_dir, &["status", "--porcelain"]).map_or(0, |s| s.lines().count());
     if dirty > 0 {
         ui::warn(format!(
             "{} in the repo (it does not prevent the merge)",

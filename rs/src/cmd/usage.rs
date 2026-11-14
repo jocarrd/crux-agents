@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use unicode_normalization::UnicodeNormalization;
 
 fn transcripts_dir() -> PathBuf {
-    env::var(crate::names::vars::TRANSCRIPTS).map(PathBuf::from).unwrap_or_else(env::claude_transcripts_dir)
+    env::var(crate::names::vars::TRANSCRIPTS).map_or_else(env::claude_transcripts_dir, PathBuf::from)
 }
 
 fn description_of(dir: &Path) -> String {
@@ -344,12 +344,11 @@ pub fn run(argv: &[String]) -> Res {
             } else {
                 argv.get(i + 1).cloned()
             };
-            match raw.as_deref().and_then(|r| r.parse::<f64>().ok()).filter(|n| n.is_finite() && *n > 0.0) {
-                Some(n) => n,
-                None => {
-                    eprintln!("--days: '{}' is not a number of days", raw.unwrap_or_default());
-                    return exit(1);
-                }
+            if let Some(n) = raw.as_deref().and_then(|r| r.parse::<f64>().ok()).filter(|n| n.is_finite() && *n > 0.0) {
+                n
+            } else {
+                eprintln!("--days: '{}' is not a number of days", raw.unwrap_or_default());
+                return exit(1);
             }
         }
     };

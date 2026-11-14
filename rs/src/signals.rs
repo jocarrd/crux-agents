@@ -32,7 +32,7 @@ pub fn received() -> Option<i32> {
 
 /// The exit code a shell gives for a signal: 128 + its number.
 pub fn exit_code() -> i32 {
-    received().map(|s| 128 + s).unwrap_or(1)
+    received().map_or(1, |s| 128 + s)
 }
 
 /// Runs a command in its own process group, killing the whole group if a

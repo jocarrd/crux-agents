@@ -97,15 +97,14 @@ pub(super) fn proposal_guard() -> Res {
     }
     // If the command first enters another folder, that is the one that counts.
     let cd = fancy(r"(?:^|[;&|]\s*)cd\s+(\S+)\s*&&[^;&|\n]*\bgh\b[^;&|\n]*\bpr\s+(create|new)\b");
-    let target = match cd.captures(&text).ok().flatten() {
-        Some(c) => c.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-        None => {
-            let c = field(&event, "cwd");
-            if c.is_empty() {
-                cwd().to_string_lossy().into_owned()
-            } else {
-                c
-            }
+    let target = if let Some(c) = cd.captures(&text).ok().flatten() {
+        c.get(1).map(|m| m.as_str().to_string()).unwrap_or_default()
+    } else {
+        let c = field(&event, "cwd");
+        if c.is_empty() {
+            cwd().to_string_lossy().into_owned()
+        } else {
+            c
         }
     };
     let target = target.strip_prefix('~').map(|r| format!("{}{r}", env::home().display())).unwrap_or(target);

@@ -30,8 +30,7 @@ pub fn stale_after_days() -> i64 {
     env::var(crate::names::vars::STALE_WORKSPACE_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
-        .map(|n| n as i64)
-        .unwrap_or(7)
+        .map_or(7, |n| n as i64)
 }
 
 fn epoch_days(secs: i64) -> i64 {

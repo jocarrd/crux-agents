@@ -123,39 +123,7 @@ pub fn run(argv: &[String]) -> Res {
     }
 
     let repos = files::str_list(contract.get("repos"));
-    if !policy::flag(&profile, Some(&docs), "pointers.write", true) {
-        if !policy::flag(&profile, Some(&docs), "pointers.local", false) {
-            ui::warn(format!("profile {profile}: nothing is written outside the docs repo"));
-            ui::info(format!("agents must open {docs_name}/AGENTS.md explicitly"));
-        } else {
-            ui::info(format!(
-                "profile {profile}: nothing versioned outside the docs repo; only the local pointer {LOCAL_POINTER}"
-            ));
-            for repo in repos.iter().filter(|r| !r.is_empty()) {
-                if !project::valid_name(repo) {
-                    ui::warn(format!("invalid repo name in the contract: {repo}"));
-                    continue;
-                }
-                let dir = root.join(repo);
-                if !dir.is_dir() {
-                    ui::warn(format!("declared in crux.json but not on disk: {repo}"));
-                    continue;
-                }
-                match template::write_local_pointer(&dir, &docs_name) {
-                    Ok(LocalPointer::Written) => {
-                        ui::ok(format!("{repo}/{LOCAL_POINTER} points to {docs_name} (excluded from git)"))
-                    }
-                    Ok(LocalPointer::NotARepo) => ui::warn(format!(
-                        "{repo} is not a git repo: no local pointer, there would be no way to exclude it"
-                    )),
-                    Ok(LocalPointer::Versioned) => {
-                        ui::info(format!("{repo} versions its own {LOCAL_POINTER} — respected, not touched"))
-                    }
-                    Err(e) => ui::warn(format!("{repo}: {e}")),
-                }
-            }
-        }
-    } else {
+    if policy::flag(&profile, Some(&docs), "pointers.write", true) {
         let (mut created, mut updated, mut seen) = (0, 0, 0);
         let mut without_markers: Vec<(String, String)> = vec![];
         for repo in repos.iter().filter(|r| !r.is_empty()) {
@@ -235,6 +203,38 @@ pub fn run(argv: &[String]) -> Res {
             ui::info("no code repo on disk yet");
         } else if created + updated == 0 && without_markers.is_empty() {
             ui::ok(format!("pointers up to date ({})", ui::count(seen, "repo", "repos")));
+        }
+    } else {
+        if policy::flag(&profile, Some(&docs), "pointers.local", false) {
+            ui::info(format!(
+                "profile {profile}: nothing versioned outside the docs repo; only the local pointer {LOCAL_POINTER}"
+            ));
+            for repo in repos.iter().filter(|r| !r.is_empty()) {
+                if !project::valid_name(repo) {
+                    ui::warn(format!("invalid repo name in the contract: {repo}"));
+                    continue;
+                }
+                let dir = root.join(repo);
+                if !dir.is_dir() {
+                    ui::warn(format!("declared in crux.json but not on disk: {repo}"));
+                    continue;
+                }
+                match template::write_local_pointer(&dir, &docs_name) {
+                    Ok(LocalPointer::Written) => {
+                        ui::ok(format!("{repo}/{LOCAL_POINTER} points to {docs_name} (excluded from git)"))
+                    }
+                    Ok(LocalPointer::NotARepo) => ui::warn(format!(
+                        "{repo} is not a git repo: no local pointer, there would be no way to exclude it"
+                    )),
+                    Ok(LocalPointer::Versioned) => {
+                        ui::info(format!("{repo} versions its own {LOCAL_POINTER} — respected, not touched"))
+                    }
+                    Err(e) => ui::warn(format!("{repo}: {e}")),
+                }
+            }
+        } else {
+            ui::warn(format!("profile {profile}: nothing is written outside the docs repo"));
+            ui::info(format!("agents must open {docs_name}/AGENTS.md explicitly"));
         }
     }
 

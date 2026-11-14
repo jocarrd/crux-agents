@@ -108,8 +108,7 @@ pub fn run(argv: &[String]) -> Res {
                 head("proposal");
                 let s = |k: &str| {
                     d.get(k)
-                        .map(|v| v.as_str().map(String::from).unwrap_or_else(|| v.to_string()))
-                        .unwrap_or_else(|| "undefined".into())
+                        .map_or_else(|| "undefined".into(), |v| v.as_str().map_or_else(|| v.to_string(), String::from))
                 };
                 println!("      #{} {}", s("number"), s("title"));
                 println!("      {} · {}", s("mergeable"), s("mergeStateStatus"));
@@ -151,7 +150,7 @@ pub fn run(argv: &[String]) -> Res {
     // A console.log in a test is its way of reporting, not unfinished work.
     let code_paths: Vec<&str> = code.iter().copied().filter(|f| !test_path.is_match(f)).collect();
     let mut diff_args = vec!["diff".to_string(), format!("{base}...{branch}"), "--".to_string()];
-    diff_args.extend(code_paths.iter().map(|s| s.to_string()));
+    diff_args.extend(code_paths.iter().map(std::string::ToString::to_string));
     let diff_refs: Vec<&str> = diff_args.iter().map(String::as_str).collect();
     let added: String =
         g(&diff_refs).lines().filter(|l| l.starts_with('+') && !l.starts_with("+++")).collect::<Vec<_>>().join("\n");
@@ -173,7 +172,7 @@ pub fn run(argv: &[String]) -> Res {
         signal(format!("changes dependencies: {} ", deps.join(" ")));
     }
     for f in files.lines().filter(|f| Path::new(f).is_file()) {
-        let n = std::fs::read_to_string(f).map(|t| t.matches('\n').count()).unwrap_or(0);
+        let n = std::fs::read_to_string(f).map_or(0, |t| t.matches('\n').count());
         if n > 700 {
             signal(format!("{f} ends up at {n} lines"));
         }

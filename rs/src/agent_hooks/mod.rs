@@ -229,15 +229,14 @@ fn codex_context(argv: &[String]) -> Res {
     let (Some(event), Some(hook)) = (argv.first(), argv.get(1)) else { return exit(2) };
     let mut raw = Vec::new();
     let _ = std::io::stdin().read_to_end(&mut raw);
-    let mut child = match std::process::Command::new("bash")
+    let Ok(mut child) = std::process::Command::new("bash")
         .arg(hook)
         .args(&argv[2..])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
-    {
-        Ok(c) => c,
-        Err(_) => return exit(127),
+    else {
+        return exit(127);
     };
     if let Some(mut stdin) = child.stdin.take() {
         let _ = std::io::Write::write_all(&mut stdin, &raw);
@@ -265,7 +264,7 @@ fn codex_context(argv: &[String]) -> Res {
 
 pub fn run(argv: &[String]) -> Res {
     let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
-    let name = argv.first().map(String::as_str).unwrap_or("");
+    let name = argv.first().map_or("", String::as_str);
     if let Some(hook) = Hook::parse(name) {
         return hook.run();
     }

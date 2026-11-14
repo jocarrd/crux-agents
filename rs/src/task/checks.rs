@@ -55,7 +55,7 @@ fn tool_and_args(command: &str) -> Option<(String, Vec<String>)> {
 fn kind_of(command: &str) -> Option<&'static Kind> {
     let (tool, args) = tool_and_args(command)?;
     let has = |flag: &str| args.iter().any(|a| a == flag);
-    let sub = args.first().map(String::as_str).unwrap_or("");
+    let sub = args.first().map_or("", String::as_str);
     let kind = match tool.as_str() {
         "tsc" | "vue-tsc" | "mypy" | "pyright" => &TYPES,
         t if TEST_RUNNERS.contains(&t) => {
@@ -92,7 +92,7 @@ fn kind_of(command: &str) -> Option<&'static Kind> {
 /// The commands chained in one receipt line, without the shell that ran them.
 fn commands(line: &str) -> Vec<String> {
     let shell = crate::regex!(r#"^(?:sh|bash) -c\s+["']?(.*?)["']?$"#);
-    let inner = shell.captures(line).map(|c| c[1].to_string()).unwrap_or_else(|| line.to_string());
+    let inner = shell.captures(line).map_or_else(|| line.to_string(), |c| c[1].to_string());
     inner.split("&&").flat_map(|part| part.split(';')).map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()
 }
 

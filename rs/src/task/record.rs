@@ -221,7 +221,7 @@ pub fn parse(text: &str) -> Result<Doc, String> {
 
 fn trim_lines(lines: &[String]) -> &[String] {
     let start = lines.iter().position(|l| !l.trim().is_empty()).unwrap_or(lines.len());
-    let end = lines.iter().rposition(|l| !l.trim().is_empty()).map(|i| i + 1).unwrap_or(start);
+    let end = lines.iter().rposition(|l| !l.trim().is_empty()).map_or(start, |i| i + 1);
     &lines[start..end.max(start)]
 }
 
@@ -557,7 +557,7 @@ impl Fence {
     fn code(&mut self, line: &str) -> bool {
         let t = line.trim_start();
         let first = t.chars().next().filter(|c| *c == '`' || *c == '~');
-        let run = first.map(|c| t.chars().take_while(|x| *x == c).count()).unwrap_or(0);
+        let run = first.map_or(0, |c| t.chars().take_while(|x| *x == c).count());
         match self.0 {
             None if run >= 3 => {
                 self.0 = first.map(|c| (c, run));
@@ -780,7 +780,7 @@ pub fn summary(doc: &Doc) -> Summary {
         task: doc.text("task"),
         status: doc.text("status"),
         steps: if ps.is_empty() { String::new() } else { format!("{done}/{}", ps.len()) },
-        next: if !next.is_empty() { next } else { pending.map(|p| format!("{} {}", p.id, p.text)).unwrap_or_default() },
+        next: if next.is_empty() { pending.map(|p| format!("{} {}", p.id, p.text)).unwrap_or_default() } else { next },
         objective: first_line(&content(doc.section("Objective"))),
         waiting: waiting_of(doc),
     }

@@ -253,7 +253,7 @@ pub fn internal_sync(argv: &[String]) -> Res {
             Ok(())
         }
         "remind" => {
-            let cwd = o.get("cwd").map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            let cwd = o.get("cwd").map_or_else(|| std::env::current_dir().unwrap_or_default(), PathBuf::from);
             if let Some(r) = remind::reminder(Path::new(&cwd), 6) {
                 println!("{r}");
             }

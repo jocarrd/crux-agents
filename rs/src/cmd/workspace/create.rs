@@ -421,9 +421,7 @@ fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo
     let tmpl: Vec<(String, String)> =
         config.env_template.iter().map(|(k, v)| (k.clone(), slot.fill(&files::value_text(v)))).collect();
     let base = repo.join(&config.env_file);
-    let lines: Vec<String> = if !base.is_file() {
-        vec![]
-    } else {
+    let lines: Vec<String> = if base.is_file() {
         match files::read_if_exists(&base) {
             Ok(t) => t.split('\n').map(String::from).collect(),
             Err(e) => {
@@ -431,6 +429,8 @@ fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo
                 vec![]
             }
         }
+    } else {
+        vec![]
     };
     let mut seen = vec![];
     let mut out: Vec<String> = lines
@@ -446,7 +446,7 @@ fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo
             None => l.clone(),
         })
         .collect();
-    while out.last().is_some_and(|l| l.is_empty()) {
+    while out.last().is_some_and(std::string::String::is_empty) {
         out.pop();
     }
     for (k, v) in &tmpl {
@@ -466,13 +466,13 @@ fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo
             missing.push(k);
         }
     }
-    if !lines.is_empty() {
+    if lines.is_empty() {
+        ui::ok(format!("{} with slot {} (ports from {})", config.env_file, slot.number, slot.first_port));
+    } else {
         ui::ok(format!(
             "{} from {repo_name}'s, with slot {} (ports from {})",
             config.env_file, slot.number, slot.first_port
         ));
-    } else {
-        ui::ok(format!("{} with slot {} (ports from {})", config.env_file, slot.number, slot.first_port));
     }
     if !missing.is_empty() {
         ui::warn(format!("{} lacks what .env.example asks for: {}", config.env_file, missing.join(" ")));

@@ -49,9 +49,8 @@ fn retire_idle(f: &Path) -> Res {
     let doc = record::read(f).unwrap_or_default();
     let task_name = doc.text("task");
     let project_name = crate::files::name(f.parent().unwrap());
-    let list = match registry::read() {
-        Ok(l) => l,
-        Err(_) => die!("could not read the workspace registry {}", registry::path().display()),
+    let Ok(list) = registry::read() else {
+        die!("could not read the workspace registry {}", registry::path().display())
     };
     let mine: Vec<registry::Workspace> =
         list.into_iter().filter(|w| w.project == project_name && w.task == task_name).collect();
@@ -183,23 +182,20 @@ fn merge(names: &[String], goal: &str) -> Res {
             })?;
         }
     } else {
-        let mut doc = match record::archived_copy(&dir, into) {
-            Some(old) => {
-                let mut d = match record::read(&old) {
-                    Ok(d) => d,
-                    Err(e) => return fail(e),
-                };
-                record::reopen(&mut d, &crate::files::name(&old));
-                if let Err(e) = std::fs::remove_file(&old) {
-                    return fail(e.to_string());
-                }
-                ui::ok(format!("reopens the archived task '{}' to merge into", names[0]));
-                d
+        let mut doc = if let Some(old) = record::archived_copy(&dir, into) {
+            let mut d = match record::read(&old) {
+                Ok(d) => d,
+                Err(e) => return fail(e),
+            };
+            record::reopen(&mut d, &crate::files::name(&old));
+            if let Err(e) = std::fs::remove_file(&old) {
+                return fail(e.to_string());
             }
-            None => {
-                ui::ok(format!("task '{}' created to merge into", names[0]));
-                record::create(into, project_name, "", "")
-            }
+            ui::ok(format!("reopens the archived task '{}' to merge into", names[0]));
+            d
+        } else {
+            ui::ok(format!("task '{}' created to merge into", names[0]));
+            record::create(into, project_name, "", "")
         };
         if !goal.is_empty() {
             record::set_section(&mut doc, "Objective", goal);
@@ -212,12 +208,12 @@ fn merge(names: &[String], goal: &str) -> Res {
         }
     }
     for (name, f, doc) in &sources {
-        let before = record::read(&target).map(|d| record::steps(&d).len()).unwrap_or(0);
+        let before = record::read(&target).map_or(0, |d| record::steps(&d).len());
         mutate(&target, |d| {
             record::absorb(d, doc, name);
             Ok(())
         })?;
-        let moved = record::read(&target).map(|d| record::steps(&d).len()).unwrap_or(0) - before;
+        let moved = record::read(&target).map_or(0, |d| record::steps(&d).len()) - before;
         // Marked in the source too: reopened later, it would bring them back.
         let pending: Vec<String> = record::steps(doc).into_iter().filter(|s| !s.done).map(|s| s.id).collect();
         if let Err(e) = record::edit(f, false, |d| {
@@ -406,23 +402,20 @@ pub fn run(argv: &[String]) -> Res {
             if f.exists() {
                 return fail(format!("the task '{name}' already exists: {}", f.display()));
             }
-            let mut doc = match record::archived_copy(&dir, task_name) {
-                Some(old) => {
-                    let mut d = match record::read(&old) {
-                        Ok(d) => d,
-                        Err(e) => return fail(e),
-                    };
-                    record::reopen(&mut d, &crate::files::name(&old));
-                    if let Err(e) = std::fs::remove_file(&old) {
-                        return fail(e.to_string());
-                    }
-                    ui::ok(format!("reopens the archived task '{name}'"));
-                    d
+            let mut doc = if let Some(old) = record::archived_copy(&dir, task_name) {
+                let mut d = match record::read(&old) {
+                    Ok(d) => d,
+                    Err(e) => return fail(e),
+                };
+                record::reopen(&mut d, &crate::files::name(&old));
+                if let Err(e) = std::fs::remove_file(&old) {
+                    return fail(e.to_string());
                 }
-                None => {
-                    ui::ok(format!("task '{name}' created"));
-                    record::create(task_name, project_name, "", "")
-                }
+                ui::ok(format!("reopens the archived task '{name}'"));
+                d
+            } else {
+                ui::ok(format!("task '{name}' created"));
+                record::create(task_name, project_name, "", "")
             };
             if !goal.is_empty() {
                 record::set_section(&mut doc, "Objective", &goal);
@@ -546,11 +539,11 @@ pub fn run(argv: &[String]) -> Res {
                 record::append(d, "Deviations and decisions", &record::decision_line(&what, &why, &where_, &learned));
                 Ok(())
             })?;
-            if !why.is_empty() {
-                ui::ok("decision noted: when the task is archived it goes to the repo notes in the docs repo");
-            } else {
+            if why.is_empty() {
                 ui::ok("noted in deviations and decisions");
                 ui::info("if it is a decision that has to last, add its why: --why \"…\"");
+            } else {
+                ui::ok("decision noted: when the task is archived it goes to the repo notes in the docs repo");
             }
             Ok(())
         }

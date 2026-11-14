@@ -251,8 +251,7 @@ fn tasks_elsewhere(live: &[registry::Workspace]) {
     let nudge: i64 = env::var(crate::names::vars::WAIT_NUDGE_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
-        .map(|n| n as i64)
-        .unwrap_or(7);
+        .map_or(7, |n| n as i64);
     println!();
     println!("waiting for an answer");
     println!();
@@ -289,13 +288,12 @@ fn unpublished_work(root: &Path) {
                 continue;
             }
             let branch = git::out(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_else(|| "?".into());
-            let dirty = git::out(&repo, &["status", "--porcelain"]).map(|s| s.lines().count()).unwrap_or(0);
+            let dirty = git::out(&repo, &["status", "--porcelain"]).map_or(0, |s| s.lines().count());
             let unpushed = if git::ok(&repo, &["rev-parse", "@{u}"]) {
-                git::out(&repo, &["log", "--oneline", "@{u}.."]).map(|s| s.lines().count()).unwrap_or(0)
+                git::out(&repo, &["log", "--oneline", "@{u}.."]).map_or(0, |s| s.lines().count())
             } else {
                 git::out(&repo, &["log", "--oneline", &format!("{}..{branch}", project::main_branch(&repo))])
-                    .map(|s| s.lines().count())
-                    .unwrap_or(0)
+                    .map_or(0, |s| s.lines().count())
             };
             if dirty == 0 && unpushed == 0 {
                 continue;

@@ -52,9 +52,8 @@ fn parse_env(text: &str) -> HashMap<String, String> {
 }
 
 fn read_config() -> Result<Stg, crate::error::Exit> {
-    let config = env::var(crate::names::vars::STG_CONFIG)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| env::crux_dir().join("staging.env"));
+    let config =
+        env::var(crate::names::vars::STG_CONFIG).map_or_else(|| env::crux_dir().join("staging.env"), PathBuf::from);
     let Ok(text) = std::fs::read_to_string(&config) else {
         ui::err(format!("no staging configuration in {}", config.display()));
         ui::info("create it with the four variables documented in this command's header:");
@@ -63,7 +62,7 @@ fn read_config() -> Result<Stg, crate::error::Exit> {
     };
     let m = parse_env(&text);
     for v in VARS {
-        if m.get(v).is_none_or(|x| x.is_empty()) {
+        if m.get(v).is_none_or(std::string::String::is_empty) {
             ui::err(format!("{v} missing in {}", config.display()));
             return Err(crate::error::Exit(1));
         }
@@ -289,7 +288,7 @@ fn rm(s: &Stg, args: &[String]) -> Res {
 }
 
 pub fn run(argv: &[String]) -> Res {
-    let sub = argv.first().map(String::as_str).unwrap_or("");
+    let sub = argv.first().map_or("", String::as_str);
     let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
     match sub {
         "deploy" | "list" | "url" | "rm" => {

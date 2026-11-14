@@ -95,16 +95,15 @@ fn failure_log(job: &str, n: usize) -> String {
     }
     let stamp = crate::regex!(r"^\S+Z ");
     let lines: Vec<String> = log.stdout.split('\n').map(|l| stamp.replace(l, "").into_owned()).collect();
-    let last = match lines.iter().rposition(|l| l.contains("##[error]")) {
-        Some(i) => i as i64,
-        None => {
-            let cleanup = lines.iter().position(|l| l.starts_with("Post job cleanup"));
-            (match cleanup {
-                Some(c) if c > 0 => c,
-                _ => lines.len(),
-            }) as i64
-                - 1
-        }
+    let last = if let Some(i) = lines.iter().rposition(|l| l.contains("##[error]")) {
+        i as i64
+    } else {
+        let cleanup = lines.iter().position(|l| l.starts_with("Post job cleanup"));
+        (match cleanup {
+            Some(c) if c > 0 => c,
+            _ => lines.len(),
+        }) as i64
+            - 1
     };
     // Stack traces eat the trim and the message ends up outside: two lines of
     // each stack are kept and the rest is counted.

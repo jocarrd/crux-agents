@@ -312,9 +312,7 @@ fn unchain_hooks_path(repo: &Path) {
 
 fn status(p: &Paths) -> Res {
     println!("agent hooks — {}", p.settings.display());
-    if !p.settings.is_file() {
-        ui::warn("does not exist yet");
-    } else {
+    if p.settings.is_file() {
         let s = match files::read_json(&p.settings) {
             Ok(v) => v,
             Err(e) => die!("{} cannot be read: {e}", p.settings.display()),
@@ -326,7 +324,7 @@ fn status(p: &Paths) -> Res {
                 for h in g.get("hooks").and_then(Value::as_array).cloned().unwrap_or_default() {
                     n += 1;
                     let cmd = h.get("command").and_then(Value::as_str).unwrap_or("").to_string();
-                    let path = cmd.strip_prefix('~').map(|r| format!("{home}{r}")).unwrap_or_else(|| cmd.clone());
+                    let path = cmd.strip_prefix('~').map_or_else(|| cmd.clone(), |r| format!("{home}{r}"));
                     let first = path.split(' ').next().unwrap_or("");
                     let exists = Path::new(first).exists();
                     let own = if cmd.contains(MARK) { "[crux] " } else { "" };
@@ -337,6 +335,8 @@ fn status(p: &Paths) -> Res {
         if n == 0 {
             println!("      none configured");
         }
+    } else {
+        ui::warn("does not exist yet");
     }
     println!();
     if let Some(docs) = project::find_docs_repo(&std::env::current_dir().unwrap_or_default()) {
@@ -520,7 +520,7 @@ fn codex_hooks(p: &Paths, add: bool) -> Result<(), String> {
         put("PreToolUse", "Bash", vec![p.s("destructive-guard"), p.s("worktree-guard"), p.s("proposal-guard")]);
         put("Stop", "", vec![p.s(Hook::DocSync.name())]);
     }
-    if s.get("hooks").and_then(Value::as_object).is_some_and(|h| h.is_empty()) {
+    if s.get("hooks").and_then(Value::as_object).is_some_and(serde_json::Map::is_empty) {
         s.as_object_mut().unwrap().shift_remove("hooks");
     }
     write_settings(&file, &s)
@@ -915,7 +915,7 @@ fn remove(p: &Paths) -> Res {
 
 pub fn run(argv: &[String]) -> Res {
     let p = paths();
-    match argv.first().map(String::as_str).unwrap_or("status") {
+    match argv.first().map_or("status", String::as_str) {
         "status" => status(&p),
         "install" => install(&p),
         "remove" => remove(&p),

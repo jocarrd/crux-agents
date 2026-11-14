@@ -74,39 +74,36 @@ pub fn lock(tries: u32) -> Result<Lock, String> {
     let seconds = tries.div_ceil(10);
     let mut attempts = 0;
     loop {
-        match fs::create_dir(&dir) {
-            Ok(()) => {
-                // Without its pid a lock left by a dead process cannot be told
-                // from a live one, and it blocks every later command.
-                if let Err(e) = crate::files::write(&dir.join("pid"), &format!("{}\n", std::process::id())) {
-                    let _ = fs::remove_dir_all(&dir);
-                    return Err(e);
-                }
-                return Ok(Lock { dir });
+        if let Ok(()) = fs::create_dir(&dir) {
+            // Without its pid a lock left by a dead process cannot be told
+            // from a live one, and it blocks every later command.
+            if let Err(e) = crate::files::write(&dir.join("pid"), &format!("{}\n", std::process::id())) {
+                let _ = fs::remove_dir_all(&dir);
+                return Err(e);
             }
-            Err(_) => {
-                let owner = fs::read_to_string(dir.join("pid")).ok().and_then(|s| s.trim().parse::<i32>().ok());
-                if let Some(pid) = owner {
-                    if !pid_alive(pid) {
-                        let aside = dir.with_extension(format!("lock.{}", std::process::id()));
-                        if fs::rename(&dir, &aside).is_ok() {
-                            let _ = fs::remove_dir_all(&aside);
-                            ui::warn(format!("removed the lock of process {pid}, which no longer exists"));
-                        }
-                        continue;
+            return Ok(Lock { dir });
+        } else {
+            let owner = fs::read_to_string(dir.join("pid")).ok().and_then(|s| s.trim().parse::<i32>().ok());
+            if let Some(pid) = owner {
+                if !pid_alive(pid) {
+                    let aside = dir.with_extension(format!("lock.{}", std::process::id()));
+                    if fs::rename(&dir, &aside).is_ok() {
+                        let _ = fs::remove_dir_all(&aside);
+                        ui::warn(format!("removed the lock of process {pid}, which no longer exists"));
                     }
+                    continue;
                 }
-                attempts += 1;
-                if attempts > tries {
-                    return Err(match owner {
-                        Some(pid) => {
-                            format!("the registry has been held for {seconds}s by process {pid}, which is still alive")
-                        }
-                        None => format!("lock with no owner at {}: remove it if no crux is running", dir.display()),
-                    });
-                }
-                std::thread::sleep(LOCK_RETRY);
             }
+            attempts += 1;
+            if attempts > tries {
+                return Err(match owner {
+                    Some(pid) => {
+                        format!("the registry has been held for {seconds}s by process {pid}, which is still alive")
+                    }
+                    None => format!("lock with no owner at {}: remove it if no crux is running", dir.display()),
+                });
+            }
+            std::thread::sleep(LOCK_RETRY);
         }
     }
 }

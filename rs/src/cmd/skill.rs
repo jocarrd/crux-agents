@@ -216,9 +216,7 @@ pub fn run(argv: &[String]) -> Res {
     while let Some(arg) = p.next() {
         match arg {
             "--against" => against = p.value_opt(),
-            "--runs" => {
-                runs = p.value_opt().and_then(|r| r.parse::<f64>().ok()).map(|n| n.max(1.0) as usize).unwrap_or(1)
-            }
+            "--runs" => runs = p.value_opt().and_then(|r| r.parse::<f64>().ok()).map_or(1, |n| n.max(1.0) as usize),
             "--verbose" => verbose = true,
             a if a.starts_with("--") => return fail(format!("unknown option: {a}"), 2),
             a => goal = Some(a.to_string()),

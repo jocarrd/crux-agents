@@ -210,7 +210,7 @@ fn section(ctx: &Ctx, argv: &[String]) -> Result<String, Exit> {
         out.push_str(&format!("\n{}\n", template::SCREENSHOTS_CAPTION));
         for f in images_of(Path::new(&dir)) {
             let name = files::name(&f);
-            let stem = name.rsplit_once('.').map(|(a, _)| a).unwrap_or(&name);
+            let stem = name.rsplit_once('.').map_or(name.as_str(), |(a, _)| a);
             out.push_str(&format!("\n![{stem}](https://github.com/{slug}/blob/{branch}/{prefix}/{name}?raw=true)\n"));
         }
     }
@@ -304,7 +304,7 @@ pub fn run(argv: &[String]) -> Res {
     let Some(repo) = git::toplevel(&cwd) else { die!("this is not a git repository") };
     let ctx = Ctx { receipt: repo.join(names::VISUAL_RECEIPT), repo };
     let rest = if argv.is_empty() { &[][..] } else { &argv[1..] };
-    match argv.first().map(String::as_str).unwrap_or("") {
+    match argv.first().map_or("", String::as_str) {
         "approve" => approve(&ctx, rest),
         "show" => show(&ctx),
         "section" => {

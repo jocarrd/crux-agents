@@ -111,7 +111,7 @@ pub fn run(_argv: &[String]) -> Res {
         let broken_hooks = commands
             .iter()
             .filter(|c| {
-                let p = c.strip_prefix('~').map(|r| format!("{home}{r}")).unwrap_or_else(|| c.to_string());
+                let p = c.strip_prefix('~').map_or_else(|| c.to_string(), |r| format!("{home}{r}"));
                 let first = p.split(' ').next().unwrap_or("");
                 !first.is_empty() && !Path::new(first).exists()
             })
@@ -185,8 +185,7 @@ pub fn run(_argv: &[String]) -> Res {
     // with a time limit: a check that hangs is reported, it does not hang the
     // doctor.
     let checks_file = env::var(crate::names::vars::MACHINE_CHECKS)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| env::crux_dir().join("machine-checks.json"));
+        .map_or_else(|| env::crux_dir().join("machine-checks.json"), PathBuf::from);
     if checks_file.is_file() {
         println!();
         let limit: u64 = env::var(crate::names::vars::MACHINE_CHECK_TIMEOUT).and_then(|v| v.parse().ok()).unwrap_or(20);
