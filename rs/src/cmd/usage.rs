@@ -85,12 +85,14 @@ fn catalog_scripts(home: &Path) -> Vec<(String, String)> {
 }
 
 /// What a session delegates hangs under <session>/subagents/ and counts as
-/// that session.
+/// that session. The session's own file comes first in its group: by name,
+/// the folder `<session>` sorts before `<session>.jsonl`, and whoever reads
+/// the group from the start would take a subagent's opening as the person's.
 fn sessions_of(project: &Path) -> BTreeMap<String, Vec<PathBuf>> {
     let mut groups: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     fn visit(dir: &Path, root: Option<&str>, groups: &mut BTreeMap<String, Vec<PathBuf>>) {
         let mut entries: Vec<_> = std::fs::read_dir(dir).map(|e| e.flatten().collect()).unwrap_or_default();
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(|e| (e.path().is_dir(), e.file_name()));
         for e in entries {
             let name = e.file_name().to_string_lossy().into_owned();
             let full = e.path();
@@ -116,26 +118,44 @@ const EMPTY: &str = "esto esta este eso ese aqui alli para porque cuando donde
   would could should about into your just like make made only over such than
   them then were will your";
 
+/// What the person wrote in one line of a transcript. A tool's output also
+/// arrives as a message of type "user", but its content is a list of
+/// `tool_result` blocks: only plain text, or text blocks, are the person's.
+fn said_by_person(line: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    if v.get("type").and_then(|t| t.as_str()) != Some("user") {
+        return None;
+    }
+    match v.get("message")?.get("content")? {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Array(blocks) => {
+            let text: Vec<&str> = blocks
+                .iter()
+                .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+                .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+                .collect();
+            (!text.is_empty()).then(|| text.join("\n"))
+        }
+        _ => None,
+    }
+}
+
 /// Only the message that opens the session: it is the one the person writes.
 /// Taking more let in pasted code and test output.
 fn user_words(text: &str) -> Vec<String> {
     let empty: HashSet<&str> = EMPTY.split_whitespace().collect();
-    let re = crate::regex!(r#""type"\s*:\s*"user"[^\n]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)""#);
-    let mut words = vec![];
-    for m in re.captures_iter(text) {
-        let said = &m[1];
-        if said.chars().count() > 400 || said.matches("\\n").count() > 2 {
-            continue;
-        }
-        let plain: String = said.to_lowercase().nfd().filter(|c| !('\u{300}'..='\u{36f}').contains(c)).collect();
-        for w in plain.split(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit())) {
-            if w.len() > 4 && w.len() < 20 && !w.chars().any(|c| c.is_ascii_digit()) && !empty.contains(w) {
-                words.push(w.to_string());
-            }
-        }
-        break;
-    }
-    words
+    let opening = text
+        .lines()
+        .filter(|l| l.contains("\"user\""))
+        .filter_map(said_by_person)
+        .find(|said| said.chars().count() <= 400 && said.matches('\n').count() <= 2);
+    let Some(said) = opening else { return vec![] };
+    let plain: String = said.to_lowercase().nfd().filter(|c| !('\u{300}'..='\u{36f}').contains(c)).collect();
+    plain
+        .split(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit()))
+        .filter(|w| w.len() > 4 && w.len() < 20 && !w.chars().any(|c| c.is_ascii_digit()) && !empty.contains(w))
+        .map(str::to_string)
+        .collect()
 }
 
 struct Usage {

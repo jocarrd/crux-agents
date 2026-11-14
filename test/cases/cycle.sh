@@ -1608,6 +1608,24 @@ test_usage_says_with_what_words_the_problem_appeared() {
   assert_not_contains "$out" " about" "without the stop words"
 }
 
+test_usage_takes_the_words_from_the_person_not_from_a_tool_result() {
+  sandbox >/dev/null
+  local t="$SB/transcripts/p"; mkdir -p "$t/s/subagents"
+  # The folder of a session's subagents sorts before the session's own file,
+  # and a tool's output also arrives under "type":"user". Together they made
+  # the report say the work had been asked for with the words of cargo test.
+  {
+    printf '{"type":"user","message":{"role":"user","content":"this looks like spaghetti and I am nervous"}}\n'
+    printf '{"name":"Bash","input":{"command":"node scripts/health.mjs ."}}\n'
+  } > "$t/s.jsonl"
+  printf '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"x","type":"tool_result","content":"running 1 test passed filtered"}]}}\n' \
+    > "$t/s/subagents/agent-a.jsonl"
+
+  local out; out="$(CRUX_TRANSCRIPTS="$SB/transcripts" "$CRUX_HOME/bin/crux" usage 2>&1)"
+  assert_contains "$out" "spaghetti" "the words come from what the person wrote"
+  assert_not_contains "$out" "filtered" "not from the output of a tool"
+}
+
 test_proposal_title_does_not_execute_commands() {
   # The title comes from gh, that is, from whoever can rename the proposal. In
   # the shell version it ended up in an eval between double quotes, where bash
