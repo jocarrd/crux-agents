@@ -37,6 +37,37 @@ pub fn common_dir(dir: &Path) -> Option<PathBuf> {
     out(dir, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).map(PathBuf::from)
 }
 
+/// Keeps local files out of git without touching the versioned .gitignore:
+/// the common directory's exclude, which every worktree of the repo honours.
+pub fn exclude(dir: &Path, entries: &[&str]) -> Result<(), String> {
+    let Some(common) = common_dir(dir) else { return Err(format!("{} is not a git repo", dir.display())) };
+    let file = common.join("info/exclude");
+    std::fs::create_dir_all(common.join("info")).map_err(|e| format!("{}: {e}", file.display()))?;
+    let mut current = crate::files::read_if_exists(&file)?;
+    let missing: Vec<&str> = entries.iter().copied().filter(|e| !current.lines().any(|l| l == *e)).collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    if !current.is_empty() && !current.ends_with('\n') {
+        current.push('\n');
+    }
+    for e in missing {
+        current.push_str(e);
+        current.push('\n');
+    }
+    crate::files::write(&file, &current)
+}
+
+/// The main checkout and every worktree that hangs from it.
+pub fn worktrees(dir: &Path) -> Vec<PathBuf> {
+    out(dir, &["worktree", "list", "--porcelain"])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.strip_prefix("worktree ").map(PathBuf::from))
+        .filter(|p| p.is_dir())
+        .collect()
+}
+
 /// The main checkout a worktree hangs from (or the repo itself).
 pub fn main_repo(dir: &Path) -> Option<PathBuf> {
     common_dir(dir).and_then(|c| c.parent().map(Path::to_path_buf))
