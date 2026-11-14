@@ -53,7 +53,9 @@ function description(text) {
 // The catalog the agent sees, not the one in the repos: what matters is what
 // it really competes against.
 function catalog() {
-  const dir = process.env.CLAUDE_SKILLS_DIR || join(process.env.HOME, '.claude', 'skills')
+  // The agent's folder moves with CLAUDE_CONFIG_DIR, and the skills with it.
+  const config = process.env.CLAUDE_CONFIG_DIR || join(process.env.HOME, '.claude')
+  const dir = process.env.CLAUDE_SKILLS_DIR || join(config, 'skills')
   const output = new Map()
   if (!existsSync(dir)) return output
   for (const n of readdirSync(dir)) {

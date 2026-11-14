@@ -59,7 +59,7 @@ machine() {
 on() {
   local m="$SB/$1"; shift
   ( cd "${CWD:-$m/projects}" && env HOME="$m" CRUX_MACHINE="$(basename "$m")" CRUX_PROJECTS_DIR="$m/projects" \
-      CLAUDE_SETTINGS="$m/.claude/settings.json" CLAUDE_SKILLS_DIR="$m/.claude/skills" \
+      CLAUDE_CONFIG_DIR="$m/.claude" CLAUDE_SETTINGS="$m/.claude/settings.json" CLAUDE_SKILLS_DIR="$m/.claude/skills" \
       CODEX_HOME_DIR="$m/.codex" CODEX_PROMPTS_DIR="$m/.codex/prompts" "$@" )
 }
 crux_on() { local m="$1"; shift; on "$m" "$CRUX_HOME/bin/crux" "$@"; }
