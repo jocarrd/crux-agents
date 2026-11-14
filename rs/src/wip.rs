@@ -34,7 +34,10 @@ pub fn save_in_background(dir: &Path) {
     }
     let Some(repo) = git::toplevel(dir) else { return };
     let Some(branch) = git::current_branch(&repo) else { return };
-    if !publish::is_workspace_branch(&repo, &branch) || git::remote_url(&repo, refs::REMOTE).is_none() {
+    if !publish::is_workspace_branch(&repo, &branch)
+        || git::remote_url(&repo, refs::REMOTE).is_none()
+        || !publish::may_travel(&repo)
+    {
         return;
     }
     if let Ok(exe) = std::env::current_exe() {
@@ -107,6 +110,9 @@ fn rev(repo: &Path, r: &str) -> Option<String> {
 /// was published before is withdrawn: it would be applied on the other
 /// machine over work that already has it.
 pub fn save_now(repo: &Path, branch: &str) -> bool {
+    if !publish::may_travel(repo) {
+        return false;
+    }
     if task::sync::visibility_of(repo) != task::sync::Visibility::Private {
         return true;
     }

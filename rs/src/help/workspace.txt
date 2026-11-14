@@ -31,7 +31,10 @@ hook publishes the branch in the background to refs/crux/branches/<machine>/
 on the remote, which no list of branches shows and no workflow reacts to.
 resume brings the most advanced of what the machines published; if the
 copies diverged it says so and chooses none. CRUX_MACHINE names the machine
-when two share a hostname.
+when two share a hostname. A project with the client-repo profile publishes
+none of this, nor the uncommitted work below: the refs would carry our
+tooling's name and our machines' into the client's remote. There, push the
+branch to switch machines.
 
 What is not committed travels too: at the end of each agent turn the
 workspace's working tree is saved as a commit on its HEAD, to

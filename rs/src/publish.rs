@@ -16,7 +16,7 @@ pub fn post_commit() -> Res {
     }
     let Some(repo) = git::toplevel(&std::env::current_dir().unwrap_or_default()) else { return Ok(()) };
     let Some(branch) = git::current_branch(&repo) else { return Ok(()) };
-    if is_workspace_branch(&repo, &branch) && git::remote_url(&repo, refs::REMOTE).is_some() {
+    if is_workspace_branch(&repo, &branch) && git::remote_url(&repo, refs::REMOTE).is_some() && may_travel(&repo) {
         if let Ok(exe) = std::env::current_exe() {
             let mut c = Command::new(exe);
             c.arg(INTERNAL).arg(&repo).arg(&branch);
@@ -35,6 +35,15 @@ pub fn internal(argv: &[String]) -> Res {
     }
 }
 
+/// A client's repo receives none of this: the refs would carry our tooling's
+/// name and our machines' into their remote. The profile says so with
+/// `travel.hiddenRefs`.
+pub(crate) fn may_travel(repo: &Path) -> bool {
+    let docs = project::find_docs_repo(repo);
+    let profile = docs.as_deref().and_then(|d| project::contract_field(d, "profile")).unwrap_or_default();
+    profile.is_empty() || crate::policy::flag(&profile, docs.as_deref(), "travel.hiddenRefs", true)
+}
+
 pub(crate) fn is_workspace_branch(repo: &Path, branch: &str) -> bool {
     let here = project::normalize(repo);
     registry::read()
@@ -51,6 +60,9 @@ fn lock_file(repo: &Path, branch: &str) -> PathBuf {
 /// The tip is read once the lock is held, not when the commit was made: two
 /// commits in a row would otherwise race, and the older could land last.
 pub fn publish_now(repo: &Path, branch: &str) -> bool {
+    if !may_travel(repo) {
+        return false;
+    }
     let Ok(_lock) = task::record::lock(&lock_file(repo, branch)) else { return false };
     let Some(tip) = git::out(repo, &["rev-parse", "-q", "--verify", &refs::head(branch)]) else { return false };
     let mine = refs::published_here(branch);
