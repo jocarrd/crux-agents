@@ -18,6 +18,12 @@ fn absolute(dir: &Path) -> Option<PathBuf> {
     std::env::current_dir().ok().map(|c| normalize(&c.join(dir)))
 }
 
+/// A path reached through a symbolic link is still the same path: git answers
+/// with the resolved one, and the person's configuration may hold the other.
+pub fn real(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| normalize(p))
+}
+
 /// Removes `.` and `..` lexically, as the shell's `cd` does with a logical path.
 pub fn normalize(p: &Path) -> PathBuf {
     let mut out = PathBuf::new();

@@ -33,7 +33,7 @@ pub(super) fn cycle_guard() -> Res {
         root = Path::new(&kernel).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
     }
     // A trailing slash would leave the pattern unmatched and the guard silent.
-    let root = root.trim_end_matches('/').to_string();
+    let root = crate::project::real(Path::new(root.trim_end_matches('/'))).to_string_lossy().into_owned();
     let Some(top) = git::toplevel(&here) else { return Ok(()) };
     let top_s = top.to_string_lossy().into_owned();
     // In the docs repo you work on main and push directly.
@@ -41,6 +41,11 @@ pub(super) fn cycle_guard() -> Res {
     if top.join(names::CONTRACT).is_file() && (base.ends_with("-docs") || base == "docs") {
         return Ok(());
     }
+    let kernel = if kernel.is_empty() {
+        kernel
+    } else {
+        crate::project::real(Path::new(&kernel)).to_string_lossy().into_owned()
+    };
     let mut managed = !kernel.is_empty() && top_s == kernel;
     if !managed && !root.is_empty() {
         managed = top_s.strip_prefix(&format!("{root}/")).is_some_and(|rel| !rel.is_empty());

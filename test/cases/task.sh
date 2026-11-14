@@ -982,3 +982,49 @@ test_a_truncated_record_is_named_not_hidden() {
   assert_contains "$out" "unreadable task record" "status names it too"
   assert_exit 1 "and showing it is an error, not an empty task" "$CRUX_HOME/bin/crux" task --task proj/cut
 }
+
+test_task_show_names_the_task_like_new_does_and_lists_what_is_left() {
+  sandbox >/dev/null
+  "$CRUX_HOME/bin/crux" task new proj/route >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task add --task proj/route "measure the page" "fix the footer" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" --task proj/route T1 "measured" >/dev/null 2>&1
+  # 'task new proj/route' names it without --task; 'task show proj/route'
+  # refused the same name, and showed a count where the help promised steps.
+  local out; out="$("$CRUX_HOME/bin/crux" task show proj/route 2>&1)"
+  assert_contains "$out" "task route" "show takes the task as an argument, like new"
+  assert_contains "$out" "T2 fix the footer" "and lists the steps still to do"
+  assert_not_contains "$out" "measure the page" "not the ones already done"
+}
+
+test_an_own_repo_with_local_pointers_is_not_treated_as_a_clients() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  # A public repo of ours keeps its pointers out of git, like a client's: that
+  # made crux warn about "the client's repo" and skip our commit format there.
+  printf '{"pointers":{"write":false,"local":true}}\n' > "$root/proj-docs/profile.json"
+  git -C "$root/proj-docs" init -q
+
+  local out; out="$("$CRUX_HOME/bin/crux" workspace new own --repo "$root/app" 2>&1)"
+  assert_not_contains "$out" "client" "creating a workspace says nothing about a client"
+
+  ( cd "$root/proj-docs" && "$CRUX_HOME/bin/crux" hooks install ) >/dev/null 2>&1
+  local f="$SB/MSG"; printf 'Update the readme\n' > "$f"
+  assert_exit 1 "and its commits follow our format" bash "$root/app/.git/hooks/commit-msg" "$f"
+
+  local cli; cli="$CRUX_PROJECTS_DIR/cli"; mkdir -p "$cli/vendor" "$cli/cli-docs"
+  git -C "$cli/vendor" init -q; git -C "$cli/vendor" commit -q --allow-empty -m init
+  printf '{"crux":"0.1.0","project":"cli","profile":"client-repo","repos":["vendor"],"sections":[]}\n' > "$cli/cli-docs/crux.json"
+  out="$("$CRUX_HOME/bin/crux" workspace new theirs --repo "$cli/vendor" 2>&1)"
+  assert_contains "$out" "client's repo" "a client's repo still gets the warning"
+}
+
+test_a_workspace_reached_through_a_symlink_belongs_to_its_project() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  # git answers with the resolved path and the projects root kept the one it
+  # was given: behind a symlink, as macOS's temporary folder is, the repo was
+  # taken for the project and its task never reached the docs repo.
+  ln -s "$CRUX_PROJECTS_DIR" "$SB/link"
+  ( cd "$SB/link/proj/app" && CRUX_PROJECTS_DIR="$SB/link" "$CRUX_HOME/bin/crux" workspace new linked >/dev/null 2>&1 )
+  assert_file "$SB/tasks/proj/linked.md" "the task belongs to the project, not to the repo"
+}

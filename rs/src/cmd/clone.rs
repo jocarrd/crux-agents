@@ -9,7 +9,7 @@
 
 use crate::args::Parser;
 use crate::error::{exit, Res};
-use crate::{die, env, files, git, project, sh, ui};
+use crate::{die, env, files, git, policy, project, sh, ui};
 use std::path::{Path, PathBuf};
 
 /// A machine set up before the project existed keeps its repos wherever they
@@ -126,7 +126,7 @@ pub fn run(argv: &[String]) -> Res {
         }
         // In a client project the code is normally in another organization:
         // this is information, not a failure.
-        if profile == "client-repo" {
+        if policy::code_is_foreign(&profile, Some(&docs)) {
             ui::info(format!("profile {profile}: the code usually lives on the client's remote, clone it yourself"));
         } else {
             ui::info("check the name or the permissions");

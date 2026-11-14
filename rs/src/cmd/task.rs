@@ -21,7 +21,7 @@ fn fail<T>(msg: impl AsRef<str>) -> Result<T, Exit> {
 fn current_file(chosen: &str) -> Result<PathBuf, Exit> {
     if !chosen.is_empty() {
         if !chosen.contains('/') {
-            return fail("--task goes as <project>/<task>");
+            return fail("the task goes as <project>/<task>");
         }
         return Ok(env::tasks_dir().join(format!("{chosen}.md")));
     }
@@ -366,20 +366,25 @@ pub fn run(argv: &[String]) -> Res {
     let arg = |n: usize| args.get(n).cloned().unwrap_or_default();
     match op.as_str() {
         "show" => {
-            let f = current_file(&chosen)?;
+            let named = if chosen.is_empty() { arg(0) } else { chosen.clone() };
+            let f = current_file(&named)?;
             if !f.is_file() {
                 die!("the record {} does not exist", f.display());
             }
-            let s = match record::read(&f) {
-                Ok(d) => record::summary(&d),
+            let doc = match record::read(&f) {
+                Ok(d) => d,
                 Err(e) => return fail(format!("{e}: {}", f.display())),
             };
+            let s = record::summary(&doc);
             println!(
                 "task {} · {}{}",
                 s.task,
                 s.status,
                 if s.steps.is_empty() { String::new() } else { format!(" · steps {}", s.steps) }
             );
+            for step in record::steps(&doc).iter().filter(|p| !p.done) {
+                println!("  {} {}", step.id, step.text);
+            }
             if s.next.is_empty() {
                 ui::info("no next step: crux task next \"...\"");
             } else {

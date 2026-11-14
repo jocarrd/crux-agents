@@ -204,6 +204,13 @@ mod tests {
         assert!(found.is_empty(), "questions to GitHub copied instead of asked through gh.rs:\n{}", found.join("\n"));
     }
 
+    /// Rebuilt from HOME, the path escaped the suite's redirection into the real ~/.crux.
+    #[test]
+    fn the_state_directory_is_not_rebuilt_from_home() {
+        let found = written_outside(r#""\.crux/state"#, "env.rs");
+        assert!(found.is_empty(), "state paths built by hand instead of env::state_dir():\n{}", found.join("\n"));
+    }
+
     #[test]
     fn the_tasks_tracking_ref_is_the_remote_copy_of_their_branch() {
         assert_eq!(super::git::TASKS_TRACKED, super::git::remote_branch(super::git::TASKS_BRANCH));

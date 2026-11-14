@@ -42,7 +42,7 @@ fn session_or_parent(event: &Value) -> String {
 /// Markers go to ~/.crux/state and not to /tmp: their names would expose the
 /// repo path, that is the client and the task, to anyone on the machine.
 fn marker(prefix: &str, key: &str) -> PathBuf {
-    let state = env::home().join(".crux/state");
+    let state = env::state_dir();
     let _ = files::mkdir_private(&state);
     let id: String = crate::cmd::ship::cksum(key.as_bytes())
         .chars()

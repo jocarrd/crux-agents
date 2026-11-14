@@ -64,7 +64,7 @@ impl Ctx {
     /// The repos in the root and those inside each project, and separately the
     /// worktrees, which share their main repo's fetch.
     fn in_scope(&self, d: &Path) -> bool {
-        let d = real(d);
+        let d = project::real(d);
         let under = |dirs: &[PathBuf]| dirs.iter().any(|x| d.starts_with(x));
         match &self.scope {
             Scope::All => true,
@@ -844,21 +844,16 @@ fn arrival(ctx: &Ctx) -> Res {
 
 /// The project the session opens in, and the profile, which the agent reads.
 fn session_dirs(root: &Path) -> Vec<PathBuf> {
-    let root = real(root);
-    let cwd = real(&std::env::current_dir().unwrap_or_default());
+    let root = project::real(root);
+    let cwd = project::real(&std::env::current_dir().unwrap_or_default());
     let mut dirs: Vec<PathBuf> = cwd
         .strip_prefix(&root)
         .ok()
         .and_then(|rel| rel.components().next())
         .map(|first| vec![root.join(first)])
         .unwrap_or_default();
-    dirs.extend(person::dir().map(|d| real(&d)));
+    dirs.extend(person::dir().map(|d| project::real(&d)));
     dirs
-}
-
-/// A projects root reached through a symbolic link is still the same root.
-fn real(p: &Path) -> PathBuf {
-    std::fs::canonicalize(p).unwrap_or_else(|_| project::normalize(p))
 }
 
 /// The rest of the arrival runs detached and leaves what it found for the next

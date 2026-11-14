@@ -383,7 +383,7 @@ fn gate(ctx: &Ctx) -> Res {
     // branch checked out. Their fingerprint is remembered: when it changes,
     // what is about to run is shown before running it. A contract that arrives
     // in a proposal does not execute silently.
-    let state = env::home().join(".crux/state");
+    let state = env::state_dir();
     let _ = files::mkdir_private(&state);
     let key = cksum(format!("{}/{repo_name}", docs.display()).as_bytes());
     let key: String = key.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();

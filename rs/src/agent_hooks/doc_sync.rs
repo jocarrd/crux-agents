@@ -35,7 +35,8 @@ pub(super) fn doc_sync() -> Res {
     if root.is_empty() {
         return Ok(());
     }
-    let here = cwd();
+    let here = project::real(&cwd());
+    let root = project::real(Path::new(&root)).to_string_lossy().into_owned();
     let Some(rel) = here.to_string_lossy().strip_prefix(&format!("{root}/")).map(String::from) else { return Ok(()) };
     let mut parts = rel.split('/');
     let Some(project_name) = parts.next().filter(|p| !p.is_empty()) else { return Ok(()) };
@@ -80,8 +81,8 @@ pub(super) fn doc_sync() -> Res {
     if !activity {
         return Ok(());
     }
-    let state = env::home().join(".crux/state");
-    let _ = std::fs::create_dir_all(&state);
+    let state = env::state_dir();
+    let _ = crate::files::mkdir_private(&state);
     let id: String =
         session.chars().map(|c| if c.is_ascii_alphanumeric() || "_.-".contains(c) { c } else { '_' }).collect();
     let m = state.join(format!("doc-gate-{id}"));

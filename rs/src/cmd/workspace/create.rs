@@ -197,10 +197,7 @@ fn warn_before_creating(a: &NewArgs, repo: &Path, repo_name: &str, profile: &str
     if !others.is_empty() {
         ui::warn(format!("there is already open work on {repo_name}: {}", others.join(", ")));
     }
-    // `pointers.write: false` says the standard's documentation is not written
-    // in the code repo, not that you cannot work in it: a local branch is not
-    // documentation. What does go out to the client is `finish`.
-    if profile.is_empty() || a.force || policy::flag(profile, docs, "pointers.write", true) {
+    if profile.is_empty() || a.force || !policy::code_is_foreign(profile, docs) {
         return;
     }
     let docs_name = docs.map(files::name).unwrap_or_default();
