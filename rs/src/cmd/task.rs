@@ -21,7 +21,7 @@ fn fail<T>(msg: impl AsRef<str>) -> Result<T, Exit> {
 fn current_file(chosen: &str) -> Result<PathBuf, Exit> {
     if !chosen.is_empty() {
         if !chosen.contains('/') {
-            return fail("--task goes as <project>/<task>");
+            return fail("the task goes as <project>/<task>");
         }
         return Ok(env::tasks_dir().join(format!("{chosen}.md")));
     }

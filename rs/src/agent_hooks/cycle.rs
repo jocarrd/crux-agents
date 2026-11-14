@@ -41,6 +41,11 @@ pub(super) fn cycle_guard() -> Res {
     if top.join(names::CONTRACT).is_file() && (base.ends_with("-docs") || base == "docs") {
         return Ok(());
     }
+    let kernel = if kernel.is_empty() {
+        kernel
+    } else {
+        crate::project::real(Path::new(&kernel)).to_string_lossy().into_owned()
+    };
     let mut managed = !kernel.is_empty() && top_s == kernel;
     if !managed && !root.is_empty() {
         managed = top_s.strip_prefix(&format!("{root}/")).is_some_and(|rel| !rel.is_empty());

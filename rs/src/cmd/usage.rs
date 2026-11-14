@@ -90,7 +90,7 @@ fn sessions_of(project: &Path) -> BTreeMap<String, Vec<PathBuf>> {
     let mut groups: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     fn visit(dir: &Path, root: Option<&str>, groups: &mut BTreeMap<String, Vec<PathBuf>>) {
         let mut entries: Vec<_> = std::fs::read_dir(dir).map(|e| e.flatten().collect()).unwrap_or_default();
-        entries.sort_by_key(|e| (e.path().is_dir(), e.file_name()));
+        entries.sort_by_key(|e| (e.file_type().is_ok_and(|t| t.is_dir()), e.file_name()));
         for e in entries {
             let name = e.file_name().to_string_lossy().into_owned();
             let full = e.path();
