@@ -15,11 +15,15 @@
 # because your own command line contains that text).
 set -u
 umask 077
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
 SRC="${1:?source profile required}"
 WORK="${2:-${TMPDIR:-/tmp}/cdp-profile}"
 WORK="${WORK%/}"
 PORT="${3:-9222}"
-CFG="$(dirname "$SRC")"   # the user data dir that holds the profile and Local State
+CFG="$(dirname -- "$SRC")"   # the user data dir that holds the profile and Local State
 
 # macOS keeps the cookie key in the Keychain, which Chrome reaches on its own;
 # Linux needs to be told which keyring holds it.

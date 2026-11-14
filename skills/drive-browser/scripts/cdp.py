@@ -15,14 +15,25 @@ Actions:
 
 CDP listens on $CDP_URL or http://127.0.0.1:9222.
 """
-import asyncio, json, sys, os, base64, urllib.request, websockets
+import asyncio, json, sys, os, base64, urllib.error, urllib.request
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__.strip())
+    raise SystemExit(0)
+try:
+    import websockets
+except ModuleNotFoundError:
+    raise SystemExit("cdp.py needs websockets: python3 -m pip install --user websockets")
 
 CDP = os.environ.get("CDP_URL", "http://127.0.0.1:9222")
 
 def http(path):
     # ProxyHandler({}) keeps an http_proxy from the environment from breaking the localhost call
     op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    return json.load(op.open(CDP + path, timeout=6))
+    try:
+        return json.load(op.open(CDP + path, timeout=6))
+    except (urllib.error.URLError, OSError) as e:
+        raise SystemExit(f"no Chrome answers on {CDP} ({e}): start it with chrome-session.sh")
 
 def page_ws():
     for t in http("/json"):

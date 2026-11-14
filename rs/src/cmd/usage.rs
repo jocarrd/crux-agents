@@ -17,15 +17,7 @@ use std::path::{Path, PathBuf};
 use unicode_normalization::UnicodeNormalization;
 
 fn transcripts_dir() -> PathBuf {
-    // CLAUDE_SKILLS_DIR is redirected by the suite: if the transcripts came
-    // from the real HOME, the machine would be measured, not the sandbox.
-    if let Some(t) = env::var(crate::names::vars::TRANSCRIPTS) {
-        return PathBuf::from(t);
-    }
-    match env::var("CLAUDE_SKILLS_DIR") {
-        Some(s) => Path::new(&s).parent().unwrap_or(Path::new("/")).join("projects"),
-        None => env::home().join(".claude/projects"),
-    }
+    env::var(crate::names::vars::TRANSCRIPTS).map(PathBuf::from).unwrap_or_else(env::claude_transcripts_dir)
 }
 
 fn description_of(dir: &Path) -> String {

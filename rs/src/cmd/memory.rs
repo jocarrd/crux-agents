@@ -27,7 +27,7 @@ pub struct Memory {
 /// hyphens, left undecoded: the way back is ambiguous, and the kernel is the
 /// one that knows which projects exist.
 pub fn claude_memories() -> Vec<Memory> {
-    let root = env::claude_config_dir().join("projects");
+    let root = env::claude_transcripts_dir();
     let mut out = vec![];
     for scope in project::subdirs(&root) {
         let dir = root.join(&scope).join("memory");

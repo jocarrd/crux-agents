@@ -19,9 +19,14 @@ pub fn home() -> PathBuf {
     var("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
 }
 
+/// The folder of this machine's crux state: config, kernels, tasks.
+pub fn crux_dir() -> PathBuf {
+    home().join(".crux")
+}
+
 /// The machine config, `~/.crux/config`: shell-style `KEY="value"` lines.
 pub fn config_file() -> PathBuf {
-    home().join(".crux/config")
+    crux_dir().join("config")
 }
 
 /// The same file, but redirectable with CRUX_CONFIG. Only the remote template
@@ -136,7 +141,7 @@ pub fn default_projects_root() -> PathBuf {
 }
 
 pub fn registry_file() -> PathBuf {
-    var(crate::names::vars::REGISTRY).map(PathBuf::from).unwrap_or_else(|| home().join(".crux/workspaces.json"))
+    var(crate::names::vars::REGISTRY).map(PathBuf::from).unwrap_or_else(|| crux_dir().join("workspaces.json"))
 }
 
 /// Next to the workspace registry: if a test redirects that registry to its
@@ -149,23 +154,52 @@ pub fn tasks_dir() -> PathBuf {
 }
 
 pub fn state_dir() -> PathBuf {
-    var(crate::names::vars::STATE_DIR).map(PathBuf::from).unwrap_or_else(|| home().join(".crux/state"))
+    var(crate::names::vars::STATE_DIR).map(PathBuf::from).unwrap_or_else(|| crux_dir().join("state"))
 }
 
+/// Where each installed kernel version lives, one folder per version.
+pub fn kernels_dir() -> PathBuf {
+    crux_dir().join("kernel")
+}
+
+/// The person's own profiles, which survive upgrades.
+pub fn user_profiles_dir() -> PathBuf {
+    crux_dir().join("profiles")
+}
+
+// Every agent path hangs from the agent's own folder, which the agent itself
+// lets the person move: built from HOME instead, crux wrote where the agent
+// did not look.
+
 pub fn claude_config_dir() -> PathBuf {
-    var("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home().join(".claude"))
+    var(crate::names::agents::CLAUDE_CONFIG_DIR).map(PathBuf::from).unwrap_or_else(|| home().join(".claude"))
 }
 
 pub fn claude_skills_dir() -> PathBuf {
-    var("CLAUDE_SKILLS_DIR").map(PathBuf::from).unwrap_or_else(|| home().join(".claude/skills"))
+    var(crate::names::agents::CLAUDE_SKILLS_DIR)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| claude_config_dir().join("skills"))
 }
 
-pub fn codex_prompts_dir() -> PathBuf {
-    var("CODEX_PROMPTS_DIR").map(PathBuf::from).unwrap_or_else(|| home().join(".codex/prompts"))
+pub fn claude_settings() -> PathBuf {
+    var(crate::names::agents::CLAUDE_SETTINGS)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| claude_config_dir().join("settings.json"))
+}
+
+pub fn claude_transcripts_dir() -> PathBuf {
+    claude_config_dir().join("projects")
 }
 
 pub fn codex_home_dir() -> PathBuf {
-    var("CODEX_HOME_DIR").map(PathBuf::from).unwrap_or_else(|| home().join(".codex"))
+    var(crate::names::agents::CODEX_HOME_DIR)
+        .or_else(|| var(crate::names::agents::CODEX_HOME))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home().join(".codex"))
+}
+
+pub fn codex_prompts_dir() -> PathBuf {
+    var(crate::names::agents::CODEX_PROMPTS_DIR).map(PathBuf::from).unwrap_or_else(|| codex_home_dir().join("prompts"))
 }
 
 /// This machine's name as it can go into a file name or a git ref: the short

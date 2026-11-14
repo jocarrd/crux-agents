@@ -96,11 +96,37 @@ pub mod git {
     }
 }
 
+/// What the agents read: their environment variables and the settings key
+/// where crux registers its plugin.
+pub mod agents {
+    pub const CLAUDE_CONFIG_DIR: &str = "CLAUDE_CONFIG_DIR";
+    pub const CLAUDE_SKILLS_DIR: &str = "CLAUDE_SKILLS_DIR";
+    pub const CLAUDE_SETTINGS: &str = "CLAUDE_SETTINGS";
+    pub const PLUGIN_DIRS: &str = "CLAUDE_CODE_PLUGIN_DIRS";
+    pub const CODEX_HOME: &str = "CODEX_HOME";
+    pub const CODEX_HOME_DIR: &str = "CODEX_HOME_DIR";
+    pub const CODEX_PROMPTS_DIR: &str = "CODEX_PROMPTS_DIR";
+}
+
 pub mod hooks {
     pub const COMMIT_MSG: &str = "commit-msg";
     pub const POST_COMMIT: &str = "post-commit";
     pub const PRE_COMMIT: &str = "pre-commit";
     pub const PRE_PUSH: &str = "pre-push";
+
+    /// The parts a hook's dispatcher runs, in this order: crux's rules, the
+    /// project's from its docs repo, and this machine's own.
+    pub fn crux_part(hook: &str) -> String {
+        format!("{hook}.crux")
+    }
+
+    pub fn project_part(hook: &str) -> String {
+        format!("{hook}.project")
+    }
+
+    pub fn local_part(hook: &str) -> String {
+        format!("{hook}.local")
+    }
 }
 
 pub mod vars {
@@ -183,17 +209,18 @@ mod tests {
     fn code(text: &str) -> String {
         let text = text.split("#[cfg(test)]").next().unwrap_or("");
         let raw = regex::Regex::new(r##"(?s)r#+".*?"#+"##).unwrap();
-        raw.replace_all(text, "").into_owned()
+        // Each one leaves its line breaks, so what is found keeps its line number.
+        raw.replace_all(text, |c: &regex::Captures| "\n".repeat(c[0].matches('\n').count())).into_owned()
     }
 
     /// Every match of `pattern` in the code of `rs/src`, except in `owner`.
-    fn written_outside(pattern: &str, owner: &str) -> Vec<String> {
+    fn written_outside(pattern: &str, owners: &[&str]) -> Vec<String> {
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = vec![];
         rust_files(&src, &mut files);
         let literal = regex::Regex::new(pattern).unwrap();
         let mut found = vec![];
-        for f in files.iter().filter(|f| !f.ends_with(owner)) {
+        for f in files.iter().filter(|f| !owners.iter().any(|o| f.ends_with(o))) {
             let text = code(&std::fs::read_to_string(f).unwrap());
             for (n, line) in text.lines().enumerate() {
                 for m in literal.find_iter(line) {
@@ -206,7 +233,7 @@ mod tests {
 
     #[test]
     fn no_name_is_written_outside_this_file() {
-        let found = written_outside(r#""(CRUX_[A-Z0-9_]+"|origin"|origin/|refs/)"#, "names.rs");
+        let found = written_outside(r#""(CRUX_[A-Z0-9_]+"|origin"|origin/|refs/)"#, &["names.rs"]);
         assert!(found.is_empty(), "names written by hand instead of taken from names.rs:\n{}", found.join("\n"));
     }
 
@@ -216,7 +243,7 @@ mod tests {
     fn no_repeated_github_question_is_copied_outside_gh_rs() {
         let found = written_outside(
             r#""auth", "status"|"repo", "list"|"repo", "view"|"--json", "visibility"|contents/crux\.json"#,
-            "gh.rs",
+            &["gh.rs"],
         );
         assert!(found.is_empty(), "questions to GitHub copied instead of asked through gh.rs:\n{}", found.join("\n"));
     }
@@ -224,8 +251,24 @@ mod tests {
     /// Rebuilt from HOME, the path escaped the suite's redirection into the real ~/.crux.
     #[test]
     fn the_state_directory_is_not_rebuilt_from_home() {
-        let found = written_outside(r#""\.crux/state"#, "env.rs");
+        let found = written_outside(r#""\.crux/state"#, &["env.rs"]);
         assert!(found.is_empty(), "state paths built by hand instead of env::state_dir():\n{}", found.join("\n"));
+    }
+
+    /// The agents' folders and variables are read in env.rs, where the suite
+    /// redirects them: rebuilt elsewhere, one copy honoured CODEX_HOME and the
+    /// other did not, and crux wrote where the agent did not look.
+    #[test]
+    fn no_agent_path_or_variable_is_rebuilt_outside_env() {
+        let found = written_outside(
+            r#"join\("\.(crux|claude|codex)("|/)|"\.(crux|claude|codex)/|"(CLAUDE|CODEX)_[A-Z_]+""#,
+            &["env.rs", "names.rs"],
+        );
+        assert!(
+            found.is_empty(),
+            "agent paths or variables built by hand instead of taken from env:\n{}",
+            found.join("\n")
+        );
     }
 
     #[test]

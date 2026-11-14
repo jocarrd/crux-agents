@@ -43,10 +43,15 @@ pub fn field(dir: &Path, key: &str) -> Option<String> {
     None
 }
 
-/// This machine's note, if the profile has one.
+/// This machine's note, if the profile has one: by its full hostname, and
+/// failing that by its short name. macOS builds the hostname from the network
+/// when none is set, so a note named after it stopped loading on another one.
 pub fn machine_note(dir: &Path) -> Option<PathBuf> {
-    let note = dir.join(format!("machines/{}.md", env::hostname()));
-    note.is_file().then_some(note)
+    [env::hostname(), env::machine()]
+        .into_iter()
+        .filter(|n| !n.is_empty())
+        .map(|n| dir.join(format!("machines/{n}.md")))
+        .find(|note| note.is_file())
 }
 
 const BEGIN: &str = "<!-- crux:profile:begin -->";

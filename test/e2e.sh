@@ -22,6 +22,7 @@ build_core || exit 1
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/crux-e2e-XXXXXX")"
 export CRUX_PROJECTS_DIR="$SB/projects"
+export CLAUDE_CONFIG_DIR="$SB/home/.claude"
 export CLAUDE_SKILLS_DIR="$SB/home/.claude/skills"
 export CODEX_PROMPTS_DIR="$SB/home/.codex/prompts"
 export CODEX_HOME_DIR="$SB/home/.codex"

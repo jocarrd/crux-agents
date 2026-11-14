@@ -37,10 +37,13 @@ bad()   { FAILURES=$((FAILURES + 1)); echo "   ${R}fail${O} $*"; }
 truthy(){ if eval "$1"; then good "$2"; else bad "$2"; fi; }
 
 # What publishes in the background may still be writing into the sandbox.
+# It is looked for by both spellings of the path: on macOS the temporary
+# folder sits behind a symlink, and those processes run with the resolved one.
 settle() {
-  local _
+  local _ real
+  real="$(cd "$SB" 2>/dev/null && pwd -P)"
   for _ in $(seq 40); do
-    pgrep -f -- "$SB" >/dev/null || return 0
+    pgrep -f -- "$SB" >/dev/null || pgrep -f -- "${real:-$SB}" >/dev/null || return 0
     sleep 0.25
   done
 }
@@ -56,7 +59,7 @@ machine() {
 on() {
   local m="$SB/$1"; shift
   ( cd "${CWD:-$m/projects}" && env HOME="$m" CRUX_MACHINE="$(basename "$m")" CRUX_PROJECTS_DIR="$m/projects" \
-      CLAUDE_SETTINGS="$m/.claude/settings.json" CLAUDE_SKILLS_DIR="$m/.claude/skills" \
+      CLAUDE_CONFIG_DIR="$m/.claude" CLAUDE_SETTINGS="$m/.claude/settings.json" CLAUDE_SKILLS_DIR="$m/.claude/skills" \
       CODEX_HOME_DIR="$m/.codex" CODEX_PROMPTS_DIR="$m/.codex/prompts" "$@" )
 }
 crux_on() { local m="$1"; shift; on "$m" "$CRUX_HOME/bin/crux" "$@"; }

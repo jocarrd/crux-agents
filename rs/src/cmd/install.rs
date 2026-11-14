@@ -99,10 +99,10 @@ fn move_hooks(file: &Path, kernels: &Path, target: &Path, plugin_dirs: bool) -> 
     if plugin_dirs {
         let dirs_re = Regex::new(&format!("{k}/[^/:]+/adapters/")).unwrap();
         if let Some(e) = s.get_mut("env").and_then(Value::as_object_mut) {
-            if let Some(dirs) = e.get("CLAUDE_CODE_PLUGIN_DIRS").and_then(Value::as_str).map(String::from) {
+            if let Some(dirs) = e.get(crate::names::agents::PLUGIN_DIRS).and_then(Value::as_str).map(String::from) {
                 let updated = dirs_re.replace_all(&dirs, regex::NoExpand(&new)).into_owned();
                 if updated != dirs {
-                    e.insert("CLAUDE_CODE_PLUGIN_DIRS".into(), Value::String(updated));
+                    e.insert(crate::names::agents::PLUGIN_DIRS.into(), Value::String(updated));
                     n += 1;
                 }
             }
@@ -131,7 +131,7 @@ pub fn run(argv: &[String]) -> Res {
     }
     // The installed command points CRUX_HOME at the kernel copy it runs: that
     // is not a clone, and taking it for one deleted it before copying from it.
-    let installed = env::home().join(".crux/kernel");
+    let installed = env::kernels_dir();
     let clone = env::var(crate::names::vars::HOME)
         .map(PathBuf::from)
         .filter(|h| h.join(names::VERSION).is_file())
@@ -174,7 +174,7 @@ pub fn run(argv: &[String]) -> Res {
     let home = env::home();
     let mut kernel = origin.clone();
     if !dev && !dry {
-        let target = home.join(".crux/kernel").join(&version);
+        let target = env::kernels_dir().join(&version);
         // The binary goes with the copy: the kernel of a version runs the
         // commands of that version. Read before the target is emptied, since
         // installing again from the installed command runs from inside it.
@@ -220,14 +220,14 @@ pub fn run(argv: &[String]) -> Res {
 
     // The root is deduced from the kernel clone, not from the copy: the
     // copy's parent is the kernels directory and contains no project.
-    let config = home.join(".crux/config");
+    let config = env::config_file();
     let mut root_text = "deduced from where the kernel clone is";
     let from_flag = !projects_dir.is_empty();
     let mut root = projects_dir.clone();
     if root.is_empty() {
         if let Some(mut declared) = env::config_value_in(&config, env::PROJECTS_DIR_KEY) {
             // Older installs wrote the kernels directory as the root.
-            if Path::new(&declared) == home.join(".crux/kernel") {
+            if Path::new(&declared) == env::kernels_dir() {
                 ui::warn("the declared root was the kernels directory: fixing it");
                 declared.clear();
             }
@@ -246,7 +246,7 @@ pub fn run(argv: &[String]) -> Res {
         }
     };
     if !dry {
-        let _ = std::fs::create_dir_all(home.join(".crux"));
+        let _ = std::fs::create_dir_all(env::crux_dir());
         let previous = match files::read_if_exists(&config) {
             Ok(t) => t,
             Err(e) => die!("{e} — the lines you added there would be lost"),
@@ -300,10 +300,9 @@ pub fn run(argv: &[String]) -> Res {
     skills::prune();
     ui::ok("kernel skills materialized (Claude + Codex)");
     if !dev && !dry {
-        let settings =
-            env::var("CLAUDE_SETTINGS").map(PathBuf::from).unwrap_or_else(|| home.join(".claude/settings.json"));
+        let settings = env::claude_settings();
         if settings.is_file() {
-            let n = match move_hooks(&settings, &home.join(".crux/kernel"), &kernel, true) {
+            let n = match move_hooks(&settings, &env::kernels_dir(), &kernel, true) {
                 Ok(n) => n,
                 Err(e) => die!("{e} — the agent hooks still run the previous kernel"),
             };
@@ -311,13 +310,9 @@ pub fn run(argv: &[String]) -> Res {
                 ui::ok(format!("agent hooks moved to {version} ({n})"));
             }
         }
-        let codex = env::var("CODEX_HOME_DIR")
-            .or_else(|| env::var("CODEX_HOME"))
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".codex"))
-            .join("hooks.json");
+        let codex = env::codex_home_dir().join("hooks.json");
         if codex.is_file() {
-            let n = match move_hooks(&codex, &home.join(".crux/kernel"), &kernel, false) {
+            let n = match move_hooks(&codex, &env::kernels_dir(), &kernel, false) {
                 Ok(n) => n,
                 Err(e) => die!("{e} — the Codex hooks still run the previous kernel"),
             };

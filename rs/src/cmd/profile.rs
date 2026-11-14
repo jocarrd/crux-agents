@@ -28,7 +28,8 @@ goes in this index is read in every session: keep it short and link the detail.
 here and not in the agent's local memory: one note per fact in `preferences/`
 (how they want you to work) or `about/` (who they are, their plans, their
 accounts), one line in this index, then `git commit` and `git push` right away.
-What only holds on one computer goes in `machines/<hostname>.md`. A project's
+What only holds on one computer goes in `machines/<machine>.md`, named after
+the short hostname, which does not change with the network. A project's
 knowledge goes to its `-docs` repo; keys and passwords go nowhere in git.
 
 ## Preferences
@@ -49,7 +50,7 @@ loads it into each one and `crux sync` carries it between machines.
 | `PROFILE.md` | The index loaded in every session. Short: the rest is opened when needed |
 | `preferences/` | How the agents should work |
 | `about/` | Who the person is, their plans, their accounts |
-| `machines/<hostname>.md` | What only holds on one computer; loaded only there |
+| `machines/<machine>.md` | What only holds on one computer, named after the short hostname; loaded only there |
 
 What does not go here: a project's knowledge (its `-docs` repo) and keys (each machine).
 ";

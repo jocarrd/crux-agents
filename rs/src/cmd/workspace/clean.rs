@@ -21,7 +21,7 @@ fn repoint_hooks(workspace: &Path, main_repo: &Path, settings: &Path) {
                 .args(["hooks", "install"])
                 .current_dir(main_repo)
                 .env(crate::names::vars::HOME, main_repo)
-                .env("CLAUDE_SETTINGS", settings),
+                .env(crate::names::agents::CLAUDE_SETTINGS, settings),
         )
         .ok();
     if !reinstalled {
@@ -88,8 +88,7 @@ pub fn rm(argv: &[String]) -> Res {
         }
         // Hooks installed from inside a workspace point at it, and on closing
         // it they cease to exist with nothing saying so.
-        let settings =
-            env::var("CLAUDE_SETTINGS").map(PathBuf::from).unwrap_or_else(|| env::home().join(".claude/settings.json"));
+        let settings = env::claude_settings();
         if files::read_or_empty(&settings).contains(&format!("{}/", path.display())) {
             repoint_hooks(&path, &repo, &settings);
         }

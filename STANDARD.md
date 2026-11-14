@@ -642,7 +642,7 @@ name with `CRUX_PROFILE_REPO` in `~/.crux/config`), in neutral markdown:
 | `PROFILE.md` | The index, loaded in every session. Short: the detail is linked |
 | `preferences/` | How the person wants the agents to work (`feedback`) |
 | `about/` | Who they are, their plans, their accounts (`user`) |
-| `machines/<hostname>.md` | What only holds on one computer; loaded only there |
+| `machines/<machine>.md` | What only holds on one computer; loaded only there. Named after the short hostname (`CRUX_MACHINE` when set), which does not change with the network; the full hostname is also found |
 
 Keys and passwords go nowhere in git; a project's knowledge, to its docs repo.
 
