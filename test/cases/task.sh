@@ -987,7 +987,7 @@ test_task_show_names_the_task_like_new_does_and_lists_what_is_left() {
   sandbox >/dev/null
   "$CRUX_HOME/bin/crux" task new proj/route >/dev/null 2>&1
   "$CRUX_HOME/bin/crux" task add --task proj/route "measure the page" "fix the footer" >/dev/null 2>&1
-  "$CRUX_HOME/bin/crux" task done --task proj/route T1 "measured" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" task "done" --task proj/route T1 "measured" >/dev/null 2>&1
   # 'task new proj/route' names it without --task; 'task show proj/route'
   # refused the same name, and showed a count where the help promised steps.
   local out; out="$("$CRUX_HOME/bin/crux" task show proj/route 2>&1)"
