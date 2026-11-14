@@ -616,19 +616,19 @@ test_sync_deletes_a_branch_merged_and_deleted_on_the_other_machine() {
   sandbox >/dev/null
   _two_machines
   local app="$CRUX_PROJECTS_DIR/alpha/app"
-  _merged_and_deleted_there done
+  _merged_and_deleted_there finished
   _merged_and_deleted_there more
   git -C "$app" switch -q more
   git -C "$app" commit -q --allow-empty -m "after the merge"
   git -C "$app" switch -q main
   _merged_and_deleted_there unmerged
   local fake; fake="$(_gh_with_merged_proposal)"
-  printf '7 %s\n' "$(git -C "$app" rev-parse done)" > "$SB/merged"
+  printf '7 %s\n' "$(git -C "$app" rev-parse finished)" > "$SB/merged"
 
   local out
   out="$(PATH="$fake:$PATH" crux sync 2>&1)"
-  assert_exit 1 "the merged one is gone" git -C "$app" rev-parse -q --verify refs/heads/done
-  assert_contains "$out" "done deleted, merged in #7" "and it says so"
+  assert_exit 1 "the merged one is gone" git -C "$app" rev-parse -q --verify refs/heads/finished
+  assert_contains "$out" "finished deleted, merged in #7" "and it says so"
   assert_exit 0 "one with a commit after the merge stays" git -C "$app" rev-parse -q --verify refs/heads/more
   teardown
 }
