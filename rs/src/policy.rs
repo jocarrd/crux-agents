@@ -63,6 +63,11 @@ pub fn code_is_foreign(name: &str, docs: Option<&Path>) -> bool {
     name == "client-repo" || flag(name, docs, "code.foreign", false)
 }
 
+/// Whether anything of ours may sit in a code repo, versioned or only local.
+pub fn writes_in_code_repos(name: &str, docs: Option<&Path>) -> bool {
+    flag(name, docs, "pointers.write", true) || flag(name, docs, "pointers.local", false)
+}
+
 /// The language commits and proposals are written in: the contract wins,
 /// then the profile, and with nobody saying anything, English.
 pub fn commit_language(profile: &str, docs: Option<&Path>) -> String {

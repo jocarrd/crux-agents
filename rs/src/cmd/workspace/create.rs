@@ -149,6 +149,9 @@ pub fn create(a: NewArgs) -> Res {
     exclude_local_state(&path, &config.env_file);
     // An unversioned file does not travel with `git worktree add`.
     if let Some(d) = docs.as_deref() {
+        if policy::writes_in_code_repos(&profile, Some(d)) {
+            crate::skills::ProjectSkills::of(d).link_into(&path);
+        }
         if policy::flag(&profile, Some(d), "pointers.local", false) {
             if let Ok(template::LocalPointer::Written) = template::write_local_pointer(&path, &files::name(d)) {
                 ui::ok(format!("{} points to {} (excluded from git)", template::LOCAL_POINTER, files::name(d)));
@@ -356,31 +359,14 @@ fn hint_unattended_tasks(project_name: &str, task: &str, name: &str) {
 /// directory's exclude, which git honours from a worktree, never the
 /// versioned .gitignore.
 fn exclude_local_state(path: &Path, env_file: &str) {
-    let Some(common) = git::common_dir(path) else { return };
-    let _ = std::fs::create_dir_all(common.join("info"));
-    let exclude = common.join("info/exclude");
-    let mut current = match files::read_if_exists(&exclude) {
-        Ok(t) => t,
-        Err(e) => {
-            ui::warn(format!("{e} — the gate receipt and {env_file} are not ignored, and could be committed"));
-            return;
-        }
-    };
     // uv run writes uv.lock; a Python repo that does not version it would see
     // it as a change and finish would refuse the proposal over it
     let lockfile = path.join("pyproject.toml").is_file()
         && git::out(path, &["ls-files", "--", "uv.lock"]).unwrap_or_default().trim().is_empty();
     let uv_lock = if lockfile { "/uv.lock" } else { "" };
-    for entry in [names::GATE_RECEIPT, names::VISUAL_RECEIPT, env_file, uv_lock].into_iter().filter(|e| !e.is_empty()) {
-        if !current.lines().any(|l| l == entry) {
-            if !current.is_empty() && !current.ends_with('\n') {
-                current.push('\n');
-            }
-            current.push_str(entry);
-            current.push('\n');
-        }
-    }
-    if let Err(e) = files::write(&exclude, &current) {
+    let entries: Vec<&str> =
+        [names::GATE_RECEIPT, names::VISUAL_RECEIPT, env_file, uv_lock].into_iter().filter(|e| !e.is_empty()).collect();
+    if let Err(e) = git::exclude(path, &entries) {
         ui::warn(format!("{e} — the gate receipt and {env_file} are not ignored, and could be committed"));
     }
 }

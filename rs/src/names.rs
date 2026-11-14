@@ -13,6 +13,10 @@ pub const AGENTS: &str = "AGENTS.md";
 pub const CLAUDE: &str = "CLAUDE.md";
 pub const README: &str = "README.md";
 pub const SKILL: &str = "SKILL.md";
+/// Where an agent looks for the skills of the repo a session opens in.
+pub const CLAUDE_SKILLS: &str = ".claude/skills";
+/// Where a docs repo keeps its project's skills.
+pub const PROJECT_SKILLS: &str = ".claude/skills/project";
 /// What marks a directory as a kernel, with VERSION.
 pub const STANDARD: &str = "STANDARD.md";
 pub const VERSION: &str = "VERSION";

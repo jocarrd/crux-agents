@@ -261,8 +261,23 @@ pub fn run(argv: &[String]) -> Res {
     }
 
     println!();
-    skills::materialize(&tree.join(".claude/skills"), &project_name);
+    skills::materialize_for_project(&docs, &project_name, &skill_repos(&docs, &profile, &repos));
     skills::prune();
     ui::ok("project skills materialized");
     Ok(())
+}
+
+/// Where the project's sessions open: the docs repo and the code repos with
+/// every workspace of them. A client's repo only takes what is local and out
+/// of git, as its pointer is.
+fn skill_repos(docs: &Path, profile: &str, repos: &[String]) -> Vec<PathBuf> {
+    let local = policy::writes_in_code_repos(profile, Some(docs));
+    let root = docs.parent().unwrap_or(docs);
+    let code = repos
+        .iter()
+        .filter(|_| local)
+        .filter(|r| project::valid_name(r))
+        .map(|r| root.join(r))
+        .filter(|d| git::common_dir(d).is_some());
+    std::iter::once(docs.to_path_buf()).chain(code).flat_map(|d| git::worktrees(&d)).collect()
 }

@@ -58,7 +58,7 @@ fn catalog(home: &Path, root: &Path) -> (Vec<(String, String)>, HashMap<String, 
     }
     for p in dirs(root) {
         for sub in dirs(&root.join(&p)).into_iter().filter(|s| s.ends_with("-docs")) {
-            let skills = root.join(&p).join(&sub).join(".claude/skills/project");
+            let skills = root.join(&p).join(&sub).join(names::PROJECT_SKILLS);
             for n in dirs(&skills) {
                 set(n.clone(), sub.replacen("-docs", "", 1), skills.join(&n), &mut out);
             }

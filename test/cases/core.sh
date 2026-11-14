@@ -446,9 +446,9 @@ test_json_get_returns_the_whole_array() {
   assert_eq "3" "$count" "the last element of the array is not lost"
 }
 
-test_skills_are_materialized_for_both_agents() {
-  sandbox >/dev/null
-  local docs; docs="$(new_project omicron)"
+_project_with_a_skill() {
+  local docs; docs="$(new_project omicron --repos "api")"
+  git init -q "$CRUX_PROJECTS_DIR/omicron/api"
   mkdir -p "$docs/.claude/skills/project/do-something"
   cat > "$docs/.claude/skills/project/do-something/SKILL.md" <<'EOF'
 ---
@@ -457,14 +457,99 @@ description: Test procedure.
 ---
 # do something
 EOF
+  echo "$docs"
+}
+
+test_project_skills_are_offered_only_inside_the_project() {
+  sandbox >/dev/null
+  local docs; docs="$(_project_with_a_skill)"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  # A link from an earlier version, in the catalog every session loads.
+  ln -s "$docs/.claude/skills/project/do-something" "$CLAUDE_SKILLS_DIR/do-something"
 
   "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
 
-  assert_symlink "$CLAUDE_SKILLS_DIR/do-something" \
-    "$docs/.claude/skills/project/do-something" "Claude gets the link to the skill"
-  assert_file "$CODEX_PROMPTS_DIR/do-something.md" "Codex gets its stub"
+  assert_symlink "$api/.claude/skills/do-something" \
+    "$docs/.claude/skills/project/do-something" "the code repo offers the project's skill"
+  assert_symlink "$docs/.claude/skills/do-something" \
+    "$docs/.claude/skills/project/do-something" "and so does the docs repo, where the agent does not look in subfolders"
+  assert_eq "" "$(git -C "$api" status --porcelain -- .claude)" "the link stays out of git"
+  assert_eq "1" "$([[ -L "$CLAUDE_SKILLS_DIR/do-something" ]] && echo 0 || echo 1)" \
+    "and the global catalog, which every other project loads, no longer has it"
+  assert_file "$CODEX_PROMPTS_DIR/do-something.md" "Codex keeps its stub"
   assert_contains "$(cat "$CODEX_PROMPTS_DIR/do-something.md")" \
     "$docs/.claude/skills/project/do-something/SKILL.md" "the stub points to the source, it does not duplicate it"
+}
+
+test_a_client_repo_takes_project_skills_only_as_local_files() {
+  sandbox >/dev/null
+  local docs; docs="$(_project_with_a_skill)"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  json_set "$docs/crux.json" profile '"client-repo"'
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  assert_symlink "$api/.claude/skills/do-something" \
+    "$docs/.claude/skills/project/do-something" "with a local pointer allowed, the skill is linked like it"
+  assert_eq "" "$(git -C "$api" status --porcelain)" "and the client's repo shows nothing new"
+
+  rm -rf "$api/.claude"
+  printf '{"pointers":{"local":false}}\n' > "$docs/profile.json"
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  assert_no_file "$api/.claude/skills/do-something" "a profile that allows nothing there gets nothing"
+}
+
+test_project_skill_links_leave_the_repos_own_alone_and_follow_renames() {
+  sandbox >/dev/null
+  local docs; docs="$(_project_with_a_skill)"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  # The repo versions a link of its own under the same name: it is theirs.
+  mkdir -p "$api/.claude/skills" "$api/tools/do-something"
+  ln -s ../../tools/do-something "$api/.claude/skills/do-something"
+  git -C "$api" add -A && git -C "$api" commit -qm "own skill"
+  # A kernel skill keeps its global link.
+  ln -s "$CRUX_HOME/skills/ship" "$CLAUDE_SKILLS_DIR/ship"
+  # And a link left in the global catalog pointing at a worktree of the docs repo.
+  git -C "$docs" add -A && git -C "$docs" commit -qm skill
+  git -C "$docs" worktree add -q "$docs-ws-x" 2>/dev/null
+  ln -s "$docs-ws-x/.claude/skills/project/do-something" "$CLAUDE_SKILLS_DIR/do-something"
+
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+
+  assert_eq "../../tools/do-something" "$(readlink "$api/.claude/skills/do-something")" "the repo's versioned link is not replaced"
+  assert_eq "" "$(git -C "$api" status --porcelain -- .claude)" "and git sees nothing changed"
+  assert_symlink "$CLAUDE_SKILLS_DIR/ship" "$CRUX_HOME/skills/ship" "a kernel skill keeps its global link"
+  assert_eq "1" "$([[ -L "$CLAUDE_SKILLS_DIR/do-something" ]] && echo 0 || echo 1)" \
+    "a global link into a worktree of the docs repo is removed too"
+
+  mv "$docs/.claude/skills/project/do-something" "$docs/.claude/skills/project/do-other"
+  sed_i 's/name: do-something/name: do-other/' "$docs/.claude/skills/project/do-other/SKILL.md"
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  assert_eq "1" "$([[ -L "$docs/.claude/skills/do-something" ]] && echo 0 || echo 1)" \
+    "a renamed skill leaves no broken link behind"
+  assert_symlink "$docs/.claude/skills/do-other" "$docs/.claude/skills/project/do-other" "and its new name is offered"
+}
+
+test_a_project_skill_named_like_a_kernel_one_is_not_linked() {
+  sandbox >/dev/null
+  local docs; docs="$(_project_with_a_skill)"
+  mv "$docs/.claude/skills/project/do-something" "$docs/.claude/skills/project/ship"
+  # The global catalog wins over a repo's: the project's would be hidden.
+  local out; out="$("$CRUX_HOME/bin/crux" link "$docs" 2>&1)"
+  assert_contains "$out" "already shipped by the kernel" "it says why it is not offered"
+  assert_eq "1" "$([[ -L "$CRUX_PROJECTS_DIR/omicron/api/.claude/skills/ship" ]] && echo 0 || echo 1)" "and does not link it"
+}
+
+test_a_workspace_offers_the_skills_of_its_project() {
+  sandbox >/dev/null
+  export CRUX_REGISTRY="$SB/registry.json"
+  local docs; docs="$(_project_with_a_skill)"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  git -C "$api" commit -q --allow-empty -m init
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  # What git ignores does not reach a new worktree on its own.
+  "$CRUX_HOME/bin/crux" workspace new skill-ws --repo "$api" >/dev/null 2>&1
+  assert_symlink "$api-ws-skill-ws/.claude/skills/do-something" \
+    "$docs/.claude/skills/project/do-something" "the workspace offers the project's skill"
 }
 
 test_no_kernel_skill_names_an_agents_tools() {

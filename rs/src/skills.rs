@@ -106,6 +106,121 @@ pub fn materialize(root: &Path, label: &str) {
     }
 }
 
+/// A project's skills, and every folder their links may point into: the docs
+/// repo's and each of its worktrees'.
+pub struct ProjectSkills {
+    skills: Vec<PathBuf>,
+    roots: Vec<PathBuf>,
+    kernel: Vec<String>,
+}
+
+impl ProjectSkills {
+    pub fn of(docs: &Path) -> Self {
+        let source = docs.join(names::CLAUDE_SKILLS);
+        // The links left next to the sources are not skills of their own.
+        let skills: Vec<PathBuf> = find(&source)
+            .into_iter()
+            .filter(|p| p.symlink_metadata().is_ok_and(|m| !m.file_type().is_symlink()))
+            .collect();
+        let mut roots: Vec<PathBuf> =
+            crate::git::worktrees(docs).iter().map(|w| w.join(names::CLAUDE_SKILLS)).collect();
+        if roots.is_empty() {
+            roots.push(source);
+        }
+        let kernel = env::crux_home()
+            .map(|h| find(&h.join("skills")).iter().map(|k| crate::files::name(k)).collect())
+            .unwrap_or_default();
+        ProjectSkills { skills, roots, kernel }
+    }
+
+    fn ours(&self, link: &Path) -> bool {
+        fs::read_link(link).is_ok_and(|t| self.roots.iter().any(|r| t.starts_with(r)))
+    }
+
+    /// Links them into one repo, or into the worktree of a workspace, which
+    /// does not get what git ignores on its own. What the repo has under the
+    /// same name —a folder, a versioned file, a link of its own— is left alone,
+    /// and links of ours to a skill that no longer exists are removed.
+    pub fn link_into(&self, repo: &Path) {
+        if env::dry_run() {
+            println!("      [dry-run] claude: {} project skills in {}", self.skills.len(), repo.display());
+            return;
+        }
+        let dir = repo.join(names::CLAUDE_SKILLS);
+        let tracked: Vec<String> = crate::git::out(repo, &["ls-files", "--", names::CLAUDE_SKILLS])
+            .unwrap_or_default()
+            .lines()
+            .map(String::from)
+            .collect();
+        let is_tracked = |name: &str| tracked.iter().any(|t| t == &format!("{}/{name}", names::CLAUDE_SKILLS));
+        let wanted: Vec<String> = self.skills.iter().map(|s| crate::files::name(s)).collect();
+        for e in fs::read_dir(&dir).map(|e| e.flatten().collect::<Vec<_>>()).unwrap_or_default() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if !wanted.contains(&name) && self.ours(&e.path()) && !is_tracked(&name) {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+        let mut linked: Vec<String> = vec![];
+        for (skill, name) in self.skills.iter().zip(&wanted) {
+            // The global catalog wins over a repo's, so this one would be hidden.
+            if self.kernel.contains(name) {
+                crate::ui::warn(format!(
+                    "skill '{name}' is already shipped by the kernel: the project's is not offered"
+                ));
+                continue;
+            }
+            let target = dir.join(name);
+            if target.symlink_metadata().is_ok() && (!self.ours(&target) || is_tracked(name)) {
+                continue;
+            }
+            if fs::create_dir_all(&dir).is_err() {
+                crate::ui::warn(format!(
+                    "{} cannot be created: the project's skills are not offered there",
+                    dir.display()
+                ));
+                return;
+            }
+            let _ = fs::remove_file(&target);
+            if std::os::unix::fs::symlink(skill, &target).is_ok() {
+                linked.push(format!("/{}/{name}", names::CLAUDE_SKILLS));
+            }
+        }
+        let entries: Vec<&str> = linked.iter().map(String::as_str).collect();
+        if let Err(e) = crate::git::exclude(repo, &entries) {
+            crate::ui::warn(format!("{e} — the links to the project's skills could be committed"));
+        }
+    }
+
+    /// Links an earlier version left in the global catalog.
+    fn forget_global_links(&self) {
+        let Ok(entries) = fs::read_dir(env::claude_skills_dir()) else { return };
+        for e in entries.flatten() {
+            if self.ours(&e.path()) && !env::dry_run() {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+    }
+}
+
+/// A project's skills, offered only where its sessions open: a link in each
+/// of its repos' `.claude/skills/`, kept out of git, instead of the global
+/// catalog every other project loads. Codex has a single global catalog, so
+/// it keeps its stubs.
+pub fn materialize_for_project(docs: &Path, label: &str, repos: &[PathBuf]) {
+    let project = ProjectSkills::of(docs);
+    for skill in &project.skills {
+        codex_stub(skill, &crate::files::name(skill));
+    }
+    for repo in repos {
+        project.link_into(repo);
+    }
+    project.forget_global_links();
+    if !project.skills.is_empty() {
+        let label = if label.is_empty() { String::new() } else { format!(" ({label})") };
+        println!("      {} skills{label}, in {} repos", project.skills.len(), repos.len());
+    }
+}
+
 /// Only broken links and stubs pointing at a SKILL.md that no longer exists.
 pub fn prune() {
     let dir = env::claude_skills_dir();

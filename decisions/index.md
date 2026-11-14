@@ -905,3 +905,37 @@
 - **Reversibility**: low cost: remove the hook; the refs are ignored by
   everything else and can be deleted with one push.
 - **Related**: `ADR-020`, `ADR-021`
+
+---
+
+### ADR-023: A project's skills are offered only inside the project
+
+- **Date**: 2026-11-14
+- **Status**: Accepted
+- **Context**: `crux link` put every project's skills in `~/.claude/skills`,
+  the catalog every session loads. Measured on one machine on 14-11: 68 skills
+  and about 30,600 characters of descriptions in every session, 21 of them from
+  three projects that the session at hand had nothing to do with. ADR-009 had
+  left this open: a project's adapters compete in every other project, and the
+  catalog grows with each one. Moving the skills into the repos had been
+  discarded because the client profile writes nothing in a client's repo.
+  Tried with the agent on 14-11: it does not read skills from the folder above
+  a repo, it does read them from `<repo>/.claude/skills`, through a symbolic
+  link too, and not from a subfolder of it.
+- **Decision**:
+  - `link` links each project skill into `.claude/skills/<name>` of the docs
+    repo and of each code repo, with all their worktrees, and keeps the links
+    out of git through the common directory's `info/exclude`, which every
+    worktree honours. `workspace new` does the same in the new worktree, which
+    does not get ignored files on its own.
+  - A client's repo takes them only when its profile allows the local pointer:
+    they are the same kind of file, local and out of git.
+  - The links an earlier version left in the global catalog are removed.
+  - Codex keeps its stubs in `~/.codex/prompts`: it has one catalog for every
+    project.
+- **Consequences**: a session opened outside every project, or in a repo
+  that is not declared, does not see any project skill. A project skill whose
+  name a repo already uses for its own is not linked there.
+- **Reversibility**: low cost: going back to the global link is one call in
+  `link`; the per-repo links are removed with the excluded folder.
+- **Related**: `ADR-009`, `ADR-014`

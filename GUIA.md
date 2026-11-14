@@ -382,6 +382,12 @@ skills/<name>/SKILL.md            ← the ONLY source
         └─ adapters/codex/   → stub in ~/.codex/prompts/<name>.md
 ```
 
+A project's skills are linked the same way, but inside each of its repos
+(`<repo>/.claude/skills/<name>`, excluded from git) and in each workspace, not
+in `~/.claude/skills`: the global catalog is loaded by every session, and a
+project's procedures competed there with every other project's. Codex has a
+single catalog, so its stubs stay global.
+
 The key: **the Codex stub does not copy the content, it points to the file**.
 If it copied, you would have two versions diverging — the very `cp` problem all
 this exists to eliminate. You edit the `SKILL.md` once and both agents see the

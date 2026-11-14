@@ -130,18 +130,13 @@ pub enum LocalPointer {
 }
 
 pub fn write_local_pointer(dir: &Path, docs_name: &str) -> std::io::Result<LocalPointer> {
-    let Some(common) = git::common_dir(dir) else { return Ok(LocalPointer::NotARepo) };
+    if git::common_dir(dir).is_none() {
+        return Ok(LocalPointer::NotARepo);
+    }
     if git::ok(dir, &["ls-files", "--error-unmatch", LOCAL_POINTER]) {
         return Ok(LocalPointer::Versioned);
     }
-    let exclude = common.join("info/exclude");
-    fs::create_dir_all(common.join("info"))?;
-    let listed =
-        crate::files::read_if_exists(&exclude).map_err(std::io::Error::other)?.lines().any(|l| l == LOCAL_POINTER);
-    if !listed {
-        let mut f = fs::OpenOptions::new().create(true).append(true).open(&exclude)?;
-        std::io::Write::write_all(&mut f, format!("{LOCAL_POINTER}\n").as_bytes())?;
-    }
+    git::exclude(dir, &[LOCAL_POINTER]).map_err(std::io::Error::other)?;
     let home = env::crux_home().unwrap_or_default();
     // With its trailing newline: the client's `prettier --check`, which does
     // not read info/exclude, flags the file otherwise.

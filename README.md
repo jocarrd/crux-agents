@@ -327,7 +327,8 @@ each agent:
 
 | Piece | Claude Code | Codex |
 | ----- | ----------- | ----- |
-| Skill | symlink in `~/.claude/skills/` | prompt in `~/.codex/prompts/` |
+| Kernel skill | symlink in `~/.claude/skills/` | prompt in `~/.codex/prompts/` |
+| Project skill | symlink in each project repo's `.claude/skills/`, out of git | prompt in `~/.codex/prompts/` |
 | Your profile | imported from `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
 | Project context | `CLAUDE.md` | `AGENTS.md` |
 | Repo pointer | `CLAUDE.md` with `@-import` | `AGENTS.md` with a path |

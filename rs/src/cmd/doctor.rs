@@ -571,7 +571,9 @@ fn check_links(t: &mut Tally, c: &Checkup) {
 /// The same bar as the kernel's catalog.
 fn check_project_skills(t: &mut Tally, c: &Checkup) {
     t.section();
-    let dir = c.docs.join(".claude/skills");
+    // Next to project/ live the links that offer its skills to the agent.
+    let nested = c.docs.join(names::PROJECT_SKILLS);
+    let dir = if nested.is_dir() { nested } else { c.docs.join(names::CLAUDE_SKILLS) };
     let skills = if dir.is_dir() { count_skills(&dir) } else { 0 };
     for line in checks::skill_descriptions(&dir, &c.language) {
         t.report(&line, "");
