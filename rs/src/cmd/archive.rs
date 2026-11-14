@@ -212,7 +212,9 @@ pub fn run(argv: &[String]) -> Res {
     if repo_dir.join(".git").is_dir() {
         if let Some(hooks) = hooks_dir(&repo_dir) {
             let archived = |f: &Path| crate::files::read_or_empty(f).contains("Installed by crux archive");
-            if archived(&hooks.join("pre-push")) || archived(&hooks.join("pre-push.crux")) {
+            if archived(&hooks.join(crate::names::hooks::PRE_PUSH))
+                || archived(&hooks.join(crate::names::hooks::crux_part(crate::names::hooks::PRE_PUSH)))
+            {
                 super::hooks::take_hook(&hooks, "pre-push");
             }
         }

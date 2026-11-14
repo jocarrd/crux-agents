@@ -113,6 +113,20 @@ pub mod hooks {
     pub const POST_COMMIT: &str = "post-commit";
     pub const PRE_COMMIT: &str = "pre-commit";
     pub const PRE_PUSH: &str = "pre-push";
+
+    /// The parts a hook's dispatcher runs, in this order: crux's rules, the
+    /// project's from its docs repo, and this machine's own.
+    pub fn crux_part(hook: &str) -> String {
+        format!("{hook}.crux")
+    }
+
+    pub fn project_part(hook: &str) -> String {
+        format!("{hook}.project")
+    }
+
+    pub fn local_part(hook: &str) -> String {
+        format!("{hook}.local")
+    }
 }
 
 pub mod vars {

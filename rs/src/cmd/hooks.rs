@@ -113,7 +113,7 @@ fn crux_hook_at(f: &Path) -> bool {
 /// being overwritten.
 pub fn put_hook(hooks: &Path, name: &str, body: &str) -> Result<(), String> {
     ensure_dispatcher(hooks, name)?;
-    let part = hooks.join(format!("{name}.crux"));
+    let part = hooks.join(crate::names::hooks::crux_part(name));
     files::write(&part, body)?;
     executable(&part);
     Ok(())
@@ -121,7 +121,7 @@ pub fn put_hook(hooks: &Path, name: &str, body: &str) -> Result<(), String> {
 
 fn ensure_dispatcher(hooks: &Path, name: &str) -> Result<(), String> {
     let main = hooks.join(name);
-    let local = hooks.join(format!("{name}.local"));
+    let local = hooks.join(crate::names::hooks::local_part(name));
     if main.exists() {
         let text = std::fs::read(&main).map_err(|e| format!("cannot read {}: {e}", main.display()))?;
         if !is_crux_hook(&String::from_utf8_lossy(&text)) {
@@ -172,14 +172,14 @@ pub fn sync_project_hooks(docs: &Path, repo: &str, dir: &Path) -> Result<Vec<Str
     for (name, src) in &declared {
         let body = std::fs::read_to_string(src).map_err(|e| format!("cannot read {}: {e}", src.display()))?;
         ensure_dispatcher(&hooks, name)?;
-        let part = hooks.join(format!("{name}.project"));
+        let part = hooks.join(crate::names::hooks::project_part(name));
         if files::read_or_empty(&part) != body {
             files::write(&part, &body)?;
         }
         executable(&part);
     }
     for name in GIT_HOOK_NAMES {
-        let part = hooks.join(format!("{name}.project"));
+        let part = hooks.join(crate::names::hooks::project_part(name));
         if part.exists() && !declared.iter().any(|(n, _)| n == name) {
             let _ = std::fs::remove_file(&part);
             drop_empty_dispatcher(&hooks, name);
@@ -196,15 +196,14 @@ pub fn hooks_out_of_date(docs: &Path, repo: Option<&str>, dir: &Path) -> bool {
         crux_hook_at(&main) && files::read_or_empty(&main) != DISPATCHER
     });
     let missing_one = repo.is_some()
-        && hooks.join(format!("{COMMIT_MSG}.crux")).exists()
-        && !hooks.join(format!("{POST_COMMIT}.crux")).exists();
+        && hooks.join(crate::names::hooks::crux_part(COMMIT_MSG)).exists()
+        && !hooks.join(crate::names::hooks::crux_part(POST_COMMIT)).exists();
     let declared = repo.map(|r| project_hooks(docs, r)).unwrap_or_default();
-    let stale_project = declared
+    let stale_project = declared.iter().any(|(n, src)| {
+        files::read_or_empty(&hooks.join(crate::names::hooks::project_part(n))) != files::read_or_empty(src)
+    }) || GIT_HOOK_NAMES
         .iter()
-        .any(|(n, src)| files::read_or_empty(&hooks.join(format!("{n}.project"))) != files::read_or_empty(src))
-        || GIT_HOOK_NAMES
-            .iter()
-            .any(|n| hooks.join(format!("{n}.project")).exists() && !declared.iter().any(|(d, _)| d == n));
+        .any(|n| hooks.join(crate::names::hooks::project_part(n)).exists() && !declared.iter().any(|(d, _)| d == n));
     stale_dispatcher || stale_project || missing_one || lost_kernel(&hooks)
 }
 
@@ -213,7 +212,7 @@ pub fn hooks_out_of_date(docs: &Path, repo: Option<&str>, dir: &Path) -> bool {
 /// is not on the PATH.
 fn lost_kernel(hooks: &Path) -> bool {
     GIT_HOOK_NAMES.iter().any(|n| {
-        files::read_or_empty(&hooks.join(format!("{n}.crux")))
+        files::read_or_empty(&hooks.join(crate::names::hooks::crux_part(n)))
             .lines()
             .find_map(|l| l.strip_prefix("KERNEL=\"").and_then(|r| r.strip_suffix('"')))
             .is_some_and(|k| !Path::new(k).join("bin/crux").exists())
@@ -222,12 +221,12 @@ fn lost_kernel(hooks: &Path) -> bool {
 
 pub fn take_hook(hooks: &Path, name: &str) -> bool {
     let main = hooks.join(name);
-    let part = hooks.join(format!("{name}.crux"));
-    let local = hooks.join(format!("{name}.local"));
+    let part = hooks.join(crate::names::hooks::crux_part(name));
+    let local = hooks.join(crate::names::hooks::local_part(name));
     let ours = crux_hook_at(&main);
     let had = part.exists() || ours;
     let _ = std::fs::remove_file(&part);
-    let _ = std::fs::remove_file(hooks.join(format!("{name}.project")));
+    let _ = std::fs::remove_file(hooks.join(crate::names::hooks::project_part(name)));
     if ours {
         let _ = std::fs::remove_file(&main);
     }
@@ -344,7 +343,7 @@ fn status(p: &Paths) -> Res {
         println!("git hooks — {}", files::name(&docs));
         let hooks = dir_hooks(&docs).unwrap_or_default();
         let has = |name: &str, needles: &[&str]| {
-            [hooks.join(format!("{name}.crux")), hooks.join(name)].iter().any(|f| {
+            [hooks.join(crate::names::hooks::crux_part(name)), hooks.join(name)].iter().any(|f| {
                 let text = files::read_or_empty(f);
                 needles.iter().any(|n| text.contains(n))
             })
@@ -744,7 +743,7 @@ fn install(p: &Paths) -> Res {
         files::read_or_empty(f).contains("Installed by crux hooks install")
             || files::read_or_empty(f).contains("Instalado por crux hooks install")
     };
-    if (crux_pre_push(&hooks.join(PRE_PUSH)) || crux_pre_push(&hooks.join("pre-push.crux")))
+    if (crux_pre_push(&hooks.join(PRE_PUSH)) || crux_pre_push(&hooks.join(crate::names::hooks::crux_part(PRE_PUSH))))
         && take_hook(&hooks, PRE_PUSH)
     {
         ui::ok(format!("pre-push removed from {docs_name}: documentation is pushed directly"));
@@ -839,7 +838,7 @@ fn add(argv: &[String]) -> Res {
     let body = OWN_HOOK.replace("NAME", &name).replace("REPO", &repo);
     if local {
         let Some(hooks) = dir_hooks(&dir) else { die!("{repo} is not cloned here") };
-        let file = hooks.join(format!("{name}.local"));
+        let file = hooks.join(crate::names::hooks::local_part(&name));
         if file.exists() {
             die!("{} already exists: edit it", file.display());
         }
