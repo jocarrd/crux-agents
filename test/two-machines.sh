@@ -144,6 +144,18 @@ truthy '[[ "$la$de" == *"laptop decision"* && "$la$de" == *"desktop decision"* ]
   "both decisions survive: the most recent wins, the other is kept alongside"
 truthy 'ls "$SB"/*/.crux/tasks/demo/ | grep -q "checkout.conflict-.*\.md"' "the copy alongside is named in English"
 
+step "archiving publishes the decisions it writes into the docs repo"
+CWD="$A" crux_on laptop task archive --task demo/checkout >/dev/null 2>&1
+for _ in $(seq 40); do
+  git -C "$REMOTES/demo-docs.git" log --format=%s main 2>/dev/null | grep -q "decisions from task" && break
+  sleep 0.25
+done
+truthy 'git -C "$REMOTES/demo-docs.git" log --format=%s main | grep -q "decisions from task"' \
+  "the commit reaches the remote without a push by hand"
+CWD="$B" crux_on desktop sync >/dev/null 2>&1
+truthy '[[ -s "$B/demo-docs/repos/api/notes.md" ]] && cmp -s "$A/demo-docs/repos/api/notes.md" "$B/demo-docs/repos/api/notes.md"' \
+  "and the desktop reads the same decisions"
+
 step "the real machine was not touched"
 truthy '[[ ! -e "$HOME/.crux/tasks/demo" ]]' "no task of the demo reached the real ~/.crux"
 truthy '[[ "$(kernel_hooks)" == "$hooks_before" ]]' "nor were the kernel repo's git hooks rewritten"

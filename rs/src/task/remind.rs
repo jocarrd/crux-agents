@@ -113,13 +113,28 @@ fn project_of(cwd: &Path) -> Option<String> {
     Some(crate::regex!(r"-ws-.*$").replace(&first, "").into_owned())
 }
 
+/// A local time the clock change makes ambiguous or skips is still a date.
+/// Read as none, a task written in the repeated autumn hour looked active
+/// forever, and the suite failed every night that fell twenty days after it.
+/// Of a repeated hour, the older instant: the order in which the platform
+/// returns the two is not something to rely on.
+fn pick_local<T: Ord>(found: chrono::LocalResult<T>, an_hour_later: impl FnOnce() -> Option<T>) -> Option<T> {
+    match found {
+        chrono::LocalResult::Single(t) => Some(t),
+        chrono::LocalResult::Ambiguous(a, b) => Some(a.min(b)),
+        chrono::LocalResult::None => an_hour_later(),
+    }
+}
+
 fn parse_date(s: &str) -> Option<chrono::DateTime<chrono::Local>> {
     use chrono::TimeZone;
     if let Ok(d) = chrono::DateTime::parse_from_rfc3339(s) {
         return Some(d.with_timezone(&chrono::Local));
     }
     if let Ok(d) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
-        return chrono::Local.from_local_datetime(&d).single();
+        return pick_local(chrono::Local.from_local_datetime(&d), || {
+            chrono::Local.from_local_datetime(&(d + chrono::Duration::hours(1))).earliest()
+        });
     }
     // A bare date is UTC midnight.
     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
@@ -336,6 +351,13 @@ pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_time_the_clock_change_repeats_or_skips_is_still_a_date() {
+        assert_eq!(pick_local(chrono::LocalResult::Single(1), || None), Some(1));
+        assert_eq!(pick_local(chrono::LocalResult::Ambiguous(2, 1), || None), Some(1), "the older of the two");
+        assert_eq!(pick_local(chrono::LocalResult::<i32>::None, || Some(3)), Some(3), "a skipped one, an hour later");
+    }
 
     #[test]
     fn idle_only_without_a_live_workspace_and_past_the_threshold() {

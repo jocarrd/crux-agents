@@ -111,6 +111,22 @@ pub fn with_timeout(cmd: &mut Command, seconds: u64) -> Run {
     }
 }
 
+/// Starts a command that must outlive this one and the terminal, without
+/// making anyone wait: publishing what was just written is never on the path
+/// of whoever wrote it.
+pub fn detach(mut cmd: Command) -> bool {
+    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // SAFETY: setsid is async-signal-safe and runs in the child before exec.
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        cmd.pre_exec(|| {
+            libc::setsid();
+            Ok(())
+        });
+    }
+    cmd.spawn().is_ok()
+}
+
 /// A shell line, as the contract writes it (quality gates, setup steps).
 pub fn shell(line: &str) -> Command {
     let mut c = Command::new("bash");

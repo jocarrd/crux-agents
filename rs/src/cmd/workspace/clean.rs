@@ -3,7 +3,8 @@
 
 use super::{archive_if_finished, clean_workspace, find, ignored_files, load_config, lock, Slot};
 use crate::error::{exit, Res};
-use crate::{die, env, files, git, project, registry, sh, ui};
+use crate::task::record;
+use crate::{die, env, files, git, names, project, registry, sh, ui};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -154,30 +155,71 @@ pub fn rm(argv: &[String]) -> Res {
         return exit(1);
     }
     ui::ok("slot released");
+    let deleted = delete_merged_branch(&repo, &w.branch);
     if !w.task.is_empty() && !w.project.is_empty() {
+        forget_in_task(&w, &repo, deleted);
         archive_if_finished(&w.project, &w.task);
     }
-    // Only if merged: a branch with work that is nowhere else is not deleted
-    // because of a preference. Here crux created the branch for this
-    // workspace, so `--merged` does say its commits are in the main branch.
-    let main = project::main_branch(&repo);
-    let merged = git::out(&repo, &["branch", "--merged", &main])
+    Ok(())
+}
+
+/// Only if merged: a branch with work that is nowhere else is not deleted.
+/// A merged proposal is enough, squash included; without one, `--merged`
+/// only counts under the preference, because it is also true for a branch
+/// that was never worked on.
+fn delete_merged_branch(repo: &Path, branch: &str) -> bool {
+    if !git::has_ref(repo, &names::git::head(branch)) {
+        return false;
+    }
+    let main = project::main_branch(repo);
+    let proposal = super::merged_proposal(repo, branch);
+    let ancestor = git::out(repo, &["branch", "--merged", &main])
         .unwrap_or_default()
         .lines()
-        .any(|l| l.trim_start_matches(['*', '+', ' ']).trim() == w.branch);
-    let has_commits =
-        !git::out(&repo, &["log", "--oneline", &format!("{main}..{}", w.branch)]).unwrap_or_default().is_empty()
-            || !git::out(&repo, &["log", "--oneline", "-1", &w.branch]).unwrap_or_default().is_empty();
-    if env::preference_flag("CRUX_RM_DELETE_BRANCH", false) && merged && has_commits {
-        if git::ok(&repo, &["branch", "-D", &w.branch]) {
-            ui::ok(format!("branch {} deleted (CRUX_RM_DELETE_BRANCH)", w.branch));
-        } else {
-            ui::info(format!("the branch {} still exists", w.branch));
-        }
-    } else {
-        ui::info(format!("the branch {} still exists; delete it if you no longer need it", w.branch));
+        .any(|l| l.trim_start_matches(['*', '+', ' ']).trim() == branch);
+    let by_preference = env::preference_flag(names::vars::RM_DELETE_BRANCH, false) && ancestor;
+    if proposal.is_none() && !by_preference {
+        ui::info(format!("the branch {branch} still exists: no merged proposal holds all of it"));
+        return false;
     }
-    Ok(())
+    if !git::ok(repo, &["branch", "-D", branch]) {
+        ui::info(format!("the branch {branch} still exists: git did not delete it"));
+        return false;
+    }
+    match &proposal {
+        Some(number) => {
+            let remote = names::git::REMOTE;
+            if git::ok(repo, &["ls-remote", "--exit-code", "--heads", remote, branch])
+                && !git::ok(repo, &["push", "-q", remote, "--delete", branch])
+            {
+                ui::warn(format!("could not delete the remote branch {branch}"));
+            }
+            ui::ok(format!("branch {branch} deleted (merged in #{number})"));
+        }
+        None => ui::ok(format!("branch {branch} deleted ({})", names::vars::RM_DELETE_BRANCH)),
+    }
+    true
+}
+
+/// The task stops naming a workspace that no longer exists, and a branch that
+/// was deleted: on the other machine they would read as work to resume.
+fn forget_in_task(w: &registry::Workspace, repo: &Path, branch_deleted: bool) {
+    let file = env::tasks_dir().join(&w.project).join(format!("{}.md", w.task));
+    if !file.is_file() {
+        return;
+    }
+    let repo_name = files::name(repo);
+    let edited = record::edit(&file, true, |d| {
+        if branch_deleted {
+            record::retire_branch(d, &repo_name, &w.branch, &w.name);
+        } else {
+            record::forget_workspace(d, &w.name);
+        }
+        Ok(())
+    });
+    if let Err(e) = edited {
+        ui::warn(format!("the task {} still names {}: {e}", w.task, w.name));
+    }
 }
 
 /// The registry repairs itself. An entry whose folder and branch no longer
@@ -425,53 +467,26 @@ pub fn gc(argv: &[String]) -> Res {
     Ok(())
 }
 
-/// A branch merged by squash does not appear in `git branch --merged`: asking
-/// the proposal is the only reliable thing. `--merged` is true for any branch
-/// pointing at an ancestor of the main one —a fresh one, or develop right
-/// after its release— so it alone would delete them without asking.
-fn branches_with_merged_pr(repo: &Path) -> Option<Vec<String>> {
-    let slug = sh::capture_in(repo, "gh", &["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
-    if !slug.ok() || slug.out().is_empty() {
-        return None;
-    }
-    let r = sh::capture(
-        "gh",
-        &[
-            "pr",
-            "list",
-            "--repo",
-            &slug.out(),
-            "--state",
-            "merged",
-            "--limit",
-            "200",
-            "--json",
-            "headRefName",
-            "-q",
-            ".[].headRefName",
-        ],
-    );
-    Some(r.stdout.lines().map(String::from).collect())
-}
-
 pub fn prune(argv: &[String]) -> Res {
     let confirmed = argv.first().map(String::as_str) == Some("--yes");
     let Some(repo) = git::toplevel(&std::env::current_dir().unwrap_or_default()) else {
         die!("this runs inside a repo")
     };
-    if !(sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok()) {
+    if !crate::gh::authenticated() {
         die!("an authenticated gh is needed to know which proposals were merged");
     }
     let main = project::main_branch(&repo);
-    let Some(merged) = branches_with_merged_pr(&repo) else { die!("could not ask gh which proposals were merged") };
+    let Some(merged) = crate::gh::merged_branches(&repo) else { die!("could not ask gh which proposals were merged") };
     let long_lived =
         crate::regex!(r"^(develop|development|staging|stage|next|production|prod|release|release/.*|hotfix/.*)$");
-    let mut names: Vec<String> =
-        git::out(&repo, &["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes/origin"])
-            .unwrap_or_default()
-            .lines()
-            .map(|b| b.strip_prefix("origin/").unwrap_or(b).to_string())
-            .collect();
+    let mut names: Vec<String> = git::out(
+        &repo,
+        &["for-each-ref", "--format=%(refname:short)", "refs/heads", &format!("refs/remotes/{}", names::git::REMOTE)],
+    )
+    .unwrap_or_default()
+    .lines()
+    .map(|b| b.strip_prefix(&format!("{}/", names::git::REMOTE)).unwrap_or(b).to_string())
+    .collect();
     names.sort();
     names.dedup();
     // No long-lived branches: even with a merged proposal, deleting them
@@ -496,7 +511,7 @@ pub fn prune(argv: &[String]) -> Res {
     let in_use: Vec<String> = git::out(&repo, &["worktree", "list", "--porcelain"])
         .unwrap_or_default()
         .lines()
-        .filter_map(|l| l.strip_prefix("branch refs/heads/").map(String::from))
+        .filter_map(|l| l.strip_prefix("branch ").and_then(|r| r.strip_prefix(names::git::HEADS)).map(String::from))
         .collect();
     let mut cleaned = 0;
     for b in &integrated {
@@ -507,7 +522,7 @@ pub fn prune(argv: &[String]) -> Res {
         // A failing deletion —the branch only existed locally, or is no
         // longer on the remote— must not take the rest of the pass with it.
         let local = git::ok(&repo, &["branch", "-D", b]);
-        let remote = git::ok(&repo, &["push", "-q", "origin", "--delete", b]);
+        let remote = git::ok(&repo, &["push", "-q", names::git::REMOTE, "--delete", b]);
         if local || remote {
             cleaned += 1;
         }

@@ -471,10 +471,16 @@ pub fn retire_branch(doc: &mut Doc, repo: &str, branch: &str, workspace: &str) {
         .collect();
     doc.set("branches", Meta::List(branches));
     if !workspace.is_empty() {
-        let ws =
-            doc.get("workspaces").map(Meta::list).unwrap_or_default().into_iter().filter(|w| w != workspace).collect();
-        doc.set("workspaces", Meta::List(ws));
+        forget_workspace(doc, workspace);
     }
+}
+
+/// A workspace closed while its branch lives on: the branch stays named, the
+/// workspace that no longer exists does not.
+pub fn forget_workspace(doc: &mut Doc, workspace: &str) {
+    let ws: Vec<String> =
+        doc.get("workspaces").map(Meta::list).unwrap_or_default().into_iter().filter(|w| w != workspace).collect();
+    doc.set("workspaces", Meta::List(ws));
 }
 
 pub fn reopen_branch(doc: &mut Doc, repo: &str) {
@@ -956,6 +962,22 @@ mod tests {
             vec!["own step (from p/pending)", "still to do (from p/small)"],
             "a step keeps its first origin"
         );
+    }
+
+    #[test]
+    fn closing_a_workspace_forgets_it_and_retiring_forgets_its_branch_too() {
+        let mut d = create("t", "p", "app", "one");
+        d.set("workspaces", Meta::List(vec!["one".into(), "two".into()]));
+        d.set("branches", Meta::List(vec!["app=ws/one".into(), "web=ws/two".into()]));
+
+        forget_workspace(&mut d, "one");
+        assert_eq!(d.list("workspaces"), vec!["two"]);
+        assert_eq!(d.list("branches"), vec!["app=ws/one", "web=ws/two"], "a living branch stays named");
+
+        retire_branch(&mut d, "web", "ws/two", "two");
+        assert!(d.list("workspaces").is_empty());
+        assert_eq!(d.list("branches"), vec!["app=ws/one"]);
+        assert_eq!(d.list("retired"), vec!["web=ws/two"], "kept as retired so resuming opens a new one");
     }
 
     #[test]

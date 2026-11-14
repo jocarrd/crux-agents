@@ -8,7 +8,7 @@
 use crate::args::Parser;
 use crate::error::{exit, Exit, Res};
 use crate::task::{self, record, stall};
-use crate::{die, env, git, project, registry, sh, ui};
+use crate::{die, env, git, project, registry, ui};
 use std::path::{Path, PathBuf};
 
 /// To stderr: called where the output is captured, an error on stdout would
@@ -71,27 +71,11 @@ fn retire_idle(f: &Path) -> Res {
             .unwrap_or(0);
         let mut merged_pr = String::new();
         if ahead > 0 {
-            merged_pr = sh::capture_in(
-                &repo,
-                "gh",
-                &[
-                    "pr",
-                    "list",
-                    "--head",
-                    &w.branch,
-                    "--state",
-                    "merged",
-                    "--json",
-                    "number",
-                    "-q",
-                    ".[0].number // \"\"",
-                ],
-            )
-            .out();
-            if merged_pr.is_empty() {
+            let Some(number) = super::workspace::merged_proposal(&repo, &w.branch) else {
                 ui::warn(format!("{} has {ahead} unmerged commit(s) in {}: it stays", w.name, w.branch));
                 continue;
-            }
+            };
+            merged_pr = number;
         }
         if path.is_dir()
             && !super::call_quiet(
