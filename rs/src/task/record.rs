@@ -283,6 +283,10 @@ impl Drop for Lock {
 /// once left one step and all eight said ok. A directory, as in the registry,
 /// because it is the one primitive every system has; one older than the
 /// longest edit belongs to a process that died.
+/// How often a record held by another command is tried again; a hundred tries
+/// are ten seconds, longer than any edit of a record.
+const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(100);
+
 pub fn lock(file: &Path) -> Result<Lock, String> {
     let dir = file.with_file_name(format!(".{}.lock", files::name(file)));
     if let Some(d) = file.parent() {
@@ -305,7 +309,7 @@ pub fn lock(file: &Path) -> Result<Lock, String> {
             let _ = std::fs::remove_dir_all(&dir);
             continue;
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(LOCK_RETRY);
     }
     Err(format!("{} is being written by another command; remove {} if none is running", file.display(), dir.display()))
 }

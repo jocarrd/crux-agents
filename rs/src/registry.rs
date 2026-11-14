@@ -12,6 +12,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+/// How often a registry held by another command is tried again: short, since
+/// nobody holds it for more than a write.
+const LOCK_RETRY: Duration = Duration::from_millis(100);
+
 pub fn path() -> PathBuf {
     env::registry_file()
 }
@@ -101,7 +105,7 @@ pub fn lock(tries: u32) -> Result<Lock, String> {
                         None => format!("lock with no owner at {}: remove it if no crux is running", dir.display()),
                     });
                 }
-                std::thread::sleep(Duration::from_millis(100));
+                std::thread::sleep(LOCK_RETRY);
             }
         }
     }

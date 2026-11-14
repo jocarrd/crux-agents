@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 /// To stderr: called where the output is captured, an error on stdout would
 /// end up inside the value and the command would exit without saying why.
 fn fail<T>(msg: impl AsRef<str>) -> Result<T, Exit> {
-    eprintln!("{}error{} {}", ui::palette().red, ui::palette().off, msg.as_ref());
+    ui::err_stderr(msg);
     Err(Exit(1))
 }
 

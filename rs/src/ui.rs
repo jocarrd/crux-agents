@@ -52,6 +52,18 @@ pub fn err(msg: impl AsRef<str>) {
     println!("{}error{} {}", p.red, p.off, msg.as_ref());
 }
 
+/// The same two, for what goes with an error stream of its own: a reading
+/// that failed while the command's own output is being captured.
+pub fn warn_stderr(msg: impl AsRef<str>) {
+    let p = palette();
+    eprintln!("{}warn{}  {}", p.yellow, p.off, msg.as_ref());
+}
+
+pub fn err_stderr(msg: impl AsRef<str>) {
+    let p = palette();
+    eprintln!("{}error{} {}", p.red, p.off, msg.as_ref());
+}
+
 pub fn info(msg: impl AsRef<str>) {
     let p = palette();
     println!("{}      {}{}", p.dim, msg.as_ref(), p.off);

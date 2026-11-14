@@ -45,12 +45,10 @@ fn targets(ctx: &Ctx, name: &str) -> Vec<PathBuf> {
         return out;
     }
     if !policy::flag(&ctx.profile, Some(&ctx.docs), "pointers.write", true) {
-        eprintln!(
-            "{}warn{}  {name}: the '{}' profile does not write in code repos — only in the docs repo",
-            ui::palette().yellow,
-            ui::palette().off,
+        ui::warn_stderr(format!(
+            "{name}: the '{}' profile does not write in code repos — only in the docs repo",
             ctx.profile
-        );
+        ));
         return out;
     }
     for repo in requested.into_iter().filter(|r| !r.is_empty()) {
@@ -58,11 +56,7 @@ fn targets(ctx: &Ctx, name: &str) -> Vec<PathBuf> {
         if d.is_dir() {
             out.push(d);
         } else {
-            eprintln!(
-                "{}warn{}  {name}: declares the repo '{repo}', which is not cloned",
-                ui::palette().yellow,
-                ui::palette().off
-            );
+            ui::warn_stderr(format!("{name}: declares the repo '{repo}', which is not cloned"));
         }
     }
     out

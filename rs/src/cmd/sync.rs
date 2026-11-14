@@ -920,6 +920,10 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
     Ok(())
 }
 
+/// A lock older than this belongs to a process that died: an arrival over every
+/// repo of the machine takes seconds, not minutes.
+const STALE_LOCK: Duration = Duration::from_secs(600);
+
 /// Hidden: what the session-start hook leaves running when it returns.
 const REST: &str = "--rest";
 
@@ -956,12 +960,11 @@ fn take_lock(state: &Path, hook: bool) -> Option<SyncLock> {
         if std::fs::create_dir(&lock).is_ok() {
             return Some(SyncLock(lock));
         }
-        // A lock older than ten minutes belongs to a process that died.
         let old = std::fs::metadata(&lock)
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.elapsed().ok())
-            .is_some_and(|e| e > Duration::from_secs(600));
+            .is_some_and(|e| e > STALE_LOCK);
         if old {
             let _ = std::fs::remove_dir(&lock);
             continue;

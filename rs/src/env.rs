@@ -45,10 +45,7 @@ pub fn config_value_in(file: &Path, key: &str) -> Option<String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
         Err(e) => {
             static SAID: std::sync::Once = std::sync::Once::new();
-            SAID.call_once(|| {
-                let p = crate::ui::palette();
-                eprintln!("{}warn{}  cannot read {}: {e}", p.yellow, p.off, file.display());
-            });
+            SAID.call_once(|| crate::ui::warn_stderr(format!("cannot read {}: {e}", file.display())));
             return None;
         }
     };
