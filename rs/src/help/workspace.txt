@@ -19,3 +19,9 @@ slot.
 The worktree is created as a sibling of the original repo, not in a separate
 directory: that is what makes the relative context pointers
 (../<project>-docs/) keep resolving inside the isolated workspace.
+
+Closing a workspace (rm, and merge, which closes it) deletes its branch, here
+and on the remote, when its proposal was merged —squash included— and the
+branch holds nothing beyond what was merged. A commit made after the merge
+keeps it. The task stops naming the closed workspace, and a deleted branch is
+kept as retired so that resuming the task opens a new one.

@@ -349,11 +349,29 @@ pub fn promote_decisions(record_file: &Path) {
             &["commit", "-q", "-m", &format!("docs({repo}): decisions from task {stem}"), "--", &rel],
         )
     {
-        crate::ui::ok(format!("task decisions in {docs_name}/{rel} (committed; push them with git push)"));
+        let how = if publish_docs(&docs) { "committed; publishing it" } else { "committed; push it with git push" };
+        crate::ui::ok(format!("task decisions in {docs_name}/{rel} ({how})"));
     } else {
         crate::ui::warn(format!("decisions written to {docs_name}/{rel}, but the commit could not be made"));
         crate::ui::info("review it and commit it by hand");
     }
+}
+
+/// The commit that archiving leaves in the docs repo leaves with it, or the
+/// other machine reads the task as archived and its decisions as missing.
+/// Only a fast-forward: a branch with no upstream or one that is behind is
+/// left for the person, and `sync --leave` names it.
+fn publish_docs(docs: &Path) -> bool {
+    if !sync::publishing_enabled() {
+        return false;
+    }
+    let behind = crate::git::out(docs, &["rev-list", "--count", "HEAD..@{upstream}"]);
+    if behind.as_deref() != Some("0") {
+        return false;
+    }
+    let mut push = crate::git::cmd(docs);
+    push.args(["push", "-q"]);
+    crate::sh::detach(push)
 }
 
 /// The project from the layout: <root>/<project>/<repo>. A repo that hangs

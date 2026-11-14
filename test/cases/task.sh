@@ -584,6 +584,72 @@ test_closing_the_last_workspace_of_a_merged_task_archives_it() {
   assert_contains "$out" "-a" "and --done does"
 }
 
+# gh as GitHub would answer about a merged proposal: what $SB/merged holds, a
+# number and the head that was merged, or nothing when there is none.
+_gh_with_merged_proposal() {
+  local fake="$SB/bin"; mkdir -p "$fake"
+  cat > "$fake/gh" <<GH
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "pr list") [[ -f "$SB/merged" ]] && cat "$SB/merged" ;;
+esac
+exit 0
+GH
+  chmod +x "$fake/gh"
+  echo "$fake"
+}
+
+_commit_in() {
+  echo "$2" >> "$1/f.txt"
+  git -C "$1" commit -qam "$2"
+}
+
+test_closing_a_workspace_whose_proposal_was_squashed_deletes_its_branch() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new sq --repo "$root/app" >/dev/null 2>&1
+  _commit_in "$root/app-ws-sq" "work"
+  local fake; fake="$(_gh_with_merged_proposal)"
+  echo "12 $(git -C "$root/app" rev-parse ws/sq)" > "$SB/merged"
+
+  local out; out="$(PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" workspace rm sq 2>&1)"
+  assert_contains "$out" "branch ws/sq deleted (merged in #12)" "a squash-merged proposal is enough to delete it"
+  assert_exit 1 "the branch is gone" git -C "$root/app" show-ref -q --verify refs/heads/ws/sq
+  local task; task="$(cat "$SB/tasks/proj/sq.md")"
+  assert_not_contains "$(grep '^workspaces:' <<<"$task")" "sq" "the task stops naming the closed workspace"
+  assert_not_contains "$(grep '^branches:' <<<"$task")" "ws/sq" "and the deleted branch"
+  assert_contains "$(grep '^retired:' <<<"$task")" "app=ws/sq" "which it keeps as retired, so resuming opens a new one"
+}
+
+test_a_commit_after_the_merge_keeps_the_branch() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new late --repo "$root/app" >/dev/null 2>&1
+  _commit_in "$root/app-ws-late" "merged"
+  local fake; fake="$(_gh_with_merged_proposal)"
+  echo "13 $(git -C "$root/app" rev-parse ws/late)" > "$SB/merged"
+  _commit_in "$root/app-ws-late" "after the merge"
+
+  local out; out="$(PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" workspace rm late 2>&1)"
+  assert_contains "$out" "the branch ws/late still exists" "a commit the proposal does not hold keeps it"
+  assert_exit 0 "the branch is still there" git -C "$root/app" show-ref -q --verify refs/heads/ws/late
+  local task; task="$(cat "$SB/tasks/proj/late.md")"
+  assert_not_contains "$(grep '^workspaces:' <<<"$task")" "late" "the closed workspace is still forgotten"
+  assert_contains "$(grep '^branches:' <<<"$task")" "ws/late" "but the living branch stays named"
+}
+
+test_without_a_merged_proposal_the_branch_stays() {
+  sandbox >/dev/null
+  local root; root="$(_tasks_project)"
+  "$CRUX_HOME/bin/crux" workspace new open --repo "$root/app" >/dev/null 2>&1
+  _commit_in "$root/app-ws-open" "unmerged"
+  local fake; fake="$(_gh_with_merged_proposal)"
+
+  local out; out="$(PATH="$fake:$PATH" "$CRUX_HOME/bin/crux" workspace rm open 2>&1)"
+  assert_contains "$out" "no merged proposal holds all of it" "it says why the branch stays"
+  assert_exit 0 "and keeps it" git -C "$root/app" show-ref -q --verify refs/heads/ws/open
+}
+
 test_an_unfinished_task_is_not_archived_when_its_workspace_closes() {
   sandbox >/dev/null
   local root; root="$(_tasks_project)"

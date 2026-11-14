@@ -782,10 +782,7 @@ pub fn pending_projects() -> Vec<String> {
 /// mark goes first, in this process, so that if the publication never runs
 /// —offline, powered off— `crux sync --leave` knows.
 pub fn publish_in_background(file: &Path) {
-    if env::in_tests() && env::var("CRUX_TASK_SYNC").as_deref() != Some("1") {
-        return;
-    }
-    if env::var("CRUX_TASK_SYNC").as_deref() == Some("0") {
+    if !publishing_enabled() {
         return;
     }
     let mut dir = file.parent().unwrap_or(Path::new("/")).to_path_buf();
@@ -801,20 +798,19 @@ pub fn publish_in_background(file: &Path) {
     mark_pending(&p);
     if let Ok(exe) = std::env::current_exe() {
         let mut c = Command::new(exe);
-        c.args(["__task-sync", "sync", "--project", &p])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        // Its own session: it must outlive the command and the terminal.
-        // SAFETY: setsid is async-signal-safe and runs in the child before exec.
-        unsafe {
-            use std::os::unix::process::CommandExt;
-            c.pre_exec(|| {
-                libc::setsid();
-                Ok(())
-            });
-        }
-        let _ = c.spawn();
+        c.args(["__task-sync", "sync", "--project", &p]);
+        crate::sh::detach(c);
+    }
+}
+
+/// Whether what a task writes may be published from here: the switch every
+/// background publication of tasks obeys, so tests and a person who turned
+/// it off see nothing leave the machine.
+pub fn publishing_enabled() -> bool {
+    match env::var(names::vars::TASK_SYNC).as_deref() {
+        Some("0") => false,
+        Some("1") => true,
+        _ => !env::in_tests(),
     }
 }
 

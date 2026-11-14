@@ -30,6 +30,7 @@ pub mod cmd;
 pub mod env;
 pub mod error;
 pub mod files;
+pub mod gh;
 pub mod git;
 pub mod help;
 pub mod mcp;

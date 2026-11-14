@@ -21,6 +21,17 @@ use crate::{die, env, files, git, project, registry, ui};
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
+/// The number of the merged proposal of `branch`, when the local branch adds
+/// nothing to what was merged. A squash merge leaves no trace in
+/// `git branch --merged`: only the proposal knows. And a commit made after
+/// the merge would be lost with the branch, so the local tip has to be the
+/// head that was merged or one of its ancestors.
+pub fn merged_proposal(repo: &Path, branch: &str) -> Option<String> {
+    let merged = crate::gh::merged_proposal(repo, branch)?;
+    let tip = git::out(repo, &["rev-parse", "-q", "--verify", &names::git::head(branch)])?;
+    (tip == merged.head || git::ok(repo, &["merge-base", "--is-ancestor", &tip, &merged.head])).then_some(merged.number)
+}
+
 /// The "workspace" section of the contract, with the repo's own section laid
 /// over the common one: the front, the backend and the panel of one project
 /// need different things.

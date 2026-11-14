@@ -367,7 +367,7 @@ In `~/.crux/config`. They belong to the machine, not to the project:
 | `CRUX_REMOTE` | — | Remote template for the projects you create |
 | `CRUX_PROJECTS_DIR` | the parent of the kernel clone | Where projects live |
 | `CRUX_MERGE_CLOSE_WORKSPACE` | `true` | Closes the space on merge |
-| `CRUX_RM_DELETE_BRANCH` | `false` | Also deletes the local branch on close, once integrated |
+| `CRUX_RM_DELETE_BRANCH` | `false` | On close, also deletes a branch already in the main one with no merged proposal behind it. A branch whose proposal was merged, squash included, is always deleted if it holds nothing beyond what was merged |
 | `CRUX_UNMANAGED` | — | Paths under the root that are not yours, separated by `:` |
 | `CRUX_TASKS_IDLE_HOURS` | `3` | After this long idle, a session catches up as if it had just opened |
 | `CRUX_TASKS_RETENTION_DAYS` | `180` | How long archived tasks are kept |
