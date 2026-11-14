@@ -113,6 +113,20 @@ impl<'a> Batch<'a> {
     pub fn with(repo: &'a Path, env: &[(&str, &str)]) -> Self {
         Batch { repo, env: env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect() }
     }
+    /// Commits crux writes on its own are signed by it, not by the person.
+    pub fn as_crux(repo: &'a Path, env: &[(&str, &str)]) -> Self {
+        let mut b = Self::with(
+            repo,
+            &[
+                ("GIT_AUTHOR_NAME", "crux"),
+                ("GIT_AUTHOR_EMAIL", "crux@localhost"),
+                ("GIT_COMMITTER_NAME", "crux"),
+                ("GIT_COMMITTER_EMAIL", "crux@localhost"),
+            ],
+        );
+        b.env.extend(env.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        b
+    }
     fn command(&self, args: &[&str]) -> Command {
         let mut c = Command::new("git");
         c.arg("-C").arg(self.repo).args(args);

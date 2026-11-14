@@ -429,16 +429,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
             }
             args.push("-m");
             args.push(&msg);
-            let author = Git::with(
-                repo,
-                &[
-                    ("GIT_INDEX_FILE", &index_s),
-                    ("GIT_AUTHOR_NAME", "crux"),
-                    ("GIT_AUTHOR_EMAIL", "crux@localhost"),
-                    ("GIT_COMMITTER_NAME", "crux"),
-                    ("GIT_COMMITTER_EMAIL", "crux@localhost"),
-                ],
-            );
+            let author = Git::as_crux(repo, &[("GIT_INDEX_FILE", &index_s)]);
             commit = Some(author.run(&args, None)?.trim().to_string());
         }
         Ok::<_, String>(commit)

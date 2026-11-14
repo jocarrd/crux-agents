@@ -1,11 +1,18 @@
 crux usage — which skills are really used.
 
-  crux usage [--days N] [--all]
+  crux usage [--days N] [--all] [--here]
 
 A catalog that only grows ends up getting in the way of discovery: the more
 skills there are, the worse the choice between them. This measures real use
 against the installed catalog and separates the live from the dead.
 
-The source is the agent's local transcripts. It is an internal format and
-may change; if one day it stops finding invocations, it says so instead of
+The source is the agent's transcripts. It is an internal format and may
+change; if one day it stops finding invocations, it says so instead of
 reporting zero as if it were data.
+
+Each machine adds its sessions to a log of its own in the profile repo, and
+the report counts every machine's: one line per session with its date, its
+project and the skills it used, never its words. A client's project goes as
+a fingerprint. Lines accumulate, so a session the agent deletes after a
+month is still counted. --here counts only this machine and publishes
+nothing.

@@ -1,16 +1,17 @@
 //! crux usage — which skills are really used.
 //!
-//!   crux usage [--days N] [--all]
+//!   crux usage [--days N] [--all] [--here]
 //!
 //! A catalog that only grows ends up getting in the way of discovery. This
 //! measures real use against the installed catalog and separates the live
-//! from the dead. The source is the agent's local transcripts: an internal
-//! format that may change, so if it stops finding invocations it says so
-//! instead of reporting zero as if it were data.
+//! from the dead. The source is the agent's transcripts, an internal format
+//! that may change: if it stops finding invocations it says so instead of
+//! reporting zero as if it were data. What every machine read travels in the
+//! profile repo (`usage_log`).
 
-use crate::env;
 use crate::error::{exit, Res};
 use crate::names;
+use crate::{env, person, policy, project, ui, usage_log};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use unicode_normalization::UnicodeNormalization;
@@ -160,11 +161,31 @@ struct Usage {
     order: Vec<String>,
     said: HashMap<String, Vec<(String, usize)>>,
     sessions: usize,
+    by_machine: BTreeMap<String, usize>,
 }
 
-fn invocations(home: &Path, since: std::time::SystemTime) -> Usage {
-    let mut u =
-        Usage { calls: HashMap::new(), by_script: HashMap::new(), order: vec![], said: HashMap::new(), sessions: 0 };
+/// One session of this machine's transcripts: what travels, and the words of
+/// its opening, which stay here.
+struct Read {
+    log: usage_log::Session,
+    words: Vec<String>,
+}
+
+/// The project a session opened in, from the folder the agent recorded.
+fn project_of_session(text: &str) -> String {
+    let cwd = crate::regex!(r#""cwd"\s*:\s*"((?:[^"\\]|\\.)*)""#);
+    let Some(dir) = cwd.captures(text).map(|c| c[1].replace("\\\\", "\\")) else { return String::new() };
+    let Some(docs) = project::find_docs_repo(Path::new(&dir)) else { return String::new() };
+    let name = project::contract_field(&docs, "project").unwrap_or_default();
+    let profile = project::contract_field(&docs, "profile").unwrap_or_default();
+    usage_log::project_label(&name, policy::code_is_foreign(&profile, Some(&docs)))
+}
+
+fn day_of(t: std::time::SystemTime) -> String {
+    chrono::DateTime::<chrono::Local>::from(t).format("%Y-%m-%d").to_string()
+}
+
+fn read_sessions(home: &Path, since: std::time::SystemTime) -> Vec<Read> {
     let scripts = catalog_scripts(home);
     let skill_re = crate::regex!(r#""name"\s*:\s*"Skill"\s*,\s*"input"\s*:\s*\{\s*"skill"\s*:\s*"([^"]+)""#);
     let bash_re =
@@ -177,67 +198,85 @@ fn invocations(home: &Path, since: std::time::SystemTime) -> Usage {
     // Writing a skill is not using it.
     let edits = crate::regex!(r#"<<\s*['"]?\w*(PY|EOF|SH)\b|chmod\s|cat\s*>|>>\s*\S|sed -i|\.replace\("#);
     let dir = transcripts_dir();
-    let mut said_counts: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut said_order: HashMap<String, Vec<String>> = HashMap::new();
+    let machine = env::machine();
+    let mut out = vec![];
     for project in dirs(&dir) {
-        for parts in sessions_of(&dir.join(&project)).into_values() {
-            let recent =
-                parts.iter().any(|f| std::fs::metadata(f).and_then(|m| m.modified()).is_ok_and(|t| t >= since));
-            if !recent {
-                continue;
-            }
-            u.sessions += 1;
+        for (id, parts) in sessions_of(&dir.join(&project)) {
+            let last = parts.iter().filter_map(|f| std::fs::metadata(f).and_then(|m| m.modified()).ok()).max();
+            let Some(last) = last.filter(|t| *t >= since) else { continue };
             // A transcript that cannot be read does not count: these are statistics.
             let text = parts.iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect::<Vec<_>>().join("\n");
-            let mut here: Vec<String> = vec![];
+            let mut calls: Vec<String> = vec![];
             for c in skill_re.captures_iter(&text) {
-                if !here.contains(&c[1].to_string()) {
-                    here.push(c[1].to_string());
+                if !calls.contains(&c[1].to_string()) {
+                    calls.push(c[1].to_string());
                 }
             }
-            for s in &here {
-                *u.calls.entry(s.clone()).or_default() += 1;
-                if !u.order.contains(s) {
-                    u.order.push(s.clone());
-                }
-            }
-            if scripts.is_empty() {
-                continue;
-            }
-            let mut scripts_here: Vec<String> = vec![];
+            let mut by_script: Vec<String> = vec![];
             for c in bash_re.captures_iter(&text) {
                 let cmd = &c[1];
                 if edits.is_match(cmd) {
                     continue;
                 }
                 for (script, skill) in &scripts {
-                    for (i, _) in cmd.match_indices(script.as_str()) {
-                        if read_verb.is_match(&cmd[..i]) {
-                            continue;
-                        }
-                        if !scripts_here.contains(skill) {
-                            scripts_here.push(skill.clone());
-                        }
+                    let runs = cmd.match_indices(script.as_str()).any(|(i, _)| !read_verb.is_match(&cmd[..i]));
+                    if runs && !by_script.contains(skill) {
+                        by_script.push(skill.clone());
                     }
                 }
             }
-            let words = if scripts_here.is_empty() { vec![] } else { user_words(&text) };
-            for skill in scripts_here {
-                *u.by_script.entry(skill.clone()).or_default() += 1;
-                if !u.order.contains(&skill) {
-                    u.order.push(skill.clone());
+            let words = if by_script.is_empty() { vec![] } else { user_words(&text) };
+            let log = usage_log::Session {
+                session: id,
+                date: day_of(last),
+                machine: machine.clone(),
+                project: project_of_session(&text),
+                calls,
+                scripts: by_script,
+            };
+            out.push(Read { log, words });
+        }
+    }
+    out
+}
+
+/// The counts over every session, wherever it was read. The words are only
+/// known for this machine's.
+fn tally(sessions: &[usage_log::Session], words: &HashMap<(String, String), Vec<String>>) -> Usage {
+    let mut u = Usage {
+        calls: HashMap::new(),
+        by_script: HashMap::new(),
+        order: vec![],
+        said: HashMap::new(),
+        sessions: sessions.len(),
+        by_machine: BTreeMap::new(),
+    };
+    let mut said_counts: HashMap<String, HashMap<String, usize>> = HashMap::new();
+    let mut said_order: HashMap<String, Vec<String>> = HashMap::new();
+    for s in sessions {
+        *u.by_machine.entry(s.machine.clone()).or_default() += 1;
+        for skill in &s.calls {
+            *u.calls.entry(skill.clone()).or_default() += 1;
+            if !u.order.contains(skill) {
+                u.order.push(skill.clone());
+            }
+        }
+        let said = words.get(&(s.machine.clone(), s.session.clone()));
+        for skill in &s.scripts {
+            *u.by_script.entry(skill.clone()).or_default() += 1;
+            if !u.order.contains(skill) {
+                u.order.push(skill.clone());
+            }
+            if s.calls.contains(skill) {
+                continue;
+            }
+            let counts = said_counts.entry(skill.clone()).or_default();
+            let order = said_order.entry(skill.clone()).or_default();
+            for w in said.into_iter().flatten() {
+                if !counts.contains_key(w) {
+                    order.push(w.clone());
                 }
-                if here.contains(&skill) {
-                    continue;
-                }
-                let counts = said_counts.entry(skill.clone()).or_default();
-                let order = said_order.entry(skill.clone()).or_default();
-                for w in &words {
-                    if !counts.contains_key(w) {
-                        order.push(w.clone());
-                    }
-                    *counts.entry(w.clone()).or_default() += 1;
-                }
+                *counts.entry(w.clone()).or_default() += 1;
             }
         }
     }
@@ -246,6 +285,24 @@ fn invocations(home: &Path, since: std::time::SystemTime) -> Usage {
         u.said.insert(skill, order.into_iter().map(|w| (w.clone(), counts[&w])).collect());
     }
     u
+}
+
+/// This machine's sessions go to its log, and the report counts every
+/// machine's. Without a profile repo, or with --here, only this machine.
+fn gather(home: &Path, since: std::time::SystemTime, here_only: bool) -> Usage {
+    let read = read_sessions(home, since);
+    let words: HashMap<(String, String), Vec<String>> =
+        read.iter().map(|r| ((r.log.machine.clone(), r.log.session.clone()), r.words.clone())).collect();
+    let local: Vec<usage_log::Session> = read.into_iter().map(|r| r.log).collect();
+    let profile = if here_only { None } else { person::dir() };
+    let Some(profile) = profile else { return tally(&local, &words) };
+    if let Err(e) = usage_log::publish(&profile, &local) {
+        ui::warn(format!("this machine's usage did not reach the profile repo: {}", e.trim()));
+    }
+    let from = day_of(since);
+    let all: Vec<usage_log::Session> =
+        usage_log::merge(usage_log::fetch_all(&profile), local).into_iter().filter(|s| s.date >= from).collect();
+    tally(&all, &words)
 }
 
 pub fn run(argv: &[String]) -> Res {
@@ -271,9 +328,15 @@ pub fn run(argv: &[String]) -> Res {
     let home = env::crux_home().unwrap_or_else(|| env::projects_root().join("crux"));
     let since = std::time::SystemTime::now() - std::time::Duration::from_secs_f64(days * 86400.0);
     let (cat, desc) = catalog(&home, &env::projects_root());
-    let u = invocations(&home, since);
+    let u = gather(&home, since, argv.iter().any(|a| a == "--here"));
     let days_s = if days.fract() == 0.0 { format!("{}", days as i64) } else { days.to_string() };
-    println!("skill usage — last {days_s} days · {} sessions reviewed\n", u.sessions);
+    let machines = if u.by_machine.len() > 1 {
+        let each: Vec<String> = u.by_machine.iter().map(|(m, n)| format!("{m} {n}")).collect();
+        format!(" ({})", each.join(", "))
+    } else {
+        String::new()
+    };
+    println!("skill usage — last {days_s} days · {} sessions reviewed{machines}\n", u.sessions);
     if u.sessions == 0 {
         println!("No transcripts in the period. No data, not no usage.\n");
         return Ok(());
