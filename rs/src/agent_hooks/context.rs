@@ -43,6 +43,16 @@ pub(super) fn profile_reminder() -> Res {
     Ok(())
 }
 
+/// At the end of each turn, so that switching machines halfway through a
+/// change loses nothing. It prints nothing: the turn is over.
+pub(super) fn wip_save() -> Res {
+    let event = input();
+    let cwd = field(&event, "cwd");
+    let dir = if cwd.is_empty() { self::cwd() } else { PathBuf::from(cwd) };
+    crate::wip::save_in_background(&dir);
+    Ok(())
+}
+
 /// One line on closing, not the whole report: a warning that takes half the
 /// screen is learned to be ignored in two days.
 pub(super) fn memory_guard() -> Res {

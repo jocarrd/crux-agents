@@ -26,6 +26,10 @@ pub mod git {
     /// Kept locally so that knowing whether a branch travelled needs no network.
     pub const PUBLISHED_HERE: &str = "refs/crux/published/";
     pub const FETCHED: &str = "refs/crux/fetched/";
+    /// What a workspace had uncommitted, per machine, as a commit on its HEAD.
+    pub const WIP_ON_REMOTE: &str = "refs/crux/wip/";
+    pub const WIP_HERE: &str = "refs/crux/wip-here/";
+    pub const WIP_FETCHED: &str = "refs/crux/wip-fetched/";
 
     pub fn head(branch: &str) -> String {
         format!("{HEADS}{branch}")
@@ -37,6 +41,14 @@ pub mod git {
 
     pub fn published_here(branch: &str) -> String {
         format!("{PUBLISHED_HERE}{branch}")
+    }
+
+    pub fn wip_on_remote(machine: &str, branch: &str) -> String {
+        format!("{WIP_ON_REMOTE}{machine}/{branch}")
+    }
+
+    pub fn wip_here(branch: &str) -> String {
+        format!("{WIP_HERE}{branch}")
     }
 }
 

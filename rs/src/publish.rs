@@ -35,7 +35,7 @@ pub fn internal(argv: &[String]) -> Res {
     }
 }
 
-fn is_workspace_branch(repo: &Path, branch: &str) -> bool {
+pub(crate) fn is_workspace_branch(repo: &Path, branch: &str) -> bool {
     let here = project::normalize(repo);
     registry::read()
         .unwrap_or_default()
@@ -69,7 +69,7 @@ pub fn is_published(repo: &Path, branch: &str) -> bool {
 
 /// Whether `full` is `<prefix><machine>/<branch>` for exactly this branch: by
 /// its ending alone, `fix` would also take what `ws/fix` published.
-fn is_branch_ref(full: &str, prefix: &str, branch: &str) -> bool {
+pub(crate) fn is_branch_ref(full: &str, prefix: &str, branch: &str) -> bool {
     full.strip_prefix(prefix).and_then(|r| r.split_once('/')).is_some_and(|(_, b)| b == branch)
 }
 
@@ -102,6 +102,7 @@ pub fn most_advanced(repo: &Path, commits: &[String]) -> Result<Option<String>, 
 
 /// After the merge nothing of `branch` should keep travelling.
 pub fn forget(repo: &Path, branch: &str) {
+    crate::wip::forget(repo, branch);
     let remote: Vec<String> = git::out(repo, &["ls-remote", refs::REMOTE, &format!("{}*", refs::PUBLISHED_ON_REMOTE)])
         .unwrap_or_default()
         .lines()

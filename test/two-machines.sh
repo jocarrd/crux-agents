@@ -193,6 +193,32 @@ CWD="$B" crux_on desktop sync >/dev/null 2>&1
 CWD="$B/api" crux_on desktop workspace resume travel >/dev/null 2>&1
 truthy '[[ -f "$B/api-ws-travel/travel.js" ]]' "the desktop's worktree has the laptop's commit"
 
+step "what the laptop left uncommitted travels at the end of the turn"
+CWD="$A/api" crux_on laptop workspace new half --goal "Halfway" >/dev/null 2>&1
+WH="$A/api-ws-half"
+echo "export const done = 1;" > "$WH/done.js"
+on laptop git -C "$WH" add -A
+on laptop git -C "$WH" commit -qm "feat: the part that is done"
+echo "export const half = 1;" > "$WH/half.js"
+printf '{"cwd":"%s"}' "$WH" | CWD="$WH" crux_on laptop hook wip-save
+for _ in $(seq 40); do
+  git -C "$REMOTES/api.git" rev-parse -q --verify refs/crux/wip/laptop/ws/half >/dev/null && break
+  sleep 0.25
+done
+truthy 'git -C "$REMOTES/api.git" rev-parse -q --verify refs/crux/wip/laptop/ws/half >/dev/null' \
+  "the half-made file reaches the remote with nobody committing"
+
+step "the desktop resumes it with the half-made file in place"
+for _ in $(seq 40); do
+  git -C "$REMOTES/demo-docs.git" show crux/tasks:half.md >/dev/null 2>&1 && break
+  sleep 0.25
+done
+CWD="$B" crux_on desktop sync >/dev/null 2>&1
+out="$(CWD="$B/api" crux_on desktop workspace resume half 2>&1)"
+truthy '[[ -f "$B/api-ws-half/half.js" && -f "$B/api-ws-half/done.js" ]]' "the commit and the uncommitted file are there"
+truthy '[[ "$(git -C "$B/api-ws-half" status --porcelain)" == "?? half.js" ]]' "and the file is still uncommitted"
+truthy '[[ "$out" == *"brought what laptop left uncommitted"* ]]' "and it says where it came from"
+
 step "the real machine was not touched"
 truthy '[[ ! -e "$HOME/.crux/tasks/demo" ]]' "no task of the demo reached the real ~/.crux"
 truthy '[[ "$(kernel_hooks)" == "$hooks_before" ]]' "nor were the kernel repo's git hooks rewritten"

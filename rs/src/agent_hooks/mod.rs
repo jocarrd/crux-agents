@@ -96,6 +96,7 @@ pub enum Hook {
     SessionSync,
     SessionIdle,
     ProfileReminder,
+    WipSave,
 }
 
 /// How a hook is registered in Claude Code's settings.
@@ -109,7 +110,7 @@ pub struct Registration {
 }
 
 impl Hook {
-    pub const ALL: [Hook; 11] = [
+    pub const ALL: [Hook; 12] = [
         Hook::DocSync,
         Hook::CycleGuard,
         Hook::MemoryGuard,
@@ -121,6 +122,7 @@ impl Hook {
         Hook::SessionSync,
         Hook::SessionIdle,
         Hook::ProfileReminder,
+        Hook::WipSave,
     ];
 
     /// The name in `crux hook <name>` and in its launcher's file name.
@@ -137,6 +139,7 @@ impl Hook {
             Hook::SessionSync => "session-sync",
             Hook::SessionIdle => "session-idle",
             Hook::ProfileReminder => "profile-reminder",
+            Hook::WipSave => "wip-save",
         }
     }
 
@@ -195,6 +198,9 @@ impl Hook {
                 "",
                 "hook that repeats the reminder the person set in their profile",
             ),
+            Hook::WipSave => {
+                r("Stop", "wip-save", "", "hook that carries a workspace's uncommitted work to the other machine")
+            }
         }
     }
 
@@ -211,6 +217,7 @@ impl Hook {
             Hook::SessionSync => context::session_sync(),
             Hook::SessionIdle => context::session_idle(),
             Hook::ProfileReminder => context::profile_reminder(),
+            Hook::WipSave => context::wip_save(),
         }
     }
 }

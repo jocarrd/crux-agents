@@ -32,3 +32,11 @@ on the remote, which no list of branches shows and no workflow reacts to.
 resume brings the most advanced of what the machines published; if the
 copies diverged it says so and chooses none. CRUX_MACHINE names the machine
 when two share a hostname.
+
+What is not committed travels too: at the end of each agent turn the
+workspace's working tree is saved as a commit on its HEAD, to
+refs/crux/wip/<machine>/ on the remote. resume applies it when it was saved on
+the same commit, and only points at it otherwise. Ignored files, files that
+look like a secret (.env, keys), files over 5 MB and more than a thousand new
+files are not carried, nor is anything halfway through a merge or in a public
+repo. sync --leave saves it too and counts it as travelled.
