@@ -219,7 +219,7 @@ CLEAN_KERNEL_HOOKS="$(kernel_hooks)"
 # and from the repo that meant a case writing a red gate receipt into the
 # developer's own worktree.
 STRAY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/crux-test-cwd.XXXXXX")"
-trap 'rm -rf "$STRAY_DIR" "$STRAY_DIR.timed-out"' EXIT
+trap 'rm -rf "$STRAY_DIR" "$STRAY_DIR.timed-out" "$STRAY_DIR.watchdog"' EXIT
 
 # A case that hung stopped the whole suite in silence, once for half an hour.
 # Past CRUX_CASE_LIMIT seconds a watchdog stops the case's processes, and the
@@ -227,26 +227,31 @@ trap 'rm -rf "$STRAY_DIR" "$STRAY_DIR.timed-out"' EXIT
 CASE_LIMIT="${CRUX_CASE_LIMIT:-300}"
 SUITE_PID=$$
 TIMED_OUT="$STRAY_DIR.timed-out"
+WATCHDOG_PID="$STRAY_DIR.watchdog"
 # The whole tree, not only the children: what a case runs inside $(...) is a
 # grandchild, and the suite waits for it to close its output.
 stop_tree() {
   local child
   for child in $(pgrep -P "$1"); do
-    [[ "$child" == "$2" ]] && continue
-    stop_tree "$child" "$2"
+    stop_tree "$child"
     kill -TERM "$child" 2>/dev/null
   done
 }
+# The watchdog is not a child of the suite: a case that ends with a bare
+# `wait` waited for it too, and every case that runs things at once took the
+# whole limit. A subshell that exits at once leaves it to the system.
 watch_case() {
   (
-    trap 'kill "$nap" 2>/dev/null; exit 0' TERM
-    sleep "$CASE_LIMIT" & nap=$!
-    wait "$nap" || exit 0
-    : > "$TIMED_OUT"
-    # macOS ships bash 3.2, which has no BASHPID: a child shell reports its parent.
-    stop_tree "$SUITE_PID" "$(exec sh -c 'echo "$PPID"')"
-  ) &
-  WATCHDOG=$!
+    (
+      trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+      sleep "$CASE_LIMIT" & nap=$!
+      wait "$nap" || exit 0
+      : > "$TIMED_OUT"
+      stop_tree "$SUITE_PID"
+    ) &
+    echo $! > "$WATCHDOG_PID"
+  )
+  WATCHDOG="$(cat "$WATCHDOG_PID")"
 }
 
 for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
@@ -262,7 +267,7 @@ for fn in $(declare -F | awk '{print $3}' | grep '^test_' | sort); do
   rm -f "$TIMED_OUT"
   watch_case
   "$fn"
-  kill "$WATCHDOG" 2>/dev/null; wait "$WATCHDOG" 2>/dev/null
+  kill "$WATCHDOG" 2>/dev/null
   if [[ -e "$TIMED_OUT" ]]; then
     _fail "the case did not end in ${CASE_LIMIT}s: its processes were stopped"
     rm -f "$TIMED_OUT"
