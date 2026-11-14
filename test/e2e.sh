@@ -17,6 +17,8 @@ set -uo pipefail
 
 CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export CRUX_HOME CRUX_IN_TESTS=1
+source "$CRUX_HOME/test/build.sh"
+build_core || exit 1
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/crux-e2e-XXXXXX")"
 export CRUX_PROJECTS_DIR="$SB/projects"

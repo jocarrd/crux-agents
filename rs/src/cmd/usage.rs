@@ -305,11 +305,38 @@ fn gather(home: &Path, since: std::time::SystemTime, here_only: bool) -> Usage {
     tally(&all, &words)
 }
 
+/// The period read when nobody says one.
+const DEFAULT_DAYS: f64 = 90.0;
+/// How often the arrival round publishes on its own: reading every transcript
+/// takes seconds, and a day late is the same statistics.
+const PUBLISH_EVERY: std::time::Duration = std::time::Duration::from_secs(86400);
+
+fn kernel_home() -> std::path::PathBuf {
+    env::crux_home().unwrap_or_else(|| env::projects_root().join("crux"))
+}
+
+/// Publishes this machine's sessions to its log, with no report. `always`
+/// skips the daily limit, for whoever is leaving the machine.
+pub fn publish_this_machine(always: bool) -> Result<bool, String> {
+    let marker = env::state_dir().join(names::USAGE_PUBLISHED);
+    let recent = std::fs::metadata(&marker)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < PUBLISH_EVERY);
+    let Some(profile) = person::dir().filter(|_| always || !recent) else { return Ok(false) };
+    let since = std::time::SystemTime::now() - std::time::Duration::from_secs_f64(DEFAULT_DAYS * 86400.0);
+    let local: Vec<usage_log::Session> = read_sessions(&kernel_home(), since).into_iter().map(|r| r.log).collect();
+    let published = usage_log::publish(&profile, &local)?;
+    crate::files::touch_marker(&marker, "");
+    Ok(published)
+}
+
 pub fn run(argv: &[String]) -> Res {
     let show_all = argv.iter().any(|a| a == "--all");
     // A value that is not a number is reported, not replaced by the default.
     let days: f64 = match argv.iter().position(|a| a == "--days" || a.starts_with("--days=")) {
-        None => 90.0,
+        None => DEFAULT_DAYS,
         Some(i) => {
             let raw = if argv[i].contains('=') {
                 Some(argv[i]["--days=".len()..].to_string())
@@ -325,7 +352,7 @@ pub fn run(argv: &[String]) -> Res {
             }
         }
     };
-    let home = env::crux_home().unwrap_or_else(|| env::projects_root().join("crux"));
+    let home = kernel_home();
     let since = std::time::SystemTime::now() - std::time::Duration::from_secs_f64(days * 86400.0);
     let (cat, desc) = catalog(&home, &env::projects_root());
     let u = gather(&home, since, argv.iter().any(|a| a == "--here"));

@@ -265,6 +265,11 @@ fn departure(ctx: &Ctx) -> Res {
         ));
         stuck += 1;
     }
+    match super::usage::publish_this_machine(true) {
+        Ok(true) => ui::ok("skill usage: this machine's sessions reached the profile repo"),
+        Ok(false) => {}
+        Err(e) => ui::warn(format!("skill usage did not reach the profile repo: {}", e.trim())),
+    }
     println!();
     if warnings > 0 {
         ui::info(format!(
@@ -920,6 +925,8 @@ const REST: &str = "--rest";
 
 fn rest(ctx: &Ctx, state: &Path) -> Res {
     let _lock = take_lock(state, false);
+    // Statistics: a round that cannot publish them retries the next day.
+    let _ = super::usage::publish_this_machine(false);
     let (lines, offline, repos) = arrival_lines(ctx);
     let text = hook_text("crux sync, found after the last session started:", &lines, offline.len(), repos);
     if !text.is_empty() {

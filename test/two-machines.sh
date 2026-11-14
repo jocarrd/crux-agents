@@ -18,6 +18,8 @@ CRUX_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # Without CRUX_IN_TESTS, the hooks install that clone runs took this checkout
 # for the person's kernel and rewrote the git hooks of the real repo.
 export CRUX_HOME CRUX_IN_TESTS=1
+source "$CRUX_HOME/test/build.sh"
+build_core || exit 1
 kernel_hooks() { cat "$(git -C "$CRUX_HOME" rev-parse --path-format=absolute --git-common-dir)"/hooks/* 2>/dev/null | cksum; }
 hooks_before="$(kernel_hooks)"
 # Tasks publish themselves when written; here that is what is being tested.
@@ -218,6 +220,36 @@ out="$(CWD="$B/api" crux_on desktop workspace resume half 2>&1)"
 truthy '[[ -f "$B/api-ws-half/half.js" && -f "$B/api-ws-half/done.js" ]]' "the commit and the uncommitted file are there"
 truthy '[[ "$(git -C "$B/api-ws-half" status --porcelain)" == "?? half.js" ]]' "and the file is still uncommitted"
 truthy '[[ "$out" == *"brought what laptop left uncommitted"* ]]' "and it says where it came from"
+
+step "each machine's skill usage reaches the other through the profile repo"
+bare agent-profile
+for m in laptop desktop; do
+  mkdir -p "$SB/$m/transcripts/p"
+done
+on laptop git init -q -b main "$A/../agent-profile"
+printf -- '---\nname: laptop\n---\n# Profile\n' > "$A/../agent-profile/PROFILE.md"
+on laptop git -C "$A/../agent-profile" add -A
+on laptop git -C "$A/../agent-profile" commit -qm "chore: profile"
+on laptop git -C "$A/../agent-profile" remote add origin "$REMOTES/agent-profile.git"
+on laptop git -C "$A/../agent-profile" push -q -u origin main
+on desktop git clone -q "$REMOTES/agent-profile.git" "$B/../agent-profile"
+# One session on each machine, with the person's words in its opening.
+printf '{"type":"user","cwd":"%s","message":{"role":"user","content":"ship it from the laptop"}}\n{"name":"Skill","input":{"skill":"ship"}}\n' \
+  "$A/api" > "$SB/laptop/transcripts/p/one.jsonl"
+printf '{"type":"user","message":{"role":"user","content":"review it from the desktop"}}\n{"name":"Skill","input":{"skill":"review-pr"}}\n' \
+  > "$SB/desktop/transcripts/p/two.jsonl"
+# Leaving the laptop publishes its sessions with nobody asking for the report.
+CRUX_TRANSCRIPTS="$SB/laptop/transcripts" CWD="$A" crux_on laptop sync --leave >/dev/null 2>&1
+out="$(CRUX_TRANSCRIPTS="$SB/desktop/transcripts" crux_on desktop usage 2>&1)"
+truthy '[[ "$out" == *"2 sessions reviewed"* && "$out" == *"laptop 1"* && "$out" == *"desktop 1"* ]]' \
+  "the desktop counts the laptop's session as well as its own"
+truthy '[[ "$out" == *"ship"* && "$out" == *"review-pr"* ]]' "with the skill each one used"
+log="$(git -C "$REMOTES/agent-profile.git" cat-file blob refs/crux/usage/laptop:usage.jsonl 2>/dev/null)"
+truthy '[[ -n "$log" && "$log" != *"from the laptop"* ]]' "and what travelled carries no words of the session"
+truthy '[[ "$log" == *'"'"'"project":"demo"'"'"'* ]]' "the session counts for the project it opened in"
+truthy '[[ -z "$(git -C "$REMOTES/agent-profile.git" for-each-ref refs/heads/crux)" ]]' "nor any branch"
+out="$(CRUX_TRANSCRIPTS="$SB/desktop/transcripts" crux_on desktop usage --here 2>&1)"
+truthy '[[ "$out" == *"1 sessions reviewed"* ]]' "--here counts only this machine"
 
 step "the real machine was not touched"
 truthy '[[ ! -e "$HOME/.crux/tasks/demo" ]]' "no task of the demo reached the real ~/.crux"

@@ -19,6 +19,8 @@ pub const CLAUDE_SKILLS: &str = ".claude/skills";
 pub const PROJECT_SKILLS: &str = ".claude/skills/project";
 /// The file of the usage log, one line per session.
 pub const USAGE_LOG: &str = "usage.jsonl";
+/// When this machine last published its usage, in the state directory.
+pub const USAGE_PUBLISHED: &str = "usage-published";
 /// What marks a directory as a kernel, with VERSION.
 pub const STANDARD: &str = "STANDARD.md";
 pub const VERSION: &str = "VERSION";

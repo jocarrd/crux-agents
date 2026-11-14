@@ -51,7 +51,7 @@ jobs:
             bin/crux install.sh \
             adapters/*/*.sh adapters/*/hooks/*.sh \
             skills/*/scripts/*.sh test/run.sh test/e2e.sh test/cases/*.sh \
-            test/two-machines.sh test/flows.sh test/fake-gh npm/pack.sh
+            test/two-machines.sh test/flows.sh test/build.sh test/fake-gh npm/pack.sh
 
       - name: Python libraries of the before-after skill
         run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends python3-pil python3-numpy

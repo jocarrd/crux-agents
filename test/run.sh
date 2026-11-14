@@ -20,22 +20,9 @@ export CRUX_IN_TESTS=1
 # test draw a panel instead of printing, and their cases fail only there.
 unset CRUX_REMINDER_UI
 
-# The Rust core is built once per run, and every case uses that build: a case
-# must never test a binary older than the sources next to it. CRUX_SUITE_BIN
-# tests a binary built elsewhere instead —a release, a static one, another
-# platform's— on a machine that may have no Rust at all.
-if [[ -n "${CRUX_SUITE_BIN:-}" ]]; then
-  [[ -x "$CRUX_SUITE_BIN" ]] || { echo "CRUX_SUITE_BIN is not an executable: $CRUX_SUITE_BIN"; exit 1; }
-  export CRUX_BIN="$CRUX_SUITE_BIN"
-else
-  CARGO="$(command -v cargo || echo "$HOME/.cargo/bin/cargo")"
-  if ! build_output="$("$CARGO" build --quiet --manifest-path "$CRUX_HOME/rs/Cargo.toml" 2>&1)"; then
-    echo "$build_output"
-    echo "the Rust core does not build: fix that before running the cases"
-    exit 1
-  fi
-  export CRUX_BIN="${CARGO_TARGET_DIR:-$CRUX_HOME/rs/target}/debug/crux"
-fi
+# The Rust core is built once per run, and every case uses that build.
+source "$CRUX_HOME/test/build.sh"
+build_core || exit 1
 
 PASS=0; FAIL=0; CURRENT=""; FAILED_CASES=()
 
