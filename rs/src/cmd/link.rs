@@ -123,29 +123,74 @@ pub fn run(argv: &[String]) -> Res {
     }
 
     let repos = files::str_list(contract.get("repos"));
+    let ctx = Ctx { docs: &docs, root: &root, home: &home, project_name: &project_name, docs_name: &docs_name };
     if policy::flag(&profile, Some(&docs), "pointers.write", true) {
-        let (mut created, mut updated, mut seen) = (0, 0, 0);
-        let mut without_markers: Vec<(String, String)> = vec![];
+        ctx.versioned_pointers(&repos, refresh)?;
+    } else if policy::flag(&profile, Some(&docs), "pointers.local", false) {
+        ui::info(format!(
+            "profile {profile}: nothing versioned outside the docs repo; only the local pointer {LOCAL_POINTER}"
+        ));
+        ctx.local_pointers(&repos);
+    } else {
+        ui::warn(format!("profile {profile}: nothing is written outside the docs repo"));
+        ui::info(format!("agents must open {docs_name}/AGENTS.md explicitly"));
+    }
+    ctx.skill_catalog(&tree)?;
+
+    println!();
+    skills::materialize_for_project(&docs, &project_name, &skill_repos(&docs, &profile, &repos));
+    skills::prune();
+    ui::ok("project skills materialized");
+    Ok(())
+}
+
+/// What the parts of a link share: the project and where its repos live.
+struct Ctx<'a> {
+    docs: &'a Path,
+    root: &'a Path,
+    home: &'a Path,
+    project_name: &'a str,
+    docs_name: &'a str,
+}
+
+impl Ctx<'_> {
+    /// The declared repos that are on disk; the rest are named, not skipped in silence.
+    fn present_repos(&self, repos: &[String]) -> Vec<(String, PathBuf)> {
+        let mut out = vec![];
         for repo in repos.iter().filter(|r| !r.is_empty()) {
             if !project::valid_name(repo) {
                 ui::warn(format!("invalid repo name in the contract: {repo}"));
                 continue;
             }
-            let dir = root.join(repo);
+            let dir = self.root.join(repo);
             if !dir.is_dir() {
                 ui::warn(format!("declared in crux.json but not on disk: {repo}"));
                 continue;
             }
-            seen += 1;
-            let tagline = tagline_of(&docs, repo, &project_name);
+            out.push((repo.clone(), dir));
+        }
+        out
+    }
+
+    fn template(&self, file: &str) -> PathBuf {
+        self.home.join("templates/code-repo").join(file)
+    }
+
+    fn render_vars<'v>(&'v self, repo: &'v str, tagline: &'v str) -> [(&'v str, &'v str); 4] {
+        [("REPO", repo), ("PROJECT", self.project_name), ("DOCS", self.docs_name), ("TAGLINE", tagline)]
+    }
+
+    /// AGENTS.md and CLAUDE.md in each code repo, as a block crux owns inside
+    /// files that are otherwise the repo's.
+    fn versioned_pointers(&self, repos: &[String], refresh: bool) -> Res {
+        let (mut created, mut updated) = (0, 0);
+        let mut without_markers: Vec<(String, String)> = vec![];
+        let present = self.present_repos(repos);
+        for (repo, dir) in &present {
+            let tagline = tagline_of(self.docs, repo, self.project_name);
             for file in [names::AGENTS, names::CLAUDE] {
-                let vars = [
-                    ("REPO", repo.as_str()),
-                    ("PROJECT", project_name.as_str()),
-                    ("DOCS", docs_name.as_str()),
-                    ("TAGLINE", tagline.as_str()),
-                ];
-                match template::render_managed(&home.join("templates/code-repo").join(file), &dir.join(file), &vars) {
+                let vars = self.render_vars(repo, &tagline);
+                match template::render_managed(&self.template(file), &dir.join(file), &vars) {
                     Ok(Managed::Created) => {
                         ui::ok(format!("created {repo}/{file}"));
                         created += 1;
@@ -165,31 +210,7 @@ pub fn run(argv: &[String]) -> Res {
             println!();
             if refresh {
                 for (repo, file) in &without_markers {
-                    let path = root.join(repo).join(file);
-                    let text = match files::read_if_exists(&path) {
-                        Ok(t) => t,
-                        Err(e) => die!("{e}"),
-                    };
-                    let mut lines: Vec<&str> = text.lines().collect();
-                    if lines.first().is_some_and(|l| l.starts_with("# ")) {
-                        lines.remove(0);
-                    }
-                    let own = lines.join("\n").trim_end_matches('\n').to_string();
-                    let tagline = tagline_of(&docs, repo, &project_name);
-                    let vars = [
-                        ("REPO", repo.as_str()),
-                        ("PROJECT", project_name.as_str()),
-                        ("DOCS", docs_name.as_str()),
-                        ("TAGLINE", tagline.as_str()),
-                    ];
-                    let rendered =
-                        template::render(&home.join("templates/code-repo").join(file), &vars).unwrap_or_default();
-                    if let Err(e) =
-                        crate::files::write(&path, &format!("{rendered}\n---\n\n## Own context of {repo}\n\n{own}\n"))
-                    {
-                        die!("{e}");
-                    }
-                    ui::ok(format!("{repo}/{file} rewritten with the block, previous content kept below"));
+                    self.rewrite_with_block(repo, file)?;
                 }
             } else {
                 ui::warn("these pointers predate the managed block:");
@@ -199,72 +220,78 @@ pub fn run(argv: &[String]) -> Res {
                 ui::info("'crux link --refresh' rewrites them keeping their content below");
             }
         }
-        if seen == 0 {
+        if present.is_empty() {
             ui::info("no code repo on disk yet");
         } else if created + updated == 0 && without_markers.is_empty() {
-            ui::ok(format!("pointers up to date ({})", ui::count(seen, "repo", "repos")));
+            ui::ok(format!("pointers up to date ({})", ui::count(present.len(), "repo", "repos")));
         }
-    } else {
-        if policy::flag(&profile, Some(&docs), "pointers.local", false) {
-            ui::info(format!(
-                "profile {profile}: nothing versioned outside the docs repo; only the local pointer {LOCAL_POINTER}"
-            ));
-            for repo in repos.iter().filter(|r| !r.is_empty()) {
-                if !project::valid_name(repo) {
-                    ui::warn(format!("invalid repo name in the contract: {repo}"));
-                    continue;
+        Ok(())
+    }
+
+    /// A pointer written before the managed block existed: the block goes on
+    /// top and what the file had stays below it.
+    fn rewrite_with_block(&self, repo: &str, file: &str) -> Res {
+        let path = self.root.join(repo).join(file);
+        let text = match files::read_if_exists(&path) {
+            Ok(t) => t,
+            Err(e) => die!("{e}"),
+        };
+        let mut lines: Vec<&str> = text.lines().collect();
+        if lines.first().is_some_and(|l| l.starts_with("# ")) {
+            lines.remove(0);
+        }
+        let own = lines.join("\n").trim_end_matches('\n').to_string();
+        let tagline = tagline_of(self.docs, repo, self.project_name);
+        let rendered = template::render(&self.template(file), &self.render_vars(repo, &tagline)).unwrap_or_default();
+        if let Err(e) = crate::files::write(&path, &format!("{rendered}\n---\n\n## Own context of {repo}\n\n{own}\n")) {
+            die!("{e}");
+        }
+        ui::ok(format!("{repo}/{file} rewritten with the block, previous content kept below"));
+        Ok(())
+    }
+
+    /// Only CLAUDE.local.md, excluded from git: the profile writes nothing
+    /// versioned in the code repos.
+    fn local_pointers(&self, repos: &[String]) {
+        let docs_name = self.docs_name;
+        for (repo, dir) in self.present_repos(repos) {
+            match template::write_local_pointer(&dir, docs_name) {
+                Ok(LocalPointer::Written) => {
+                    ui::ok(format!("{repo}/{LOCAL_POINTER} points to {docs_name} (excluded from git)"))
                 }
-                let dir = root.join(repo);
-                if !dir.is_dir() {
-                    ui::warn(format!("declared in crux.json but not on disk: {repo}"));
-                    continue;
+                Ok(LocalPointer::NotARepo) => {
+                    ui::warn(format!("{repo} is not a git repo: no local pointer, there would be no way to exclude it"))
                 }
-                match template::write_local_pointer(&dir, &docs_name) {
-                    Ok(LocalPointer::Written) => {
-                        ui::ok(format!("{repo}/{LOCAL_POINTER} points to {docs_name} (excluded from git)"))
-                    }
-                    Ok(LocalPointer::NotARepo) => ui::warn(format!(
-                        "{repo} is not a git repo: no local pointer, there would be no way to exclude it"
-                    )),
-                    Ok(LocalPointer::Versioned) => {
-                        ui::info(format!("{repo} versions its own {LOCAL_POINTER} — respected, not touched"))
-                    }
-                    Err(e) => ui::warn(format!("{repo}: {e}")),
+                Ok(LocalPointer::Versioned) => {
+                    ui::info(format!("{repo} versions its own {LOCAL_POINTER} — respected, not touched"))
                 }
+                Err(e) => ui::warn(format!("{repo}: {e}")),
             }
-        } else {
-            ui::warn(format!("profile {profile}: nothing is written outside the docs repo"));
-            ui::info(format!("agents must open {docs_name}/AGENTS.md explicitly"));
         }
     }
 
-    // The kernel's skill catalog in the project index fills itself in if
-    // AGENTS.md marks the spot: a list kept by hand goes stale as the kernel
-    // grows, and an index that lies is worse than none.
-    let index = tree.join(names::AGENTS);
-    if let Some(src) = crate::files::read_optional(&index) {
-        if src.contains("<!-- crux:skills -->") {
-            let lines: Vec<String> = project::subdirs(&home.join("skills"))
-                .iter()
-                .map(|n| catalog_line(&home.join("skills").join(n)))
-                .collect();
-            let catalog = lines.join("\n");
-            let re = crate::regex!(r"<!-- crux:skills -->[\s\S]*?<!-- /crux:skills -->");
-            let replaced = re
-                .replacen(&src, 1, regex::NoExpand(&format!("<!-- crux:skills -->\n{catalog}\n<!-- /crux:skills -->")))
-                .into_owned();
-            if let Err(e) = crate::files::write(&index, &replaced) {
-                die!("{e}");
-            }
-            ui::ok(format!("kernel catalog updated in AGENTS.md ({} skills)", lines.len()));
+    /// The kernel's skill catalog in the project index fills itself in if
+    /// AGENTS.md marks the spot: a list kept by hand goes stale as the kernel
+    /// grows, and an index that lies is worse than none.
+    fn skill_catalog(&self, tree: &Path) -> Res {
+        let index = tree.join(names::AGENTS);
+        let Some(src) = crate::files::read_optional(&index) else { return Ok(()) };
+        if !src.contains("<!-- crux:skills -->") {
+            return Ok(());
         }
+        let skills = self.home.join("skills");
+        let lines: Vec<String> = project::subdirs(&skills).iter().map(|n| catalog_line(&skills.join(n))).collect();
+        let catalog = lines.join("\n");
+        let re = crate::regex!(r"<!-- crux:skills -->[\s\S]*?<!-- /crux:skills -->");
+        let replaced = re
+            .replacen(&src, 1, regex::NoExpand(&format!("<!-- crux:skills -->\n{catalog}\n<!-- /crux:skills -->")))
+            .into_owned();
+        if let Err(e) = crate::files::write(&index, &replaced) {
+            die!("{e}");
+        }
+        ui::ok(format!("kernel catalog updated in AGENTS.md ({} skills)", lines.len()));
+        Ok(())
     }
-
-    println!();
-    skills::materialize_for_project(&docs, &project_name, &skill_repos(&docs, &profile, &repos));
-    skills::prune();
-    ui::ok("project skills materialized");
-    Ok(())
 }
 
 /// Where the project's sessions open: the docs repo and the code repos with
