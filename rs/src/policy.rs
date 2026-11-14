@@ -12,7 +12,7 @@ pub fn layers(name: &str, docs: Option<&Path>) -> Vec<PathBuf> {
     if let Some(h) = env::crux_home() {
         out.push(h.join(format!("profiles/{name}.json")));
     }
-    out.push(env::home().join(format!(".crux/profiles/{name}.json")));
+    out.push(env::user_profiles_dir().join(format!("{name}.json")));
     if let Some(d) = docs {
         out.push(d.join("profile.json"));
     }

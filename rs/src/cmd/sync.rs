@@ -551,7 +551,7 @@ fn kernel_up_to_date(ctx: &Ctx) -> Option<String> {
         Command::new("bash").arg(clone.join("install.sh")).current_dir(&home).env_remove(crate::names::vars::HOME),
     )
     .ok();
-    let kernel = home.join(format!(".crux/kernel/{new}"));
+    let kernel = env::kernels_dir().join(&new);
     let hooked = installed
         && sh::capture_cmd(
             Command::new(kernel.join("bin/crux"))

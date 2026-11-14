@@ -60,6 +60,16 @@ test_the_machine_note_is_found_when_the_hostname_changes_with_the_network() {
   assert_contains "$(cat "$(claude_md)")" "@$dir/machines/deskbox.md" "the note is imported by the machine's short name"
 }
 
+test_the_profile_reaches_codex_where_codex_home_says() {
+  sandbox >/dev/null
+  profile_here >/dev/null
+  # Codex reads CODEX_HOME. The hooks honoured it and the profile and prompts
+  # did not, so with it set they went to a ~/.codex Codex never opened.
+  local codex="$SB/elsewhere/codex"; mkdir -p "$codex"
+  env -u CODEX_HOME_DIR -u CODEX_PROMPTS_DIR CODEX_HOME="$codex" "$CRUX_HOME/bin/crux" profile link >/dev/null 2>&1
+  assert_file "$codex/AGENTS.md" "the profile goes to the folder CODEX_HOME names"
+}
+
 test_profile_link_never_overwrites_a_claude_md_it_cannot_read() {
   sandbox >/dev/null
   profile_here >/dev/null

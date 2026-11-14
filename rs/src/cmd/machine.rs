@@ -103,8 +103,7 @@ pub fn run(_argv: &[String]) -> Res {
 
     // A hook that points at a nonexistent file does not fail: it does
     // nothing, and the system looks guarded and is not.
-    let settings_file =
-        env::var("CLAUDE_SETTINGS").map(PathBuf::from).unwrap_or_else(|| env::home().join(".claude/settings.json"));
+    let settings_file = env::claude_settings();
     if settings_file.is_file() {
         let settings = files::read_json(&settings_file).unwrap_or(Value::Null);
         let commands = hook_commands(&settings);
@@ -187,7 +186,7 @@ pub fn run(_argv: &[String]) -> Res {
     // doctor.
     let checks_file = env::var(crate::names::vars::MACHINE_CHECKS)
         .map(PathBuf::from)
-        .unwrap_or_else(|| env::home().join(".crux/machine-checks.json"));
+        .unwrap_or_else(|| env::crux_dir().join("machine-checks.json"));
     if checks_file.is_file() {
         println!();
         let limit: u64 = env::var(crate::names::vars::MACHINE_CHECK_TIMEOUT).and_then(|v| v.parse().ok()).unwrap_or(20);

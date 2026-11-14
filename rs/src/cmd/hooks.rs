@@ -55,13 +55,7 @@ impl Paths {
 
 fn paths() -> Paths {
     let home = env::crux_home().unwrap_or_default();
-    let settings =
-        env::var("CLAUDE_SETTINGS").map(PathBuf::from).unwrap_or_else(|| env::home().join(".claude/settings.json"));
-    let codex_dir = env::var("CODEX_HOME_DIR")
-        .or_else(|| env::var("CODEX_HOME"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| env::home().join(".codex"));
-    Paths { home, settings, codex_dir }
+    Paths { home, settings: env::claude_settings(), codex_dir: env::codex_home_dir() }
 }
 
 /// Only the file names: the kernel path can contain a hook name, as in a
@@ -437,7 +431,7 @@ fn plugin_claude(settings: &mut Value, add: bool, dir: &Path) {
     let e = env_v.as_object_mut().unwrap();
     let re = crate::regex!(r"/adapters/claude/plugin/?$");
     let mut others: Vec<String> = e
-        .get("CLAUDE_CODE_PLUGIN_DIRS")
+        .get(crate::names::agents::PLUGIN_DIRS)
         .and_then(Value::as_str)
         .unwrap_or("")
         .split(':')
@@ -448,9 +442,9 @@ fn plugin_claude(settings: &mut Value, add: bool, dir: &Path) {
         others.push(dir.to_string_lossy().into_owned());
     }
     if others.is_empty() {
-        e.shift_remove("CLAUDE_CODE_PLUGIN_DIRS");
+        e.shift_remove(crate::names::agents::PLUGIN_DIRS);
     } else {
-        e.insert("CLAUDE_CODE_PLUGIN_DIRS".into(), json!(others.join(":")));
+        e.insert(crate::names::agents::PLUGIN_DIRS.into(), json!(others.join(":")));
     }
     if e.is_empty() {
         obj.shift_remove("env");

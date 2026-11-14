@@ -54,7 +54,7 @@ fn parse_env(text: &str) -> HashMap<String, String> {
 fn read_config() -> Result<Stg, crate::error::Exit> {
     let config = env::var(crate::names::vars::STG_CONFIG)
         .map(PathBuf::from)
-        .unwrap_or_else(|| env::home().join(".crux/staging.env"));
+        .unwrap_or_else(|| env::crux_dir().join("staging.env"));
     let Ok(text) = std::fs::read_to_string(&config) else {
         ui::err(format!("no staging configuration in {}", config.display()));
         ui::info("create it with the four variables documented in this command's header:");
@@ -73,7 +73,7 @@ fn read_config() -> Result<Stg, crate::error::Exit> {
         domain: m[crate::names::vars::STG_DOMAIN].clone(),
         root: m[crate::names::vars::STG_ROOT].clone(),
         container: m[crate::names::vars::STG_CONTAINER].clone(),
-        keys: env::home().join(".crux/staging"),
+        keys: env::crux_dir().join("staging"),
     })
 }
 

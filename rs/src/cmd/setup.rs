@@ -533,7 +533,7 @@ pub fn run(argv: &[String]) -> Res {
     banner();
     let mut s = Setup {
         ask: Prompt::new(),
-        config: env::home().join(".crux/config"),
+        config: env::config_file(),
         github: GitHub::detect(),
         remote: String::new(),
         root: PathBuf::new(),
