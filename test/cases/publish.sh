@@ -133,7 +133,7 @@ test_publish_arrival_repairs_hooks_whose_kernel_is_gone() {
   local api="$CRUX_PROJECTS_DIR/omicron/api"
   git init -q "$api"
   (cd "$docs" && "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1)
-  sed -i "s|^KERNEL=.*|KERNEL=\"$SB/deleted-worktree\"|" "$api/.git/hooks/commit-msg.crux"
+  sed_i "s|^KERNEL=.*|KERNEL=\"$SB/deleted-worktree\"|" "$api/.git/hooks/commit-msg.crux"
 
   local out; out="$(cd "$CRUX_PROJECTS_DIR" && "$CRUX_HOME/bin/crux" sync 2>&1)"
   assert_contains "$out" "git hooks brought up to date" "arriving notices a hook that points at a kernel no longer there"

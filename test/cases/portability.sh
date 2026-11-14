@@ -79,3 +79,10 @@ test_registry_lock_works_with_a_flock_without_wait() {
   assert_eq "0" "$rc" "taking the registry lock does not fail"
   assert_contains "$out" "locked" "the lock is taken through the directory"
 }
+
+test_no_case_calls_sed_in_place_directly() {
+  # BSD sed takes the expression after -i as a backup suffix and edits
+  # nothing, so a case that used it passed on Linux and failed on macOS.
+  local found; found="$(grep -nE '^[[:space:]]*sed -i ' "$CRUX_HOME"/test/cases/*.sh || true)"
+  assert_eq "" "$found" "cases edit files in place through sed_i"
+}
