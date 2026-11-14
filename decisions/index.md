@@ -963,11 +963,17 @@
     committed to `refs/crux/usage/<machine>` in the profile repo and pushed
     there. Each machine writes only its own ref, so there is nothing to merge;
     the report fetches every machine's and joins them by session.
-  - What travels carries no words of the session. A project with
-    `code.foreign` travels as a fingerprint, `client-<hash>`: counted, without
-    saying whose. The words the report uses to say how a skill was asked for
-    stay on the machine that read them.
+  - What travels carries no words of the session. A session in a project with
+    `code.foreign` travels as project `client`, and every skill it used that is
+    not the kernel's as `client-skill`: a project's own skill names the client
+    as well as its name would. A fingerprint of the name was discarded: a list
+    of company names reverses it. The words the report uses to say how a skill
+    was asked for stay on the machine that read them.
   - Lines accumulate, so a session the agent has deleted stays counted.
+  - The log builds on what the remote holds and is never force-pushed: a
+    machine reinstalled under the same name clones the profile without the
+    hidden refs, and a forced push from it would erase its history. What a
+    push without network left only here is sent the next time.
   - The arrival round publishes at most once a day, `sync --leave` always, and
     `crux usage` before reading. `--here` keeps to this machine.
 - **Consequences**: a year of one machine at 20 sessions a day, simulated,

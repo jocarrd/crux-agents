@@ -12,7 +12,7 @@ reporting zero as if it were data.
 
 Each machine adds its sessions to a log of its own in the profile repo, and
 the report counts every machine's: one line per session with its date, its
-project and the skills it used, never its words. A client's project goes as
-a fingerprint. Lines accumulate, so a session the agent deletes after a
+project and the skills it used, never its words. A client's session says
+neither which client nor which of its skills: `client` and `client-skill`. Lines accumulate, so a session the agent deletes after a
 month is still counted. --here counts only this machine and publishes
 nothing.

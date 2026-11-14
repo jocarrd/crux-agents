@@ -2,7 +2,7 @@
 //!
 //! Each machine keeps one line per session in `usage.jsonl`, committed to a
 //! ref of its own in the person's profile repo and pushed there. Only counts
-//! travel: no words of the session, and a client's project as a fingerprint.
+//! travel: no words of the session, and nothing that says which client.
 //! Lines accumulate, so what the agent deletes after a month stays counted.
 
 use crate::git::Batch;
@@ -47,13 +47,22 @@ pub fn merge(older: Vec<Session>, newer: Vec<Session>) -> Vec<Session> {
     out
 }
 
-/// A client's project travels as a fingerprint: counted, without saying whose.
+/// What a client's session says about whose it is does not travel: its
+/// project goes as `client`, and so does any skill that is not the kernel's,
+/// since a project's own skill names the client as well as the project would.
 pub fn project_label(name: &str, foreign: bool) -> String {
     if foreign && !name.is_empty() {
-        let digest = crate::cmd::ship::cksum(name.as_bytes());
-        format!("client-{}", &digest[..digest.len().min(8)])
+        "client".to_string()
     } else {
         name.to_string()
+    }
+}
+
+pub fn skill_label(skill: &str, foreign: bool, kernel: &[String]) -> String {
+    if foreign && !kernel.iter().any(|k| k == skill) {
+        "client-skill".to_string()
+    } else {
+        skill.to_string()
     }
 }
 
@@ -64,30 +73,69 @@ fn read_log(repo: &Path, r: &str) -> Vec<Session> {
         .unwrap_or_default()
 }
 
-/// Adds this machine's sessions to its log and publishes it. Ok(false) when
-/// there was nothing new to write.
+fn tip(repo: &Path, r: &str) -> Option<String> {
+    git::out(repo, &["rev-parse", "-q", "--verify", r])
+}
+
+/// Adds this machine's sessions to its log and publishes it; Ok(true) when
+/// something new reached the log or the remote.
+///
+/// It builds on what the remote holds, not only on the local copy: a profile
+/// cloned again, on a machine reinstalled under the same name, has no local
+/// copy, and a forced push from it would erase that machine's history. So the
+/// push is never forced, and what an earlier push without network left only
+/// here is sent the next time.
 pub fn publish(profile: &Path, sessions: &[Session]) -> Result<bool, String> {
-    let mine = refs::usage_on_remote(&env::machine());
-    let head = git::out(profile, &["rev-parse", "-q", "--verify", &mine]);
-    let before = head.as_deref().map(|_| read_log(profile, &mine)).unwrap_or_default();
-    let merged = merge(before.clone(), sessions.to_vec());
-    if merged == before {
-        return Ok(false);
-    }
+    let common = git::common_dir(profile).ok_or_else(|| format!("{} is not a git repo", profile.display()))?;
+    let _lock = crate::task::record::lock(&common.join("crux").join("usage"))?;
+    let machine = env::machine();
+    let mine = refs::usage_on_remote(&machine);
+    let theirs = format!("{}{machine}", refs::USAGE_FETCHED);
     let g = Batch::new(profile);
-    let blob = g.run(&["hash-object", "-w", "--stdin"], Some(&render(&merged)))?.trim().to_string();
-    let tree = g.run(&["mktree"], Some(&format!("100644 blob {blob}\t{}\n", names::USAGE_LOG)))?.trim().to_string();
-    let message = format!("[skip ci] usage: {}", env::machine());
-    let mut args = vec!["commit-tree", "--no-gpg-sign", tree.as_str(), "-m", message.as_str()];
-    if let Some(h) = &head {
-        args.extend(["-p", h.as_str()]);
+    // Asked first, because fetching a ref the remote does not have yet fails
+    // just as being offline does.
+    let listed = git::remote_url(profile, refs::REMOTE).and(g.run(&["ls-remote", refs::REMOTE, &mine], None).ok());
+    let online = listed.is_some();
+    let on_remote = listed.is_some_and(|l| !l.trim().is_empty());
+    if on_remote {
+        g.run(&["fetch", "-q", "--no-write-fetch-head", refs::REMOTE, &format!("+{mine}:{theirs}")], None)?;
     }
-    let commit = Batch::as_crux(profile, &[]).run(&args, None)?.trim().to_string();
-    g.run(&["update-ref", &mine, &commit], None)?;
-    if git::remote_url(profile, refs::REMOTE).is_some() {
-        g.run(&["push", "-q", "--no-verify", refs::REMOTE, &format!("+{commit}:{mine}")], None)?;
+    let remote = if on_remote { tip(profile, &theirs) } else { None };
+    let local = tip(profile, &mine);
+    let known = merge(
+        remote.as_deref().map(|r| read_log(profile, r)).unwrap_or_default(),
+        local.as_deref().map(|l| read_log(profile, l)).unwrap_or_default(),
+    );
+    let merged = merge(known, sessions.to_vec());
+    let base = if on_remote { remote.clone() } else { local.clone() };
+    let base_log = base.as_deref().map(|b| read_log(profile, b)).unwrap_or_default();
+    let head = if merged == base_log && base.is_some() {
+        base.clone().unwrap_or_default()
+    } else {
+        let blob = g.run(&["hash-object", "-w", "--stdin"], Some(&render(&merged)))?.trim().to_string();
+        let tree = g.run(&["mktree"], Some(&format!("100644 blob {blob}\t{}\n", names::USAGE_LOG)))?.trim().to_string();
+        let message = format!("[skip ci] usage: {machine}");
+        let mut args = vec!["commit-tree", "--no-gpg-sign", tree.as_str(), "-m", message.as_str()];
+        if let Some(b) = &base {
+            args.extend(["-p", b.as_str()]);
+        }
+        Batch::as_crux(profile, &[]).run(&args, None)?.trim().to_string()
+    };
+    let changed = local.as_deref() != Some(head.as_str());
+    if changed {
+        // The old value guards against another writer that got in between.
+        let old = local.clone().unwrap_or_else(|| "0".repeat(40));
+        g.run(&["update-ref", &mine, &head, &old], None)?;
     }
-    Ok(true)
+    let pending = online && remote.as_deref() != Some(head.as_str());
+    if pending {
+        g.run(&["push", "-q", "--no-verify", refs::REMOTE, &format!("{head}:{mine}")], None)?;
+        g.run(&["update-ref", &theirs, &head], None)?;
+    }
+    if !online && git::remote_url(profile, refs::REMOTE).is_some() {
+        return Err("the profile's remote cannot be reached: this machine's usage stays here until next time".into());
+    }
+    Ok(changed || pending)
 }
 
 /// Every machine's log as the remote has it, plus this machine's local copy,
@@ -139,10 +187,12 @@ mod tests {
     }
 
     #[test]
-    fn a_clients_project_travels_as_a_fingerprint() {
-        let label = project_label("acme", true);
-        assert!(label.starts_with("client-") && !label.contains("acme"));
-        assert_eq!(label, project_label("acme", true));
+    fn nothing_of_a_clients_session_says_whose_it_is() {
+        let kernel = vec!["ship".to_string()];
+        assert_eq!(project_label("acme", true), "client");
         assert_eq!(project_label("own", false), "own");
+        assert_eq!(skill_label("acme-billing-deploy", true, &kernel), "client-skill");
+        assert_eq!(skill_label("ship", true, &kernel), "ship");
+        assert_eq!(skill_label("own-deploy", false, &kernel), "own-deploy");
     }
 }

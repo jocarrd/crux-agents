@@ -925,8 +925,6 @@ const REST: &str = "--rest";
 
 fn rest(ctx: &Ctx, state: &Path) -> Res {
     let _lock = take_lock(state, false);
-    // Statistics: a round that cannot publish them retries the next day.
-    let _ = super::usage::publish_this_machine(false);
     let (lines, offline, repos) = arrival_lines(ctx);
     let text = hook_text("crux sync, found after the last session started:", &lines, offline.len(), repos);
     if !text.is_empty() {
@@ -935,6 +933,9 @@ fn rest(ctx: &Ctx, state: &Path) -> Res {
             die!("cannot write {}: {e}", file.display());
         }
     }
+    // After the report, which the next session reads. Statistics: a round
+    // that cannot publish them leaves the mark untouched, so the next tries.
+    let _ = super::usage::publish_this_machine(false);
     Ok(())
 }
 

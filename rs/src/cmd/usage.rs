@@ -171,14 +171,15 @@ struct Read {
     words: Vec<String>,
 }
 
-/// The project a session opened in, from the folder the agent recorded.
-fn project_of_session(text: &str) -> String {
+/// The project a session opened in, from the folder the agent recorded, and
+/// whether its code is a client's.
+fn project_of_session(text: &str) -> (String, bool) {
     let cwd = crate::regex!(r#""cwd"\s*:\s*"((?:[^"\\]|\\.)*)""#);
-    let Some(dir) = cwd.captures(text).map(|c| c[1].replace("\\\\", "\\")) else { return String::new() };
-    let Some(docs) = project::find_docs_repo(Path::new(&dir)) else { return String::new() };
+    let Some(dir) = cwd.captures(text).map(|c| c[1].replace("\\\\", "\\")) else { return (String::new(), false) };
+    let Some(docs) = project::find_docs_repo(Path::new(&dir)) else { return (String::new(), false) };
     let name = project::contract_field(&docs, "project").unwrap_or_default();
     let profile = project::contract_field(&docs, "profile").unwrap_or_default();
-    usage_log::project_label(&name, policy::code_is_foreign(&profile, Some(&docs)))
+    (name, policy::code_is_foreign(&profile, Some(&docs)))
 }
 
 fn day_of(t: std::time::SystemTime) -> String {
@@ -199,6 +200,7 @@ fn read_sessions(home: &Path, since: std::time::SystemTime) -> Vec<Read> {
     let edits = crate::regex!(r#"<<\s*['"]?\w*(PY|EOF|SH)\b|chmod\s|cat\s*>|>>\s*\S|sed -i|\.replace\("#);
     let dir = transcripts_dir();
     let machine = env::machine();
+    let kernel = dirs(&home.join("skills"));
     let mut out = vec![];
     for project in dirs(&dir) {
         for (id, parts) in sessions_of(&dir.join(&project)) {
@@ -226,11 +228,18 @@ fn read_sessions(home: &Path, since: std::time::SystemTime) -> Vec<Read> {
                 }
             }
             let words = if by_script.is_empty() { vec![] } else { user_words(&text) };
+            let (project, foreign) = project_of_session(&text);
+            let calls = calls.iter().map(|c| usage_log::skill_label(c, foreign, &kernel)).fold(vec![], |mut acc, l| {
+                if !acc.contains(&l) {
+                    acc.push(l);
+                }
+                acc
+            });
             let log = usage_log::Session {
                 session: id,
                 date: day_of(last),
                 machine: machine.clone(),
-                project: project_of_session(&text),
+                project: usage_log::project_label(&project, foreign),
                 calls,
                 scripts: by_script,
             };
