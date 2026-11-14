@@ -57,7 +57,7 @@ impl Tally {
 }
 
 fn gh_ready() -> bool {
-    sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok()
+    crate::gh::authenticated()
 }
 
 /// The system's, the bundler's own and libraries' debug switches.
@@ -169,7 +169,7 @@ pub fn run(argv: &[String]) -> Res {
         declared_version: field("crux", "?"),
         language: field("language", "es"),
         declared: files::str_list(contract.get("repos")).into_iter().filter(|r| !r.is_empty()).collect(),
-        origin_docs: git::remote_url(&docs, "origin").unwrap_or_default(),
+        origin_docs: git::remote_url(&docs, crate::names::git::REMOTE).unwrap_or_default(),
         gh: gh_ready(),
         writes: policy::flag(&profile, Some(&docs), "pointers.write", true),
         profile,
@@ -363,10 +363,7 @@ fn archived_repos(t: &mut Tally, c: &Checkup) -> Vec<String> {
 fn undeclared_on_remote(t: &mut Tally, c: &Checkup, archived: &[String]) {
     let owner =
         crate::regex!(r"^.*github\.com[:/]").replace(&c.origin_docs, "").split('/').next().unwrap_or("").to_string();
-    // Archived on GitHub is read-only: nothing more can land there.
-    let jq = ".[] | select(.isArchived | not) | .name";
-    let list =
-        sh::capture("gh", &["repo", "list", &owner, "--limit", "200", "--json", "name,isArchived", "--jq", jq]).stdout;
+    let list = crate::gh::active_repo_names(&owner).join("\n");
     // A declared repo can live under another name: its URL in the contract says which.
     let remote_names: Vec<String> = c
         .declared
@@ -495,7 +492,7 @@ fn check_remotes(t: &mut Tally, c: &Checkup) {
         return;
     }
     for repo in c.declared.iter().filter(|r| c.root.join(r).join(".git").is_dir()) {
-        let Some(real) = git::remote_url(&c.root.join(repo), "origin") else { continue };
+        let Some(real) = git::remote_url(&c.root.join(repo), crate::names::git::REMOTE) else { continue };
         match project::remote_url(&c.contract, repo) {
             None => {
                 t.note(format!("{repo}: no remote in the contract — 'crux clone' will not know where to fetch it from"))
@@ -522,8 +519,7 @@ fn check_visibility(t: &mut Tally, c: &Checkup) {
     let expected = c.field("remote.visibility", "private");
     let slug = crate::regex!(r"^.*github\.com[:/]").replace(&c.origin_docs, "").into_owned();
     let slug = slug.strip_suffix(".git").unwrap_or(&slug).to_string();
-    let actual =
-        sh::capture("gh", &["repo", "view", &slug, "--json", "visibility", "-q", ".visibility"]).out().to_lowercase();
+    let actual = crate::gh::visibility(&slug).unwrap_or_default();
     if actual.is_empty() {
         t.note(format!("could not query the visibility of {slug}"));
     } else if actual == "public" && expected != "public" {

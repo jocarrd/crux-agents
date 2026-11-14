@@ -106,7 +106,7 @@ pub fn run(argv: &[String]) -> Res {
     }
     // `crux release` runs the installed copy's code, not the repo's:
     // publishing with an old copy publishes with the old publisher.
-    let installed = env::config_value_in(&env::config_file(), "CRUX_HOME")
+    let installed = env::config_value_in(&env::config_file(), crate::names::vars::HOME)
         .and_then(|h| std::fs::read_to_string(Path::new(&h).join(names::VERSION)).ok())
         .map(|v| v.split_whitespace().collect::<String>())
         .unwrap_or_default();
@@ -121,7 +121,7 @@ pub fn run(argv: &[String]) -> Res {
 
     // The suite also tests this command: without this guard they would call
     // each other endlessly.
-    if env::var("CRUX_IN_TESTS").is_some() {
+    if env::var(crate::names::vars::IN_TESTS).is_some() {
         ui::info("suite skipped: running from the suite itself");
     } else {
         let r = sh::capture_in(&repo, "./test/run.sh", &[]);
@@ -188,10 +188,10 @@ pub fn run(argv: &[String]) -> Res {
         return Ok(());
     }
     sh::status(git::cmd(&repo).args(["tag", "-a", &format!("v{new}"), "-m", &format!("{new}\n\n{notes}")]));
-    sh::status(git::cmd(&repo).args(["push", "-q", "origin", &format!("v{new}")]));
+    sh::status(git::cmd(&repo).args(["push", "-q", crate::names::git::REMOTE, &format!("v{new}")]));
     ui::ok(format!("v{new} published"));
     // Without this the notes only exist in the tag message, which nobody reads.
-    if sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok() {
+    if crate::gh::authenticated() {
         if sh::capture_in(&repo, "gh", &["release", "create", &format!("v{new}"), "--title", &new, "--notes", &notes])
             .ok()
         {

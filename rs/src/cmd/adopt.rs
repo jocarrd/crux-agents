@@ -58,7 +58,7 @@ pub fn run(argv: &[String]) -> Res {
         if !dir.join(".git").is_dir() {
             continue;
         }
-        let Some(url) = git::remote_url(&dir, "origin") else { continue };
+        let Some(url) = git::remote_url(&dir, crate::names::git::REMOTE) else { continue };
         if url == tmpl.replace("{repo}", repo) {
             continue;
         }

@@ -96,7 +96,7 @@ pub(super) fn session_sync() -> Res {
     }
     // With the Claude Code mod it draws the reminder as a panel; the model
     // still gets it the same.
-    let panel = env::var("CRUX_REMINDER_UI").as_deref() == Some("panel");
+    let panel = env::var(crate::names::vars::REMINDER_UI).as_deref() == Some("panel");
     let r_user =
         reminder.as_ref().and_then(|r| r.get("user")).and_then(Value::as_str).filter(|_| !panel).map(String::from);
     let r_agent = reminder.as_ref().and_then(|r| r.get("agent")).and_then(Value::as_str).map(String::from);
@@ -133,7 +133,7 @@ pub(super) fn session_idle() -> Res {
     }
     sweep(&dir, "", Duration::from_secs(31 * 86400));
     let m = dir.join(safe_id(&session));
-    let hours: u64 = env::var("CRUX_TASKS_IDLE_HOURS").and_then(|h| h.parse().ok()).unwrap_or(3);
+    let hours: u64 = env::var(crate::names::vars::TASKS_IDLE_HOURS).and_then(|h| h.parse().ok()).unwrap_or(3);
     // No marker means the first message: session start took care of it.
     let stopped = std::fs::metadata(&m)
         .and_then(|x| x.modified())

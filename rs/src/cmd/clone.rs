@@ -19,7 +19,7 @@ fn clone_elsewhere(parent: &Path, url: &str) -> Option<PathBuf> {
     let wanted = project::normalize_git_url(url);
     project::repo_dirs(parent).into_iter().find(|d| {
         d.join(".git").is_dir()
-            && project::normalize_git_url(&git::remote_url(d, "origin").unwrap_or_default()) == wanted
+            && project::normalize_git_url(&git::remote_url(d, crate::names::git::REMOTE).unwrap_or_default()) == wanted
     })
 }
 

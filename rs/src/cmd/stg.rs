@@ -14,7 +14,12 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const VARS: [&str; 4] = ["CRUX_STG_SSH", "CRUX_STG_DOMAIN", "CRUX_STG_ROOT", "CRUX_STG_CONTAINER"];
+const VARS: [&str; 4] = [
+    crate::names::vars::STG_SSH,
+    crate::names::vars::STG_DOMAIN,
+    crate::names::vars::STG_ROOT,
+    crate::names::vars::STG_CONTAINER,
+];
 
 struct Stg {
     ssh: String,
@@ -47,8 +52,9 @@ fn parse_env(text: &str) -> HashMap<String, String> {
 }
 
 fn read_config() -> Result<Stg, crate::error::Exit> {
-    let config =
-        env::var("CRUX_STG_CONFIG").map(PathBuf::from).unwrap_or_else(|| env::home().join(".crux/staging.env"));
+    let config = env::var(crate::names::vars::STG_CONFIG)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| env::home().join(".crux/staging.env"));
     let Ok(text) = std::fs::read_to_string(&config) else {
         ui::err(format!("no staging configuration in {}", config.display()));
         ui::info("create it with the four variables documented in this command's header:");
@@ -63,10 +69,10 @@ fn read_config() -> Result<Stg, crate::error::Exit> {
         }
     }
     Ok(Stg {
-        ssh: m["CRUX_STG_SSH"].clone(),
-        domain: m["CRUX_STG_DOMAIN"].clone(),
-        root: m["CRUX_STG_ROOT"].clone(),
-        container: m["CRUX_STG_CONTAINER"].clone(),
+        ssh: m[crate::names::vars::STG_SSH].clone(),
+        domain: m[crate::names::vars::STG_DOMAIN].clone(),
+        root: m[crate::names::vars::STG_ROOT].clone(),
+        container: m[crate::names::vars::STG_CONTAINER].clone(),
         keys: env::home().join(".crux/staging"),
     })
 }

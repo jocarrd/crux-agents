@@ -127,7 +127,7 @@ fn branches_gone(live: &[registry::Workspace]) {
     for w in live.iter().filter(|w| Path::new(&w.path).is_dir()) {
         let tracking = git::out(
             Path::new(&w.path),
-            &["for-each-ref", "--format=%(upstream:track)", &format!("refs/heads/{}", w.branch)],
+            &["for-each-ref", "--format=%(upstream:track)", &crate::names::git::head(&w.branch)],
         )
         .unwrap_or_default();
         if tracking.contains("gone") {
@@ -173,7 +173,7 @@ fn proposals_without_receipt(live: &[registry::Workspace]) {
     let slug_re = crate::regex!(r"^.*github\.com[:/]");
     let mut rows = vec![];
     for w in live.iter().filter(|w| Path::new(&w.path).is_dir()) {
-        let Some(origin) = git::remote_url(Path::new(&w.path), "origin") else { continue };
+        let Some(origin) = git::remote_url(Path::new(&w.path), crate::names::git::REMOTE) else { continue };
         let slug = slug_re.replace(&origin, "").into_owned();
         let slug = slug.strip_suffix(".git").unwrap_or(&slug).to_string();
         rows.push((w, slug));
@@ -248,7 +248,7 @@ fn tasks_elsewhere(live: &[registry::Workspace]) {
     if waiting.is_empty() {
         return;
     }
-    let nudge: i64 = env::var("CRUX_WAIT_NUDGE_DAYS")
+    let nudge: i64 = env::var(crate::names::vars::WAIT_NUDGE_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
         .map(|n| n as i64)

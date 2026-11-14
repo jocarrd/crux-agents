@@ -70,7 +70,7 @@ struct Prompt {
 impl Prompt {
     fn new() -> Self {
         // In tests the answers come on stdin, as a person would type them.
-        let test_tty = env::in_tests() && env::var("CRUX_TEST_TTY").is_some();
+        let test_tty = env::in_tests() && env::var(crate::names::vars::TEST_TTY).is_some();
         Prompt { interactive: std::io::stdin().is_terminal() || test_tty }
     }
 
@@ -162,7 +162,7 @@ impl GitHub {
     fn detect() -> Self {
         if !sh::exists("gh") {
             GitHub::Missing
-        } else if sh::capture("gh", &["auth", "status"]).ok() {
+        } else if crate::gh::authenticated() {
             GitHub::Ready
         } else {
             GitHub::LoggedOut
@@ -256,7 +256,7 @@ impl Setup {
 
     fn account(&mut self, owner_arg: &str) -> Res {
         self.step(2, "where your projects live");
-        if let Some(r) = env::config_value_in(&self.config, "CRUX_REMOTE").filter(|r| !r.is_empty()) {
+        if let Some(r) = env::config_value_in(&self.config, crate::names::vars::REMOTE).filter(|r| !r.is_empty()) {
             done(format!("the remote this machine already has: {r}"));
             self.remote = r;
         } else if self.github != GitHub::Ready {
@@ -325,7 +325,7 @@ impl Setup {
             quietly(&self.root, "profile", &["link"]);
             done(format!("{} loaded into the agents", shown(&local)));
             "loaded"
-        } else if !me.is_empty() && sh::capture("gh", &["repo", "view", &format!("{me}/{name}")]).ok() {
+        } else if !me.is_empty() && crate::gh::repo_exists(&format!("{me}/{name}")) {
             if self.ask.yes(&format!("your profile is on {me}: bring it?"), true)
                 && quietly(&self.root, "profile", &["clone", "--owner", &me])
             {
@@ -409,10 +409,9 @@ impl Setup {
         let owner = project::owner_from_template(&self.remote);
         if self.github == GitHub::Ready && !owner.is_empty() {
             let profile_repo = person::repo_name();
-            let listed =
-                sh::capture("gh", &["repo", "list", &owner, "--limit", "100", "--json", "name", "--jq", ".[].name"]);
+            let listed = crate::gh::repo_names(&owner);
             let repos: Vec<&str> =
-                listed.stdout.lines().filter(|r| !r.ends_with("-docs") && *r != profile_repo).collect();
+                listed.iter().map(String::as_str).filter(|r| !r.ends_with("-docs") && *r != profile_repo).collect();
             if !repos.is_empty() {
                 hint(format!("repos on {owner}: {}", repos.join(", ")));
             }
@@ -508,10 +507,7 @@ fn banner() {
 /// The repos of an owner that are projects of crux: a `-docs` repo with a
 /// contract.
 fn projects_on(owner: &str) -> Vec<String> {
-    project::candidate_projects(owner)
-        .into_iter()
-        .filter(|p| sh::capture("gh", &["api", &format!("repos/{owner}/{p}-docs/contents/crux.json")]).ok())
-        .collect()
+    project::candidate_projects(owner).into_iter().filter(|p| project::has_contract(owner, p)).collect()
 }
 
 fn projects_here(dir: &Path) -> Vec<String> {

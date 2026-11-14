@@ -161,7 +161,7 @@ fn ago(s: &str) -> String {
 }
 
 fn nudge_after_days() -> i64 {
-    env::var("CRUX_WAIT_NUDGE_DAYS")
+    env::var(crate::names::vars::WAIT_NUDGE_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
         .map(|n| n as i64)
@@ -169,7 +169,7 @@ fn nudge_after_days() -> i64 {
 }
 
 pub fn idle_after_days() -> i64 {
-    env::var("CRUX_IDLE_TASK_DAYS")
+    env::var(crate::names::vars::IDLE_TASK_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
         .map(|n| n as i64)

@@ -28,7 +28,7 @@ pub(super) fn doc_sync() -> Res {
     let config = env::config_file();
     let mut root = env::declared_projects_root().unwrap_or_default();
     if root.is_empty() {
-        if let Some(k) = env::config_value_in(&config, "CRUX_HOME") {
+        if let Some(k) = env::config_value_in(&config, crate::names::vars::HOME) {
             root = Path::new(&k).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
         }
     }

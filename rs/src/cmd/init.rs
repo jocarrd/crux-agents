@@ -56,7 +56,7 @@ pub fn run(argv: &[String]) -> Res {
     // Where the remote comes from, in order: what is passed, the machine's
     // default, and with none it says so instead of guessing.
     if remote_tmpl.is_empty() {
-        remote_tmpl = env::config_value_in(&env::config_file(), "CRUX_REMOTE").unwrap_or_default();
+        remote_tmpl = env::config_value_in(&env::config_file(), crate::names::vars::REMOTE).unwrap_or_default();
     }
     if remote && remote_tmpl.is_empty() {
         ui::err(format!("I do not know where to push {project_name}-docs"));
@@ -69,8 +69,7 @@ pub fn run(argv: &[String]) -> Res {
     // Creating the remote repo does depend on the provider. GitHub is covered
     // because there is an official CLI; for the rest the repo is left ready
     // and it says what to do.
-    let create_remote =
-        remote && url_docs.contains("github.com") && sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok();
+    let create_remote = remote && url_docs.contains("github.com") && crate::gh::authenticated();
     println!("creating {project_name}-docs · profile {profile}");
     if remote {
         println!("remote: {url_docs}");
@@ -114,10 +113,10 @@ pub fn run(argv: &[String]) -> Res {
         // the hook protecting the main branch looks at another one.
         if !git::ok(&docs, &["init", "-q", "-b", &branch]) {
             git::run(&docs, &["init", "-q"]);
-            git::run(&docs, &["symbolic-ref", "HEAD", &format!("refs/heads/{branch}")]);
+            git::run(&docs, &["symbolic-ref", "HEAD", &crate::names::git::head(&branch)]);
         }
         if remote {
-            git::run(&docs, &["remote", "add", "origin", &url_docs]);
+            git::run(&docs, &["remote", "add", crate::names::git::REMOTE, &url_docs]);
             ui::ok(format!("local repo with origin pointing at {url_docs}"));
             pending_create = true;
         } else {
@@ -250,7 +249,7 @@ pub fn run(argv: &[String]) -> Res {
         ],
     );
     // Sin gh no se sabe si el repo existe en el proveedor: el push lo dice.
-    let pushed = remote && git::ok(&docs, &["push", "-q", "-u", "origin", "HEAD"]);
+    let pushed = remote && git::ok(&docs, &["push", "-q", "-u", crate::names::git::REMOTE, "HEAD"]);
     ui::ok("initial commit");
 
     println!("done: {}", docs.display());

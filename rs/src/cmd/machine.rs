@@ -140,7 +140,7 @@ pub fn run(_argv: &[String]) -> Res {
     println!();
     t.optional("gh", "create repos with crux init (use --no-remote meanwhile)");
     if sh::exists("gh") {
-        if sh::capture("gh", &["auth", "status"]).ok() {
+        if crate::gh::authenticated() {
             ui::ok("gh authenticated")
         } else {
             t.note("gh not authenticated — 'gh auth login'")
@@ -178,12 +178,12 @@ pub fn run(_argv: &[String]) -> Res {
     // uses it declares the check in ~/.crux/machine-checks.json. Each runs
     // with a time limit: a check that hangs is reported, it does not hang the
     // doctor.
-    let checks_file = env::var("CRUX_MACHINE_CHECKS")
+    let checks_file = env::var(crate::names::vars::MACHINE_CHECKS)
         .map(PathBuf::from)
         .unwrap_or_else(|| env::home().join(".crux/machine-checks.json"));
     if checks_file.is_file() {
         println!();
-        let limit: u64 = env::var("CRUX_MACHINE_CHECK_TIMEOUT").and_then(|v| v.parse().ok()).unwrap_or(20);
+        let limit: u64 = env::var(crate::names::vars::MACHINE_CHECK_TIMEOUT).and_then(|v| v.parse().ok()).unwrap_or(20);
         let parsed = files::read_json(&checks_file).and_then(|c| {
             let list = c.get("checks").and_then(Value::as_array).cloned().unwrap_or_default();
             list.into_iter()

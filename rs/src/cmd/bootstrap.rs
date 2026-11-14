@@ -39,7 +39,7 @@ fn bring_profile(parent: &Path, owner: &str, all_repos: &[String], dry: bool) {
                 .arg("profile")
                 .args(args)
                 .env(env::PROJECTS_DIR_KEY, parent)
-                .env("CRUX_HOME", &home),
+                .env(crate::names::vars::HOME, &home),
         )
         .ok()
     };
@@ -69,7 +69,7 @@ fn bring_tasks(parent: &Path, project: &str) {
         Command::new(std::env::current_exe().unwrap_or_default())
             .args(["__task-sync", "sync", "--project", project])
             .env(env::PROJECTS_DIR_KEY, parent)
-            .env("CRUX_HOME", &home),
+            .env(crate::names::vars::HOME, &home),
     );
     let result = serde_json::from_str::<serde_json::Value>(&out.stdout)
         .ok()
@@ -117,7 +117,7 @@ pub fn run(argv: &[String]) -> Res {
     if !sh::exists("gh") {
         die!("gh is needed to discover the projects — install it, or clone them one by one with 'crux clone'");
     }
-    if !sh::capture("gh", &["auth", "status"]).ok() {
+    if !crate::gh::authenticated() {
         die!("gh not authenticated — 'gh auth login' and come back");
     }
     // The first owner is yours: the profile and the loose repos are looked
@@ -135,12 +135,7 @@ pub fn run(argv: &[String]) -> Res {
     println!();
     println!("2. projects of {}", owners.join(" "));
     println!();
-    let mut all_repos: Vec<String> =
-        sh::capture("gh", &["repo", "list", &owner, "--limit", "300", "--json", "name", "--jq", ".[].name"])
-            .stdout
-            .lines()
-            .map(String::from)
-            .collect();
+    let mut all_repos: Vec<String> = crate::gh::repo_names(&owner).into_iter().collect();
     all_repos.sort();
     all_repos.dedup();
     let filter: Vec<String> = only.split(',').filter(|x| !x.is_empty()).map(String::from).collect();

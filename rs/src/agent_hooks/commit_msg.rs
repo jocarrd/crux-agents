@@ -113,8 +113,9 @@ const SPANISH: [&str; 72] = [
 
 pub(super) fn commit_msg(argv: &[String]) -> Res {
     let Some(file) = argv.first().map(std::path::PathBuf::from).filter(|f| f.is_file()) else { return Ok(()) };
-    let scope = crate::env::var("CRUX_COMMIT_MSG_SCOPE").and_then(|s| Scope::parse(&s)).unwrap_or(Scope::Full);
-    let language = crate::env::var("CRUX_COMMIT_MSG_LANG").unwrap_or_else(|| "en".into());
+    let scope =
+        crate::env::var(crate::names::vars::COMMIT_MSG_SCOPE).and_then(|s| Scope::parse(&s)).unwrap_or(Scope::Full);
+    let language = crate::env::var(crate::names::vars::COMMIT_MSG_LANG).unwrap_or_else(|| "en".into());
     let Ok(mut text) = std::fs::read_to_string(&file) else { return Ok(()) };
 
     // Deleted instead of rejected: the agent adds it because its own

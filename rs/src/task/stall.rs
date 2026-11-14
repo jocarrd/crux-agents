@@ -27,7 +27,7 @@ pub struct WorkspaceState {
 }
 
 pub fn stale_after_days() -> i64 {
-    env::var("CRUX_STALE_WORKSPACE_DAYS")
+    env::var(crate::names::vars::STALE_WORKSPACE_DAYS)
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|n| *n > 0.0)
         .map(|n| n as i64)
@@ -67,10 +67,10 @@ pub fn workspace_state(w: &registry::Workspace) -> WorkspaceState {
             newest = Some(newest.map_or(m, |n| n.max(m)));
         }
     }
-    let track = git::out(dir, &["for-each-ref", "--format=%(upstream:track)", &format!("refs/heads/{}", w.branch)])
+    let track = git::out(dir, &["for-each-ref", "--format=%(upstream:track)", &crate::names::git::head(&w.branch)])
         .unwrap_or_default();
     let gone = track.contains("gone");
-    let remote = format!("refs/remotes/origin/{}", w.branch);
+    let remote = crate::names::git::remote_branch(&w.branch);
     let ahead_of = |base: &str| {
         git::out(dir, &["rev-list", "--count", &format!("{base}..HEAD")])
             .and_then(|s| s.trim().parse::<i64>().ok())

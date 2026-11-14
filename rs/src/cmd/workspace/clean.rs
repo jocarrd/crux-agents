@@ -20,7 +20,7 @@ fn repoint_hooks(workspace: &Path, main_repo: &Path, settings: &Path) {
             Command::new(main_repo.join("bin/crux"))
                 .args(["hooks", "install"])
                 .current_dir(main_repo)
-                .env("CRUX_HOME", main_repo)
+                .env(crate::names::vars::HOME, main_repo)
                 .env("CLAUDE_SETTINGS", settings),
         )
         .ok();
@@ -239,7 +239,7 @@ pub fn heal(quiet: bool) -> Res {
     // removing it would lose a workspace another process is creating.
     for w in list.into_iter().filter(|w| !Path::new(&w.path).exists() && !w.being_created()) {
         if Path::new(&w.repo).is_dir()
-            && git::ok(Path::new(&w.repo), &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", w.branch)])
+            && git::ok(Path::new(&w.repo), &["rev-parse", "--verify", "-q", &names::git::head(&w.branch)])
         {
             if !quiet {
                 ui::warn(format!(
@@ -316,8 +316,8 @@ impl Drop for QuietStdout {
 /// decisions in the docs repo. The date is in the file name, not in the
 /// modification time, which changes with any copy.
 fn expire_tasks(confirmed: bool) -> Res {
-    let days =
-        env::var("CRUX_TASKS_RETENTION_DAYS").unwrap_or_else(|| env::preference("CRUX_TASKS_RETENTION_DAYS", "180"));
+    let days = env::var(crate::names::vars::TASKS_RETENTION_DAYS)
+        .unwrap_or_else(|| env::preference(crate::names::vars::TASKS_RETENTION_DAYS, "180"));
     let Ok(n) = days.parse::<i64>() else { die!("CRUX_TASKS_RETENTION_DAYS has to be a number of days: '{days}'") };
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(n)).format("%Y-%m-%d").to_string();
     let date = crate::regex!(r"^\d{4}-\d{2}-\d{2}$");
@@ -482,7 +482,12 @@ pub fn prune(argv: &[String]) -> Res {
         crate::regex!(r"^(develop|development|staging|stage|next|production|prod|release|release/.*|hotfix/.*)$");
     let mut names: Vec<String> = git::out(
         &repo,
-        &["for-each-ref", "--format=%(refname:short)", "refs/heads", &format!("refs/remotes/{}", names::git::REMOTE)],
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)",
+            names::git::HEADS,
+            &format!("{}{}", names::git::REMOTES, names::git::REMOTE),
+        ],
     )
     .unwrap_or_default()
     .lines()

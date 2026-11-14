@@ -95,11 +95,10 @@ fn read_checks(num: &str) -> Result<Vec<Check>, ()> {
 /// distributions, so the job's log comes from the API and is trimmed here:
 /// what precedes the last error, without the cleanup at the end.
 fn failure_log(job: &str, n: usize) -> String {
-    let repo = sh::capture("gh", &["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
-    if !repo.ok() {
+    let Some(repo) = crate::gh::repo_slug(&std::env::current_dir().unwrap_or_default()) else {
         return "(could not determine the repository to request the log)".into();
-    }
-    let log = sh::capture("gh", &["api", &format!("repos/{}/actions/jobs/{job}/logs", repo.out())]);
+    };
+    let log = sh::capture("gh", &["api", &format!("repos/{repo}/actions/jobs/{job}/logs")]);
     if !log.ok() {
         return "(the log is no longer available)".into();
     }
@@ -149,7 +148,7 @@ fn failure_log(job: &str, n: usize) -> String {
 
 pub fn run(argv: &[String]) -> Res {
     let (mut num, mut wait, mut timeout, mut lines) = (String::new(), false, "900".to_string(), "60".to_string());
-    let interval: u64 = env::var("CRUX_CHECKS_INTERVAL").and_then(|v| v.parse().ok()).unwrap_or(15);
+    let interval: u64 = env::var(crate::names::vars::CHECKS_INTERVAL).and_then(|v| v.parse().ok()).unwrap_or(15);
     let mut p = Parser::new(argv);
     while let Some(arg) = p.next() {
         match arg {
@@ -173,7 +172,7 @@ pub fn run(argv: &[String]) -> Res {
     if !sh::exists("gh") {
         die!("gh is needed to read the checks");
     }
-    if !sh::capture("gh", &["auth", "status"]).ok() {
+    if !crate::gh::authenticated() {
         die!("gh is not authenticated");
     }
     if num.is_empty() {

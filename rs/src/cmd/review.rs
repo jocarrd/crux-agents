@@ -57,11 +57,17 @@ pub fn run(argv: &[String]) -> Res {
     let g = |args: &[&str]| git::out(&repo, args).unwrap_or_default();
     let branch = g(&["rev-parse", "--abbrev-ref", "HEAD"]);
     if base.is_empty() {
-        base = g(&["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]).replacen("refs/remotes/", "", 1);
+        base =
+            g(&["symbolic-ref", "--quiet", crate::names::git::REMOTE_HEAD]).replacen(crate::names::git::REMOTES, "", 1);
         if base.is_empty() {
-            for c in ["origin/main", "origin/master", "main", "master"] {
-                if git::ok(&repo, &["rev-parse", "--verify", "--quiet", c]) {
-                    base = c.into();
+            for c in [
+                crate::names::git::remote_short("main"),
+                crate::names::git::remote_short("master"),
+                "main".into(),
+                "master".into(),
+            ] {
+                if git::ok(&repo, &["rev-parse", "--verify", "--quiet", &c]) {
+                    base = c;
                     break;
                 }
             }
@@ -92,7 +98,7 @@ pub fn run(argv: &[String]) -> Res {
         indent(&dirty.join("\n"));
     }
 
-    if sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok() {
+    if crate::gh::authenticated() {
         let pr = sh::capture(
             "gh",
             &["pr", "view", &branch, "--json", "number,title,mergeable,mergeStateStatus,statusCheckRollup"],

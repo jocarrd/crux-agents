@@ -16,8 +16,8 @@ pub(super) fn cycle_guard() -> Res {
         return Ok(());
     }
     let Some(branch) = git::out(&here, &["rev-parse", "--abbrev-ref", "HEAD"]) else { return Ok(()) };
-    let main = git::out(&here, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .map(|b| b.trim_start_matches("origin/").to_string())
+    let main = git::out(&here, &["symbolic-ref", "--short", crate::names::git::REMOTE_HEAD])
+        .map(|b| b.trim_start_matches(&crate::names::git::remote_short("")).to_string())
         .filter(|b| !b.is_empty())
         .unwrap_or_else(|| "main".into());
     if branch != main {
@@ -27,7 +27,7 @@ pub(super) fn cycle_guard() -> Res {
     // root comes from the configuration: a fixed folder would leave the guard
     // silent on a machine with another convention.
     let config = env::config_file();
-    let kernel = env::config_value_in(&config, "CRUX_HOME").unwrap_or_default();
+    let kernel = env::config_value_in(&config, crate::names::vars::HOME).unwrap_or_default();
     let mut root = env::declared_projects_root().unwrap_or_default();
     if root.is_empty() && !kernel.is_empty() {
         root = Path::new(&kernel).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
@@ -47,8 +47,9 @@ pub(super) fn cycle_guard() -> Res {
     }
     // The way out for a foreign clone left under the root to read it.
     if managed {
-        let foreign =
-            env::var("CRUX_UNMANAGED").or_else(|| env::config_value_in(&config, "CRUX_UNMANAGED")).unwrap_or_default();
+        let foreign = env::var(crate::names::vars::UNMANAGED)
+            .or_else(|| env::config_value_in(&config, crate::names::vars::UNMANAGED))
+            .unwrap_or_default();
         for pattern in foreign.split(':').filter(|p| !p.is_empty()) {
             if crate::files::glob_match(pattern, &top_s) {
                 return Ok(());

@@ -90,8 +90,8 @@ fn retire_idle(f: &Path) -> Res {
         }
         git::run(&repo, &["branch", "-D", &w.branch]);
         if !merged_pr.is_empty()
-            && git::ok(&repo, &["ls-remote", "--exit-code", "--heads", "origin", &w.branch])
-            && !git::ok(&repo, &["push", "-q", "origin", "--delete", &w.branch])
+            && git::ok(&repo, &["ls-remote", "--exit-code", "--heads", crate::names::git::REMOTE, &w.branch])
+            && !git::ok(&repo, &["push", "-q", crate::names::git::REMOTE, "--delete", &w.branch])
         {
             ui::warn(format!("could not delete remote branch {}", w.branch));
         }

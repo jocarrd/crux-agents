@@ -16,13 +16,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-pub const BRANCH: &str = "crux/tasks";
-const REMOTE_REF: &str = "refs/remotes/origin/crux/tasks";
-/// What the sync last saw on the remote. Its own ref, and the remote by URL
-/// and not by name: writing REMOTE_REF makes a `git pull` at the same moment
-/// fail with "cannot lock ref". git 2.56 and later update that ref on a push
-/// to the remote's URL; with a fetch holding it, the push still succeeds.
-const TRACK_REF: &str = "refs/crux/tasks-remote";
+pub const BRANCH: &str = crate::names::git::TASKS_BRANCH;
+const REMOTE_REF: &str = crate::names::git::TASKS_TRACKED;
+const TRACK_REF: &str = crate::names::git::TASKS_SEEN;
 const REMOVED: &str = ".removed";
 
 fn state_dir() -> PathBuf {
@@ -104,7 +100,7 @@ fn origin_url(repo: &Path, push: bool) -> Option<String> {
     if push {
         args.push("--push");
     }
-    args.push("origin");
+    args.push(crate::names::git::REMOTE);
     Git::new(repo).get(&args).filter(|u| !u.is_empty())
 }
 
@@ -151,13 +147,7 @@ fn visibility(repo: &Path) -> String {
     if let Some(v) = seen.get(&name).and_then(Value::as_str) {
         return v.to_string();
     }
-    let mut c = Command::new("gh");
-    c.args(["repo", "view", &name, "--json", "visibility", "--jq", ".visibility"]);
-    let r = crate::sh::with_timeout(&mut c, 15);
-    let v = r.stdout.trim().to_lowercase();
-    if !r.ok() || v.is_empty() {
-        return "unknown".into();
-    }
+    let Some(v) = crate::gh::visibility(&name) else { return "unknown".into() };
     seen.insert(name, json!(v));
     let _ = files::mkdir_private(&state_dir());
     // A cache: if it is not written, the visibility is asked again next time.
@@ -346,7 +336,7 @@ fn merge(p: &str, repo: &Path) -> Result<Merged, String> {
     let base = read_base(p);
     let locals = hashes(repo, &dir, &local_files(&dir));
     if env::in_tests() {
-        if let Some(ms) = env::var("CRUX_TEST_SYNC_PAUSE_MS").and_then(|v| v.parse().ok()) {
+        if let Some(ms) = env::var(crate::names::vars::TEST_SYNC_PAUSE_MS).and_then(|v| v.parse().ok()) {
             std::thread::sleep(std::time::Duration::from_millis(ms));
         }
     }

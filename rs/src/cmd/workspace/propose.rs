@@ -127,8 +127,11 @@ pub fn finish(argv: &[String]) -> Res {
     // The base comes from the contract, the remote or the local one: assuming
     // origin/main stops finish halfway, with the branch already pushed.
     let main = project::main_branch(&path);
-    let base =
-        if git::has_ref(&path, &format!("refs/remotes/origin/{main}")) { format!("origin/{main}") } else { main };
+    let base = if git::has_ref(&path, &crate::names::git::remote_branch(&main)) {
+        crate::names::git::remote_short(&main)
+    } else {
+        main
+    };
     warn_about_size(&path, &format!("{base}...{branch}"), record_file.as_deref());
 
     let docs = project::find_docs_repo(&path);
@@ -145,11 +148,11 @@ pub fn finish(argv: &[String]) -> Res {
     if let Some(d) = docs.as_deref() {
         check_origin(&path, &repo, d)?;
     }
-    if sh::status(git::cmd(&path).args(["push", "-q", "-u", "origin", &branch])) != 0 {
+    if sh::status(git::cmd(&path).args(["push", "-q", "-u", crate::names::git::REMOTE, &branch])) != 0 {
         die!("could not push {branch}");
     }
     ui::ok(format!("{branch} pushed ({})", ui::count(commits, "commit", "commits")));
-    let url = if sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok() {
+    let url = if crate::gh::authenticated() {
         open_proposal(&path, &base, &branch, &title, commits, &body)
     } else {
         String::new()
@@ -216,28 +219,27 @@ fn warn_if_no_steps(record_file: &Path) {
 /// be merged. Checked with the latest from the remote; offline, it goes on.
 fn check_against_main(path: &Path) -> Res {
     let main = project::main_branch(path);
-    if !git::ok(path, &["fetch", "-q", "origin", &main]) || !git::has_ref(path, &format!("refs/remotes/origin/{main}"))
+    if !git::ok(path, &["fetch", "-q", crate::names::git::REMOTE, &main])
+        || !git::has_ref(path, &crate::names::git::remote_branch(&main))
     {
         return Ok(());
     }
-    let r = git::run(
-        path,
-        &["merge-tree", "--write-tree", "--name-only", "--no-messages", "HEAD", &format!("origin/{main}")],
-    );
+    let upstream = crate::names::git::remote_short(&main);
+    let r = git::run(path, &["merge-tree", "--write-tree", "--name-only", "--no-messages", "HEAD", &upstream]);
     if !r.ok() {
-        ui::err(format!("the branch clashes with origin/{main}"));
+        ui::err(format!("the branch clashes with {upstream}"));
         for l in r.stdout.lines().skip(1) {
             println!("      {l}");
         }
-        ui::info(format!("rebase and pass the gate again: git rebase origin/{main}"));
+        ui::info(format!("rebase and pass the gate again: git rebase {upstream}"));
         return exit(1);
     }
-    let behind: usize = git::out(path, &["rev-list", "--count", &format!("HEAD..origin/{main}")])
+    let behind: usize = git::out(path, &["rev-list", "--count", &format!("HEAD..{upstream}")])
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
     if behind > 0 {
         ui::warn(format!(
-            "origin/{main} has {} that this branch lacks; they do not clash",
+            "{upstream} has {} that this branch lacks; they do not clash",
             ui::count(behind, "commit", "commits")
         ));
     }
@@ -353,7 +355,7 @@ fn check_body(path: &Path, body: &str, record_file: Option<&Path>) -> Res {
 /// and then gh takes that owner for a fork.
 fn check_origin(path: &Path, repo: &Path, docs: &Path) -> Res {
     let Some(contract) = project::contract_lenient(docs) else { return Ok(()) };
-    let origin = git::remote_url(path, "origin");
+    let origin = git::remote_url(path, crate::names::git::REMOTE);
     let declared = project::remote_url(&contract, &files::name(repo));
     let (Some(origin), Some(declared)) = (origin, declared) else { return Ok(()) };
     if project::normalize_git_url(&origin) == project::normalize_git_url(&declared) {
@@ -420,7 +422,7 @@ pub fn merge(argv: &[String]) -> Res {
             other => die!("unknown option: {other}"),
         }
     }
-    if !(sh::exists("gh") && sh::capture("gh", &["auth", "status"]).ok()) {
+    if !(crate::gh::authenticated()) {
         die!("an authenticated gh is needed to query and merge the proposal");
     }
     let w = find(&name)?;
@@ -435,7 +437,8 @@ pub fn merge(argv: &[String]) -> Res {
         die!("uncommitted changes in {}: commit them and finish again, or they stay out", path.display());
     }
     let head = git::head_sha(&path).unwrap_or_default();
-    let Some(remote) = git::out(&path, &["ls-remote", "origin", &format!("refs/heads/{}", w.branch)]) else {
+    let Some(remote) = git::out(&path, &["ls-remote", crate::names::git::REMOTE, &crate::names::git::head(&w.branch)])
+    else {
         die!("cannot reach origin to check that the proposal holds this branch's last commit");
     };
     let pushed = remote.split_whitespace().next().unwrap_or("");
@@ -544,8 +547,9 @@ pub fn merge(argv: &[String]) -> Res {
     }
     // A provider that deletes branches on merge has already done it, and the
     // failed delete read as "still there". The remote is asked instead.
-    let deleted = git::ok(&path, &["push", "-q", "origin", "--delete", &w.branch])
-        || git::out(&path, &["ls-remote", "--heads", "origin", &w.branch]).is_some_and(|o| o.trim().is_empty());
+    let deleted = git::ok(&path, &["push", "-q", crate::names::git::REMOTE, "--delete", &w.branch])
+        || git::out(&path, &["ls-remote", "--heads", crate::names::git::REMOTE, &w.branch])
+            .is_some_and(|o| o.trim().is_empty());
     if deleted {
         ui::ok("remote branch deleted");
     } else {
@@ -554,7 +558,7 @@ pub fn merge(argv: &[String]) -> Res {
     println!();
     // Once merged the workspace has nothing left to do; leaving it alive by
     // default piles up finished workspaces.
-    if env::preference_flag("CRUX_MERGE_CLOSE_WORKSPACE", true) {
+    if env::preference_flag(crate::names::vars::MERGE_CLOSE_WORKSPACE, true) {
         if super::clean::rm(std::slice::from_ref(&name)).is_err() {
             ui::warn(format!(
                 "the workspace is still alive: close it with 'crux workspace rm {name}' when it is clean"
