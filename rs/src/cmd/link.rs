@@ -261,11 +261,7 @@ pub fn run(argv: &[String]) -> Res {
     }
 
     println!();
-    skills::materialize_for_project(
-        &docs.join(names::CLAUDE_SKILLS),
-        &project_name,
-        &skill_repos(&docs, &profile, &repos),
-    );
+    skills::materialize_for_project(&docs, &project_name, &skill_repos(&docs, &profile, &repos));
     skills::prune();
     ui::ok("project skills materialized");
     Ok(())

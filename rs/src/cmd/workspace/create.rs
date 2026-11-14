@@ -150,7 +150,7 @@ pub fn create(a: NewArgs) -> Res {
     // An unversioned file does not travel with `git worktree add`.
     if let Some(d) = docs.as_deref() {
         if policy::writes_in_code_repos(&profile, Some(d)) {
-            crate::skills::link_into(&path, &crate::skills::project_skills(&d.join(names::CLAUDE_SKILLS)));
+            crate::skills::ProjectSkills::of(d).link_into(&path);
         }
         if policy::flag(&profile, Some(d), "pointers.local", false) {
             if let Ok(template::LocalPointer::Written) = template::write_local_pointer(&path, &files::name(d)) {

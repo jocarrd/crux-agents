@@ -139,7 +139,7 @@ pub fn run(argv: &[String]) -> Res {
     }
     let _ = std::fs::remove_file(docs.join(names::CLAUDE));
     let _ = std::os::unix::fs::symlink(names::AGENTS, docs.join(names::CLAUDE));
-    let _ = std::fs::create_dir_all(docs.join(crate::names::PROJECT_SKILLS));
+    let _ = std::fs::create_dir_all(docs.join(names::PROJECT_SKILLS));
     ui::ok("minimal structure materialized");
 
     let mut repos = vec![];

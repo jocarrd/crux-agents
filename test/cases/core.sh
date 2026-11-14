@@ -497,6 +497,48 @@ test_a_client_repo_takes_project_skills_only_as_local_files() {
   assert_no_file "$api/.claude/skills/do-something" "a profile that allows nothing there gets nothing"
 }
 
+test_project_skill_links_leave_the_repos_own_alone_and_follow_renames() {
+  sandbox >/dev/null
+  local docs; docs="$(_project_with_a_skill)"
+  local api="$CRUX_PROJECTS_DIR/omicron/api"
+  # The repo versions a link of its own under the same name: it is theirs.
+  mkdir -p "$api/.claude/skills" "$api/tools/do-something"
+  ln -s ../../tools/do-something "$api/.claude/skills/do-something"
+  git -C "$api" add -A && git -C "$api" commit -qm "own skill"
+  # A kernel skill keeps its global link.
+  ln -s "$CRUX_HOME/skills/ship" "$CLAUDE_SKILLS_DIR/ship"
+  # And a link left in the global catalog pointing at a worktree of the docs repo.
+  git -C "$docs" add -A && git -C "$docs" commit -qm skill
+  git -C "$docs" worktree add -q "$docs-ws-x" 2>/dev/null
+  ln -s "$docs-ws-x/.claude/skills/project/do-something" "$CLAUDE_SKILLS_DIR/do-something"
+
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+
+  assert_eq "../../tools/do-something" "$(readlink "$api/.claude/skills/do-something")" "the repo's versioned link is not replaced"
+  assert_eq "" "$(git -C "$api" status --porcelain -- .claude)" "and git sees nothing changed"
+  assert_symlink "$CLAUDE_SKILLS_DIR/ship" "$CRUX_HOME/skills/ship" "a kernel skill keeps its global link"
+  assert_eq "1" "$([[ -L "$CLAUDE_SKILLS_DIR/do-something" ]] && echo 0 || echo 1)" \
+    "a global link into a worktree of the docs repo is removed too"
+
+  mv "$docs/.claude/skills/project/do-something" "$docs/.claude/skills/project/do-other"
+  sed_i 's/name: do-something/name: do-other/' "$docs/.claude/skills/project/do-other/SKILL.md"
+  "$CRUX_HOME/bin/crux" link "$docs" >/dev/null 2>&1
+  assert_eq "1" "$([[ -L "$docs/.claude/skills/do-something" ]] && echo 0 || echo 1)" \
+    "a renamed skill leaves no broken link behind"
+  assert_symlink "$docs/.claude/skills/do-other" "$docs/.claude/skills/project/do-other" "and its new name is offered"
+}
+
+test_a_project_skill_named_like_a_kernel_one_is_not_linked() {
+  sandbox >/dev/null
+  local docs; docs="$(_project_with_a_skill)"
+  mv "$docs/.claude/skills/project/do-something" "$docs/.claude/skills/project/ship"
+  # The global catalog wins over a repo's: the project's would be hidden.
+  local out; out="$("$CRUX_HOME/bin/crux" link "$docs" 2>&1)"
+  assert_contains "$out" "already shipped by the kernel" "it says why it is not offered"
+  assert_eq "1" "$([[ -L "$CRUX_PROJECTS_DIR/omicron/api/.claude/skills/ship" ]] && echo 0 || echo 1)" "and does not link it"
+}
+
 test_a_workspace_offers_the_skills_of_its_project() {
   sandbox >/dev/null
   export CRUX_REGISTRY="$SB/registry.json"
