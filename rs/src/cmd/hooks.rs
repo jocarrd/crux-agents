@@ -13,6 +13,7 @@
 
 use crate::agent_hooks::{Hook, Scope};
 use crate::error::Res;
+use crate::names::hooks::{COMMIT_MSG, POST_COMMIT, PRE_COMMIT, PRE_PUSH};
 use crate::{die, env, files, git, policy, project, ui};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
@@ -339,17 +340,17 @@ fn status(p: &Paths) -> Res {
                 needles.iter().any(|n| text.contains(n))
             })
         };
-        if has("pre-commit", &[MARK, "crux doctor"]) {
+        if has(PRE_COMMIT, &[MARK, "crux doctor"]) {
             ui::ok("pre-commit installed")
         } else {
             ui::info("no crux pre-commit")
         }
-        if has("pre-push", &["crux workspace"]) {
+        if has(PRE_PUSH, &["crux workspace"]) {
             ui::ok("pre-push installed — no direct push to the main branch")
         } else {
             ui::info("no crux pre-push")
         }
-        if hooks.join("commit-msg").is_file() {
+        if hooks.join(COMMIT_MSG).is_file() {
             ui::ok("commit-msg installed — messages in English")
         } else {
             ui::info("no crux commit-msg")
@@ -533,7 +534,7 @@ fn install_pre_push(repo: &Path) -> bool {
     }
     let written = put_hook(
         &hooks,
-        "pre-push",
+        PRE_PUSH,
         &format!(
             r#"#!/usr/bin/env bash
 # Installed by crux hooks install.
@@ -575,16 +576,9 @@ fn install_commit_msg(p: &Paths, repo: &Path, scope: Scope, language: &str) -> b
         "en".into()
     };
     let scope = scope.as_str();
-    let template = p.home.join("adapters/git/commit-msg.sh");
-    let src = match std::fs::read_to_string(&template) {
-        Ok(t) => t,
-        Err(e) => {
-            ui::warn(format!("cannot read {}: {e}", template.display()));
-            return false;
-        }
-    };
+    let Some(src) = adapter_hook(p, COMMIT_MSG) else { return false };
     let out: Vec<String> = src
-        .lines()
+        .into_iter()
         .map(|l| {
             if l.starts_with("SCOPE=\"${CRUX_COMMIT_MSG_SCOPE:-full}\"") {
                 l.replacen(
@@ -598,21 +592,50 @@ fn install_commit_msg(p: &Paths, repo: &Path, scope: Scope, language: &str) -> b
                     &format!("COMMIT_LANG=\"${{CRUX_COMMIT_MSG_LANG:-{language}}}\""),
                     1,
                 )
-            } else if l.starts_with("KERNEL=") {
-                format!("KERNEL=\"{}\"", p.home.display())
             } else {
-                l.to_string()
+                l
             }
         })
         .collect();
-    if let Err(e) = put_hook(&hooks, "commit-msg", &(out.join("\n") + "\n")) {
+    if let Err(e) = put_hook(&hooks, COMMIT_MSG, &(out.join("\n") + "\n")) {
         ui::warn(e);
         return false;
     }
     true
 }
 
-const PRE_COMMIT: &str = r#"#!/usr/bin/env bash
+fn adapter_template(p: &Paths, name: &str) -> PathBuf {
+    p.home.join("adapters/git").join(format!("{name}.sh"))
+}
+
+/// A kernel adapter's lines with the kernel it came from written in: the
+/// hook keeps working when `crux` is not on the PATH of whoever commits.
+fn adapter_hook(p: &Paths, name: &str) -> Option<Vec<String>> {
+    let template = adapter_template(p, name);
+    match std::fs::read_to_string(&template) {
+        Ok(t) => Some(
+            t.lines()
+                .map(|l| if l.starts_with("KERNEL=") { format!("KERNEL=\"{}\"", p.home.display()) } else { l.into() })
+                .collect(),
+        ),
+        Err(e) => {
+            ui::warn(format!("cannot read {}: {e}", template.display()));
+            None
+        }
+    }
+}
+
+fn install_post_commit(p: &Paths, repo: &Path) -> bool {
+    let Some(hooks) = dir_hooks(repo) else { return false };
+    let Some(src) = adapter_hook(p, POST_COMMIT) else { return false };
+    if let Err(e) = put_hook(&hooks, POST_COMMIT, &(src.join("\n") + "\n")) {
+        ui::warn(e);
+        return false;
+    }
+    true
+}
+
+const PRE_COMMIT_SCRIPT: &str = r#"#!/usr/bin/env bash
 # Installed by crux hooks install.
 # Checks conformance before allowing a commit in the docs repo.
 command -v crux >/dev/null || exit 0
@@ -636,11 +659,13 @@ fn install(p: &Paths) -> Res {
         }
         executable(&p.hook(h.name()));
     }
-    let commit_msg = p.home.join("adapters/git/commit-msg.sh");
-    if !commit_msg.is_file() {
-        die!("missing {}", commit_msg.display());
+    for name in [COMMIT_MSG, POST_COMMIT] {
+        let template = adapter_template(p, name);
+        if !template.is_file() {
+            die!("missing {}", template.display());
+        }
+        executable(&template);
     }
-    executable(&commit_msg);
     if let Some(d) = p.settings.parent() {
         let _ = std::fs::create_dir_all(d);
     }
@@ -710,12 +735,12 @@ fn install(p: &Paths) -> Res {
         files::read_or_empty(f).contains("Installed by crux hooks install")
             || files::read_or_empty(f).contains("Instalado por crux hooks install")
     };
-    if (crux_pre_push(&hooks.join("pre-push")) || crux_pre_push(&hooks.join("pre-push.crux")))
-        && take_hook(&hooks, "pre-push")
+    if (crux_pre_push(&hooks.join(PRE_PUSH)) || crux_pre_push(&hooks.join("pre-push.crux")))
+        && take_hook(&hooks, PRE_PUSH)
     {
         ui::ok(format!("pre-push removed from {docs_name}: documentation is pushed directly"));
     }
-    if let Err(e) = put_hook(&hooks, "pre-commit", PRE_COMMIT) {
+    if let Err(e) = put_hook(&hooks, PRE_COMMIT, PRE_COMMIT_SCRIPT) {
         die!("{e}");
     }
     let installed = install_commit_msg(p, &docs, Scope::Full, "en");
@@ -747,6 +772,9 @@ fn install(p: &Paths) -> Res {
         }
         if install_pre_push(&dir) {
             ui::ok(format!("pre-push in {repo}"));
+        }
+        if install_post_commit(p, &dir) {
+            ui::ok(format!("post-commit in {repo}: a workspace's commits travel as they are made"));
         }
         match sync_project_hooks(&docs, &repo, &dir) {
             Ok(names) if !names.is_empty() => ui::ok(format!("the project's own in {repo}: {}", names.join(", "))),
@@ -855,10 +883,10 @@ fn remove(p: &Paths) -> Res {
     ui::ok("crux hooks removed (the rest is left as it was)");
     if let Some(docs) = project::find_docs_repo(&std::env::current_dir().unwrap_or_default()) {
         let hooks = dir_hooks(&docs).unwrap_or_default();
-        if take_hook(&hooks, "pre-commit") {
+        if take_hook(&hooks, PRE_COMMIT) {
             ui::ok("pre-commit removed");
         }
-        if take_hook(&hooks, "commit-msg") {
+        if take_hook(&hooks, COMMIT_MSG) {
             ui::ok("commit-msg removed");
         }
         unchain_hooks_path(&docs);
@@ -867,7 +895,7 @@ fn remove(p: &Paths) -> Res {
             let dir = docs.parent().unwrap().join(&repo);
             if !repo.is_empty() && project::valid_name(&repo) && dir.is_dir() {
                 if let Some(h) = dir_hooks(&dir) {
-                    if take_hook(&h, "commit-msg") | take_hook(&h, "pre-push") {
+                    if take_hook(&h, COMMIT_MSG) | take_hook(&h, PRE_PUSH) | take_hook(&h, POST_COMMIT) {
                         ui::ok(format!("git hooks removed from {repo}"));
                     }
                 }

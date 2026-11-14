@@ -34,7 +34,15 @@ good()  { echo "   ${G}ok${O} $*"; }
 bad()   { FAILURES=$((FAILURES + 1)); echo "   ${R}fail${O} $*"; }
 truthy(){ if eval "$1"; then good "$2"; else bad "$2"; fi; }
 
-[[ "${CRUX_E2E_KEEP:-0}" == "1" ]] || trap 'rm -rf "$SB"' EXIT
+# What publishes in the background may still be writing into the sandbox.
+settle() {
+  local _
+  for _ in $(seq 40); do
+    pgrep -f -- "$SB" >/dev/null || return 0
+    sleep 0.25
+  done
+}
+[[ "${CRUX_E2E_KEEP:-0}" == "1" ]] || trap 'settle; rm -rf "$SB"' EXIT
 
 machine() {
   local m="$SB/$1"
@@ -45,7 +53,7 @@ machine() {
 # on <machine> <command...>: runs it as that machine, from its projects root.
 on() {
   local m="$SB/$1"; shift
-  ( cd "${CWD:-$m/projects}" && env HOME="$m" CRUX_PROJECTS_DIR="$m/projects" \
+  ( cd "${CWD:-$m/projects}" && env HOME="$m" CRUX_MACHINE="$(basename "$m")" CRUX_PROJECTS_DIR="$m/projects" \
       CLAUDE_SETTINGS="$m/.claude/settings.json" CLAUDE_SKILLS_DIR="$m/.claude/skills" \
       CODEX_HOME_DIR="$m/.codex" CODEX_PROMPTS_DIR="$m/.codex/prompts" "$@" )
 }
@@ -155,6 +163,35 @@ truthy 'git -C "$REMOTES/demo-docs.git" log --format=%s main | grep -q "decision
 CWD="$B" crux_on desktop sync >/dev/null 2>&1
 truthy '[[ -s "$B/demo-docs/repos/api/notes.md" ]] && cmp -s "$A/demo-docs/repos/api/notes.md" "$B/demo-docs/repos/api/notes.md"' \
   "and the desktop reads the same decisions"
+
+step "a workspace's commits travel as they are made"
+CWD="$A/demo-docs" crux_on laptop hooks install >/dev/null 2>&1
+truthy 'grep -qs "hook post-commit" "$(git -C "$A/api" rev-parse --path-format=absolute --git-common-dir)/hooks/post-commit.crux"' \
+  "the code repo has the post-commit hook"
+CWD="$A/api" crux_on laptop workspace new travel --goal "Travel as it is made" >/dev/null 2>&1
+WT="$A/api-ws-travel"
+echo "export const travel = true;" > "$WT/travel.js"
+on laptop git -C "$WT" add -A
+on laptop git -C "$WT" commit -qm "feat: travel"
+published="refs/crux/branches/laptop/ws/travel"
+for _ in $(seq 40); do
+  git -C "$REMOTES/api.git" rev-parse -q --verify "$published" >/dev/null && break
+  sleep 0.25
+done
+truthy '[[ "$(git -C "$REMOTES/api.git" rev-parse -q --verify "$published")" == "$(git -C "$WT" rev-parse HEAD)" ]]' \
+  "the commit reaches the remote with nobody pushing"
+truthy '! git -C "$REMOTES/api.git" show-ref -q --verify refs/heads/ws/travel' "as a hidden ref, not as a branch"
+out="$(CWD="$A" crux_on laptop sync --leave 2>&1)"
+truthy '[[ "$out" != *"ws/travel"* ]]' "and leaving no longer counts it as work only here"
+
+step "the desktop resumes it with nobody having pushed or finished"
+for _ in $(seq 40); do
+  git -C "$REMOTES/demo-docs.git" show crux/tasks:travel.md >/dev/null 2>&1 && break
+  sleep 0.25
+done
+CWD="$B" crux_on desktop sync >/dev/null 2>&1
+CWD="$B/api" crux_on desktop workspace resume travel >/dev/null 2>&1
+truthy '[[ -f "$B/api-ws-travel/travel.js" ]]' "the desktop's worktree has the laptop's commit"
 
 step "the real machine was not touched"
 truthy '[[ ! -e "$HOME/.crux/tasks/demo" ]]' "no task of the demo reached the real ~/.crux"

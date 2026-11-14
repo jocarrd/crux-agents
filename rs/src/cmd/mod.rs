@@ -105,6 +105,7 @@ pub fn dispatch(argv: &[String]) -> i32 {
         "hook" => crate::agent_hooks::run(rest),
         "__task" => crate::task::internal(rest),
         "__task-sync" => crate::task::internal_sync(rest),
+        crate::publish::INTERNAL => crate::publish::internal(rest),
         other => {
             crate::ui::err(format!("unknown subcommand: {other}"));
             println!();

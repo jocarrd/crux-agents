@@ -186,6 +186,7 @@ fn delete_merged_branch(repo: &Path, branch: &str) -> bool {
         ui::info(format!("the branch {branch} still exists: git did not delete it"));
         return false;
     }
+    crate::publish::forget(repo, branch);
     match &proposal {
         Some(number) => {
             let remote = names::git::REMOTE;

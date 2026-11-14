@@ -264,7 +264,8 @@ pub fn run(argv: &[String]) -> Res {
     }
     match name {
         "codex-context" => codex_context(rest),
-        "commit-msg" => commit_msg::commit_msg(rest),
+        crate::names::hooks::COMMIT_MSG => commit_msg::commit_msg(rest),
+        crate::names::hooks::POST_COMMIT => crate::publish::post_commit(),
         other => {
             eprintln!("unknown hook: {other}");
             exit(2)

@@ -570,7 +570,11 @@ pub fn resume(argv: &[String]) -> Res {
             done += 1;
             continue;
         }
-        git::run(&dir_repo, &["fetch", "-q", "origin", &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}")]);
+        let remote = names::git::REMOTE;
+        git::run(
+            &dir_repo,
+            &["fetch", "-q", remote, &format!("+{}:refs/remotes/{remote}/{branch}", names::git::head(&branch))],
+        );
         // A branch retired when going into waiting is not missing: a new one
         // is opened from the main branch, because what it had was merged.
         let retired = record::read(&record_file).ok().and_then(|d| {
@@ -601,8 +605,11 @@ pub fn resume(argv: &[String]) -> Res {
             }
             continue;
         }
-        if !git::has_ref(&dir_repo, &format!("refs/heads/{branch}"))
-            && !git::has_ref(&dir_repo, &format!("refs/remotes/origin/{branch}"))
+        if !bring_published(&dir_repo, &branch, repo_name) {
+            continue;
+        }
+        if !git::has_ref(&dir_repo, &names::git::head(&branch))
+            && !git::has_ref(&dir_repo, &format!("refs/remotes/{remote}/{branch}"))
         {
             ui::err(format!("{repo_name}: the branch {branch} is neither here nor on the remote"));
             ui::info("on the other machine: crux sync --leave tells you what is left to push");
@@ -640,6 +647,37 @@ pub fn resume(argv: &[String]) -> Res {
         ui::info(format!("cd {}", p.display()));
     }
     Ok(())
+}
+
+/// The local branch moves to the most advanced of what is here, on the remote
+/// branch and in what every machine published. Diverged copies are not
+/// chosen between: that is a merge for the person.
+fn bring_published(repo: &Path, branch: &str, repo_name: &str) -> bool {
+    let local = names::git::head(branch);
+    let tracked = format!("refs/remotes/{}/{branch}", names::git::REMOTE);
+    let sha = |r: &str| git::out(repo, &["rev-parse", "-q", "--verify", r]);
+    let (here, there) = (sha(&local), sha(&tracked));
+    let mut candidates = crate::publish::fetch_published(repo, branch);
+    candidates.extend(here.clone());
+    candidates.extend(there.clone());
+    match crate::publish::most_advanced(repo, &candidates) {
+        Ok(Some(tip)) if Some(&tip) != here.as_ref() && Some(&tip) != there.as_ref() => {
+            git::run(repo, &["branch", "-f", branch, &tip]);
+            if there.is_some() {
+                git::run(repo, &["branch", "--set-upstream-to", &format!("{}/{branch}", names::git::REMOTE), branch]);
+            }
+            true
+        }
+        Ok(_) => true,
+        Err(diverged) => {
+            ui::err(format!("{repo_name}: the copies of {branch} diverged between machines"));
+            for c in diverged {
+                ui::info(format!("      {c}"));
+            }
+            ui::info("merge them by hand on one machine and resume again");
+            false
+        }
+    }
 }
 
 /// A hand-made worktree does not exist for crux: it appears in no list and

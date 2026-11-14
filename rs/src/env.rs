@@ -168,6 +168,19 @@ pub fn codex_home_dir() -> PathBuf {
     var("CODEX_HOME_DIR").map(PathBuf::from).unwrap_or_else(|| home().join(".codex"))
 }
 
+/// This machine's name as it can go into a file name or a git ref: the short
+/// hostname without anything but letters, digits and dashes.
+pub fn machine() -> String {
+    let h = var(crate::names::vars::MACHINE).unwrap_or_else(hostname);
+    let short = h.split('.').next().unwrap_or("");
+    let clean: String = short.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+    if clean.is_empty() {
+        "machine".into()
+    } else {
+        clean
+    }
+}
+
 pub fn hostname() -> String {
     let mut buf = [0u8; 256];
     // SAFETY: the buffer is valid for its whole length and gethostname

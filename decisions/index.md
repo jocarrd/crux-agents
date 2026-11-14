@@ -803,3 +803,41 @@
 - **Reversibility**: high cost. Going back is rewriting it again; what keeps it
   safe is that the suite does not depend on the language.
 - **Related**: `ADR-016`, `ADR-018` (their formats are kept as they were)
+
+### ADR-020: A workspace's commits travel as they are made, to hidden refs per machine
+
+- **Date**: 2026-11-14
+- **Status**: Accepted
+- **Context**: switching machines left work behind. A workspace branch reached
+  the remote only on `finish`, and leaving depended on remembering
+  `sync --leave`; the person kept a desktop powered on so that the laptop could
+  pick up what it had. Measured on 14-11: an arrival sync blocks 5.2 s, a fetch
+  from GitHub takes 1.6 s even for one ref, `git stash create` under 0.01 s.
+  Timers (launchd, systemd) were discarded: one more thing to install and look
+  after per machine.
+- **Decision**:
+  - A `post-commit` hook, installed with the others, hands the commit to
+    `crux hook post-commit`. In a few milliseconds and with no network it
+    checks that the branch belongs to a workspace of this machine (never the
+    main branch) and starts the publication detached, as tasks already were.
+  - The publication goes to `refs/crux/branches/<machine>/<branch>` on the
+    remote, forced. Outside `refs/heads`: no list of branches shows it, no
+    proposal is offered, no workflow runs, so it costs no CI minutes. One ref
+    per machine, so two machines on the same branch never overwrite each
+    other; `CRUX_MACHINE` names the machine when two share a hostname.
+  - The tip is read once the publication lock is held, not when the commit was
+    made: two commits in a row would otherwise race.
+  - `refs/crux/published/<branch>` keeps locally what was published, so
+    `sync --leave` knows a branch travelled without asking the network.
+  - `workspace resume` fetches what every machine published and moves the
+    branch to the commit that contains all the others. When the copies
+    diverged it names them and chooses none: that is a merge for the person.
+  - Closing a workspace whose proposal was merged deletes its hidden refs too.
+- **Consequences**: the desktop no longer has to stay on. The commit never
+  waits for the network nor fails because of it; offline, the next commit
+  publishes the latest tip. What is edited by hand and never committed still
+  stays on the machine. The hidden refs live in the remote until the merge;
+  `forget` is what removes them.
+- **Reversibility**: low cost. Removing the hook stops it; the refs are
+  ignored by everything else and can be deleted with one push.
+- **Related**: `ADR-015`, `ADR-016`

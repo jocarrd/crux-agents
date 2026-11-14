@@ -24,7 +24,6 @@ pub struct Merged {
     pub head: String,
 }
 
-/// The merged proposal whose head was `branch`, if there is one.
 pub fn merged_proposal(repo: &Path, branch: &str) -> Option<Merged> {
     if !exists() {
         return None;
@@ -50,14 +49,12 @@ pub fn merged_proposal(repo: &Path, branch: &str) -> Option<Merged> {
     Some(Merged { number: number.to_string(), head: head.to_string() })
 }
 
-/// The `owner/name` of the repo GitHub knows `repo` as.
 pub fn repo_slug(repo: &Path) -> Option<String> {
     let r = sh::capture_in(repo, GH, &["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
     let slug = r.out();
     (r.ok() && !slug.is_empty()).then_some(slug)
 }
 
-/// The head branches of the merged proposals of `repo`, the most recent first.
 pub fn merged_branches(repo: &Path) -> Option<Vec<String>> {
     let slug = repo_slug(repo)?;
     let r = sh::capture(

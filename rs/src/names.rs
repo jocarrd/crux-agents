@@ -17,20 +17,36 @@ pub const SKILL: &str = "SKILL.md";
 pub const STANDARD: &str = "STANDARD.md";
 pub const VERSION: &str = "VERSION";
 
-/// The names git gives things, as crux uses them.
 pub mod git {
-    /// The remote crux publishes to and reads from.
     pub const REMOTE: &str = "origin";
-    /// Where local branches live.
     pub const HEADS: &str = "refs/heads/";
+    /// Outside refs/heads: no list of branches shows them, no proposal is
+    /// offered for them and no workflow is triggered by them.
+    pub const PUBLISHED_ON_REMOTE: &str = "refs/crux/branches/";
+    /// Kept locally so that knowing whether a branch travelled needs no network.
+    pub const PUBLISHED_HERE: &str = "refs/crux/published/";
+    pub const FETCHED: &str = "refs/crux/fetched/";
 
-    /// The full ref of a local branch.
     pub fn head(branch: &str) -> String {
         format!("{HEADS}{branch}")
     }
+
+    pub fn published_on_remote(machine: &str, branch: &str) -> String {
+        format!("{PUBLISHED_ON_REMOTE}{machine}/{branch}")
+    }
+
+    pub fn published_here(branch: &str) -> String {
+        format!("{PUBLISHED_HERE}{branch}")
+    }
 }
 
-/// The environment variables a person sets to change what crux does.
+pub mod hooks {
+    pub const COMMIT_MSG: &str = "commit-msg";
+    pub const POST_COMMIT: &str = "post-commit";
+    pub const PRE_COMMIT: &str = "pre-commit";
+    pub const PRE_PUSH: &str = "pre-push";
+}
+
 pub mod vars {
     /// `0` keeps tasks and what archiving writes on this machine; `1` publishes
     /// them even inside the test suite.
@@ -38,4 +54,6 @@ pub mod vars {
     /// Lets `workspace rm` delete a branch already in the main one with no
     /// merged proposal behind it.
     pub const RM_DELETE_BRANCH: &str = "CRUX_RM_DELETE_BRANCH";
+    /// This machine's name in what it publishes, when two share a hostname.
+    pub const MACHINE: &str = "CRUX_MACHINE";
 }
