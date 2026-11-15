@@ -6,7 +6,7 @@
 //! every system has (BusyBox's flock has no -w, macOS has no flock at all),
 //! and a process that dies leaves a pid that can be checked.
 
-use crate::{env, files, ui};
+use crate::{env, files};
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -49,63 +49,23 @@ pub fn init() -> std::io::Result<()> {
     Ok(())
 }
 
-pub struct Lock {
-    dir: PathBuf,
-}
-
-impl Drop for Lock {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.dir);
-    }
-}
-
-fn pid_alive(pid: i32) -> bool {
-    // SAFETY: signal 0 only checks that the process exists.
-    unsafe { libc::kill(pid, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
-}
-
-/// Takes the lock, waiting up to `tries` × 0.1 s. A lock whose owner died is
-/// removed; one whose owner lives is reported with its pid.
-pub fn lock(tries: u32) -> Result<Lock, String> {
+/// Takes the lock, waiting up to `tries` × 0.1 s. Held for as long as a
+/// workspace is being registered, so it is cleared by its owner's death, not
+/// by its age; one whose owner lives is reported with its pid.
+pub fn lock(tries: u32) -> Result<crate::lock::DirLock, String> {
+    use crate::lock::{Error, Policy, Stale};
     let dir = lock_dir();
-    if let Some(d) = dir.parent() {
-        let _ = fs::create_dir_all(d);
-    }
     let seconds = tries.div_ceil(10);
-    let mut attempts = 0;
-    loop {
-        if let Ok(()) = fs::create_dir(&dir) {
-            // Without its pid a lock left by a dead process cannot be told
-            // from a live one, and it blocks every later command.
-            if let Err(e) = crate::files::write(&dir.join("pid"), &format!("{}\n", std::process::id())) {
-                let _ = fs::remove_dir_all(&dir);
-                return Err(e);
-            }
-            return Ok(Lock { dir });
-        } else {
-            let owner = fs::read_to_string(dir.join("pid")).ok().and_then(|s| s.trim().parse::<i32>().ok());
-            if let Some(pid) = owner {
-                if !pid_alive(pid) {
-                    let aside = dir.with_extension(format!("lock.{}", std::process::id()));
-                    if fs::rename(&dir, &aside).is_ok() {
-                        let _ = fs::remove_dir_all(&aside);
-                        ui::warn(format!("removed the lock of process {pid}, which no longer exists"));
-                    }
-                    continue;
-                }
-            }
-            attempts += 1;
-            if attempts > tries {
-                return Err(match owner {
-                    Some(pid) => {
-                        format!("the registry has been held for {seconds}s by process {pid}, which is still alive")
-                    }
-                    None => format!("lock with no owner at {}: remove it if no crux is running", dir.display()),
-                });
-            }
-            std::thread::sleep(LOCK_RETRY);
+    let policy = Policy { stale: Stale::DeadOwner, retry: LOCK_RETRY, tries: Some(tries) };
+    crate::lock::take(&dir, &policy, || {}).map_err(|e| match e {
+        Error::Held { owner: Some(pid) } => {
+            format!("the registry has been held for {seconds}s by process {pid}, which is still alive")
         }
-    }
+        Error::Held { owner: None } => {
+            format!("lock with no owner at {}: remove it if no crux is running", dir.display())
+        }
+        Error::Io(e) => format!("cannot lock {}: {e}", dir.display()),
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -130,7 +90,10 @@ impl Workspace {
     /// Reserved and not yet on disk, by a process that is still alive: its
     /// folder and branch do not exist yet, and that is not an abandoned entry.
     pub fn being_created(&self) -> bool {
-        self.extra.get(CREATING).and_then(Value::as_i64).is_some_and(|pid| pid_alive(pid as i32))
+        self.extra
+            .get(CREATING)
+            .and_then(Value::as_i64)
+            .is_some_and(|pid| u32::try_from(pid).is_ok_and(crate::lock::pid_alive))
     }
 }
 

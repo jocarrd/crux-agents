@@ -243,7 +243,7 @@ pub fn find(name: &str) -> Result<registry::Workspace, Exit> {
     }
 }
 
-pub fn lock() -> Result<registry::Lock, Exit> {
+pub fn lock() -> Result<crate::lock::DirLock, Exit> {
     registry::lock(300).map_err(|e| {
         ui::err(e);
         Exit(1)

@@ -661,6 +661,23 @@ rm -f /tmp/crux-precommit.$$
 "#;
 
 fn install(p: &Paths) -> Res {
+    check_kernel_files(p)?;
+    install_agent_hooks(p)?;
+    install_kernel_repo_hooks(p);
+    let docs = project::find_docs_repo(&std::env::current_dir().unwrap_or_default())
+        .filter(|d| git::ok(d, &["rev-parse", "--git-dir"]));
+    let Some(docs) = docs else {
+        ui::info("no docs repo in the current directory: the pre-commit is not installed");
+        ui::info("enter one and repeat to hook it");
+        return Ok(());
+    };
+    install_docs_repo_hooks(p, &docs)?;
+    install_code_repo_hooks(p, &docs);
+    Ok(())
+}
+
+/// The hooks and git adapters this kernel ships, there and executable.
+fn check_kernel_files(p: &Paths) -> Res {
     for h in Hook::ALL {
         if !p.hook(h.name()).is_file() {
             die!("missing {}", p.hook(h.name()).display());
@@ -674,6 +691,12 @@ fn install(p: &Paths) -> Res {
         }
         executable(&template);
     }
+    Ok(())
+}
+
+/// The agent's own hooks: Claude's settings, Codex's when it is on the
+/// machine, and the plugin that only Claude reads.
+fn install_agent_hooks(p: &Paths) -> Res {
     if let Some(d) = p.settings.parent() {
         let _ = std::fs::create_dir_all(d);
     }
@@ -717,6 +740,10 @@ fn install(p: &Paths) -> Res {
     }
     ui::info(format!("previous copy in {}.bak", p.settings.display()));
 
+    Ok(())
+}
+
+fn install_kernel_repo_hooks(p: &Paths) {
     // Only a kernel that is a working clone has a repo to guard. Under the
     // suite that clone is the real one, shared by every worktree of it.
     let kernel = env::crux_home().filter(|k| !env::in_tests() && git::ok(k, &["rev-parse", "--git-dir"]));
@@ -728,15 +755,11 @@ fn install(p: &Paths) -> Res {
             ui::ok("pre-push and commit-msg in the kernel");
         }
     }
-    let docs = project::find_docs_repo(&std::env::current_dir().unwrap_or_default())
-        .filter(|d| git::ok(d, &["rev-parse", "--git-dir"]));
-    let Some(docs) = docs else {
-        ui::info("no docs repo in the current directory: the pre-commit is not installed");
-        ui::info("enter one and repeat to hook it");
-        return Ok(());
-    };
-    let docs_name = files::name(&docs);
-    let hooks = dir_hooks(&docs).unwrap_or_default();
+}
+
+fn install_docs_repo_hooks(p: &Paths, docs: &Path) -> Res {
+    let docs_name = files::name(docs);
+    let hooks = dir_hooks(docs).unwrap_or_default();
     // The docs repo is pushed directly, as the profile rule says: a pre-push
     // there only served to be skipped. The one crux installed earlier goes.
     let crux_pre_push = |f: &Path| {
@@ -751,19 +774,23 @@ fn install(p: &Paths) -> Res {
     if let Err(e) = put_hook(&hooks, PRE_COMMIT, PRE_COMMIT_SCRIPT) {
         die!("{e}");
     }
-    let installed = install_commit_msg(p, &docs, Scope::Full, "en");
-    chain_hooks_path(&docs);
+    let installed = install_commit_msg(p, docs, Scope::Full, "en");
+    chain_hooks_path(docs);
     if installed {
         ui::ok(format!("pre-commit and commit-msg in {docs_name}"));
     }
 
+    Ok(())
+}
+
+fn install_code_repo_hooks(p: &Paths, docs: &Path) {
     // Commits in code repos are the majority. Client repos too: .git/hooks is
     // not versioned and travels in no push; skipping them left the one place
     // where the tool's signature must not appear without the net.
-    let contract = project::contract_lenient(&docs).unwrap_or_default();
+    let contract = project::contract_lenient(docs).unwrap_or_default();
     let profile = files::get_str(&contract, "profile").unwrap_or_else(|| "multi-repo".into());
-    let scope = if policy::code_is_foreign(&profile, Some(&docs)) { Scope::Signature } else { Scope::Full };
-    let language = policy::commit_language(&profile, Some(&docs));
+    let scope = if policy::code_is_foreign(&profile, Some(docs)) { Scope::Signature } else { Scope::Full };
+    let language = policy::commit_language(&profile, Some(docs));
     let root = docs.parent().unwrap();
     for repo in files::str_list(contract.get("repos")).into_iter().filter(|r| !r.is_empty()) {
         if !project::valid_name(&repo) {
@@ -783,14 +810,13 @@ fn install(p: &Paths) -> Res {
         if install_post_commit(p, &dir) {
             ui::ok(format!("post-commit in {repo}: a workspace's commits travel as they are made"));
         }
-        match sync_project_hooks(&docs, &repo, &dir) {
+        match sync_project_hooks(docs, &repo, &dir) {
             Ok(names) if !names.is_empty() => ui::ok(format!("the project's own in {repo}: {}", names.join(", "))),
             Ok(_) => {}
             Err(e) => ui::warn(e),
         }
         chain_hooks_path(&dir);
     }
-    Ok(())
 }
 
 const OWN_HOOK: &str = r#"#!/usr/bin/env bash

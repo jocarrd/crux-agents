@@ -109,39 +109,70 @@ fn cut(t: &str, n: usize) -> String {
     t.chars().take(n).collect()
 }
 
+/// What every merged task and its target share.
+struct Merge<'a> {
+    project_name: &'a str,
+    into: &'a str,
+    label: &'a str,
+    dir: PathBuf,
+}
+
+/// A name is a file inside the tasks folder: "." or ".." would step out of it.
+fn bad_task_name(x: &str) -> bool {
+    x.is_empty() || x.contains('/') || x == "." || x == ".."
+}
+
+const MERGE_USAGE: &str = "usage: crux task merge <project>/<into> <project>/<task>... [--goal \"<text>\"]";
+
 /// Leftovers of several tasks, each forgotten with a step or two, end up as a
 /// list nobody reads. Merging them into one keeps the pending steps and notes
 /// the branches, and archives the rest pointing to where its work went.
 fn merge(names: &[String], goal: &str) -> Res {
-    let usage = "usage: crux task merge <project>/<into> <project>/<task>... [--goal \"<text>\"]";
     if names.len() < 2 {
-        return fail(usage);
+        return fail(MERGE_USAGE);
     }
-    // A name is a file inside the tasks folder: "." or ".." would step out of it.
-    let bad = |x: &str| x.is_empty() || x.contains('/') || x == "." || x == "..";
-    let Some((project_name, into)) = names[0].split_once('/') else { return fail(usage) };
-    if bad(project_name) || bad(into) {
-        return fail(usage);
+    let Some((project_name, into)) = names[0].split_once('/') else { return fail(MERGE_USAGE) };
+    if bad_task_name(project_name) || bad_task_name(into) {
+        return fail(MERGE_USAGE);
     }
-    let dir = env::tasks_dir().join(project_name);
+    let m = Merge { project_name, into, label: &names[0], dir: env::tasks_dir().join(project_name) };
     let live = crate::task::sync::live_workspaces();
-    let mut sources = vec![];
     let today = record::now()[..10].to_string();
+    let mut sources = vec![];
     for (i, n) in names[1..].iter().enumerate() {
         if names[1..i + 1].contains(n) {
             return fail(format!("{n} is listed twice"));
         }
-        let Some((p, t)) = n.split_once('/') else { return fail(usage) };
-        if bad(t) {
-            return fail(usage);
+        sources.push(m.source(n, &live, &today)?);
+    }
+    let target = m.dir.join(format!("{into}.md"));
+    m.open_target(&target, goal)?;
+    for (name, f, doc) in &sources {
+        m.absorb(&target, name, f, doc)?;
+    }
+    ui::info(target.display().to_string());
+    Ok(())
+}
+
+impl Merge<'_> {
+    /// A task that can be merged, read; or why it cannot, before anything is touched.
+    fn source(
+        &self,
+        n: &str,
+        live: &std::collections::BTreeSet<String>,
+        today: &str,
+    ) -> Result<(String, PathBuf, record::Doc), Exit> {
+        let Some((p, t)) = n.split_once('/') else { return fail(MERGE_USAGE) };
+        if bad_task_name(t) {
+            return fail(MERGE_USAGE);
         }
-        if p != project_name {
-            return fail(format!("{n} is not in {project_name}: only tasks of one project are merged"));
+        if p != self.project_name {
+            return fail(format!("{n} is not in {}: only tasks of one project are merged", self.project_name));
         }
-        if t == into {
+        if t == self.into {
             return fail(format!("{n} is the task it is merged into"));
         }
-        let f = dir.join(format!("{t}.md"));
+        let f = self.dir.join(format!("{t}.md"));
         if !f.is_file() {
             return fail(format!("there is no open task {n}: {}", f.display()));
         }
@@ -163,26 +194,28 @@ fn merge(names: &[String], goal: &str) -> Res {
         }
         // Checked before touching anything: failing to archive after
         // absorbing would leave the steps in both, and a retry would copy them again.
-        let archived = dir.join("done").join(format!("{today}-{t}.md"));
+        let archived = self.dir.join("done").join(format!("{today}-{t}.md"));
         if archived.exists() {
             return fail(format!("{n} cannot be archived today: {} already exists", archived.display()));
         }
-        sources.push((n.clone(), f, doc));
+        Ok((n.to_string(), f, doc))
     }
-    let target = dir.join(format!("{into}.md"));
-    let existed = target.exists();
-    if existed {
-        if let Err(e) = record::read(&target) {
-            return fail(format!("{e}: {}", target.display()));
+
+    /// The task merged into: the one open, an archived one reopened, or a new one.
+    fn open_target(&self, target: &Path, goal: &str) -> Res {
+        if target.exists() {
+            if let Err(e) = record::read(target) {
+                return fail(format!("{e}: {}", target.display()));
+            }
+            if !goal.is_empty() {
+                mutate(target, |d| {
+                    record::set_section(d, "Objective", goal);
+                    Ok(())
+                })?;
+            }
+            return Ok(());
         }
-        if !goal.is_empty() {
-            mutate(&target, |d| {
-                record::set_section(d, "Objective", goal);
-                Ok(())
-            })?;
-        }
-    } else {
-        let mut doc = if let Some(old) = record::archived_copy(&dir, into) {
+        let mut doc = if let Some(old) = record::archived_copy(&self.dir, self.into) {
             let mut d = match record::read(&old) {
                 Ok(d) => d,
                 Err(e) => return fail(e),
@@ -191,49 +224,51 @@ fn merge(names: &[String], goal: &str) -> Res {
             if let Err(e) = std::fs::remove_file(&old) {
                 return fail(e.to_string());
             }
-            ui::ok(format!("reopens the archived task '{}' to merge into", names[0]));
+            ui::ok(format!("reopens the archived task '{}' to merge into", self.label));
             d
         } else {
-            ui::ok(format!("task '{}' created to merge into", names[0]));
-            record::create(into, project_name, "", "")
+            ui::ok(format!("task '{}' created to merge into", self.label));
+            record::create(self.into, self.project_name, "", "")
         };
         if !goal.is_empty() {
             record::set_section(&mut doc, "Objective", goal);
         } else if record::content(doc.section("Objective")).trim().is_empty() {
-            let objective = format!("What was left pending in {project_name}, merged into one task");
+            let objective = format!("What was left pending in {}, merged into one task", self.project_name);
             record::set_section(&mut doc, "Objective", &objective);
         }
-        if let Err(e) = record::write(&target, &mut doc, false) {
+        if let Err(e) = record::write(target, &mut doc, false) {
             return fail(e);
         }
+        Ok(())
     }
-    for (name, f, doc) in &sources {
-        let before = record::read(&target).map_or(0, |d| record::steps(&d).len());
-        mutate(&target, |d| {
+
+    /// Its pending steps go to the target, are marked as moved in it, and it is archived.
+    fn absorb(&self, target: &Path, name: &str, f: &Path, doc: &record::Doc) -> Res {
+        let before = record::read(target).map_or(0, |d| record::steps(&d).len());
+        mutate(target, |d| {
             record::absorb(d, doc, name);
             Ok(())
         })?;
-        let moved = record::read(&target).map_or(0, |d| record::steps(&d).len()) - before;
+        let moved = record::read(target).map_or(0, |d| record::steps(&d).len()) - before;
         // Marked in the source too: reopened later, it would bring them back.
         let pending: Vec<String> = record::steps(doc).into_iter().filter(|s| !s.done).map(|s| s.id).collect();
         if let Err(e) = record::edit(f, false, |d| {
             for id in &pending {
-                record::complete(d, id, &format!("moved to {}", names[0]))?;
+                record::complete(d, id, &format!("moved to {}", self.label))?;
             }
             Ok(())
         }) {
             return fail(e);
         }
-        if let Err(e) = record::archive_as(f, true, &format!("merged into {}", names[0])) {
+        if let Err(e) = record::archive_as(f, true, &format!("merged into {}", self.label)) {
             return fail(e);
         }
         let branches = doc.list("branches");
         let carried =
             if branches.is_empty() { String::new() } else { format!(", its branch {} noted", branches.join(", ")) };
         ui::ok(format!("{name} merged: {moved} pending step(s){carried}"));
+        Ok(())
     }
-    ui::info(target.display().to_string());
-    Ok(())
 }
 
 fn list(args: &[String]) -> Res {

@@ -21,6 +21,7 @@ use std::process::Command;
 /// pushes over the network, and past that it is stuck, not slow.
 const SYNC_RETRY: std::time::Duration = std::time::Duration::from_millis(100);
 const SYNC_WAIT_TRIES: u32 = 600;
+const SYNC_STALE: std::time::Duration = std::time::Duration::from_secs(120);
 
 pub const BRANCH: &str = crate::names::git::TASKS_BRANCH;
 const REMOTE_REF: &str = crate::names::git::TASKS_TRACKED;
@@ -518,39 +519,17 @@ pub fn reconcile(p: &str) -> Vec<String> {
     done
 }
 
-struct ProjectLock(PathBuf);
-
-impl Drop for ProjectLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
 /// Per project: the background publication of a write and that of `crux sync`
-/// cannot merge at once over the same state.
-fn lock(p: &str) -> Result<ProjectLock, String> {
-    let _ = files::mkdir_private(&state_dir());
+/// cannot merge at once over the same state. One older than two minutes was
+/// left by a publication that died.
+fn lock(p: &str) -> Result<crate::lock::DirLock, String> {
+    use crate::lock::{Error, Policy, Stale};
     let dir = state_dir().join(format!("{p}.lock"));
-    let mut i = 0;
-    loop {
-        if fs::create_dir(&dir).is_ok() {
-            return Ok(ProjectLock(dir));
-        }
-        let old = fs::metadata(&dir)
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.elapsed().ok())
-            .is_some_and(|e| e.as_secs() > 120);
-        if old {
-            let _ = fs::remove_dir_all(&dir);
-            continue;
-        }
-        i += 1;
-        if i > SYNC_WAIT_TRIES {
-            return Err(format!("{p}: another task sync does not finish"));
-        }
-        std::thread::sleep(SYNC_RETRY);
-    }
+    let policy = Policy { stale: Stale::Age(SYNC_STALE), retry: SYNC_RETRY, tries: Some(SYNC_WAIT_TRIES) };
+    crate::lock::take(&dir, &policy, || {}).map_err(|e| match e {
+        Error::Held { .. } => format!("{p}: another task sync does not finish"),
+        Error::Io(e) => format!("{p}: cannot lock {}: {e}", dir.display()),
+    })
 }
 
 /// One trip to the remote: each costs seconds over ssh. The error tells a
