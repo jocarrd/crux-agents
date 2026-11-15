@@ -986,3 +986,189 @@
 - **Reversibility**: low cost: the refs are read by nothing else and are
   deleted with one push; `--here` gives the old report.
 - **Related**: `ADR-006`, `ADR-018`, `ADR-020`, `ADR-022`
+
+---
+
+### ADR-025: Work scopes: one person, several isolated contexts on one machine
+
+- **Date**: 2026-11-16
+- **Status**: Proposed
+- **Context**: crux assumed one person with one context. Seven places hold
+  that assumption: one projects root (`env::projects_root`, read from 21
+  files), one remote template and owner (`project::remote_template`,
+  `default_owner`), the profile loaded into `~/.claude/CLAUDE.md` for every
+  session (`person::load_into_claude`), the profile found under that single
+  root (`person::dir`), one task list keyed by project name (`env::tasks_dir`),
+  a reminder that shows every task when the session is outside a project
+  (`task::remind::reminder`), and secrets recognised only by file name
+  (`guards::is_secret`). A person who works on their own projects, for an
+  employer and for clients on the same machine got all of it mixed: measured on
+  a machine set up for that on 2026-11-15, a session opened for a client loaded
+  the person's private notes (job search, rates), the reminder listed tasks of
+  three unrelated projects, `crux init` would have created an employer's docs
+  repo under the personal account, and a key created that day under
+  `~/.ssh/<folder>/<host>` was not recognised as a secret. The person asked to
+  keep one operating-system user, so the separation has to come from crux.
+- **Decision**:
+  - Two levels. A **scope** is who the work is for: a root folder, a remote
+    template, the owners where its projects live, a git identity, optionally a
+    `gh` config dir, the secrets that belong to it, the connectors it may not
+    use and how much of the person's profile it sees. A **project** stays what
+    it is, and may declare itself `isolated` from the rest of its scope. A
+    project that needs another account is moved to another scope; there is no
+    per-project account override, so the folder alone says which account
+    applies.
+  - Without scopes declared nothing changes. An implicit scope is built from
+    `CRUX_PROJECTS_DIR` and `CRUX_REMOTE` and keeps every current path. The
+    existing suite passing untouched is the proof.
+  - A scope is `~/.crux/scopes/<name>/config`, in the same `KEY="value"`
+    format as `~/.crux/config` (`ROOT`, `REMOTE`, `OWNERS`, `GIT_NAME`,
+    `GIT_EMAIL`, `GH_CONFIG_DIR`, `PERSON`, `SECRETS`, `MCP_DENY`, `ENFORCE`,
+    `PRIMARY`). Its folder also holds its tasks and state. The scope marked
+    `PRIMARY` keeps today's paths, so declaring scopes on a machine already in
+    use migrates nothing. `CRUX_SCOPES_DIR` redirects the folder, like every
+    other path.
+  - A session is **pinned to one scope**, keyed by `session_id` and inherited
+    by its sub-agents, and the pin only goes one way: once set it never
+    changes, and another scope means another session. A session opened inside
+    a root is pinned at `SessionStart`. A session opened outside every root
+    starts **unpinned**, at the front desk: it loads only the shared profile
+    and a routing map with the name of each scope and of its projects, which
+    is what lets the agent tell from the request where the work belongs. It is
+    pinned by `crux scope enter <scope> | --project <name>`, run when the agent
+    knows where the task goes (it asks the person when it does not), or by its
+    first tool call that touches a scope. Only then does the scope's context
+    load: its part of the profile, its tasks, its projects' indexes. A person
+    who prefers to skip the front desk sets `CRUX_UNPINNED_SESSIONS` to a scope
+    name, and sessions outside every root are pinned there from the start.
+  - Paths are compared by their real form (`project::real`), case-insensitively
+    on macOS. A `cd` into another root during the session does not move the
+    pin. Overlapping roots, a scope that cannot be read or one owner in two
+    scopes stop crux with the reason (rule 5); falling back to the implicit
+    scope would switch isolation off without a word.
+  - Inside the binary, a scope and an isolated project are the same thing: a
+    `Boundary`, a set of paths with the rules and identity that apply to them.
+    One type, one check and one set of tests serve both levels; a scope is a
+    boundary with an identity, an isolated project a boundary that inherits
+    it.
+  - A path belongs to a boundary by its location, with three exceptions that
+    the location alone gets wrong. A git worktree belongs where its repo's
+    common git dir lives (`git rev-parse --git-common-dir`), so a worktree
+    another tool creates outside every root keeps its scope. A session's
+    transcript and memory belong to the scope the session was pinned to, read
+    from the pins by `session_id`, because sessions opened at the front desk
+    all share one folder. And the state crux keeps per scope (tasks, pins,
+    the private profile index) belongs to its scope even though it lives under
+    `~/.crux`.
+  - When a session is pinned, crux hands it the scope's context through the
+    output of `crux scope enter` and of the next prompt hook: a global agent
+    file cannot be reloaded mid-session, so the private profile index, the
+    scope's open tasks and its projects' indexes arrive that way. An implicit
+    pin happens only when a tool call touches exactly one scope; a call that
+    touches two (`find ~`, a copy between roots) is stopped and the agent is
+    told to enter one first.
+  - The person's profile is written from the front desk and from the primary
+    scope only, and writing its shared notes does not pin the session. From
+    any other scope the agent tells the person what to note instead of
+    writing it, because the profile is pushed under the person's own account.
+  - One account can reach every scope's owners over the network, and a
+    filesystem rule does not see that. `scope-guard` also stops, in `Bash`,
+    `gh`, `git` and URLs that name an owner of another scope, and the sandbox
+    mode limits network hosts when the agent's sandbox supports it. Commands
+    that take the project from the cwd (`workspace new`, `task new`) resolve it
+    within the pinned scope when the session sits at the front desk.
+  - Root, remote, owner, `init`, `clone` and `bootstrap` follow the scope.
+    Tasks of non-primary scopes live under the scope's folder, so two projects
+    with the same name in different scopes do not collide. The session
+    reminder keeps its two outputs apart: the person always sees every open
+    task of every scope, labelled with its scope, because it is how they know
+    what they left open anywhere; the agent gets the full record only for its
+    pinned scope (only its project when isolated), and at the front desk the
+    task names and their scopes, without their text, enough to resume one,
+    which pins the session there. `crux task` and `crux workspace list` show
+    the current scope by default and everything with `--all`, which
+    `scope-guard` stops when an agent runs it: the full list is for the
+    person.
+  - The profile is the person's, not the scope's: `person::dir` resolves in the
+    primary scope. Each note declares `visibility: shared | private` in its
+    frontmatter (`about/` defaults to private). With scopes declared, the
+    global agent file imports only the shared index; the full index is
+    imported in a `crux:person` block of each repo's unversioned local pointer
+    when its scope and project allow it. It goes per repo and not in the parent
+    folder because workspaces are siblings of the project folder, not children.
+    A project's `person` can narrow what its scope allows, never widen it.
+  - The contract gains three optional fields: `isolation`
+    (`shared` | `isolated`), `person` (`full` | `shared` | `none`) and
+    `secrets` (paths). The `client-repo` profile implies `isolated`.
+  - A new `PreToolUse` hook, `scope-guard`, on
+    `Bash|Read|Edit|Write|MultiEdit|NotebookEdit|mcp__.*`, stops reading or
+    writing another scope's root, another project when either is isolated, or a
+    secret declared elsewhere, and stops the connectors in `MCP_DENY`. Writes
+    are stopped as well as reads: the leak runs both ways, and work copied into
+    a personal repo is published under the personal account. For `Bash` it
+    reuses the parsing `destructive-guard` already has and resolves absolute,
+    `~`, `$HOME` and relative paths against the cwd. With one scope it does
+    nothing; when it cannot read the scopes it stops (fails closed). Its
+    message says how to go on: open a session in that scope.
+  - Changing scope means **a new session**, never switching the current one:
+    what leaks is the conversation as much as the files. `crux scope open
+    <name> [--task <id>] [--prompt <text>]` opens the agent in the scope's
+    root, or in the task's workspace, with the request as the first message
+    and nothing else from the scope it came from. With `--project <name>` crux
+    finds the scope itself: the session asking only learns the scope's name,
+    never what is inside it. Each pinned session gets one line naming its
+    scope and how to open another, so the agent declines work from another
+    scope when it is asked, before the guard has to stop a tool call.
+  - Parsing a shell command is never complete (`find /`, a script that reads
+    on its own). `ENFORCE="sandbox"` makes `crux link` write the agent's
+    sandbox settings in each repo of the scope, with the other roots denied for
+    reading, so the operating system enforces it. Where the sandbox is missing
+    (bubblewrap on Linux), crux says so and stays on the guard.
+  - `is_secret` also covers everything under `~/.ssh/` except `*.pub`,
+    `config` and `known_hosts`, and every declared secret path.
+  - Identity per scope, generated between markers: an `includeIf
+    "gitdir:<real root>/"` (`gitdir/i:` on macOS) with the scope's name, email
+    and, when `GH_CONFIG_DIR` is set, a credential helper bound to it; crux's
+    own `gh` calls run with it, and the agent's get it through the `env` of
+    the repo's local agent settings. In `~/.ssh/config`, one
+    `Match exec "crux __fn scope-of-cwd <name>"` block per scope with
+    `IdentityFile ~/.ssh/<name>/%h` and `IdentitiesOnly yes`: a key named
+    after its host, offered only from its scope. A browser profile directory
+    per scope for the browser skill.
+  - Usage lines (ADR-024) of a non-primary scope do not travel to the
+    person's profile repo with project or skill names: they count as project
+    `scope` and only kernel skills are named, as `client` already does.
+  - New commands: `crux scope list | show | add | check | open`,
+    `crux project move <project> <scope>` (moves the folders, repairs
+    worktrees, updates the registry, tasks and local pointers; refuses with a
+    live session), and `crux __fn scope-of <path>`. New `doctor` checks, each
+    with a negative test: overlapping roots, several scopes without a default,
+    a declared secret inside another root, recent commits with another scope's
+    email, one owner in two scopes, a project whose remote belongs to another
+    scope.
+  - Delivered in three phases that each stand alone: the model (resolution,
+    paths, profile split, `crux scope`, `doctor`); the wall (`scope-guard`,
+    isolated projects, connectors, sandbox, `is_secret`); identity (git, `gh`,
+    SSH, browser, `project move`). Linux and macOS from the first case.
+- **Consequences**: a person can keep an employer, clients and their own
+  projects on one user with what an agent sees bounded by folder and by
+  session, and can keep starting sessions without a folder and let the first
+  request decide where they belong. The routing map shows every project's name
+  to the front desk, so a session that ends in one scope has seen the names,
+  and only the names, of the others. A conversation that used to jump between
+  projects of different scopes is now one session per scope. The isolation
+  stops the agent and mistakes, not a person at the
+  keyboard: shared places (`/tmp`, `~/Downloads`, the clipboard, shell
+  history) are not covered, nor tools that open or read another session
+  (an agent app's thread tools): those have to be listed in `MCP_DENY`, and a
+  session that launches another session can still read what that one
+  answers, and two people on one machine still need two users. Codex only gets
+  the `Bash` part of the guard, because it only receives that hook. Working
+  across scopes costs a new session, which is the point. The contract gains
+  optional fields only, so it is a minor version.
+- **Reversibility**: high. Removing `~/.crux/scopes/` returns the implicit
+  scope; the generated blocks in `~/.gitconfig`, `~/.ssh/config` and the local
+  pointers are between markers and are removed by `crux scope check --fix`.
+  The tasks of non-primary scopes stay in their folder until moved.
+- **Related**: `ADR-001`, `ADR-008`, `ADR-011`, `ADR-014`, `ADR-018`,
+  `ADR-023`, `ADR-024`
