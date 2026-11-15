@@ -497,6 +497,44 @@ pub fn resume(argv: &[String]) -> Res {
     if !project::valid_name(&task) {
         die!("invalid task name: '{task}'");
     }
+    let record_file = task_record(&task, &project_arg)?;
+    let doc = match record::read(&record_file) {
+        Ok(d) => d,
+        Err(e) => die!("could not read the record {}: {e}", record_file.display()),
+    };
+    let repos = doc.list("repos");
+    if repos.is_empty() {
+        die!("the task '{task}' declares no repo: open it with crux workspace new");
+    }
+    let r = Resume {
+        project_name: files::name(record_file.parent().unwrap()),
+        branches: doc
+            .list("branches")
+            .iter()
+            .filter_map(|e| {
+                e.split_once('=').map(|(a, b)| (a.to_string(), b.split('=').next().unwrap_or("").to_string()))
+            })
+            .collect(),
+        workspaces: doc.list("workspaces"),
+        several: repos.len() > 1,
+        task,
+        record_file,
+    };
+    let (mut done, mut opened) = (0, vec![]);
+    for (idx, repo_name) in repos.iter().enumerate() {
+        if r.repo(idx, repo_name, &mut opened) {
+            done += 1;
+        }
+    }
+    if done == 0 {
+        return exit(1);
+    }
+    r.finish(&opened);
+    Ok(())
+}
+
+/// The one open task with that name, in the project asked for or in any.
+fn task_record(task: &str, project_arg: &str) -> Result<PathBuf, Exit> {
     let dir = env::tasks_dir();
     let candidates: Vec<PathBuf> = project::subdirs(&dir)
         .into_iter()
@@ -516,129 +554,131 @@ pub fn resume(argv: &[String]) -> Res {
         }
         die!("choose with --project <project>");
     }
-    let record_file = candidates[0].clone();
-    let project_name = files::name(record_file.parent().unwrap());
-    let doc = match record::read(&record_file) {
-        Ok(d) => d,
-        Err(e) => die!("could not read the record {}: {e}", record_file.display()),
-    };
-    let repos = doc.list("repos");
-    if repos.is_empty() {
-        die!("the task '{task}' declares no repo: open it with crux workspace new");
-    }
-    let branches: Vec<(String, String)> = doc
-        .list("branches")
-        .iter()
-        .filter_map(|e| e.split_once('=').map(|(a, b)| (a.to_string(), b.split('=').next().unwrap_or("").to_string())))
-        .collect();
-    let workspaces = doc.list("workspaces");
-    let root = env::projects_root();
-    let (mut done, mut opened) = (0, vec![]);
-    for (idx, repo_name) in repos.iter().enumerate() {
-        let mut dir_repo = root.join(&project_name).join(repo_name);
+    Ok(candidates[0].clone())
+}
+
+/// What resuming each repo of a task shares.
+struct Resume {
+    task: String,
+    project_name: String,
+    record_file: PathBuf,
+    branches: Vec<(String, String)>,
+    workspaces: Vec<String>,
+    several: bool,
+}
+
+impl Resume {
+    /// Opens the task's workspace on one repo; true when it is there after.
+    fn repo(&self, idx: usize, repo_name: &str, opened: &mut Vec<PathBuf>) -> bool {
+        let root = env::projects_root();
+        let mut dir_repo = root.join(&self.project_name).join(repo_name);
         if !dir_repo.join(".git").is_dir() {
             dir_repo = root.join(repo_name);
         }
         if !dir_repo.join(".git").is_dir() {
             ui::err(format!("{repo_name} is not on this machine"));
-            ui::info(format!("bring it with: crux clone {project_name}"));
-            continue;
+            ui::info(format!("bring it with: crux clone {}", self.project_name));
+            return false;
         }
-        let mut ws_name = workspaces.get(idx).cloned().unwrap_or_default();
+        let mut ws_name = self.workspaces.get(idx).cloned().unwrap_or_default();
         if ws_name.is_empty() {
-            ws_name = if repos.len() > 1 { format!("{task}-{repo_name}") } else { task.clone() };
+            ws_name = if self.several { format!("{}-{repo_name}", self.task) } else { self.task.clone() };
         }
         // A task registered before the branch was noted: the pattern one.
-        let mut branch = branches.iter().find(|(r, _)| r == repo_name).map(|(_, b)| b.clone()).unwrap_or_default();
+        let mut branch = self.branches.iter().find(|(r, _)| r == repo_name).map(|(_, b)| b.clone()).unwrap_or_default();
         if branch.is_empty() {
             branch = format!("ws/{ws_name}");
         }
         if let Some(w) = registry::find(&ws_name).filter(|w| Path::new(&w.path).exists()) {
             ui::ok(format!("{repo_name}: the workspace is already here — {}", w.path));
             opened.push(PathBuf::from(w.path));
-            done += 1;
-            continue;
+            return true;
         }
         let remote = names::git::REMOTE;
         git::run(
             &dir_repo,
             &["fetch", "-q", remote, &format!("+{}:refs/remotes/{remote}/{branch}", names::git::head(&branch))],
         );
-        // A branch retired when going into waiting is not missing: a new one
-        // is opened from the main branch, because what it had was merged.
-        let retired = record::read(&record_file).ok().and_then(|d| {
-            d.get("retired")
-                .map(record::Meta::list)
-                .unwrap_or_default()
-                .into_iter()
-                .find_map(|e| e.split_once('=').filter(|(r, _)| r == repo_name).map(|(_, b)| b.to_string()))
-        });
         let args = |branch: String, base: String| NewArgs {
             name: ws_name.clone(),
             repo: dir_repo.clone(),
             base,
             branch,
             force: false,
-            task: task.clone(),
+            task: self.task.clone(),
             goal: String::new(),
             defer_cd: true,
         };
-        if let Some(retired_branch) = retired {
-            if create(args(retired_branch, project::main_branch(&dir_repo))).is_ok() {
-                let _ = record::edit(&record_file, true, |d| {
-                    record::reopen_branch(d, repo_name);
-                    Ok(())
-                });
-                opened.extend(workspace_path(&ws_name));
-                done += 1;
+        // A branch retired when going into waiting is not missing: a new one
+        // is opened from the main branch, because what it had was merged.
+        if let Some(retired_branch) = self.retired_branch(repo_name) {
+            if create(args(retired_branch, project::main_branch(&dir_repo))).is_err() {
+                return false;
             }
-            continue;
+            let _ = record::edit(&self.record_file, true, |d| {
+                record::reopen_branch(d, repo_name);
+                Ok(())
+            });
+            opened.extend(workspace_path(&ws_name));
+            return true;
         }
         if !bring_published(&dir_repo, &branch, repo_name) {
-            continue;
+            return false;
         }
         if !git::has_ref(&dir_repo, &names::git::head(&branch))
             && !git::has_ref(&dir_repo, &names::git::remote_branch(&branch))
         {
             ui::err(format!("{repo_name}: the branch {branch} is neither here nor on the remote"));
             ui::info("on the other machine: crux sync --leave tells you what is left to push");
-            continue;
+            return false;
         }
-        if create(args(branch.clone(), String::new())).is_ok() {
-            if let Some(path) = workspace_path(&ws_name) {
-                crate::wip::bring(&path, &branch, repo_name);
-                opened.push(path);
-            }
-            done += 1;
+        if create(args(branch.clone(), String::new())).is_err() {
+            return false;
+        }
+        if let Some(path) = workspace_path(&ws_name) {
+            crate::wip::bring(&path, &branch, repo_name);
+            opened.push(path);
+        }
+        true
+    }
+
+    fn retired_branch(&self, repo_name: &str) -> Option<String> {
+        record::read(&self.record_file).ok().and_then(|d| {
+            d.get("retired")
+                .map(record::Meta::list)
+                .unwrap_or_default()
+                .into_iter()
+                .find_map(|e| e.split_once('=').filter(|(r, _)| *r == repo_name).map(|(_, b)| b.to_string()))
+        })
+    }
+
+    /// Resuming it means the answer arrived: it stops waiting. Then where it
+    /// stands and where to go.
+    fn finish(&self, opened: &[PathBuf]) {
+        let mut cleared = false;
+        let _ = record::edit(&self.record_file, true, |d| {
+            cleared = record::clear_waiting(d);
+            Ok(())
+        });
+        if cleared {
+            ui::ok("the task no longer waits for an answer");
+        }
+        println!();
+        let s = record::summary(&record::read(&self.record_file).unwrap_or_default());
+        ui::ok(format!(
+            "task '{}' resumed · {}{}",
+            self.task,
+            s.status,
+            if s.steps.is_empty() { String::new() } else { format!(" · steps {}", s.steps) }
+        ));
+        if !s.next.is_empty() {
+            ui::info(format!("next: {}", s.next));
+        }
+        ui::info(format!("record: {}", self.record_file.display()));
+        for p in opened {
+            ui::info(format!("cd {}", p.display()));
         }
     }
-    if done == 0 {
-        return exit(1);
-    }
-    // Resuming it means the answer arrived: it stops waiting.
-    let mut cleared = false;
-    let _ = record::edit(&record_file, true, |d| {
-        cleared = record::clear_waiting(d);
-        Ok(())
-    });
-    if cleared {
-        ui::ok("the task no longer waits for an answer");
-    }
-    println!();
-    let s = record::summary(&record::read(&record_file).unwrap_or_default());
-    ui::ok(format!(
-        "task '{task}' resumed · {}{}",
-        s.status,
-        if s.steps.is_empty() { String::new() } else { format!(" · steps {}", s.steps) }
-    ));
-    if !s.next.is_empty() {
-        ui::info(format!("next: {}", s.next));
-    }
-    ui::info(format!("record: {}", record_file.display()));
-    for p in opened {
-        ui::info(format!("cd {}", p.display()));
-    }
-    Ok(())
 }
 
 /// The local branch moves to the most advanced of what is here, on the remote
