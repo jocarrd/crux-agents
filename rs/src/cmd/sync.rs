@@ -146,18 +146,39 @@ fn carried_uncommitted(repo: &Path) -> bool {
     crate::wip::save_now(repo, &branch) && crate::wip::is_current(repo, &branch)
 }
 
+/// What leaving this machine would strand, counted while it is reported.
+#[derive(Default)]
+struct Departure {
+    stuck: usize,
+    warnings: usize,
+}
+
 fn departure(ctx: &Ctx) -> Res {
-    let mut stuck = 0;
-    let mut warnings = 0;
+    let mut d = Departure::default();
     println!("what would stay only on this machine");
     println!();
     let (main, worktrees) = ctx.repos();
     for repo in main.iter().chain(worktrees.iter()) {
+        d.check_repo(ctx, repo);
+    }
+    d.check_remotes_exist(ctx, &main);
+    d.check_tasks();
+    d.check_memory();
+    match super::usage::publish_this_machine(true) {
+        Ok(true) => ui::ok("skill usage: this machine's sessions reached the profile repo"),
+        Ok(false) => {}
+        Err(e) => ui::warn(format!("skill usage did not reach the profile repo: {}", e.trim())),
+    }
+    d.report()
+}
+
+impl Departure {
+    fn check_repo(&mut self, ctx: &Ctx, repo: &Path) {
         let name = ctx.name_of(repo);
         if git::out(repo, &["remote"]).unwrap_or_default().is_empty() {
             ui::warn(format!("{name}: no remote, everything it has lives only here"));
-            stuck += 1;
-            continue;
+            self.stuck += 1;
+            return;
         }
         let dirty = git::out(repo, &["status", "--porcelain"]).map_or(0, |s| s.lines().count());
         if dirty > 0 && carried_uncommitted(repo) {
@@ -167,7 +188,7 @@ fn departure(ctx: &Ctx) -> Res {
             ));
         } else if dirty > 0 {
             ui::err(format!("{name}: {}", ui::count(dirty, "uncommitted file", "uncommitted files")));
-            stuck += 1;
+            self.stuck += 1;
         }
         // A commit made with a detached HEAD is in no branch, so the branch
         // review below does not see it.
@@ -180,12 +201,23 @@ fn departure(ctx: &Ctx) -> Res {
             ui::err(format!(
                 "{name}: detached HEAD with commits that are in no branch — create one: git switch -c <branch>"
             ));
-            stuck += 1;
+            self.stuck += 1;
         }
         // Branches from the main repo only: worktrees share them.
         if git::is_worktree(repo) {
-            continue;
+            return;
         }
+        self.check_branches(&name, repo);
+        let stash = git::out(repo, &["stash", "list"]).map_or(0, |s| s.lines().count());
+        if stash > 0 {
+            ui::warn(format!(
+                "{name}: {} — they do not travel; turn them into a branch if you want them there",
+                ui::count(stash, "stash", "stashes")
+            ));
+        }
+    }
+
+    fn check_branches(&mut self, name: &str, repo: &Path) {
         for line in git::out(repo, &["for-each-ref", "--format=%(refname:short)\t%(upstream:short)", names::git::HEADS])
             .unwrap_or_default()
             .lines()
@@ -197,92 +229,92 @@ fn departure(ctx: &Ctx) -> Res {
                     && !crate::publish::is_published(repo, b)
                 {
                     ui::err(format!("{name}: branch {b} is in no remote"));
-                    stuck += 1;
+                    self.stuck += 1;
                 }
             } else if !git::ok(repo, &["rev-parse", "-q", "--verify", up]) {
                 // It tracked a branch that no longer exists: almost always a
                 // proposal merged with squash.
-                warnings += 1;
+                self.warnings += 1;
             } else {
                 let ahead: usize = git::out(repo, &["rev-list", "--count", &format!("{up}..{b}")])
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
                 if ahead > 0 && !crate::publish::is_published(repo, b) {
                     ui::err(format!("{name}: {b} has {} not pushed", ui::count(ahead, "commit", "commits")));
-                    stuck += 1;
+                    self.stuck += 1;
                 }
             }
         }
-        let stash = git::out(repo, &["stash", "list"]).map_or(0, |s| s.lines().count());
-        if stash > 0 {
-            ui::warn(format!(
-                "{name}: {} — they do not travel; turn them into a branch if you want them there",
-                ui::count(stash, "stash", "stashes")
+    }
+
+    /// With the remote deleted, the local references still say everything is
+    /// pushed: git does not find out until it asks.
+    fn check_remotes_exist(&mut self, ctx: &Ctx, main: &[PathBuf]) {
+        let missing = missing_remotes(main);
+        for (_, r) in missing.iter().filter(|(k, _)| *k == 'x') {
+            ui::err(format!("{}: its remote no longer exists — what it has lives only here", ctx.name_of(r)));
+            self.stuck += 1;
+        }
+        let unchecked: Vec<&PathBuf> = missing.iter().filter(|(k, _)| *k == '?').map(|(_, r)| r).collect();
+        if !unchecked.is_empty() {
+            ui::warn("could not check whether the remotes still exist for:");
+            for r in unchecked {
+                ui::info(ctx.name_of(r));
+            }
+        }
+    }
+
+    /// Tasks publish themselves when written, but a write without a network
+    /// stays pending: retried here.
+    fn check_tasks(&mut self) {
+        let projects = tsync::projects_with_tasks();
+        let results = parallel(&projects, 8, |p| tsync::sync_project(p, false).ok());
+        for r in results.into_iter().flatten() {
+            let p = r.get("project").and_then(Value::as_str).unwrap_or("");
+            match r.get("status").and_then(Value::as_str).unwrap_or("") {
+                "no-transport" => ui::warn(format!("{p}: their tasks have no docs repo to travel through: they stay on this machine")),
+                "no-remote" => ui::warn(format!("{p}: its docs repo has no remote: the tasks stay on this machine")),
+                "public" => ui::warn(format!("{p}: its repo is public: tasks are not published there and stay on this machine (\"tasks\": {{\"sync\": true}} in crux.json to force it)")),
+                _ => {}
+            }
+        }
+        for p in tsync::pending_projects() {
+            ui::err(format!("{p}: unpublished tasks — the other machine will not see them"));
+            self.stuck += 1;
+        }
+    }
+
+    /// What the agent learned about the person, still only in its local memory.
+    fn check_memory(&mut self) {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        if person::dir().is_some() && !super::call_quiet(&cwd, "memory", &["--check"]).ok() {
+            let brief = super::call_quiet(&cwd, "memory", &["--brief"]);
+            let first = format!("{}{}", brief.stdout, brief.stderr).lines().next().unwrap_or("").to_string();
+            let msg = first.split_once(' ').map(|(_, r)| r.trim_start().to_string()).unwrap_or_default();
+            ui::err(format!(
+                "agent memory: {} — 'crux memory'",
+                if msg.is_empty() { "there are memories that should be in git".into() } else { msg }
+            ));
+            self.stuck += 1;
+        }
+    }
+
+    fn report(&self) -> Res {
+        println!();
+        if self.warnings > 0 {
+            ui::info(format!(
+                "{} a branch deleted from the remote (merged, almost surely): they do not block",
+                ui::count(self.warnings, "branch tracks", "branches track")
             ));
         }
-    }
-    // With the remote deleted, the local references still say everything is
-    // pushed: git does not find out until it asks.
-    let missing = missing_remotes(&main);
-    for (_, r) in missing.iter().filter(|(k, _)| *k == 'x') {
-        ui::err(format!("{}: its remote no longer exists — what it has lives only here", ctx.name_of(r)));
-        stuck += 1;
-    }
-    let unchecked: Vec<&PathBuf> = missing.iter().filter(|(k, _)| *k == '?').map(|(_, r)| r).collect();
-    if !unchecked.is_empty() {
-        ui::warn("could not check whether the remotes still exist for:");
-        for r in unchecked {
-            ui::info(ctx.name_of(r));
+        if self.stuck == 0 {
+            ui::ok("nothing trapped: you can carry on on the other machine");
+            return Ok(());
         }
+        ui::err(format!("{} would not reach the other machine", ui::count(self.stuck, "thing", "things")));
+        ui::info("push them, or consciously decide they stay here");
+        exit(1)
     }
-    // Tasks publish themselves when written, but a write without a network
-    // stays pending: retried here.
-    let projects = tsync::projects_with_tasks();
-    let results = parallel(&projects, 8, |p| tsync::sync_project(p, false).ok());
-    for r in results.into_iter().flatten() {
-        let p = r.get("project").and_then(Value::as_str).unwrap_or("");
-        match r.get("status").and_then(Value::as_str).unwrap_or("") {
-            "no-transport" => ui::warn(format!("{p}: their tasks have no docs repo to travel through: they stay on this machine")),
-            "no-remote" => ui::warn(format!("{p}: its docs repo has no remote: the tasks stay on this machine")),
-            "public" => ui::warn(format!("{p}: its repo is public: tasks are not published there and stay on this machine (\"tasks\": {{\"sync\": true}} in crux.json to force it)")),
-            _ => {}
-        }
-    }
-    for p in tsync::pending_projects() {
-        ui::err(format!("{p}: unpublished tasks — the other machine will not see them"));
-        stuck += 1;
-    }
-    // What the agent learned about the person, still only in its local memory.
-    let cwd = std::env::current_dir().unwrap_or_default();
-    if person::dir().is_some() && !super::call_quiet(&cwd, "memory", &["--check"]).ok() {
-        let brief = super::call_quiet(&cwd, "memory", &["--brief"]);
-        let first = format!("{}{}", brief.stdout, brief.stderr).lines().next().unwrap_or("").to_string();
-        let msg = first.split_once(' ').map(|(_, r)| r.trim_start().to_string()).unwrap_or_default();
-        ui::err(format!(
-            "agent memory: {} — 'crux memory'",
-            if msg.is_empty() { "there are memories that should be in git".into() } else { msg }
-        ));
-        stuck += 1;
-    }
-    match super::usage::publish_this_machine(true) {
-        Ok(true) => ui::ok("skill usage: this machine's sessions reached the profile repo"),
-        Ok(false) => {}
-        Err(e) => ui::warn(format!("skill usage did not reach the profile repo: {}", e.trim())),
-    }
-    println!();
-    if warnings > 0 {
-        ui::info(format!(
-            "{} a branch deleted from the remote (merged, almost surely): they do not block",
-            ui::count(warnings, "branch tracks", "branches track")
-        ));
-    }
-    if stuck == 0 {
-        ui::ok("nothing trapped: you can carry on on the other machine");
-        return Ok(());
-    }
-    ui::err(format!("{} would not reach the other machine", ui::count(stuck, "thing", "things")));
-    ui::info("push them, or consciously decide they stay here");
-    exit(1)
 }
 
 /// Every remote in parallel: in series, with dozens of repos, the
