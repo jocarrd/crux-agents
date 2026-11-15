@@ -87,6 +87,13 @@ pub fn link() -> Res {
     };
     union_index(&dir);
     let note = person::machine_note(&dir);
+    let all = match crate::scope::load() {
+        Ok(a) => a,
+        Err(e) => die!("the scopes cannot be used: {e}"),
+    };
+    if all.declared {
+        return link_into_scopes(&dir, note.as_deref(), &all);
+    }
     if let Err(e) = person::load_into_claude(Some(&dir), note.as_deref()) {
         die!("cannot write Claude's context: {e}");
     }
@@ -107,6 +114,35 @@ pub fn link() -> Res {
     }
     if let Some(n) = note {
         ui::info(format!("and this machine's note: {}", n.display()));
+    }
+    Ok(())
+}
+
+/// With scopes (ADR-025): each root gets what its scope may see, and Codex,
+/// which only reads its global file, only what is shared.
+fn link_into_scopes(dir: &Path, note: Option<&Path>, all: &crate::scope::Scopes) -> Res {
+    match person::load_into_scopes(dir, note, all) {
+        Ok(files) => {
+            ui::ok("Claude: the global file no longer imports the profile; each scope's root does");
+            for f in files {
+                ui::info(format!("  {}", f.display()));
+            }
+        }
+        Err(e) => die!("cannot write the profile into the scopes: {e}"),
+    }
+    let codex = env::codex_home_dir();
+    if codex.is_dir() {
+        let shared = std::fs::read_to_string(person::shared_index_file()).unwrap_or_default();
+        let block = format!("<!-- crux:profile:begin -->\n{}\n<!-- crux:profile:end -->", shared.trim_end());
+        if let Err(e) = crate::template::write_marked_block(
+            &codex.join(names::AGENTS),
+            "<!-- crux:profile:begin -->",
+            "<!-- crux:profile:end -->",
+            &block,
+        ) {
+            die!("cannot write Codex's context: {e}");
+        }
+        ui::ok(format!("Codex: {}/AGENTS.md carries the shared part only", codex.display()));
     }
     Ok(())
 }

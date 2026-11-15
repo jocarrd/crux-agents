@@ -1,0 +1,629 @@
+//! Work scopes (ADR-025): who the work is for. A scope is a root folder with
+//! its remote, the owners its projects live under, a git identity, the secrets
+//! that belong to it, the connectors it may not use and how much of the
+//! person's profile it sees.
+//!
+//! Without scopes declared there is one implicit scope built from the machine
+//! config, and every path stays where it always was.
+
+use crate::{env, files, project};
+use std::path::{Path, PathBuf};
+
+/// How much of the person's profile a scope or a project sees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Person {
+    None,
+    Shared,
+    Full,
+}
+
+impl Person {
+    pub fn parse(s: &str) -> Option<Person> {
+        match s {
+            "full" => Some(Person::Full),
+            "shared" => Some(Person::Shared),
+            "none" => Some(Person::None),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Person::Full => "full",
+            Person::Shared => "shared",
+            Person::None => "none",
+        }
+    }
+}
+
+/// What enforces the boundary: the agent hook alone, or the agent's own
+/// sandbox as well, so the operating system stops what a pattern misses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Enforce {
+    Guard,
+    Sandbox,
+}
+
+#[derive(Debug, Clone)]
+pub struct Scope {
+    pub name: String,
+    /// As declared, for messages.
+    pub root: PathBuf,
+    /// Resolved, for comparing.
+    pub real_root: PathBuf,
+    pub remote: Option<String>,
+    pub owners: Vec<String>,
+    pub git_name: Option<String>,
+    pub git_email: Option<String>,
+    pub gh_config_dir: Option<PathBuf>,
+    pub person: Person,
+    pub secrets: Vec<PathBuf>,
+    pub mcp_deny: Vec<String>,
+    pub enforce: Enforce,
+    pub primary: bool,
+    /// The scope's own folder; none for the implicit scope.
+    pub dir: Option<PathBuf>,
+}
+
+impl Scope {
+    pub fn contains(&self, path: &Path) -> bool {
+        inside(&real_lenient(path), &self.real_root)
+    }
+
+    /// Where the tasks of this scope's projects live. The primary scope keeps
+    /// the machine's, so declaring scopes on a machine in use moves nothing.
+    pub fn tasks_dir(&self) -> PathBuf {
+        match (&self.dir, self.primary) {
+            (Some(d), false) => d.join("tasks"),
+            _ => env::machine_tasks_dir(),
+        }
+    }
+
+    pub fn owns_secret(&self, path: &Path) -> bool {
+        let p = real_lenient(path);
+        self.secrets.iter().any(|s| inside(&p, &real_lenient(s)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Scopes {
+    pub list: Vec<Scope>,
+    /// False when the only scope is the implicit one.
+    pub declared: bool,
+}
+
+pub const CONFIG_FILE: &str = "config";
+
+pub fn dir() -> PathBuf {
+    env::var(crate::names::vars::SCOPES_DIR).map_or_else(|| env::crux_dir().join("scopes"), PathBuf::from)
+}
+
+/// `~` and `$HOME` as the shell would expand them, in a value of the config.
+pub fn expand(value: &str) -> PathBuf {
+    let home = env::home().to_string_lossy().into_owned();
+    let v = value.trim();
+    let v = if v == "~" {
+        home.clone()
+    } else if let Some(rest) = v.strip_prefix("~/") {
+        format!("{home}/{rest}")
+    } else {
+        v.replace("${HOME}", &home).replace("$HOME", &home)
+    };
+    PathBuf::from(v)
+}
+
+/// The resolved form of a path that may not exist yet: the longest prefix that
+/// exists is resolved and the rest appended. A file about to be written still
+/// belongs where its folder does.
+pub fn real_lenient(path: &Path) -> PathBuf {
+    let path = if path.is_absolute() {
+        project::normalize(path)
+    } else {
+        project::normalize(&std::env::current_dir().unwrap_or_default().join(path))
+    };
+    let mut existing = path.clone();
+    let mut rest = vec![];
+    while !existing.exists() {
+        match (existing.file_name().map(|n| n.to_os_string()), existing.parent()) {
+            (Some(n), Some(parent)) => {
+                rest.push(n);
+                existing = parent.to_path_buf();
+            }
+            _ => return path,
+        }
+    }
+    let mut out = project::real(&existing);
+    for n in rest.into_iter().rev() {
+        out.push(n);
+    }
+    out
+}
+
+/// Whether `path` is `root` or inside it. macOS volumes are case-insensitive
+/// by default, so `~/desktop/acme` is the same folder as `~/Desktop/Acme`.
+pub fn inside(path: &Path, root: &Path) -> bool {
+    if cfg!(target_os = "macos") {
+        let p = path.to_string_lossy().to_lowercase();
+        let r = root.to_string_lossy().to_lowercase();
+        let r = r.trim_end_matches('/');
+        p == r || p.starts_with(&format!("{r}/"))
+    } else {
+        path.starts_with(root)
+    }
+}
+
+fn words(v: Option<String>) -> Vec<String> {
+    v.map(|s| s.split_whitespace().map(String::from).collect()).unwrap_or_default()
+}
+
+/// One scope from its folder. Every value it cannot make sense of is an error
+/// with the file and the key: a typo in ENFORCE read as the default would
+/// switch off what the person asked for.
+pub fn parse(name: &str, folder: &Path) -> Result<Scope, String> {
+    let file = folder.join(CONFIG_FILE);
+    files::read_if_exists(&file)?;
+    if !file.is_file() {
+        return Err(format!("{}: missing", file.display()));
+    }
+    let get = |k: &str| env::config_value_in(&file, k);
+    let where_ = |k: &str| format!("{} ({k})", file.display());
+    let root = get("ROOT").ok_or_else(|| format!("{}: ROOT is required", file.display()))?;
+    let root = expand(&root);
+    if !root.is_absolute() {
+        return Err(format!("{}: must be an absolute path", where_("ROOT")));
+    }
+    let person = match get("PERSON") {
+        None => None,
+        Some(v) => {
+            Some(Person::parse(&v).ok_or_else(|| format!("{}: '{v}' is not full, shared or none", where_("PERSON")))?)
+        }
+    };
+    let enforce = match get("ENFORCE").as_deref() {
+        None | Some("guard") => Enforce::Guard,
+        Some("sandbox") => Enforce::Sandbox,
+        Some(v) => return Err(format!("{}: '{v}' is not guard or sandbox", where_("ENFORCE"))),
+    };
+    let primary = match get("PRIMARY").as_deref() {
+        None | Some("false") => false,
+        Some("true") => true,
+        Some(v) => return Err(format!("{}: '{v}' is not true or false", where_("PRIMARY"))),
+    };
+    Ok(Scope {
+        name: name.to_string(),
+        real_root: real_lenient(&root),
+        root,
+        remote: get("REMOTE"),
+        owners: words(get("OWNERS")),
+        git_name: get("GIT_NAME"),
+        git_email: get("GIT_EMAIL"),
+        gh_config_dir: get("GH_CONFIG_DIR").map(|v| expand(&v)),
+        // The primary scope is the person's own: it sees the whole profile
+        // unless it says otherwise. Any other sees what is shared.
+        person: person.unwrap_or(if primary { Person::Full } else { Person::Shared }),
+        secrets: words(get("SECRETS")).iter().map(|s| expand(s)).collect(),
+        mcp_deny: words(get("MCP_DENY")),
+        enforce,
+        primary,
+        dir: Some(folder.to_path_buf()),
+    })
+}
+
+/// The scope a machine without scopes has always had.
+pub fn implicit() -> Scope {
+    let root = env::implicit_projects_root();
+    Scope {
+        name: "default".into(),
+        real_root: real_lenient(&root),
+        root,
+        remote: env::config_value_in(&env::config_file_redirectable(), crate::names::vars::REMOTE),
+        owners: vec![],
+        git_name: None,
+        git_email: None,
+        gh_config_dir: None,
+        person: Person::Full,
+        secrets: vec![],
+        mcp_deny: vec![],
+        enforce: Enforce::Guard,
+        primary: true,
+        dir: None,
+    }
+}
+
+/// Everything that makes two scopes ambiguous, or one unusable. Each problem
+/// stops crux: falling back to the implicit scope would switch isolation off
+/// without a word (rule 5).
+pub fn problems(list: &[Scope]) -> Vec<String> {
+    let mut out = vec![];
+    for s in list {
+        if !project::valid_name(&s.name) {
+            out.push(format!("scope '{}': not a valid name (letters, digits, - and _)", s.name));
+        }
+    }
+    for (i, a) in list.iter().enumerate() {
+        for b in &list[i + 1..] {
+            if inside(&a.real_root, &b.real_root) || inside(&b.real_root, &a.real_root) {
+                out.push(format!(
+                    "scopes '{}' and '{}' overlap: {} and {}",
+                    a.name,
+                    b.name,
+                    a.root.display(),
+                    b.root.display()
+                ));
+            }
+            for o in &a.owners {
+                if b.owners.iter().any(|x| x.eq_ignore_ascii_case(o)) {
+                    out.push(format!("owner '{o}' is in two scopes: '{}' and '{}'", a.name, b.name));
+                }
+            }
+        }
+    }
+    let primaries: Vec<&str> = list.iter().filter(|s| s.primary).map(|s| s.name.as_str()).collect();
+    if list.len() > 1 && primaries.len() != 1 {
+        out.push(if primaries.is_empty() {
+            "several scopes and none is PRIMARY=\"true\": the person's own one has to be named".into()
+        } else {
+            format!("only one scope can be primary, and {} are: {}", primaries.len(), primaries.join(", "))
+        });
+    }
+    for s in list {
+        for secret in &s.secrets {
+            for other in list.iter().filter(|o| o.name != s.name) {
+                if other.contains(secret) {
+                    out.push(format!(
+                        "a secret of '{}' is inside the root of '{}': {}",
+                        s.name,
+                        other.name,
+                        secret.display()
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The scopes of this machine. An error when one cannot be read or they
+/// contradict each other.
+pub fn load() -> Result<Scopes, String> {
+    let d = dir();
+    let mut names = match std::fs::read_dir(&d) {
+        Ok(entries) => entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| !n.starts_with('.'))
+            .collect::<Vec<_>>(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => vec![],
+        Err(e) => return Err(format!("cannot read {}: {e}", d.display())),
+    };
+    names.sort();
+    if names.is_empty() {
+        return Ok(Scopes { list: vec![implicit()], declared: false });
+    }
+    let mut list = vec![];
+    for n in &names {
+        list.push(parse(n, &d.join(n))?);
+    }
+    if list.len() == 1 {
+        list[0].primary = true;
+        if env::config_value_in(&d.join(&names[0]).join(CONFIG_FILE), "PERSON").is_none() {
+            list[0].person = Person::Full;
+        }
+    }
+    let p = problems(&list);
+    if !p.is_empty() {
+        return Err(p.join("\n"));
+    }
+    Ok(Scopes { list, declared: true })
+}
+
+/// The worktree's main repo, when `path` is inside a linked worktree: its
+/// `.git` is a file that points into the main repo's git dir. Read, not asked
+/// to git: this runs on every tool call.
+fn main_repo_of_worktree(path: &Path) -> Option<PathBuf> {
+    let mut probe = Some(path);
+    while let Some(dir) = probe {
+        let dot_git = dir.join(".git");
+        if dot_git.is_file() {
+            let text = files::read_optional(&dot_git)?;
+            let gitdir = PathBuf::from(text.trim().strip_prefix("gitdir:")?.trim());
+            let gitdir = if gitdir.is_absolute() { gitdir } else { dir.join(gitdir) };
+            // <main>/.git/worktrees/<name> -> <main>
+            let common = gitdir.parent()?.parent()?;
+            return common.parent().map(Path::to_path_buf);
+        }
+        if dot_git.is_dir() {
+            return None;
+        }
+        probe = dir.parent();
+    }
+    None
+}
+
+impl Scopes {
+    pub fn primary(&self) -> &Scope {
+        self.list.iter().find(|s| s.primary).unwrap_or(&self.list[0])
+    }
+
+    pub fn by_name(&self, name: &str) -> Option<&Scope> {
+        self.list.iter().find(|s| s.name == name)
+    }
+
+    /// The scope a path belongs to, by where it lives. A worktree another tool
+    /// made outside every root belongs where its repo does.
+    pub fn of_path(&self, path: &Path) -> Option<&Scope> {
+        let real = real_lenient(path);
+        if let Some(s) = self.list.iter().find(|s| inside(&real, &s.real_root)) {
+            return Some(s);
+        }
+        let main = main_repo_of_worktree(&real)?;
+        let main = real_lenient(&main);
+        self.list.iter().find(|s| inside(&main, &s.real_root))
+    }
+
+    /// The scope a command works in: the one it is told, the one its folder
+    /// belongs to, the one sessions outside every root are pinned to, and with
+    /// no scopes declared the implicit one. None at the front desk.
+    pub fn current(&self, cwd: &Path) -> Result<Option<&Scope>, String> {
+        if !self.declared {
+            return Ok(Some(&self.list[0]));
+        }
+        if let Some(n) = env::var(crate::names::vars::SCOPE) {
+            return self.by_name(&n).map(Some).ok_or_else(|| format!("{}: no scope '{n}'", crate::names::vars::SCOPE));
+        }
+        if let Some(s) = self.of_path(cwd) {
+            return Ok(Some(s));
+        }
+        self.unpinned_default()
+    }
+
+    /// The scope named by CRUX_UNPINNED_SESSIONS, if any.
+    pub fn unpinned_default(&self) -> Result<Option<&Scope>, String> {
+        let key = crate::names::vars::UNPINNED_SESSIONS;
+        match env::var(key).or_else(|| env::config_value_in(&env::config_file(), key)) {
+            None => Ok(None),
+            Some(n) => self.by_name(&n).map(Some).ok_or_else(|| format!("{key}: no scope '{n}'")),
+        }
+    }
+
+    pub fn roots(&self) -> Vec<PathBuf> {
+        self.list.iter().map(|s| s.root.clone()).collect()
+    }
+}
+
+/// Loads the scopes, and on failure says why on stderr. For the places that
+/// cannot return an error but must not carry on as if nothing happened: they
+/// get the implicit scope only when there are no scopes declared at all.
+pub fn load_or_report() -> Option<Scopes> {
+    match load() {
+        Ok(s) => Some(s),
+        Err(e) => {
+            crate::ui::err_stderr(format!("the scopes cannot be used: {e}"));
+            None
+        }
+    }
+}
+
+// --- Boundaries -----------------------------------------------------------
+//
+// A scope and an isolated project are the same thing to the guard: a set of
+// paths a session either is inside of or must not touch.
+
+/// What a project declares in its contract about isolation. A client's
+/// project (`code.foreign`, the client-repo profile) is isolated and sees only
+/// the shared profile unless it says otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectRules {
+    pub isolated: bool,
+    pub person: Option<Person>,
+}
+
+pub fn project_rules(scope: &Scope, project: &str) -> ProjectRules {
+    let docs = scope.root.join(project).join(format!("{project}-docs"));
+    let Some(c) = project::contract_lenient(&docs) else {
+        return ProjectRules { isolated: false, person: None };
+    };
+    let profile = files::get_str(&c, "profile").unwrap_or_default();
+    let foreign = crate::policy::code_is_foreign(&profile, Some(&docs));
+    let isolated = match files::get_str(&c, "isolation").as_deref() {
+        Some("isolated") => true,
+        Some("shared") => false,
+        _ => foreign,
+    };
+    let person = files::get_str(&c, "person").and_then(|p| Person::parse(&p)).or(if foreign {
+        Some(Person::Shared)
+    } else {
+        None
+    });
+    ProjectRules { isolated, person }
+}
+
+/// Where a path is: its scope and, inside the scope's root, its project (the
+/// first folder, a workspace counted as its project).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Place {
+    pub scope: String,
+    pub project: Option<String>,
+}
+
+impl Place {
+    pub fn parse(pin: &str) -> Place {
+        match pin.split_once('/') {
+            Some((s, p)) => Place { scope: s.into(), project: Some(p.into()) },
+            None => Place { scope: pin.into(), project: None },
+        }
+    }
+
+    pub fn as_pin(&self) -> String {
+        match &self.project {
+            Some(p) => format!("{}/{p}", self.scope),
+            None => self.scope.clone(),
+        }
+    }
+}
+
+fn project_in(scope: &Scope, path: &Path) -> Option<String> {
+    let real = real_lenient(path);
+    let rel = if inside(&real, &scope.real_root) {
+        real.strip_prefix(&scope.real_root).ok().map(Path::to_path_buf).or_else(|| {
+            let r = real.to_string_lossy().to_lowercase();
+            let root = scope.real_root.to_string_lossy().to_lowercase();
+            r.strip_prefix(&root).map(|x| PathBuf::from(x.trim_start_matches('/')))
+        })?
+    } else {
+        let main = real_lenient(&main_repo_of_worktree(&real)?);
+        main.strip_prefix(&scope.real_root).ok()?.to_path_buf()
+    };
+    let first = rel.components().next()?.as_os_str().to_string_lossy().into_owned();
+    Some(first.split("-ws-").next().unwrap_or(&first).to_string())
+}
+
+impl Scopes {
+    /// The place a path belongs to: inside a root, or a secret a scope
+    /// declares, or the state crux keeps for a scope.
+    pub fn place_of(&self, path: &Path) -> Option<Place> {
+        if let Some(s) = self.of_path(path) {
+            return Some(Place { scope: s.name.clone(), project: project_in(s, path) });
+        }
+        if let Some(s) = self.list.iter().find(|s| s.owns_secret(path)) {
+            return Some(Place { scope: s.name.clone(), project: None });
+        }
+        let real = real_lenient(path);
+        for s in &self.list {
+            if inside(&real, &real_lenient(&s.tasks_dir())) {
+                return Some(Place { scope: s.name.clone(), project: None });
+            }
+        }
+        None
+    }
+
+    /// How much of the profile a session at a place sees: its scope's, which
+    /// its project can narrow and never widen.
+    pub fn person_at(&self, place: &Place) -> Person {
+        let Some(s) = self.by_name(&place.scope) else { return Person::None };
+        let narrowed = place.project.as_deref().and_then(|p| project_rules(s, p).person);
+        narrowed.map_or(s.person, |p| p.min(s.person))
+    }
+
+    /// The place a session opened in a folder is pinned to: the scope, and
+    /// the project too when that project is isolated.
+    pub fn pin_place(&self, path: &Path) -> Option<Place> {
+        let s = self.of_path(path)?;
+        let project = project_in(s, path).filter(|p| project_rules(s, p).isolated);
+        Some(Place { scope: s.name.clone(), project })
+    }
+}
+
+// --- Pins --------------------------------------------------------------------
+//
+// A session is pinned to one scope and the pin never moves: what leaks
+// between scopes is the conversation as much as the files, so another scope
+// means another session.
+
+pub fn pins_dir() -> PathBuf {
+    env::state_dir().join("scope-pins")
+}
+
+fn pin_file(session: &str) -> PathBuf {
+    let safe: String = session.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
+    pins_dir().join(safe)
+}
+
+/// The scope a session is pinned to, if it is.
+pub fn pinned(session: &str) -> Option<String> {
+    if session.is_empty() {
+        return None;
+    }
+    files::read_optional(&pin_file(session)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Pin {
+    /// It was not pinned and now is.
+    New,
+    /// It already was, to this same scope.
+    Same,
+}
+
+/// Pins a session. Refused when it is pinned elsewhere: that is the whole
+/// point of a pin.
+pub fn pin(session: &str, scope: &str) -> Result<Pin, String> {
+    if session.is_empty() {
+        return Err("no session id to pin".into());
+    }
+    match pinned(session) {
+        Some(s) if s == scope => Ok(Pin::Same),
+        Some(s) => Err(format!("this session is already in '{s}'; '{scope}' needs a new session")),
+        None => {
+            let f = pin_file(session);
+            files::mkdir_private(&pins_dir()).map_err(|e| format!("{}: {e}", pins_dir().display()))?;
+            files::write(&f, &format!("{scope}\n"))?;
+            Ok(Pin::New)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scope(name: &str, root: &str) -> Scope {
+        let mut s = implicit();
+        s.name = name.into();
+        s.root = PathBuf::from(root);
+        s.real_root = PathBuf::from(root);
+        s.primary = false;
+        s
+    }
+
+    #[test]
+    fn a_path_is_inside_its_root_and_not_in_a_sibling_with_the_same_prefix() {
+        assert!(inside(Path::new("/w/acme/web"), Path::new("/w/acme")));
+        assert!(inside(Path::new("/w/acme"), Path::new("/w/acme")));
+        assert!(!inside(Path::new("/w/acme-old/web"), Path::new("/w/acme")));
+    }
+
+    #[test]
+    fn overlapping_roots_and_shared_owners_are_problems() {
+        let mut a = scope("a", "/w/a");
+        let b = scope("b", "/w/a/inner");
+        a.primary = true;
+        let p = problems(&[a.clone(), b]);
+        assert!(p.iter().any(|x| x.contains("overlap")), "{p:?}");
+
+        let mut c = scope("c", "/w/c");
+        a.owners = vec!["org".into()];
+        c.owners = vec!["ORG".into()];
+        let p = problems(&[a, c]);
+        assert!(p.iter().any(|x| x.contains("two scopes")), "{p:?}");
+    }
+
+    #[test]
+    fn several_scopes_need_exactly_one_primary() {
+        let a = scope("a", "/w/a");
+        let b = scope("b", "/w/b");
+        assert!(problems(&[a.clone(), b.clone()]).iter().any(|x| x.contains("none is PRIMARY")));
+        let (mut a2, mut b2) = (a, b);
+        a2.primary = true;
+        b2.primary = true;
+        assert!(problems(&[a2, b2]).iter().any(|x| x.contains("only one scope")));
+    }
+
+    #[test]
+    fn a_secret_inside_another_root_is_a_problem() {
+        let mut a = scope("a", "/w/a");
+        a.primary = true;
+        a.secrets = vec![PathBuf::from("/w/b/keys")];
+        let b = scope("b", "/w/b");
+        assert!(problems(&[a, b]).iter().any(|x| x.contains("a secret of 'a'")));
+    }
+
+    #[test]
+    fn the_home_is_expanded_in_every_spelling() {
+        let home = env::home().to_string_lossy().into_owned();
+        assert_eq!(expand("~/x"), PathBuf::from(format!("{home}/x")));
+        assert_eq!(expand("$HOME/x"), PathBuf::from(format!("{home}/x")));
+        assert_eq!(expand("${HOME}/x"), PathBuf::from(format!("{home}/x")));
+        assert_eq!(expand("/abs"), PathBuf::from("/abs"));
+    }
+}

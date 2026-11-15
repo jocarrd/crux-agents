@@ -21,6 +21,7 @@ pub mod profile;
 pub mod prose;
 pub mod release;
 pub mod review;
+pub mod scope;
 pub mod setup;
 pub mod ship;
 pub mod skill;
@@ -52,6 +53,17 @@ pub fn dispatch(argv: &[String]) -> i32 {
         crate::ui::info("crux setup      the same, step by step: account, remote, profile and projects");
         return 1;
     }
+    // Scopes that contradict each other, or one that cannot be read, stop
+    // every command (ADR-025): carrying on with the implicit scope would
+    // switch isolation off without a word. `scope` stays usable to see why,
+    // and hooks decide for themselves how to fail.
+    if !standalone && !matches!(name, "scope" | "hook" | "doctor") {
+        if let Err(e) = crate::scope::load() {
+            crate::ui::err(format!("the scopes cannot be used: {e}"));
+            crate::ui::info("crux scope check    shows what is wrong");
+            return 1;
+        }
+    }
     let result: Res = match name {
         "version" | "--version" | "-v" => version(),
         "help" | "-h" | "--help" => {
@@ -79,6 +91,7 @@ pub fn dispatch(argv: &[String]) -> i32 {
         "link" => link::run(rest),
         "init" => init::run(rest),
         "profile" => profile::run(rest),
+        "scope" => scope::run(rest),
         "bootstrap" => bootstrap::run(rest),
         "status" => status::run(rest),
         "visual" => visual::run(rest),

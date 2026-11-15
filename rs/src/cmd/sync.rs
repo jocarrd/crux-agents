@@ -1020,9 +1020,10 @@ pub fn run(argv: &[String]) -> Res {
     let _ = files::mkdir_private(&state);
     if argv.first().map(String::as_str) == Some(REST) {
         let except = argv[1..].iter().map(PathBuf::from).collect();
-        return rest(&Ctx { root, mode, scope: Scope::Except(except) }, &state);
+        rest(&Ctx { root: root.clone(), mode, scope: Scope::Except(except) }, &state)?;
+        return in_other_scopes(&root, |r| rest(&Ctx { root: r, mode, scope: Scope::All }, &state));
     }
-    let ctx = Ctx { root, mode, scope: Scope::All };
+    let ctx = Ctx { root: root.clone(), mode, scope: Scope::All };
     match mode {
         "hook" => {
             // By hand and in a terminal, reading stdin would wait for a Ctrl-D.
@@ -1031,12 +1032,39 @@ pub fn run(argv: &[String]) -> Res {
             }
             hook(&ctx, &state)
         }
-        "leave" => departure(&ctx),
+        "leave" => {
+            departure(&ctx)?;
+            in_other_scopes(&root, |r| departure(&Ctx { root: r, mode, scope: Scope::All }))
+        }
         _ => {
             let _lock = take_lock(&state, false);
             // A report left by the hook would repeat what this run says now.
             let _ = std::fs::remove_file(report_file(&state));
-            arrival(&ctx)
+            arrival(&ctx)?;
+            in_other_scopes(&root, |r| arrival(&Ctx { root: r, mode, scope: Scope::All }))
         }
     }
+}
+
+/// The same pass over every other scope's root (ADR-025), each with its own
+/// tasks and remote: CRUX_SCOPE makes every path the pass resolves its scope's.
+fn in_other_scopes(done: &Path, mut pass: impl FnMut(PathBuf) -> Res) -> Res {
+    let Ok(all) = crate::scope::load() else { return Ok(()) };
+    if !all.declared {
+        return Ok(());
+    }
+    let key = crate::names::vars::SCOPE;
+    let before = env::var(key);
+    let mut result = Ok(());
+    for s in all.list.iter().filter(|s| s.root != done && s.root.is_dir()) {
+        std::env::set_var(key, &s.name);
+        if let Err(e) = pass(s.root.clone()) {
+            result = Err(e);
+        }
+    }
+    match before {
+        Some(v) => std::env::set_var(key, v),
+        None => std::env::remove_var(key),
+    }
+    result
 }

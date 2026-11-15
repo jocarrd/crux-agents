@@ -37,6 +37,10 @@ pub fn run(argv: &[String]) -> Res {
         "find_docs_repo" => print(project::find_docs_repo(&p(1)).map(|d| d.display().to_string())),
         "preference" => print(Some(env::preference(&a(1), &a(2)))),
         "projects_root" => print(Some(env::projects_root().display().to_string())),
+        // For ssh's `Match exec`: whether the folder ssh runs from is in that scope.
+        "scope_of_cwd" => yes(crate::scope::load().ok().is_some_and(|all| {
+            all.of_path(&std::env::current_dir().unwrap_or_default()).is_some_and(|s| s.name == a(1))
+        })),
         "task_dir" => print(Some(env::tasks_dir().display().to_string())),
         "json_get" => {
             let v = crate::files::read_json(&p(1)).ok().and_then(|j| crate::files::get(&j, &a(2)).cloned());

@@ -68,7 +68,7 @@ pub(super) fn memory_guard() -> Res {
 
 /// The machine brought up to date and the open tasks, as the person sees them
 /// and as the agent is told not to push them.
-fn synced_and_reminder(cwd: &str) -> (String, Option<Value>) {
+fn synced_and_reminder(cwd: &str, session: &str) -> (String, Option<Value>) {
     let me = std::env::current_exe().unwrap_or_default();
     let dir = if cwd.is_empty() { self::cwd() } else { PathBuf::from(cwd) };
     let mut sync = std::process::Command::new(&me);
@@ -78,7 +78,58 @@ fn synced_and_reminder(cwd: &str) -> (String, Option<Value>) {
         sync.current_dir(&dir);
     }
     let synced = crate::sh::capture_cmd(&mut sync).out();
-    (synced, remind::reminder(&dir, 6))
+    let reminder = match crate::scope::load() {
+        Ok(all) if all.declared => {
+            let pinned =
+                crate::scope::pinned(session).and_then(|n| all.by_name(&crate::scope::Place::parse(&n).scope).cloned());
+            remind::reminder_for_session(&dir, 6, &all, pinned.as_ref())
+        }
+        _ => remind::reminder(&dir, 6),
+    };
+    (synced, reminder)
+}
+
+/// Pins the session to the scope it opened in (ADR-025) and says where it is.
+/// A session opened outside every root stays at the front desk with the map,
+/// unless CRUX_UNPINNED_SESSIONS names a scope. Scopes that cannot be read
+/// are said to both: the guard will stop every tool call until they are fixed.
+fn scope_context(session: &str, cwd: &str) -> (Option<String>, Option<String>) {
+    let all = match crate::scope::load() {
+        Ok(a) if a.declared => a,
+        Ok(_) => return (None, None),
+        Err(e) => {
+            let msg = format!("The scopes cannot be used, so crux stops every tool call until they are: {e}");
+            return (Some(msg.clone()), Some(msg));
+        }
+    };
+    sweep(&crate::scope::pins_dir(), "", SESSION_MARKS_KEPT);
+    let dir = if cwd.is_empty() { self::cwd() } else { PathBuf::from(cwd) };
+    let target = match crate::scope::pinned(session) {
+        Some(p) => Some(crate::scope::Place::parse(&p)),
+        None => all.pin_place(&dir).or_else(|| {
+            all.unpinned_default().ok().flatten().map(|s| crate::scope::Place { scope: s.name.clone(), project: None })
+        }),
+    };
+    match target {
+        Some(place) => {
+            if let Err(e) = crate::scope::pin(session, &place.as_pin()) {
+                return (Some(e.clone()), Some(e));
+            }
+            (Some(format!("scope: {}", place.as_pin())), Some(crate::cmd::scope::context_text(&all, &place)))
+        }
+        None => {
+            let shared = crate::files::read_optional(&crate::person::shared_index_file())
+                .map(|t| format!("{}\n\n", t.trim_end()))
+                .unwrap_or_default();
+            let desk = "This session is at the front desk: it is in no scope yet. When the person asks for work, tell \
+                 from the map where it belongs (ask if unsure) and run `crux scope enter <scope>` or \
+                 `crux scope enter --project <name>` before touching it; that pins the session there for good.";
+            (
+                Some("front desk: no scope yet, the first task decides it".into()),
+                Some(format!("{shared}{desk}\n{}", crate::cmd::scope::map_text(&all))),
+            )
+        }
+    }
 }
 
 /// When a session opens, resumes or is cleared. On a compaction it stays
@@ -94,8 +145,9 @@ pub(super) fn session_sync() -> Res {
         let _ = files::mkdir_private(&dir);
         crate::files::touch_marker(&dir.join(safe_id(&session)), "");
     }
-    let (synced, reminder) = synced_and_reminder(&field(&event, "cwd"));
-    if synced.is_empty() && reminder.is_none() {
+    let (scope_user, scope_agent) = scope_context(&session, &field(&event, "cwd"));
+    let (synced, reminder) = synced_and_reminder(&field(&event, "cwd"), &session);
+    if synced.is_empty() && reminder.is_none() && scope_agent.is_none() {
         return Ok(());
     }
     // With the Claude Code mod it draws the reminder as a panel; the model
@@ -104,8 +156,10 @@ pub(super) fn session_sync() -> Res {
     let r_user =
         reminder.as_ref().and_then(|r| r.get("user")).and_then(Value::as_str).filter(|_| !panel).map(String::from);
     let r_agent = reminder.as_ref().and_then(|r| r.get("agent")).and_then(Value::as_str).map(String::from);
-    let user: Vec<String> = [r_user, Some(synced.clone())].into_iter().flatten().filter(|s| !s.is_empty()).collect();
-    let agent: Vec<String> = [Some(synced), r_agent].into_iter().flatten().filter(|s| !s.is_empty()).collect();
+    let user: Vec<String> =
+        [scope_user, r_user, Some(synced.clone())].into_iter().flatten().filter(|s| !s.is_empty()).collect();
+    let agent: Vec<String> =
+        [scope_agent, Some(synced), r_agent].into_iter().flatten().filter(|s| !s.is_empty()).collect();
     let mut out = serde_json::Map::new();
     if !user.is_empty() {
         out.insert("systemMessage".into(), json!(user.join("\n\n")));
@@ -149,7 +203,7 @@ pub(super) fn session_idle() -> Res {
         crate::task::sync::refresh_in_background();
         return Ok(());
     }
-    let (synced, reminder) = synced_and_reminder(&field(&event, "cwd"));
+    let (synced, reminder) = synced_and_reminder(&field(&event, "cwd"), &session);
     if synced.is_empty() && reminder.is_none() {
         return Ok(());
     }

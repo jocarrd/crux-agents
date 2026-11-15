@@ -391,17 +391,18 @@ pub fn gc(argv: &[String]) -> Res {
         }
     }
     let _ = registry::init();
-    let root = env::projects_root();
     let list = registry::read().unwrap_or_default();
     let without: Vec<String> = list.iter().filter(|w| !Path::new(&w.path).exists()).map(|w| w.name.clone()).collect();
     let registered: Vec<&str> = list.iter().map(|w| w.path.as_str()).collect();
     let mut candidates = vec![];
-    for a in project::subdirs(&root) {
-        if a.contains("-ws-") {
-            candidates.push(root.join(&a));
-        }
-        for b in project::subdirs(&root.join(&a)).into_iter().filter(|b| b.contains("-ws-")) {
-            candidates.push(root.join(&a).join(b));
+    for root in env::all_projects_roots() {
+        for a in project::subdirs(&root) {
+            if a.contains("-ws-") {
+                candidates.push(root.join(&a));
+            }
+            for b in project::subdirs(&root.join(&a)).into_iter().filter(|b| b.contains("-ws-")) {
+                candidates.push(root.join(&a).join(b));
+            }
         }
     }
     candidates.sort();

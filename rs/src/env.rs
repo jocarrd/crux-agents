@@ -117,6 +117,32 @@ pub fn kernel_clone(root: &Path) -> Option<PathBuf> {
 /// the commands that walk every project do not fail: they report zero, which
 /// is worse because it looks like data.
 pub fn projects_root() -> PathBuf {
+    projects_root_for(&std::env::current_dir().unwrap_or_default())
+}
+
+/// The root of the scope a folder works in (ADR-025). At the front desk, and
+/// on a machine without scopes, the person's own root.
+pub fn projects_root_for(cwd: &Path) -> PathBuf {
+    match crate::scope::load() {
+        Ok(s) if s.declared => match s.current(cwd) {
+            Ok(Some(scope)) => scope.root.clone(),
+            _ => s.primary().root.clone(),
+        },
+        _ => implicit_projects_root(),
+    }
+}
+
+/// Every root on this machine, for what walks all of it: sync, machine
+/// checks, garbage collection.
+pub fn all_projects_roots() -> Vec<PathBuf> {
+    match crate::scope::load() {
+        Ok(s) if s.declared => s.roots(),
+        _ => vec![implicit_projects_root()],
+    }
+}
+
+/// The one root a machine had before scopes, and still has without them.
+pub fn implicit_projects_root() -> PathBuf {
     if let Some(d) = declared_projects_root() {
         return PathBuf::from(d);
     }
@@ -144,6 +170,20 @@ pub fn registry_file() -> PathBuf {
 /// Next to the workspace registry: if a test redirects that registry to its
 /// sandbox, the tasks follow without having to remember another variable.
 pub fn tasks_dir() -> PathBuf {
+    if let Some(d) = var(crate::names::vars::TASKS_DIR) {
+        return PathBuf::from(d);
+    }
+    match crate::scope::load() {
+        Ok(s) if s.declared => match s.current(&std::env::current_dir().unwrap_or_default()) {
+            Ok(Some(scope)) => scope.tasks_dir(),
+            _ => s.primary().tasks_dir(),
+        },
+        _ => machine_tasks_dir(),
+    }
+}
+
+/// The tasks folder the machine has always had: the primary scope's.
+pub fn machine_tasks_dir() -> PathBuf {
     if let Some(d) = var(crate::names::vars::TASKS_DIR) {
         return PathBuf::from(d);
     }

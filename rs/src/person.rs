@@ -10,8 +10,14 @@ pub fn repo_name() -> String {
     env::preference(crate::names::vars::PROFILE_REPO, "agent-profile")
 }
 
+/// The profile is the person's, not a scope's: it lives in the primary root
+/// wherever the command runs (ADR-025).
 pub fn expected_dir() -> PathBuf {
-    env::projects_root().join(repo_name())
+    let root = match crate::scope::load() {
+        Ok(s) if s.declared => s.primary().root.clone(),
+        _ => env::implicit_projects_root(),
+    };
+    root.join(repo_name())
 }
 
 /// The profile's directory, if this machine has one.
@@ -82,6 +88,82 @@ pub fn load_into_claude(dir: Option<&Path>, note: Option<&Path>) -> std::io::Res
     }
     template::write_marked_block(&file, BEGIN, END, &block)?;
     Ok(file)
+}
+
+/// Whether a note may be read outside the person's own scope (ADR-025). What
+/// the note says wins; without a word, who the person is (`about/`) and what
+/// a machine holds (`machines/`) stay private, and how they want to work is
+/// shared.
+pub fn is_shared(dir: &Path, rel: &str) -> bool {
+    let text = crate::files::read_or_empty(&dir.join(rel));
+    let mut lines = text.lines();
+    if lines.next() == Some("---") {
+        for l in lines.by_ref() {
+            if l == "---" {
+                break;
+            }
+            if let Some(v) = l.trim().strip_prefix("visibility:") {
+                return v.trim().trim_matches('"') == "shared";
+            }
+        }
+    }
+    !(rel.starts_with("about/") || rel.starts_with("machines/"))
+}
+
+/// The index without the lines that lead to a private note, nor the
+/// frontmatter. What a scope that only sees what is shared gets.
+pub fn shared_index(dir: &Path) -> String {
+    let text = crate::files::read_or_empty(&dir.join("PROFILE.md"));
+    let link = crate::regex!(r"\]\(([^)#\s]+\.md)(#[^)]*)?\)");
+    without_frontmatter(&text)
+        .lines()
+        .filter(|l| link.captures_iter(l).all(|c| is_shared(dir, &c[1])))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Where the shared index is kept: generated, so it lives with the machine's
+/// state, never in the profile repo.
+pub fn shared_index_file() -> PathBuf {
+    env::state_dir().join("person").join("shared.md")
+}
+
+/// With scopes declared the global file imports nothing of the profile: each
+/// root imports what its scope may see, and Claude reads a root's CLAUDE.md
+/// for every session under it, workspaces included.
+pub fn load_into_scopes(dir: &Path, note: Option<&Path>, all: &crate::scope::Scopes) -> std::io::Result<Vec<PathBuf>> {
+    let shared = shared_index_file();
+    if let Some(d) = shared.parent() {
+        crate::files::mkdir_private(d)?;
+    }
+    let mut text = format!(
+        "# The person's profile, shared part\n\nGenerated from {}/PROFILE.md by `crux profile link`; edit that.\n\n{}\n",
+        dir.display(),
+        shared_index(dir)
+    );
+    if let Some(n) = note.filter(|n| is_shared(dir, &format!("machines/{}", crate::files::name(n)))) {
+        text.push_str(&format!("\n{}\n", without_frontmatter(&crate::files::read_or_empty(n))));
+    }
+    crate::files::write(&shared, &text).map_err(std::io::Error::other)?;
+    template::write_marked_block(&env::claude_config_dir().join(names::CLAUDE), BEGIN, END, "")?;
+    let mut written = vec![];
+    for s in &all.list {
+        let file = s.root.join(names::CLAUDE);
+        // Only the shared part, even in the person's own root: a root's file
+        // reaches every project under it, an isolated one too, and Claude
+        // cannot be told to skip a parent's. The full index arrives with the
+        // session's context where the scope and the project allow it.
+        let block = match s.person {
+            crate::scope::Person::None => String::new(),
+            _ => format!("{BEGIN}\n@{}\n{END}", shared.display()),
+        };
+        if !s.root.is_dir() {
+            continue;
+        }
+        template::write_marked_block(&file, BEGIN, END, &block)?;
+        written.push(file);
+    }
+    Ok(written)
 }
 
 fn without_frontmatter(text: &str) -> String {

@@ -79,6 +79,7 @@ mod context;
 mod cycle;
 mod doc_sync;
 mod guards;
+mod scope_guard;
 
 /// The agent hooks crux installs. Each knows the event that runs it, the
 /// tools it is limited to and what it does: the dispatcher and the installer
@@ -91,6 +92,7 @@ pub enum Hook {
     TaskContext,
     WorktreeGuard,
     DestructiveGuard,
+    ScopeGuard,
     ProposalGuard,
     WaitGuard,
     SessionSync,
@@ -110,13 +112,14 @@ pub struct Registration {
 }
 
 impl Hook {
-    pub const ALL: [Hook; 12] = [
+    pub const ALL: [Hook; 13] = [
         Hook::DocSync,
         Hook::CycleGuard,
         Hook::MemoryGuard,
         Hook::TaskContext,
         Hook::WorktreeGuard,
         Hook::DestructiveGuard,
+        Hook::ScopeGuard,
         Hook::ProposalGuard,
         Hook::WaitGuard,
         Hook::SessionSync,
@@ -134,6 +137,7 @@ impl Hook {
             Hook::TaskContext => "task-context",
             Hook::WorktreeGuard => "worktree-guard",
             Hook::DestructiveGuard => "destructive-guard",
+            Hook::ScopeGuard => "scope-guard",
             Hook::ProposalGuard => "proposal-guard",
             Hook::WaitGuard => "wait-guard",
             Hook::SessionSync => "session-sync",
@@ -170,6 +174,12 @@ impl Hook {
                 "destructive-guard",
                 "Bash|Read|Edit|Write|MultiEdit|NotebookEdit",
                 "hook that stops destructive commands and reading private keys",
+            ),
+            Hook::ScopeGuard => r(
+                "PreToolUse",
+                "scope-guard",
+                "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Glob|Grep|LS|mcp__.*",
+                "hook that keeps a session inside its work scope (ADR-025)",
             ),
             Hook::ProposalGuard => r(
                 "PreToolUse",
@@ -212,6 +222,7 @@ impl Hook {
             Hook::TaskContext => context::task_context(),
             Hook::WorktreeGuard => guards::worktree_guard(),
             Hook::DestructiveGuard => guards::destructive_guard(),
+            Hook::ScopeGuard => scope_guard::scope_guard(),
             Hook::ProposalGuard => guards::proposal_guard(),
             Hook::WaitGuard => guards::wait_guard(),
             Hook::SessionSync => context::session_sync(),

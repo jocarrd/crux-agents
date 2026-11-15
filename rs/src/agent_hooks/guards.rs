@@ -142,8 +142,18 @@ conversation.
 fn is_secret(p: &str) -> bool {
     let home = env::home().to_string_lossy().into_owned();
     let p = if p.starts_with("~/") { format!("{home}{}", &p[1..]) } else { p.to_string() };
+    // Everything under ~/.ssh is a key unless it is public or the client's
+    // own files: keys named after their host, in a folder per scope
+    // (ADR-025), say nothing in their name.
+    let declared = crate::scope::load().map(|all| {
+        let real = crate::scope::real_lenient(Path::new(&p));
+        all.list.iter().any(|s| s.secrets.iter().any(|x| crate::scope::inside(&real, &crate::scope::real_lenient(x))))
+    });
+    if declared.unwrap_or(false) {
+        return true;
+    }
     [
-        r"(^|/)\.ssh/(?!.*\.pub$)(id_[^/]*|[^/]*_key|identity)$",
+        r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|known_hosts\.old|authorized_keys|environment)$)[^/]+(/[^/]+)*$",
         r"\.(pem|p12|pfx)$",
         r"(^|/)[^/]*private[^/]*\.key$",
         r"(^|/)\.aws/credentials$",

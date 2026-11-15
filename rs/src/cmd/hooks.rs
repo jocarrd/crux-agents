@@ -19,7 +19,7 @@ use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
 const MARK: &str = "crux/adapters";
-const CRUX_HOOKS: &str = "doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder";
+const CRUX_HOOKS: &str = "doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder|scope-guard";
 pub const GIT_HOOK_NAMES: [&str; 15] = [
     "applypatch-msg",
     "pre-applypatch",
@@ -518,6 +518,7 @@ fn codex_hooks(p: &Paths, add: bool) -> Result<(), String> {
             ],
         );
         put("PreToolUse", "Bash", vec![p.s("destructive-guard"), p.s("worktree-guard"), p.s("proposal-guard")]);
+        put("PreToolUse", "Bash|apply_patch|Edit|Write|mcp__.*", vec![p.s(Hook::ScopeGuard.name())]);
         put("Stop", "", vec![p.s(Hook::DocSync.name())]);
     }
     if s.get("hooks").and_then(Value::as_object).is_some_and(serde_json::Map::is_empty) {

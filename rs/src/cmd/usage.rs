@@ -168,6 +168,18 @@ struct Read {
 fn project_of_session(text: &str) -> (String, bool) {
     let cwd = crate::regex!(r#""cwd"\s*:\s*"((?:[^"\\]|\\.)*)""#);
     let Some(dir) = cwd.captures(text).map(|c| c[1].replace("\\\\", "\\")) else { return (String::new(), false) };
+    // A session of a scope that is not the person's own travels like a
+    // client's (ADR-025): its project and its own skills name who it was for.
+    if let Ok(Some(all)) = crate::scope::load().map(|a| a.declared.then_some(a)) {
+        {
+            let session = crate::regex!(r#""sessionId"\s*:\s*"([^"]+)""#).captures(text).map(|c| c[1].to_string());
+            let pinned = session.and_then(|s| crate::scope::pinned(&s)).map(|p| crate::scope::Place::parse(&p).scope);
+            let of_dir = all.of_path(Path::new(&dir)).map(|s| s.name.clone());
+            if pinned.or(of_dir).is_some_and(|n| n != all.primary().name) {
+                return ("scope".into(), true);
+            }
+        }
+    }
     let Some(docs) = project::find_docs_repo(Path::new(&dir)) else { return (String::new(), false) };
     let name = project::contract_field(&docs, "project").unwrap_or_default();
     let profile = project::contract_field(&docs, "profile").unwrap_or_default();

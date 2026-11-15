@@ -53,10 +53,14 @@ pub fn run(argv: &[String]) -> Res {
     if docs.exists() {
         die!("{} already exists", docs.display());
     }
-    // Where the remote comes from, in order: what is passed, the machine's
-    // default, and with none it says so instead of guessing.
+    // Where the remote comes from, in order: what is passed, the scope's or
+    // the machine's default, and with none it says so instead of guessing.
     if remote_tmpl.is_empty() {
-        remote_tmpl = env::config_value_in(&env::config_file(), crate::names::vars::REMOTE).unwrap_or_default();
+        remote_tmpl = match crate::scope::load() {
+            Ok(s) if s.declared => crate::project::remote_template_for(&parent),
+            _ => env::config_value_in(&env::config_file(), crate::names::vars::REMOTE),
+        }
+        .unwrap_or_default();
     }
     if remote && remote_tmpl.is_empty() {
         ui::err(format!("I do not know where to push {project_name}-docs"));

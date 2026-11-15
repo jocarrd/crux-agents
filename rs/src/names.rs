@@ -15,6 +15,8 @@ pub const README: &str = "README.md";
 pub const SKILL: &str = "SKILL.md";
 /// Where an agent looks for the skills of the repo a session opens in.
 pub const CLAUDE_SKILLS: &str = ".claude/skills";
+/// The agent's settings for one repo, never versioned.
+pub const CLAUDE_LOCAL_SETTINGS: &str = ".claude/settings.local.json";
 /// Where a docs repo keeps its project's skills.
 pub const PROJECT_SKILLS: &str = ".claude/skills/project";
 /// The file of the usage log, one line per session.
@@ -106,6 +108,10 @@ pub mod agents {
     pub const CODEX_HOME: &str = "CODEX_HOME";
     pub const CODEX_HOME_DIR: &str = "CODEX_HOME_DIR";
     pub const CODEX_PROMPTS_DIR: &str = "CODEX_PROMPTS_DIR";
+    /// git's own: where the global config is, when not ~/.gitconfig.
+    pub const GIT_CONFIG_GLOBAL: &str = "GIT_CONFIG_GLOBAL";
+    /// gh's own: the folder with its accounts.
+    pub const GH_CONFIG_DIR: &str = "GH_CONFIG_DIR";
 }
 
 pub mod hooks {
@@ -143,6 +149,8 @@ pub mod vars {
     pub const SYNC_BACKGROUND: &str = "CRUX_SYNC_BACKGROUND";
     /// Minutes between two refreshes of the tasks during a session.
     pub const TASKS_REFRESH_MIN: &str = "CRUX_TASKS_REFRESH_MIN";
+    /// The agent `crux scope open` starts a session with.
+    pub const AGENT: &str = "CRUX_AGENT";
     pub const BIN: &str = "CRUX_BIN";
     pub const CHECKS_INTERVAL: &str = "CRUX_CHECKS_INTERVAL";
     pub const COMMIT_MSG_LANG: &str = "CRUX_COMMIT_MSG_LANG";
@@ -161,6 +169,15 @@ pub mod vars {
     pub const MODE: &str = "CRUX_MODE";
     pub const PROFILE_REPO: &str = "CRUX_PROFILE_REPO";
     pub const PROJECTS_DIR: &str = "CRUX_PROJECTS_DIR";
+    /// The scope a command works in, over the one its folder belongs to.
+    pub const SCOPE: &str = "CRUX_SCOPE";
+    /// The ssh client config `crux scope apply` writes its block into.
+    pub const SSH_CONFIG: &str = "CRUX_SSH_CONFIG";
+    /// Where the scopes are declared, one folder each (ADR-025).
+    pub const SCOPES_DIR: &str = "CRUX_SCOPES_DIR";
+    /// The scope a session opened outside every root is pinned to from the
+    /// start; without it, such a session starts at the front desk.
+    pub const UNPINNED_SESSIONS: &str = "CRUX_UNPINNED_SESSIONS";
     pub const REGISTRY: &str = "CRUX_REGISTRY";
     pub const REMINDER_UI: &str = "CRUX_REMINDER_UI";
     pub const REMOTE: &str = "CRUX_REMOTE";
