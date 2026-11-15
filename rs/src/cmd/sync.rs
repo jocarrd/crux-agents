@@ -941,41 +941,23 @@ fn rest(ctx: &Ctx, state: &Path) -> Res {
     Ok(())
 }
 
-struct SyncLock(PathBuf);
-
-impl Drop for SyncLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir(&self.0);
-    }
-}
-
 /// Two arrivals at once —a session's hook and a manual sync— trampled git's
-/// index. mkdir is atomic and exists everywhere.
-fn take_lock(state: &Path, hook: bool) -> Option<SyncLock> {
-    let lock = state.join("sync.lock");
-    let mut waited = false;
-    loop {
-        if std::fs::create_dir(&lock).is_ok() {
-            return Some(SyncLock(lock));
-        }
-        let old = std::fs::metadata(&lock)
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.elapsed().ok())
-            .is_some_and(|e| e > STALE_LOCK);
-        if old {
-            let _ = std::fs::remove_dir(&lock);
-            continue;
-        }
-        if hook {
-            return None;
-        }
-        if !waited {
+/// index. The hook does not wait: a sync already running does its work.
+fn take_lock(state: &Path, hook: bool) -> Option<crate::lock::DirLock> {
+    use crate::lock::{Policy, Stale};
+    let policy = Policy {
+        stale: Stale::Age(STALE_LOCK),
+        retry: Duration::from_secs(1),
+        tries: if hook { Some(0) } else { None },
+    };
+    let mut said = false;
+    crate::lock::take(&state.join("sync.lock"), &policy, || {
+        if !said {
             ui::info("another sync is running, waiting for it to finish");
-            waited = true;
+            said = true;
         }
-        std::thread::sleep(Duration::from_secs(1));
-    }
+    })
+    .ok()
 }
 
 pub fn run(argv: &[String]) -> Res {
