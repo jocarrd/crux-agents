@@ -1036,9 +1036,13 @@
     and a routing map with the name of each scope and of its projects, which
     is what lets the agent tell from the request where the work belongs. It is
     pinned by `crux scope enter <scope> | --project <name>`, run when the agent
-    knows where the task goes (it asks the person when it does not), or by its
-    first tool call that touches a scope. Only then does the scope's context
-    load: its part of the profile, its tasks, its projects' indexes. A person
+    knows where the task goes (it asks the person when it does not). A tool
+    call from the front desk that touches a scope is stopped with that command,
+    so the context always arrives before anything is read: its part of the
+    profile, its tasks, its projects. A session found standing inside a root
+    without a pin (one open before the scopes were declared) is pinned there by
+    its first tool call; a front-desk session cannot stand in a root, because
+    the command that would take it there names the path and is stopped. A person
     who prefers to skip the front desk sets `CRUX_UNPINNED_SESSIONS` to a scope
     name, and sessions outside every root are pinned there from the start.
   - Paths are compared by their real form (`project::real`), case-insensitively
@@ -1091,12 +1095,15 @@
     person.
   - The profile is the person's, not the scope's: `person::dir` resolves in the
     primary scope. Each note declares `visibility: shared | private` in its
-    frontmatter (`about/` defaults to private). With scopes declared, the
-    global agent file imports only the shared index; the full index is
-    imported in a `crux:person` block of each repo's unversioned local pointer
-    when its scope and project allow it. It goes per repo and not in the parent
-    folder because workspaces are siblings of the project folder, not children.
-    A project's `person` can narrow what its scope allows, never widen it.
+    frontmatter (`about/` and `machines/` default to private). With scopes
+    declared the global agent file imports nothing of the profile, and every
+    root imports the shared index, generated in crux's state. The full index
+    is not imported by any file: a root's file reaches every project under it,
+    an isolated client's too, and an agent cannot be told to skip a parent's.
+    It arrives with the session's context, and `scope-guard` stops reading a
+    private note, wherever scope and project do not allow it. A project's
+    `person` can narrow what its scope allows, never widen it, and
+    `client-repo` narrows it to `shared`.
   - The contract gains three optional fields: `isolation`
     (`shared` | `isolated`), `person` (`full` | `shared` | `none`) and
     `secrets` (paths). The `client-repo` profile implies `isolated`.
@@ -1133,23 +1140,30 @@
     the repo's local agent settings. In `~/.ssh/config`, one
     `Match exec "crux __fn scope-of-cwd <name>"` block per scope with
     `IdentityFile ~/.ssh/<name>/%h` and `IdentitiesOnly yes`: a key named
-    after its host, offered only from its scope. A browser profile directory
-    per scope for the browser skill.
+    after its host, offered only from its scope. A browser profile per scope
+    for the browser skill is left for later: today that skill copies the
+    person's own browser profile, whatever the scope.
   - Usage lines (ADR-024) of a non-primary scope do not travel to the
     person's profile repo with project or skill names: they count as project
     `scope` and only kernel skills are named, as `client` already does.
-  - New commands: `crux scope list | show | add | check | open`,
-    `crux project move <project> <scope>` (moves the folders, repairs
-    worktrees, updates the registry, tasks and local pointers; refuses with a
-    live session), and `crux __fn scope-of <path>`. New `doctor` checks, each
-    with a negative test: overlapping roots, several scopes without a default,
-    a declared secret inside another root, recent commits with another scope's
-    email, one owner in two scopes, a project whose remote belongs to another
-    scope.
-  - Delivered in three phases that each stand alone: the model (resolution,
-    paths, profile split, `crux scope`, `doctor`); the wall (`scope-guard`,
-    isolated projects, connectors, sandbox, `is_secret`); identity (git, `gh`,
-    SSH, browser, `project move`). Linux and macOS from the first case.
+  - The wall cannot be moved from inside: `scope-guard` stops writing the
+    scopes' folder or the pins, setting `CRUX_SCOPE`, `CRUX_SCOPES_DIR`,
+    `CRUX_STATE_DIR`, `CRUX_TASKS_DIR` or `CRUX_UNPINNED_SESSIONS` on a
+    command, and `crux task|workspace ... --all`, whose list of every scope is
+    for the person.
+  - New command `crux scope`: `list`, `show`, `check`, `of`, `map`, `enter`,
+    `open`, `move <project> <scope>` (moves the folder and its tasks; refused
+    while the project has workspaces) and `apply` (profile, git, ssh, agent
+    settings). `crux __fn scope_of_cwd <name>` answers ssh's `Match exec`.
+    Every command but `scope`, `hook` and `doctor` stops while the scopes
+    cannot be used. `crux scope check` names overlapping roots, a missing or
+    doubled primary, one owner in two scopes, a secret inside another root and
+    any value it cannot read, and warns on a root that does not exist and on
+    `CRUX_PROJECTS_DIR` pointing outside every scope. Commits with another
+    scope's email and a project whose remote belongs to another scope are not
+    checked yet. `crux sync`, `crux machine` and `crux workspace gc` walk every
+    root; sync replays its pass per scope with `CRUX_SCOPE` set, so each
+    scope's tasks reach its own docs repos.
 - **Consequences**: a person can keep an employer, clients and their own
   projects on one user with what an agent sees bounded by folder and by
   session, and can keep starting sessions without a folder and let the first
@@ -1158,17 +1172,19 @@
   and only the names, of the others. A conversation that used to jump between
   projects of different scopes is now one session per scope. The isolation
   stops the agent and mistakes, not a person at the
-  keyboard: shared places (`/tmp`, `~/Downloads`, the clipboard, shell
+  keyboard: shared places (the temporary folder, `~/Downloads`, the clipboard, shell
   history) are not covered, nor tools that open or read another session
   (an agent app's thread tools): those have to be listed in `MCP_DENY`, and a
   session that launches another session can still read what that one
-  answers, and two people on one machine still need two users. Codex only gets
-  the `Bash` part of the guard, because it only receives that hook. Working
+  answers, and two people on one machine still need two users. Codex gets the
+  guard on `Bash`, `apply_patch`, `Edit`, `Write` and connectors, the tools its
+  `PreToolUse` reaches. Working
   across scopes costs a new session, which is the point. The contract gains
   optional fields only, so it is a minor version.
 - **Reversibility**: high. Removing `~/.crux/scopes/` returns the implicit
   scope; the generated blocks in `~/.gitconfig`, `~/.ssh/config` and the local
-  pointers are between markers and are removed by `crux scope check --fix`.
+  pointers are between markers: `crux scope apply` with no scopes left writes
+  them empty.
   The tasks of non-primary scopes stay in their folder until moved.
 - **Related**: `ADR-001`, `ADR-008`, `ADR-011`, `ADR-014`, `ADR-018`,
   `ADR-023`, `ADR-024`
