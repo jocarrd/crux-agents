@@ -976,20 +976,26 @@ fn rest(ctx: &Ctx, state: &Path) -> Res {
 /// Two arrivals at once —a session's hook and a manual sync— trampled git's
 /// index. The hook does not wait: a sync already running does its work.
 fn take_lock(state: &Path, hook: bool) -> Option<crate::lock::DirLock> {
-    use crate::lock::{Policy, Stale};
+    use crate::lock::{Error, Policy, Stale};
     let policy = Policy {
         stale: Stale::Age(STALE_LOCK),
         retry: Duration::from_secs(1),
         tries: if hook { Some(0) } else { None },
     };
     let mut said = false;
-    crate::lock::take(&state.join("sync.lock"), &policy, || {
+    match crate::lock::take(&state.join("sync.lock"), &policy, || {
         if !said {
             ui::info("another sync is running, waiting for it to finish");
             said = true;
         }
-    })
-    .ok()
+    }) {
+        Ok(lock) => Some(lock),
+        Err(Error::Io(e)) if !hook => {
+            ui::warn(format!("cannot take the sync lock ({e}): carrying on without it"));
+            None
+        }
+        Err(_) => None,
+    }
 }
 
 pub fn run(argv: &[String]) -> Res {

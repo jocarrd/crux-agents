@@ -63,8 +63,10 @@ fn clear_if_stale(dir: &Path, stale: &Stale) -> bool {
         }
         Stale::DeadOwner => {
             let Some(pid) = owner(dir).filter(|p| !pid_alive(*p)) else { return false };
-            // Moved aside first: two processes clearing the same dead lock
-            // must not remove the one the other has just taken.
+            // Moved aside before it is removed, so a removal half done does
+            // not leave a lock nobody owns. Two processes clearing the same
+            // dead lock at once can still both take it: as with the age, that
+            // race needs two of them to find it dead in the same instant.
             let aside = dir.with_extension(format!("lock.{}", std::process::id()));
             if fs::rename(dir, &aside).is_err() {
                 return false;
@@ -87,11 +89,14 @@ pub fn take(dir: &Path, policy: &Policy, mut waiting: impl FnMut()) -> Result<Di
     loop {
         match fs::create_dir(dir) {
             Ok(()) => {
-                // Without its pid a lock left by a dead process cannot be told
-                // from a live one.
-                if let Err(e) = fs::write(dir.join("pid"), format!("{}\n", std::process::id())) {
-                    let _ = fs::remove_dir_all(dir);
-                    return Err(Error::Io(e));
+                // Only the policy that reads it writes the pid: an empty lock
+                // is what older versions of crux can remove, and one with a
+                // file inside kept them retrying forever.
+                if matches!(policy.stale, Stale::DeadOwner) {
+                    if let Err(e) = fs::write(dir.join("pid"), format!("{}\n", std::process::id())) {
+                        let _ = fs::remove_dir_all(dir);
+                        return Err(Error::Io(e));
+                    }
                 }
                 return Ok(DirLock(dir.to_path_buf()));
             }
@@ -118,27 +123,37 @@ mod tests {
         Policy { stale, retry: Duration::from_millis(1), tries: Some(tries) }
     }
 
-    fn scratch(name: &str) -> PathBuf {
+    /// A folder of its own per test, removed when the test ends.
+    struct Scratch(PathBuf);
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn scratch(name: &str) -> (Scratch, PathBuf) {
         let d = std::env::temp_dir().join(format!("crux-lock-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
-        d.join("x.lock")
+        let lock = d.join("x.lock");
+        (Scratch(d), lock)
     }
 
     #[test]
     fn a_held_lock_is_refused_with_its_owner_and_free_again_once_dropped() {
-        let dir = scratch("held");
-        let first = take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 0), || {}).ok().unwrap();
-        match take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 2), || {}) {
+        let (_s, dir) = scratch("held");
+        let first = take(&dir, &policy(Stale::DeadOwner, 0), || {}).ok().unwrap();
+        match take(&dir, &policy(Stale::DeadOwner, 2), || {}) {
             Err(Error::Held { owner }) => assert_eq!(owner, Some(std::process::id())),
             _ => panic!("a held lock was taken twice"),
         }
         drop(first);
-        assert!(take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 0), || {}).is_ok());
+        assert!(take(&dir, &policy(Stale::DeadOwner, 0), || {}).is_ok());
     }
 
     #[test]
     fn a_lock_older_than_its_age_is_cleared() {
-        let dir = scratch("age");
+        let (_s, dir) = scratch("age");
         fs::create_dir_all(&dir).unwrap();
         std::thread::sleep(Duration::from_millis(20));
         assert!(take(&dir, &policy(Stale::Age(Duration::from_millis(5)), 0), || {}).is_ok());
@@ -146,7 +161,7 @@ mod tests {
 
     #[test]
     fn a_lock_whose_owner_died_is_cleared_and_one_alive_is_not() {
-        let dir = scratch("owner");
+        let (_s, dir) = scratch("owner");
         fs::create_dir_all(&dir).unwrap();
         // A pid no process can have.
         fs::write(dir.join("pid"), "2147483646\n").unwrap();
@@ -159,10 +174,26 @@ mod tests {
 
     #[test]
     fn it_waits_as_many_times_as_it_is_told() {
-        let dir = scratch("tries");
+        let (_s, dir) = scratch("tries");
         let _held = take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 0), || {}).ok().unwrap();
         let mut waited = 0;
         let _ = take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 3), || waited += 1);
         assert_eq!(waited, 3);
+    }
+
+    #[test]
+    fn a_lock_by_age_stays_empty_so_older_versions_can_remove_it() {
+        let (_s, dir) = scratch("empty");
+        let _held = take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 0), || {}).ok().unwrap();
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn no_tries_means_no_wait() {
+        let (_s, dir) = scratch("nowait");
+        let _held = take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 0), || {}).ok().unwrap();
+        let mut waited = false;
+        assert!(take(&dir, &policy(Stale::Age(Duration::from_secs(60)), 0), || waited = true).is_err());
+        assert!(!waited, "a lock that must not wait waited");
     }
 }

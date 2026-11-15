@@ -274,7 +274,8 @@ pub fn write(file: &Path, doc: &mut Doc, publish: bool) -> Result<(), String> {
 /// How often a record held by another command is tried again; a hundred tries
 /// are ten seconds, longer than any edit of a record.
 const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(100);
-const LOCK_TRIES: u32 = 100;
+/// Tries again 99 times: a hundred attempts in all.
+const LOCK_TRIES: u32 = 99;
 /// An edit takes milliseconds: a lock older than this was left by a death.
 const LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(30);
 

@@ -109,9 +109,6 @@ fn cut(t: &str, n: usize) -> String {
     t.chars().take(n).collect()
 }
 
-/// Leftovers of several tasks, each forgotten with a step or two, end up as a
-/// list nobody reads. Merging them into one keeps the pending steps and notes
-/// the branches, and archives the rest pointing to where its work went.
 /// What every merged task and its target share.
 struct Merge<'a> {
     project_name: &'a str,
@@ -127,6 +124,9 @@ fn bad_task_name(x: &str) -> bool {
 
 const MERGE_USAGE: &str = "usage: crux task merge <project>/<into> <project>/<task>... [--goal \"<text>\"]";
 
+/// Leftovers of several tasks, each forgotten with a step or two, end up as a
+/// list nobody reads. Merging them into one keeps the pending steps and notes
+/// the branches, and archives the rest pointing to where its work went.
 fn merge(names: &[String], goal: &str) -> Res {
     if names.len() < 2 {
         return fail(MERGE_USAGE);
