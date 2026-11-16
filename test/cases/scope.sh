@@ -16,7 +16,7 @@ two_scopes() {
 session_start() {
   # session_start <session id> <cwd>: what the session-start hook answers.
   printf '{"session_id":"%s","cwd":"%s","source":"startup"}' "$1" "$2" |
-    (cd "$2" 2>/dev/null || cd "$SB"; bash "$CRUX_HOME/adapters/claude/hooks/session-sync.sh")
+    (cd "$2" 2>/dev/null || cd "$SB" || exit; bash "$CRUX_HOME/adapters/claude/hooks/session-sync.sh")
 }
 
 test_without_scopes_nothing_changes() {
@@ -228,7 +228,9 @@ guard() {
   # guard <session> <cwd> <tool> <tool_input json> — prints stderr, returns the exit code.
   local input
   input="$(printf '{"session_id":"%s","cwd":"%s","tool_name":"%s","tool_input":%s}' "$1" "$2" "$3" "$4")"
-  printf '%s' "$input" | (cd "$2" 2>/dev/null || cd "$SB"; bash "$CRUX_HOME/adapters/claude/hooks/scope-guard.sh" 2>&1 >/dev/null)
+  # Only the hook's reason, on stderr: stdout is dropped and stderr takes its place.
+  # shellcheck disable=SC2069
+  printf '%s' "$input" | (cd "$2" 2>/dev/null || cd "$SB" || exit; bash "$CRUX_HOME/adapters/claude/hooks/scope-guard.sh" 2>&1 >/dev/null)
 }
 
 assert_stops() {
@@ -275,8 +277,8 @@ test_the_wall_stops_every_way_into_another_scope() {
   assert_stops "a relative path" "" $s "$c" Bash "{\"command\":\"cat ../../Own/alpha/.env\"}"
   assert_stops "a cd first" "" $s "$c" Bash "{\"command\":\"cd ../.. && cat Own/alpha/.env\"}"
   assert_stops "a copy out of it" "" $s "$c" Bash "{\"command\":\"cp $OWN/alpha/.env /tmp/x\"}"
-  local home_out rc=0
-  home_out="$(HOME="$SB" guard $s "$c" Bash '{"command":"cat ~/Own/alpha/.env"}')" || rc=$?
+  local rc=0
+  HOME="$SB" guard $s "$c" Bash '{"command":"cat ~/Own/alpha/.env"}' >/dev/null || rc=$?
   assert_eq 2 "$rc" "a path through ~ (stopped)"
   rc=0; HOME="$SB" guard $s "$c" Bash '{"command":"cat $HOME/Own/alpha/.env"}' >/dev/null || rc=$?
   assert_eq 2 "$rc" "a path through \$HOME (stopped)"
