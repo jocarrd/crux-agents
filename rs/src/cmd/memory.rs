@@ -147,6 +147,11 @@ fn project_of_scope(root: &Path, scope: &str) -> String {
     best.0
 }
 
+/// The first known project a memory names, if any.
+fn named_project(path: &Path, projects: &[String]) -> Option<String> {
+    person::projects_named_in(&crate::files::read_or_empty(path), projects).into_iter().next()
+}
+
 pub fn run(argv: &[String]) -> Res {
     if argv.first().map(String::as_str) == Some("search") {
         return search(&argv[1..]);
@@ -195,6 +200,13 @@ pub fn run(argv: &[String]) -> Res {
             scopes.push(m.scope.clone());
         }
         let name = m.path.file_stem().unwrap().to_string_lossy().into_owned();
+        // A correction about one project is that project's convention: routed
+        // by its type alone, it landed in the person's preferences.
+        let project_rule = (m.kind == "feedback").then(|| named_project(&m.path, &projects)).flatten();
+        if let Some(p) = project_rule {
+            unpromoted.push((m.kind.clone(), name, format!("{p}-docs (a rule of that project)")));
+            continue;
+        }
         match m.kind.as_str() {
             "project" | "reference" => {
                 // Without a project it is not guessed: the scope it came from
@@ -208,12 +220,6 @@ pub fn run(argv: &[String]) -> Res {
                     format!("scope {}", m.scope)
                 };
                 unpromoted.push((m.kind.clone(), name, target));
-            }
-            // A correction about one project is that project's convention:
-            // routed by its type alone, it landed in the person's preferences.
-            "feedback" if !person::projects_named_in(&crate::files::read_or_empty(&m.path), &projects).is_empty() => {
-                let named = person::projects_named_in(&crate::files::read_or_empty(&m.path), &projects);
-                unpromoted.push((m.kind.clone(), name, format!("{}-docs (a rule of that project)", named[0])));
             }
             "user" | "feedback" => {
                 if profile.is_some() {
