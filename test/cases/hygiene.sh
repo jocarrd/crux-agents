@@ -377,6 +377,8 @@ test_with_scopes_a_key_named_after_its_host_is_a_secret() {
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/personal/vps_host.pub")" "its public half is not secret"
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/config")" "nor the ssh config"
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/known_hosts")" "nor the known hosts"
+  assert_eq "0" "$(_tool Bash command "cat ~/.ssh/config.before-scopes")" "nor a copy of the ssh config"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/known_hosts.old")" "nor an old known hosts"
 }
 
 test_a_secret_a_scope_declares_is_not_dumped_even_inside_it() {
