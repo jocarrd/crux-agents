@@ -239,14 +239,15 @@ pub fn run(_argv: &[String]) -> Res {
                 ));
             }
             // The registry and the disk also drift apart the other way round.
-            let root = env::projects_root();
             let registered: Vec<&str> = list.iter().map(|w| w.path.as_str()).collect();
             let mut loose = 0;
             let mut candidates = vec![];
-            for a in entries(&root) {
-                if a.is_dir() {
-                    candidates.push(a.clone());
-                    candidates.extend(entries(&a).into_iter().filter(|b| b.is_dir()));
+            for root in env::all_projects_roots() {
+                for a in entries(&root) {
+                    if a.is_dir() {
+                        candidates.push(a.clone());
+                        candidates.extend(entries(&a).into_iter().filter(|b| b.is_dir()));
+                    }
                 }
             }
             for d in candidates {

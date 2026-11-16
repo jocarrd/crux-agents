@@ -212,7 +212,20 @@ pub fn owner_from_template(tmpl: &str) -> String {
 }
 
 pub fn remote_template() -> Option<String> {
-    env::config_value_in(&env::config_file_redirectable(), crate::names::vars::REMOTE)
+    remote_template_for(&std::env::current_dir().unwrap_or_default())
+}
+
+/// The remote of the scope a folder works in; the machine's without scopes,
+/// or when the scope does not name one.
+pub fn remote_template_for(cwd: &Path) -> Option<String> {
+    let machine = || env::config_value_in(&env::config_file_redirectable(), crate::names::vars::REMOTE);
+    match crate::scope::load() {
+        Ok(s) if s.declared => {
+            let scope = s.current(cwd).ok().flatten().unwrap_or_else(|| s.primary());
+            scope.remote.clone().or_else(|| if scope.primary { machine() } else { None })
+        }
+        _ => machine(),
+    }
 }
 
 /// From the same place as the clone URLs, so there are not two sources of

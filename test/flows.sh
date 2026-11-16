@@ -323,6 +323,72 @@ truthy '[[ $rc -eq 0 && "$out" == *"ready"* ]]' "setup gets to the end without a
 truthy '[[ -f "$M5/Proyectos/demo/demo-docs/crux.json" ]]' "and brings the account's project, the default answer"
 truthy '[[ -x "$M5/.local/bin/crux" ]]' "with crux installed from the binary alone"
 
+# --- One person, several scopes (ADR-025) -------------------------------------
+# The day a person who works on their own projects and for a client takes a
+# job: one user, the person's own scope and the employer's, sessions opened
+# without a folder, and the wall between them.
+step "two scopes on the machine that already had one root"
+WORK="$HOME/Work"; mkdir -p "$WORK" "$HOME/.crux/scopes/own" "$HOME/.crux/scopes/work" "$HOME/desk"
+printf 'ROOT="%s"\nPRIMARY="true"\n' "$P" > "$HOME/.crux/scopes/own/config"
+printf 'ROOT="%s"\nOWNERS="workco"\nGIT_EMAIL="me@work.test"\nMCP_DENY="mcp__gmail__*"\n' "$WORK" > "$HOME/.crux/scopes/work/config"
+truthy 'crux scope check >/dev/null 2>&1' "the scopes are usable"
+truthy '[[ "$(crux scope of "$P/demo/api")" == own && "$(crux scope of "$WORK")" == work ]]' "each folder knows its scope"
+truthy '[[ -f "$HOME/.crux/tasks/demo/checkout.md" || -d "$HOME/.crux/tasks" ]]' "the person's tasks stayed where they were"
+
+step "a profile with something private, a client's project and the employer's"
+crux profile init --no-remote >/dev/null 2>&1
+PROF="$P/agent-profile"; mkdir -p "$PROF/preferences" "$PROF/about"
+printf 'Reply in Spanish.\n' > "$PROF/preferences/language.md"
+printf 'Interviewing elsewhere.\n' > "$PROF/about/jobs.md"
+printf -- '- [Language](preferences/language.md)\n- [Jobs](about/jobs.md)\n' >> "$PROF/PROFILE.md"
+crux init client --no-remote --parent "$P" --profile client-repo >/dev/null 2>&1; mkdir -p "$P/client/app"
+(cd "$WORK" && crux init intranet --no-remote >/dev/null 2>&1); mkdir -p "$WORK/intranet/web"; git -C "$WORK/intranet/web" init -q
+(cd "$WORK/intranet" && crux task new intranet/login --goal "ship the new login" >/dev/null 2>&1)
+(cd "$P/client" && crux task new client/report --goal "send the quarterly report" >/dev/null 2>&1)
+truthy '[[ -f "$HOME/.crux/scopes/work/tasks/intranet/login.md" ]]' "the employer's task lives in its scope"
+truthy '[[ -f "$P/client/client-docs/crux.json" && "$(crux __fn json_get "$P/client/client-docs/crux.json" profile)" == client-repo ]]' "the client's project is a client's"
+
+step "applying the scopes: profile per root, identity per scope, guards in the agent"
+crux scope apply >/dev/null 2>&1
+(cd "$P/demo/demo-docs" && crux hooks install >/dev/null 2>&1)
+truthy 'grep -q "scope-guard" "$HOME/.claude/settings.json"' "the agent runs the scope guard"
+truthy '! grep -q "PROFILE.md" "$HOME/.claude/CLAUDE.md" 2>/dev/null' "the global agent file imports none of the profile"
+truthy 'grep -q "shared.md" "$WORK/CLAUDE.md" && ! grep -q "jobs" "$HOME/.crux/state/person/shared.md"' "the employer's root gets only what is shared"
+echo x > "$WORK/intranet/web/a"; git -C "$WORK/intranet/web" add -A
+git -C "$WORK/intranet/web" -c user.name=me commit -qm "chore: start" 2>/dev/null
+truthy '[[ "$(git -C "$WORK/intranet/web" log -1 --format=%ae)" == me@work.test ]]' "a commit at work carries the work email"
+
+ev() { printf '{"session_id":"%s","cwd":"%s","tool_name":"%s","tool_input":%s}' "$@"; }
+step "a session opened without a folder: the front desk"
+out="$(cd "$HOME/desk" && printf '{"session_id":"d1","cwd":"%s"}' "$HOME/desk" | CRUX_SYNC_BACKGROUND=0 crux hook session-sync 2>/dev/null)"
+truthy '[[ "$out" == *"front desk"* && "$out" == *"work: intranet"* ]]' "the agent gets the map of scopes and projects"
+truthy '[[ "$out" == *"preferences/language.md"* && "$out" != *"about/jobs.md"* ]]' "and the shared profile, nothing private"
+truthy '[[ "$out" == *"ship the new login"* && "$out" == *"send the quarterly report"* ]]' "the person sees every open task"
+out="$(cd "$HOME/desk" && ev d1 "$HOME/desk" Read "{\"file_path\":\"$WORK/intranet/web/a\"}" | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 2 && "$out" == *"crux scope enter work"* ]]' "touching the employer's code first asks to enter its scope"
+ev d1 "$HOME/desk" Bash '{"command":"crux scope enter work"}' | crux hook scope-guard >/dev/null 2>&1
+out="$(crux scope enter work 2>&1)"
+truthy '[[ "$out" == *"scope '"'"'work'"'"'"* && "$out" != *"about/jobs.md"* ]]' "entering gives the scope's context and no private note"
+truthy 'ev d1 "$HOME/desk" Read "{\"file_path\":\"$WORK/intranet/web/a\"}" | crux hook scope-guard >/dev/null 2>&1' "then the employer's code is open"
+out="$(ev d1 "$HOME/desk" Read "{\"file_path\":\"$P/demo/api/src/index.js\"}" | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 2 && "$out" == *"new session"* ]]' "and the person's own projects are closed, with how to open them"
+out="$(ev d1 "$HOME/desk" Read "{\"file_path\":\"$PROF/about/jobs.md\"}" | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 2 ]]' "so is a private note of the profile"
+out="$(ev d1 "$HOME/desk" Bash '{"command":"gh repo clone acme/api"}' | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 0 ]]' "an owner no scope declares is left alone"
+out="$(ev d1 "$HOME/desk" mcp__gmail__send_message '{}' | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 2 ]]' "and the person's mail is not used from work"
+out="$(ev d1 "$HOME/desk" Bash '{"command":"crux scope enter own"}' | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 2 && "$out" == *"and this line enters"* ]]' "the session cannot change scope"
+
+step "a session opened in the client's project"
+out="$(cd "$P/client/app" && printf '{"session_id":"c1","cwd":"%s"}' "$P/client/app" | CRUX_SYNC_BACKGROUND=0 crux hook session-sync 2>/dev/null)"
+truthy '[[ "$out" == *"isolated project"* && "$out" != *"about/jobs.md"* ]]' "it is walled in its project, with the shared profile only"
+out="$(ev c1 "$P/client/app" Read "{\"file_path\":\"$P/demo/api/src/index.js\"}" | crux hook scope-guard 2>&1)"; rc=$?
+truthy '[[ $rc -eq 2 ]]' "the person's other projects are closed to it"
+out="$(cd "$P/demo/api" && printf '{"session_id":"o1","cwd":"%s"}' "$P/demo/api" | CRUX_SYNC_BACKGROUND=0 crux hook session-sync 2>/dev/null)"
+truthy '[[ "$out" == *"about/jobs.md"* ]]' "while a session in the person's own project gets the whole profile"
+
 step "the real agent settings are not touched"
 truthy '[[ "$(sha256sum "$real_settings" 2>/dev/null | cut -d" " -f1)" == "$real_before" ]]' \
   "the settings.json of whoever runs it comes out as it went in"

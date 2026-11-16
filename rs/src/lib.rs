@@ -41,6 +41,7 @@ pub mod policy;
 pub mod project;
 pub mod publish;
 pub mod registry;
+pub mod scope;
 pub mod script_api;
 pub mod secrets;
 pub mod sh;

@@ -359,6 +359,36 @@ test_the_guard_does_not_let_private_keys_be_read() {
   assert_eq "0" "$(_tool Read file_path "/repo/src/keys.ts")" "a file with key in the name"
 }
 
+test_with_scopes_a_key_named_after_its_host_is_a_secret() {
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
+  sandbox >/dev/null
+  _tool() {
+    printf '{"tool_name":"%s","tool_input":{"%s":%s}}' "$1" "$2" \
+      "$(json_quote "$3")" | bash "$hook" >/dev/null 2>&1
+    echo $?
+  }
+  # Without scopes, what it always knew: nothing changes for whoever has none.
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/allowed_signers")" "without scopes, an unknown name is not a key"
+  mkdir -p "$SB/Own" "$CRUX_SCOPES_DIR/own"; printf 'ROOT="%s"\n' "$SB/Own" > "$CRUX_SCOPES_DIR/own/config"
+  # A key named after its host, in a folder per scope (ADR-025): the name does
+  # not say it is a key, the folder does.
+  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/personal/vps_host")" "a key with a name of its own"
+  assert_eq "2" "$(_tool Bash command "cat ~/.ssh/acme/github.com")" "and from the shell"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/personal/vps_host.pub")" "its public half is not secret"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/config")" "nor the ssh config"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/known_hosts")" "nor the known hosts"
+}
+
+test_a_secret_a_scope_declares_is_not_dumped_even_inside_it() {
+  sandbox >/dev/null
+  mkdir -p "$SB/Own" "$CRUX_SCOPES_DIR/own" "$SB/cfg/tool"
+  printf 'ROOT="%s"\nSECRETS="%s"\n' "$SB/Own" "$SB/cfg/tool" > "$CRUX_SCOPES_DIR/own/config"
+  printf 't\n' > "$SB/cfg/tool/token"
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh" rc=0
+  printf '{"tool_name":"Read","tool_input":{"file_path":"%s"}}' "$SB/cfg/tool/token" | bash "$hook" >/dev/null 2>&1 || rc=$?
+  assert_eq 2 "$rc" "a declared secret is used, never read into the conversation"
+}
+
 test_hooks_install_hooks_the_destructive_guard() {
   sandbox >/dev/null
   echo '{}' > "$CLAUDE_SETTINGS"

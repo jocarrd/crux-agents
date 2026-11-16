@@ -1,0 +1,42 @@
+crux scope — the work scopes of this machine (ADR-025).
+
+  crux scope                       the scopes, with a * on the one this folder is in
+  crux scope show [<name>]         what a scope declares
+  crux scope check                 whether the scopes can be used, and why not; also a
+                                   repo whose remote is another scope's owner, and
+                                   recent commits with another scope's email
+  crux scope of <path>             the scope a path belongs to (exit 1 if none)
+  crux scope map                   each scope and its projects, by name only
+  crux scope enter <name> | --project <p>
+                                   the context a session gets when it enters a scope;
+                                   inside an agent session, running it pins the session
+  crux scope open <name> | --project <p> [--task <t>] [--prompt <text>]
+                                   prints the command that opens a new session there
+  crux scope move <project> <scope>
+                                   moves a project and its tasks to another scope
+                                   (refused while it has workspaces open)
+  crux scope apply                 writes what each scope needs on this machine: the
+                                   profile per root, git identity (includeIf), ssh keys
+                                   (~/.ssh/<scope>/<host>) and the agent sandbox
+
+A scope is who the work is for: a root folder with its remote, the owners
+its projects live under, a git identity, its secrets and the connectors it
+may not use. Each one is a folder with a config file:
+
+  ~/.crux/scopes/<name>/config
+    ROOT="$HOME/Work/acme"                  required
+    REMOTE="git@github.com:acme/{repo}.git" where new docs repos are created
+    OWNERS="acme"                           where bootstrap looks for its projects
+    GIT_NAME="..."  GIT_EMAIL="..."         the identity its commits carry
+    GH_CONFIG_DIR="~/.config/gh-acme"       only for a different GitHub account
+    PERSON="shared"                         full | shared | none of the profile
+    SECRETS="~/.ssh/acme ~/.config/acme"    paths no other scope may read
+    MCP_DENY="mcp__gmail__*"                connectors this scope may not use
+    ENFORCE="guard"                         guard | sandbox
+    BROWSER_PROFILE="~/.config/chrome/Work" the browser profile the browser skill uses
+    PRIMARY="true"                          the person's own scope (one of them)
+
+Without scopes nothing changes. A session opened inside a root stays in its
+scope; one opened outside every root starts at the front desk and enters a
+scope with its first task, or the one CRUX_UNPINNED_SESSIONS names. Another
+scope always means another session.
