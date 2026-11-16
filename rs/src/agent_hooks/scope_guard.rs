@@ -59,6 +59,41 @@ fn path_words(command: &str, start: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// The folder each `crux` command of a shell line runs from, following its
+/// `cd`s. crux takes the scope from the folder it runs in, and a session
+/// pinned from the front desk still stands outside every root.
+fn crux_runs_from(command: &str, start: &Path) -> Vec<(String, PathBuf)> {
+    let text = drop_heredocs(command);
+    let mut here = start.to_path_buf();
+    let mut out = vec![];
+    for seg in segments(&text) {
+        let words: Vec<String> = seg
+            .split_whitespace()
+            .map(|w| w.trim_matches(|c| c == '"' || c == '\'' || c == '(' || c == ')').to_string())
+            .collect();
+        match words.first().map(String::as_str) {
+            Some("cd") => {
+                if let Some(d) = words.get(1) {
+                    let p = scope::expand(d);
+                    here = if p.is_absolute() { p } else { here.join(p) };
+                }
+            }
+            Some("crux") => {
+                let sub = words.get(1).cloned().unwrap_or_default();
+                // These do not depend on the folder they run from.
+                if !matches!(
+                    sub.as_str(),
+                    "" | "scope" | "prose" | "help" | "version" | "--version" | "-v" | "hook" | "__fn"
+                ) {
+                    out.push((seg.trim().to_string(), here.clone()));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Paths named in an `apply_patch` body (Codex): the files it adds, updates,
 /// deletes or moves.
 fn patch_paths(patch: &str, start: &Path) -> Vec<PathBuf> {
@@ -390,6 +425,19 @@ pub(super) fn scope_guard() -> Res {
         // A remote is often quoted: here the quotes stay, the heredocs go.
         if let Some(why) = other_owner(&all, pinned.as_ref(), &drop_heredocs(&raw)) {
             return stop_with(&why);
+        }
+        if let Some(scope) = pinned.as_ref().and_then(|p| all.by_name(&p.scope)) {
+            for (cmd, from) in crux_runs_from(&raw, &start) {
+                if !scope.contains(&from) {
+                    return stop_with(&format!(
+                        "crux works in the scope of the folder it runs from, and {} is outside scope '{}'. \
+                         Run it from inside: `cd {} && {cmd}`.",
+                        from.display(),
+                        scope.name,
+                        scope.root.display()
+                    ));
+                }
+            }
         }
     }
 

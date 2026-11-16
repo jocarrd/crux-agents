@@ -507,3 +507,13 @@ test_each_scope_has_its_browser_profile_and_the_others_are_closed() {
   printf 'BROWSER_PROFILE="%s"\n' "$SB/chrome/Own" >> "$CRUX_SCOPES_DIR/acme/config"
   assert_contains "$(crux scope check 2>&1)" "share one browser profile" "two scopes cannot share one"
 }
+
+test_a_session_entered_from_the_front_desk_runs_crux_inside_its_scope() {
+  wall_setup
+  local s=desk5 c="$SB/desk"
+  session_start $s "$c" >/dev/null
+  guard $s "$c" Bash '{"command":"crux scope enter acme"}' >/dev/null
+  assert_stops "a task created from the desk folder" "Run it from inside: \`cd $ACME" $s "$c" Bash '{"command":"crux task new web/login"}'
+  assert_lets "from inside its root" $s "$c" Bash "{\"command\":\"cd $ACME/web && crux task new web/login\"}"
+  assert_lets "commands that do not depend on the folder" $s "$c" Bash '{"command":"crux scope show"}'
+}
