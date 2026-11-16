@@ -173,16 +173,27 @@ fn steps(command: &str, start: &Path) -> Vec<Step> {
         if let Some(inner) = inner_line(&step) {
             out.extend(steps(&inner, &here));
         }
-        if step.program() == "cd" {
-            here = match step.args().first().map(String::as_str) {
-                None | Some("~") => env::home(),
-                Some("-") => here,
-                Some(d) => resolve(&step.here, d),
+        if matches!(step.program(), "cd" | "pushd" | "popd") {
+            let target = step.args().iter().find(|a| !a.starts_with('-') || a.as_str() == "-");
+            here = match (step.program(), target.map(String::as_str)) {
+                ("cd", None) | (_, Some("~")) => env::home(),
+                // `cd -`, `popd` and a folder named through a variable go
+                // where the guard cannot follow: what comes after is read
+                // from nowhere it can place, and stopped if it names a path.
+                ("popd", _) | (_, Some("-")) => unknown_folder(),
+                (_, Some(d)) if d.contains('$') || d.contains('`') => unknown_folder(),
+                (_, Some(d)) => resolve(&step.here, d),
+                (_, None) => here,
             };
         }
         out.push(step);
     }
     out
+}
+
+/// Where a line stands after a `cd` the guard cannot follow.
+fn unknown_folder() -> PathBuf {
+    PathBuf::from("/.crux-unknown-folder")
 }
 
 fn looks_like_path(w: &str) -> bool {
@@ -200,6 +211,8 @@ struct Touch {
     path: PathBuf,
     writes: bool,
     tree: bool,
+    /// Removed or moved away: what the folder holds goes with it.
+    wholesale: bool,
 }
 
 /// Whether a step reads a tree. `grep`, `cp` and `ls` only when recursive.
@@ -267,11 +280,12 @@ fn step_paths(step: &Step) -> Vec<Touch> {
             ),
             writes,
             tree: tree || glob.is_some(),
+            wholesale: index.is_some() && matches!(program, "rm" | "rmdir" | "mv"),
         });
     }
     out.extend(special_touches(step));
     let named = !out.is_empty();
-    out.push(Touch { path: step.here.clone(), writes: false, tree: tree && !named });
+    out.push(Touch { path: step.here.clone(), writes: false, tree: tree && !named, wholesale: false });
     out
 }
 
@@ -284,17 +298,17 @@ fn special_touches(step: &Step) -> Vec<Touch> {
     let mut out = vec![];
     if program == "cd" {
         if let Some(d) = step.args().first() {
-            out.push(Touch { path: resolve(&step.here, d), writes: false, tree: false });
+            out.push(Touch { path: resolve(&step.here, d), writes: false, tree: false, wholesale: false });
         }
     }
     if let Some(w) = step.words.get(step.program).filter(|w| w.contains('/')) {
-        out.push(Touch { path: resolve(&step.here, w), writes: false, tree: false });
+        out.push(Touch { path: resolve(&step.here, w), writes: false, tree: false, wholesale: false });
     }
     if program == "ln" && step.args().iter().any(|a| a.starts_with('-') && a.contains('s')) {
         let paths: Vec<&String> = step.args().iter().filter(|a| !a.starts_with('-')).collect();
         if let [target, link, ..] = paths.as_slice() {
             let base = resolve(&step.here, link).parent().map(Path::to_path_buf).unwrap_or_else(|| step.here.clone());
-            out.push(Touch { path: resolve(&base, target), writes: false, tree: true });
+            out.push(Touch { path: resolve(&base, target), writes: false, tree: true, wholesale: false });
         }
     }
     out
@@ -316,7 +330,14 @@ fn tool_touches(tool: &str, params: &Value, start: &Path) -> Vec<Touch> {
     let writes = matches!(tool, "Write" | "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch");
     let tree = matches!(tool, "Grep" | "Glob" | "LS");
     let mut paths: Vec<PathBuf> = if tool == "apply_patch" {
-        let body = ["patch", "input", "command"].iter().map(|k| field(params, k)).find(|v| !v.is_empty());
+        // Codex may hand the command as an array: its words are the patch.
+        let body = ["patch", "input", "command"]
+            .iter()
+            .map(|k| match params.get(*k) {
+                Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("\n"),
+                _ => field(params, k),
+            })
+            .find(|v| !v.is_empty());
         patch_paths(&body.unwrap_or_default(), start)
     } else {
         let pattern = field(params, "pattern");
@@ -333,7 +354,7 @@ fn tool_touches(tool: &str, params: &Value, start: &Path) -> Vec<Touch> {
     if paths.is_empty() && tree {
         paths.push(start.to_path_buf());
     }
-    paths.into_iter().map(|path| Touch { path, writes, tree }).collect()
+    paths.into_iter().map(|path| Touch { path, writes, tree, wholesale: false }).collect()
 }
 
 // --- Places -----------------------------------------------------------------
@@ -396,7 +417,7 @@ fn encoded(p: &Path) -> String {
 /// folder is the scope its session was pinned to; any other store, the store
 /// as a whole, or anything it cannot place holds conversations of any scope.
 /// The session's own files are its own.
-fn session_zone(all: &Scopes, path: &Path, own_session: &str) -> Option<Option<Zone>> {
+fn session_zone(all: &Scopes, path: &Path, own_session: &str, start: &Path) -> Option<Option<Zone>> {
     let real = scope::real_lenient(path);
     let claude = scope::real_lenient(&env::claude_transcripts_dir());
     let (store, rel) = scope::session_stores().into_iter().find_map(|s| {
@@ -411,6 +432,9 @@ fn session_zone(all: &Scopes, path: &Path, own_session: &str) -> Option<Option<Z
         return Some(Some(Zone::Sessions));
     }
     let Some(folder) = parts.first().map(|f| encoded(Path::new(f))) else { return Some(Some(Zone::Sessions)) };
+    if folder == encoded(&scope::real_lenient(start)) || folder == encoded(start) {
+        return Some(None);
+    }
     let matches = |e: &str| folder == e || folder.starts_with(&format!("{e}-"));
     let best = all.list.iter().filter(|s| matches(&encoded(&s.real_root))).max_by_key(|s| encoded(&s.real_root).len());
     if let Some(s) = best {
@@ -460,7 +484,6 @@ fn wall_paths() -> Vec<PathBuf> {
 fn writes_the_wall(path: &Path) -> Option<String> {
     let real = scope::real_lenient(path);
     let hit = real.ends_with(crate::names::CLAUDE_LOCAL_SETTINGS)
-        || real.ends_with(crate::names::CLAUDE_REPO_SETTINGS)
         || wall_paths().iter().any(|w| scope::inside(&real, w) || scope::inside(w, &real));
     hit.then(|| {
         format!(
@@ -479,6 +502,9 @@ struct Wall<'a> {
     pinned: Option<Place>,
     profile: Option<PathBuf>,
     session: &'a str,
+    /// The folder the session started in: its transcript folder, and its
+    /// automatic memory in it, are named after it.
+    start: PathBuf,
 }
 
 impl Wall<'_> {
@@ -497,6 +523,12 @@ impl Wall<'_> {
                 let zone = Zone::Place(Place { scope: s.name.clone(), project: None });
                 out.push((s.real_root.clone(), zone.clone()));
                 out.extend(s.secret_paths().iter().map(|p| (scope::real_lenient(p), zone.clone())));
+                out.extend(s.dir.iter().map(|d| (scope::real_lenient(d), zone.clone())));
+                out.push((scope::real_lenient(&s.tasks_dir()), zone.clone()));
+                out.push((
+                    scope::real_lenient(&env::state_dir().join(format!("sync-report-{}", s.name))),
+                    zone.clone(),
+                ));
                 continue;
             };
             for p in scope::projects(s) {
@@ -542,6 +574,11 @@ impl Wall<'_> {
                 self.pinned.as_ref().map_or("", |p| p.scope.as_str())
             ));
         }
+        // The person's own sessions (the front desk, the primary scope) note
+        // things in the profile and commit them; writing reads nothing private.
+        if writes {
+            return None;
+        }
         let person = self.person();
         if person == Person::Full || (shared && person == Person::Shared) {
             return None;
@@ -561,6 +598,13 @@ impl Wall<'_> {
     }
 
     fn crossing(&self, touch: &Touch) -> Option<String> {
+        if touch.path.starts_with(unknown_folder()) && touch.path != unknown_folder() {
+            return Some(
+                "this line moves to a folder the guard cannot follow (`cd -`, `popd`, a variable) and then names \
+                 a path from it: write that folder out instead."
+                    .into(),
+            );
+        }
         let real = scope::real_lenient(&touch.path);
         let path = real.as_path();
         if touch.writes {
@@ -569,9 +613,14 @@ impl Wall<'_> {
             }
         }
         if let Some(shared) = profile_part(self.profile.as_deref(), path) {
+            // Standing in a folder of the profile (`git commit` in it) reads
+            // no note; reading it whole is stopped as a tree read.
+            if path.is_dir() && !touch.tree {
+                return None;
+            }
             return self.profile_crossing(path, shared, touch.writes);
         }
-        let zone = match session_zone(self.all, path, self.session) {
+        let zone = match session_zone(self.all, path, self.session, &self.start) {
             Some(None) => return None,
             Some(Some(z)) => z,
             None => Zone::Place(self.all.place_of(path)?),
@@ -642,19 +691,23 @@ impl Wall<'_> {
                 ))
                 .ok()?;
                 let by_gh = |a: &str| {
-                    a == lo
-                        || a.starts_with(&format!("{lo}/"))
+                    a.starts_with(&format!("{lo}/"))
                         || a.contains(&format!("={lo}/"))
                         || ["repos/", "orgs/", "users/"].iter().any(|k| {
                             let at = format!("{k}{lo}");
                             a.ends_with(&at) || a.contains(&format!("{at}/"))
                         })
                 };
+                // A bare owner counts where gh takes one: `-R`, `--owner`,
+                // `repo list`, `org`. `--label acme` is not a repo.
                 let hit = steps.iter().any(|st| {
                     let gh = st.program() == "gh";
-                    st.args_without_messages().iter().any(|a| {
+                    let args = st.args_without_messages();
+                    args.iter().enumerate().any(|(i, a)| {
                         let a = a.to_lowercase();
-                        web.is_match(&a) || (gh && by_gh(&a))
+                        let before = i.checked_sub(1).and_then(|j| args.get(j)).map(|b| b.as_str());
+                        let takes_owner = matches!(before, Some("-R" | "--repo" | "--owner" | "list" | "org"));
+                        web.is_match(&a) || (gh && (by_gh(&a) || (takes_owner && a == lo)))
                     })
                 });
                 if hit {
@@ -842,7 +895,9 @@ fn check_bash(wall: &Wall, command: &str, start: &Path, touches: &mut Vec<Touch>
 /// or through `~` and `$HOME`. Messages of git and gh are left out: citing a
 /// path in a commit message reaches nothing.
 fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
-    let mut text = command.to_string();
+    // Heredoc bodies only count when a shell reads them; quotes inside a
+    // path (`"$HOME"/x`) and `/./` are spelled away; macOS folds case.
+    let mut text = drop_heredocs(command).replace(['"', '\''], "").replace("/./", "/");
     for st in steps {
         let message = matches!(st.program(), "git" | "gh");
         for pair in st.args().windows(2) {
@@ -851,6 +906,10 @@ fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
             }
         }
     }
+    if cfg!(target_os = "macos") {
+        text = text.to_lowercase();
+    }
+    let tree_reader = steps.iter().any(reads_a_tree);
     let home = env::home().to_string_lossy().into_owned();
     let spellings = |p: &Path| -> Vec<String> {
         let s = p.to_string_lossy().into_owned();
@@ -865,12 +924,15 @@ fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
         text.contains('>') || steps.iter().any(|st| WRITERS.contains(&st.program()) || COPIERS.contains(&st.program()));
     let end = |c: char| c.is_whitespace() || "'\";)|&`<>".contains(c);
     let mut out = vec![];
-    for (folder, _) in wall.foreign() {
+    let mut zones: Vec<PathBuf> = wall.foreign().into_iter().map(|(f, _)| f).collect();
+    zones.extend(wall_paths());
+    for folder in zones {
         let mut candidates = spellings(&folder);
         if let Some(s) = wall.all.list.iter().find(|s| s.real_root == folder) {
             candidates.extend(spellings(&s.root));
         }
         for c in &candidates {
+            let c = if cfg!(target_os = "macos") { c.to_lowercase() } else { c.clone() };
             for (i, _) in text.match_indices(c.as_str()) {
                 let after = &text[i + c.len()..];
                 if !after.chars().next().is_none_or(|n| n == '/' || end(n)) {
@@ -880,7 +942,12 @@ fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
                 // another root is judged as itself, not as the root.
                 let tail: String = after.chars().take_while(|ch| !end(*ch)).collect();
                 let named = format!("{}{tail}", folder.display());
-                out.push(Touch { path: PathBuf::from(named), writes, tree: tail.trim_matches('/').is_empty() });
+                out.push(Touch {
+                    path: PathBuf::from(named),
+                    writes,
+                    tree: tree_reader && tail.trim_matches('/').is_empty(),
+                    wholesale: false,
+                });
             }
         }
     }
@@ -925,7 +992,7 @@ pub(super) fn scope_guard() -> Res {
         c => PathBuf::from(c),
     };
     let (pinned, pin_now) = session_place(&all, &session, &start);
-    let mut wall = Wall { all: &all, pinned, profile: person::dir(), session: &session };
+    let mut wall = Wall { all: &all, pinned, profile: person::dir(), session: &session, start: start.clone() };
 
     if let Some(rest) = tool.strip_prefix("mcp__") {
         if let Some(s) = wall.pinned.as_ref().and_then(|p| all.by_name(&p.scope)) {
@@ -954,8 +1021,13 @@ pub(super) fn scope_guard() -> Res {
         touches = tool_touches(&tool, &params, &start);
     }
 
+    for t in touches.iter().filter(|t| t.writes) {
+        if let Some(why) = writes_the_wall(&t.path) {
+            return stop_with(&why);
+        }
+    }
     let foreign = wall.foreign();
-    for t in touches.iter().filter(|t| t.tree || t.writes) {
+    for t in touches.iter().filter(|t| t.tree || t.wholesale) {
         if let Some(why) = wall.holds_foreign(&foreign, &t.path) {
             return stop_with(&why);
         }

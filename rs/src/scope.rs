@@ -560,7 +560,17 @@ impl Scopes {
         }
         let real = real_lenient(path);
         for s in &self.list {
-            if inside(&real, &real_lenient(&s.tasks_dir())) {
+            let tasks = real_lenient(&s.tasks_dir());
+            if inside(&real, &tasks) {
+                // <tasks>/<project>/<task>.md: a task is its project's.
+                let project = real
+                    .strip_prefix(&tasks)
+                    .ok()
+                    .and_then(|r| r.components().next())
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned());
+                return Some(Place { scope: s.name.clone(), project });
+            }
+            if s.dir.as_ref().is_some_and(|d| inside(&real, &real_lenient(d))) {
                 return Some(Place { scope: s.name.clone(), project: None });
             }
         }

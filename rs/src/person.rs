@@ -213,7 +213,9 @@ pub fn projects_named_in(text: &str, projects: &[String]) -> Vec<String> {
             let word = regex::Regex::new(&format!(r"(^|[^a-z0-9]){}($|[^a-z0-9])", regex::escape(&p)))
                 .is_ok_and(|r| r.is_match(&lower));
             let flat: String = p.chars().filter(|c| c.is_alphanumeric()).collect();
-            word || (flat.len() >= 6 && squeezed.contains(&flat))
+            // Written apart ("La Rioja Meteo" for `lariojameteo`) only for a
+            // long name: a short one lives inside ordinary words.
+            word || (flat.len() >= 8 && squeezed.contains(&flat))
         })
         .cloned()
         .collect()

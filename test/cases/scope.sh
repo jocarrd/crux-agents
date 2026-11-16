@@ -685,3 +685,43 @@ test_the_third_audit_is_closed() {
   assert_lets "an ordinary command in the own folder" $s "$c" Bash '{"command":"pnpm install && pnpm test 2>&1 | tail -5"}'
   assert_stops "front desk: a folder-bound crux command" "enter one first" desk8 "$SB/desk" Bash '{"command":"crux task show web/login"}'
 }
+
+test_the_last_review_is_closed() {
+  wall_setup
+  local s=in-acme c="$ACME/web"
+  in_dir "$OWN" "$CRUX_HOME/bin/crux" init cliente --no-remote --profile client-repo >/dev/null 2>&1
+  in_dir "$OWN" "$CRUX_HOME/bin/crux" init other --no-remote >/dev/null 2>&1
+  mkdir -p "$OWN/cliente/app"
+  in_dir "$OWN/other" "$CRUX_HOME/bin/crux" task new other/plan --goal "x" >/dev/null 2>&1
+  local machine; machine="$(dirname "$CRUX_REGISTRY")/tasks"
+  assert_stops "1: reading another scope's config" "" $s "$c" Bash "{\"command\":\"cat $CRUX_SCOPES_DIR/own/config\"}"
+  assert_stops "1: a glob over every scope's tasks" "" $s "$c" Bash "{\"command\":\"cat $CRUX_SCOPES_DIR/*/tasks/*/*.md\"}"
+  session_start in-cliente "$OWN/cliente/app" >/dev/null
+  assert_stops "2: an isolated project reading its neighbour's tasks" "" in-cliente "$OWN/cliente/app" Read "{\"file_path\":\"$machine/other/plan.md\"}"
+  assert_stops "3: cd with an option" "" $s "$c" Bash '{"command":"cd -P .. && cd .. && cat Own/alpha/.env"}'
+  assert_stops "3: pushd" "" $s "$c" Bash '{"command":"pushd .. && pushd .. && cat Own/alpha/.env"}'
+  assert_stops "3: a folder through a variable" "cannot follow" $s "$c" Bash '{"command":"cd $SOMEWHERE && cat alpha/.env"}'
+  assert_stops "4: the pins through a shell, by text" "" $s "$c" Bash "{\"command\":\"echo 'echo own > $CRUX_STATE_DIR/scope-pins/in-acme' | sh\"}"
+  assert_stops "4: quotes inside the path" "" $s "$c" Bash "{\"command\":\"echo 'cat \\\"$SB\\\"/Own/alpha/.env' | sh\"}"
+  assert_lets "7: a commit message in a heredoc that cites another root" $s "$c" Bash "{\"command\":\"git commit -m \\\"\$(cat <<'EOF'\\nfix: see $OWN/alpha\\nEOF\\n)\\\"\"}"
+  assert_lets "7: the repo's versioned agent settings are project content" $s "$c" Write "{\"file_path\":\"$ACME/web/.claude/settings.json\",\"content\":\"{}\"}"
+  session_start in-own3 "$OWN" >/dev/null
+  assert_lets "7: copying a file into a root that holds an isolated project" in-own3 "$OWN" Bash '{"command":"cp /tmp/f.pdf ."}'
+  assert_lets "9: gh with a label that is another scope's owner" $s "$c" Bash '{"command":"gh pr create --label me --title x"}'
+  assert_stops "9: gh repo list of another scope's owner" "" $s "$c" Bash '{"command":"gh repo list me"}'
+}
+
+test_the_front_desk_can_note_in_the_profile() {
+  wall_setup
+  local dir="$OWN/agent-profile"
+  mkdir -p "$dir/preferences" "$dir/about"; git init -q "$dir"
+  printf -- '---\n---\n- [Jobs](about/jobs.md)\n' > "$dir/PROFILE.md"
+  printf 'Interviewing.\n' > "$dir/about/jobs.md"
+  session_start desk9 "$SB/desk" >/dev/null
+  assert_lets "5: writing a note from the desk" desk9 "$SB/desk" Write "{\"file_path\":\"$dir/preferences/new.md\",\"content\":\"x\"}"
+  assert_lets "5: adding its line to the index" desk9 "$SB/desk" Bash "{\"command\":\"echo '- [New](preferences/new.md)' >> $dir/PROFILE.md\"}"
+  assert_lets "5: committing it" desk9 "$SB/desk" Bash "{\"command\":\"cd $dir && git add -A && git commit -qm x\"}"
+  assert_stops "5: but not reading a private note" "private to" desk9 "$SB/desk" Read "{\"file_path\":\"$dir/about/jobs.md\"}"
+  local enc; enc="$(printf '%s' "$SB/desk" | tr -c 'A-Za-z0-9' '-')"
+  assert_lets "7: the session's own automatic memory" desk9 "$SB/desk" Write "{\"file_path\":\"$CLAUDE_CONFIG_DIR/projects/$enc/memory/x.md\",\"content\":\"x\"}"
+}

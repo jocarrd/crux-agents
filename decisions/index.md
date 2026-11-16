@@ -1143,7 +1143,12 @@
     scope first; each scope keeps its own sync report. The hook runs before
     the agent asks the person for permission, so a `crux scope enter` the
     person then refuses has already pinned the session: refusing it means
-    opening another session.
+    opening another session. After a `cd -`, a `popd` or a `cd` through a
+    variable the guard no longer knows the folder, and stops a path named from
+    it. A repo's versioned agent settings are project content and stay
+    writable; whoever needs them closed uses the sandbox mode. The person's own
+    sessions (the front desk, the primary scope) write the profile, commit and
+    push it; the front desk still does not read its private notes.
   - Changing scope means **a new session**, never switching the current one:
     what leaks is the conversation as much as the files. `crux scope open
     <name> [--task <id>] [--prompt <text>]` opens the agent in the scope's
@@ -1174,6 +1179,12 @@
     browser profile the browser skill copies in a scope; another scope's is
     one of that scope's secrets, so the guard and the sandbox keep it out of
     reach.
+  - Apart from scopes, and for everyone: a `feedback` memory that names a
+    known project goes to that project's docs repo instead of the person's
+    preferences, and `crux profile` warns on a preference that names one.
+    Routing by type alone had filled one profile with eleven rules of a
+    single project, loaded in every session. This is the one change a person
+    without scopes sees.
   - Usage lines (ADR-024) of a non-primary scope do not travel to the
     person's profile repo with project or skill names: they count as project
     `scope` and only kernel skills are named, as `client` already does.
