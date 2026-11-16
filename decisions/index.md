@@ -1130,7 +1130,20 @@
     read of the agent's own config folder is stopped too: name the file).
     Commands are split as the shell does, quotes and `bash -c` included, and
     any `scope enter` a command runs that is not the session's own place is
-    stopped, whatever wraps it.
+    stopped, whatever wraps it. Under that reader, which can never be
+    complete, a net reads the raw line: any foreign folder it names (written
+    as declared, resolved, or through `~` and `$HOME`, outside git and gh
+    messages) is judged by the whole path written, so a pipe into `sh`,
+    `xargs`, a heredoc or `$(...)` cannot carry it past. A bare name that
+    exists in the folder counts as a path, and a write or a move of a folder
+    that holds another root is stopped like a tree read. `crux memory`,
+    `sync`, `status`, `usage` and `machine` read every project and the whole
+    profile, so they run only from a session of the person's own scope with
+    no isolation; folder-bound crux commands at the front desk ask to enter a
+    scope first; each scope keeps its own sync report. The hook runs before
+    the agent asks the person for permission, so a `crux scope enter` the
+    person then refuses has already pinned the session: refusing it means
+    opening another session.
   - Changing scope means **a new session**, never switching the current one:
     what leaks is the conversation as much as the files. `crux scope open
     <name> [--task <id>] [--prompt <text>]` opens the agent in the scope's

@@ -17,6 +17,8 @@ pub const SKILL: &str = "SKILL.md";
 pub const CLAUDE_SKILLS: &str = ".claude/skills";
 /// The agent's settings for one repo, never versioned.
 pub const CLAUDE_LOCAL_SETTINGS: &str = ".claude/settings.local.json";
+/// The agent's versioned settings for one repo.
+pub const CLAUDE_REPO_SETTINGS: &str = ".claude/settings.json";
 /// Where a docs repo keeps its project's skills.
 pub const PROJECT_SKILLS: &str = ".claude/skills/project";
 /// The file of the usage log, one line per session.

@@ -901,8 +901,14 @@ fn rest_in_background() -> bool {
     }
 }
 
+/// One report per scope: a report holds project names, and a session reads
+/// only its own scope's (ADR-025).
 fn report_file(state: &Path) -> PathBuf {
-    state.join("sync-report")
+    let here = std::env::current_dir().unwrap_or_default();
+    match crate::scope::load().ok().filter(|a| a.declared).and_then(|a| a.current(&here).ok().flatten().cloned()) {
+        Some(s) => state.join(format!("sync-report-{}", s.name)),
+        None => state.join("sync-report"),
+    }
 }
 
 fn take_report(state: &Path) -> String {

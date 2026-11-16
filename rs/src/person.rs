@@ -108,6 +108,8 @@ pub fn is_shared(dir: &Path, rel: &str) -> bool {
             }
         }
     }
+    // macOS folders ignore case: `About/x.md` is `about/x.md`.
+    let rel = rel.to_lowercase();
     !(rel.starts_with("about/") || rel.starts_with("machines/"))
 }
 

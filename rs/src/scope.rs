@@ -267,67 +267,63 @@ pub fn implicit() -> Scope {
 /// stops crux: falling back to the implicit scope would switch isolation off
 /// without a word (rule 5).
 pub fn problems(list: &[Scope]) -> Vec<String> {
-    let mut out = vec![];
-    for s in list {
-        if !project::valid_name(&s.name) {
-            out.push(format!("scope '{}': not a valid name (letters, digits, - and _)", s.name));
-        }
-    }
+    let mut out: Vec<String> = list
+        .iter()
+        .filter(|s| !project::valid_name(&s.name))
+        .map(|s| format!("scope '{}': not a valid name (letters, digits, - and _)", s.name))
+        .collect();
     for (i, a) in list.iter().enumerate() {
         for b in &list[i + 1..] {
-            if inside(&a.real_root, &b.real_root) || inside(&b.real_root, &a.real_root) {
-                out.push(format!(
-                    "scopes '{}' and '{}' overlap: {} and {}",
-                    a.name,
-                    b.name,
-                    a.root.display(),
-                    b.root.display()
-                ));
-            }
-            for o in &a.owners {
-                if b.owners.iter().any(|x| x.eq_ignore_ascii_case(o)) {
-                    out.push(format!("owner '{o}' is in two scopes: '{}' and '{}'", a.name, b.name));
-                }
-            }
+            out.extend(clashes(a, b));
         }
     }
-    let primaries: Vec<&str> = list.iter().filter(|s| s.primary).map(|s| s.name.as_str()).collect();
-    if list.len() > 1 && primaries.len() != 1 {
-        out.push(if primaries.is_empty() {
-            "several scopes and none is PRIMARY=\"true\": the person's own one has to be named".into()
-        } else {
-            format!("only one scope can be primary, and {} are: {}", primaries.len(), primaries.join(", "))
-        });
-    }
-    for (i, a) in list.iter().enumerate() {
-        for b in &list[i + 1..] {
-            if let (Some(x), Some(y)) = (&a.browser_profile, &b.browser_profile) {
-                if real_lenient(x) == real_lenient(y) {
-                    out.push(format!(
-                        "scopes '{}' and '{}' share one browser profile: {}",
-                        a.name,
-                        b.name,
-                        x.display()
-                    ));
-                }
-            }
-        }
-    }
+    out.extend(primary_problem(list));
     for s in list {
         for secret in &s.secret_paths() {
-            for other in list.iter().filter(|o| o.name != s.name) {
-                if other.contains(secret) {
-                    out.push(format!(
-                        "a secret of '{}' is inside the root of '{}': {}",
-                        s.name,
-                        other.name,
-                        secret.display()
-                    ));
-                }
+            for other in list.iter().filter(|o| o.name != s.name && o.contains(secret)) {
+                out.push(format!(
+                    "a secret of '{}' is inside the root of '{}': {}",
+                    s.name,
+                    other.name,
+                    secret.display()
+                ));
             }
         }
     }
     out
+}
+
+/// What two scopes cannot share: a folder, an owner, a browser profile.
+fn clashes(a: &Scope, b: &Scope) -> Vec<String> {
+    let mut out = vec![];
+    if inside(&a.real_root, &b.real_root) || inside(&b.real_root, &a.real_root) {
+        out.push(format!(
+            "scopes '{}' and '{}' overlap: {} and {}",
+            a.name,
+            b.name,
+            a.root.display(),
+            b.root.display()
+        ));
+    }
+    for o in a.owners.iter().filter(|o| b.owners.iter().any(|x| x.eq_ignore_ascii_case(o))) {
+        out.push(format!("owner '{o}' is in two scopes: '{}' and '{}'", a.name, b.name));
+    }
+    if let (Some(x), Some(y)) = (&a.browser_profile, &b.browser_profile) {
+        if real_lenient(x) == real_lenient(y) {
+            out.push(format!("scopes '{}' and '{}' share one browser profile: {}", a.name, b.name, x.display()));
+        }
+    }
+    out
+}
+
+/// Several scopes need exactly one that is the person's own.
+fn primary_problem(list: &[Scope]) -> Option<String> {
+    let primaries: Vec<&str> = list.iter().filter(|s| s.primary).map(|s| s.name.as_str()).collect();
+    match (list.len() > 1, primaries.len()) {
+        (true, 0) => Some("several scopes and none is PRIMARY=\"true\": the person's own one has to be named".into()),
+        (true, n) if n > 1 => Some(format!("only one scope can be primary, and {n} are: {}", primaries.join(", "))),
+        _ => None,
+    }
 }
 
 /// The scopes of this machine. An error when one cannot be read or they
@@ -537,10 +533,6 @@ impl Place {
 
 /// The project a path belongs to inside its scope.
 pub fn project_of_path(scope: &Scope, path: &Path) -> Option<String> {
-    project_in(scope, path)
-}
-
-fn project_in(scope: &Scope, path: &Path) -> Option<String> {
     let real = real_lenient(path);
     let rel = if inside(&real, &scope.real_root) {
         real.strip_prefix(&scope.real_root).ok().map(Path::to_path_buf).or_else(|| {
@@ -561,7 +553,7 @@ impl Scopes {
     /// declares, or the state crux keeps for a scope.
     pub fn place_of(&self, path: &Path) -> Option<Place> {
         if let Some(s) = self.of_path(path) {
-            return Some(Place { scope: s.name.clone(), project: project_in(s, path) });
+            return Some(Place { scope: s.name.clone(), project: project_of_path(s, path) });
         }
         if let Some(s) = self.list.iter().find(|s| s.owns_secret(path)) {
             return Some(Place { scope: s.name.clone(), project: None });
@@ -587,7 +579,7 @@ impl Scopes {
     /// the project too when that project is isolated.
     pub fn pin_place(&self, path: &Path) -> Option<Place> {
         let s = self.of_path(path)?;
-        let project = project_in(s, path).filter(|p| project_rules(s, p).isolated);
+        let project = project_of_path(s, path).filter(|p| project_rules(s, p).isolated);
         Some(Place { scope: s.name.clone(), project })
     }
 }

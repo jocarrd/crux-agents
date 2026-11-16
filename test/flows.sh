@@ -379,7 +379,7 @@ truthy '[[ $rc -eq 0 ]]' "an owner no scope declares is left alone"
 out="$(ev d1 "$HOME/desk" mcp__gmail__send_message '{}' | crux hook scope-guard 2>&1)"; rc=$?
 truthy '[[ $rc -eq 2 ]]' "and the person's mail is not used from work"
 out="$(ev d1 "$HOME/desk" Bash '{"command":"crux scope enter own"}' | crux hook scope-guard 2>&1)"; rc=$?
-truthy '[[ $rc -eq 2 && "$out" == *"already in"* ]]' "the session cannot change scope"
+truthy '[[ $rc -eq 2 && "$out" == *"and this line enters"* ]]' "the session cannot change scope"
 
 step "a session opened in the client's project"
 out="$(cd "$P/client/app" && printf '{"session_id":"c1","cwd":"%s"}' "$P/client/app" | CRUX_SYNC_BACKGROUND=0 crux hook session-sync 2>/dev/null)"

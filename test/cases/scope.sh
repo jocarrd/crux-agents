@@ -661,3 +661,27 @@ test_one_scope_has_no_front_desk() {
   assert_lets "a session outside the root works in the only scope" single "$SB/desk" Read "{\"file_path\":\"$SB/Only/p/x\"}"
   assert_lets "and searches its home without the stores in the way" single "$SB/desk" Bash "{\"command\":\"grep -r hook $CLAUDE_CONFIG_DIR\"}"
 }
+
+test_the_third_audit_is_closed() {
+  wall_setup
+  local s=in-acme c="$ACME/web"
+  mkdir -p "$ACME/web/pkg"; printf '{}\n' > "$ACME/web/pkg/package.json"
+  assert_stops "1: &> into the pins" "holds up the scope wall" $s "$c" Bash "{\"command\":\"echo own &> $CRUX_STATE_DIR/scope-pins/in-acme\"}"
+  assert_stops "1: >| into another scope" "" $s "$c" Bash "{\"command\":\"echo x >| $OWN/alpha/f\"}"
+  assert_stops "1: >& into another scope" "" $s "$c" Bash "{\"command\":\"echo x >&$OWN/alpha/f\"}"
+  assert_stops "1: running a script of another scope by its path" "" $s "$c" Bash "{\"command\":\"$OWN/alpha/run.sh\"}"
+  assert_stops "2: a bare folder name from its parent" "" $s "$SB" Bash '{"command":"tar czf ./o.tgz Own"}'
+  assert_stops "3: moving the folder that holds another root" "" $s "$c" Bash "{\"command\":\"mv $SB $SB-moved\"}"
+  assert_stops "4: a line piped into a shell" "" $s "$c" Bash "{\"command\":\"echo 'cat $OWN/alpha/.env' | sh\"}"
+  assert_stops "4: a heredoc fed to a shell" "" $s "$c" Bash "{\"command\":\"sh <<'EOF'\\ncat $OWN/alpha/.env\\nEOF\"}"
+  assert_stops "4: command substitution" "" $s "$c" Bash "{\"command\":\"cat \\\"\$(echo $OWN/alpha/.env)\\\"\"}"
+  assert_stops "4: xargs" "" $s "$c" Bash "{\"command\":\"echo $OWN/alpha/.env | xargs cat\"}"
+  assert_stops "5: searching the whole profile from another scope" "person's own scope" $s "$c" Bash '{"command":"crux memory search salary"}'
+  assert_stops "5: the machine-wide sync from another scope" "" $s "$c" Bash '{"command":"crux sync"}'
+  assert_stops "6: a symlink to another scope" "" $s "$c" Bash "{\"command\":\"ln -s $OWN web/l\"}"
+  assert_stops "6: a relative symlink resolved from its folder" "" $s "$c" Bash '{"command":"ln -s ../../Own web/l"}'
+  assert_stops "7: braces" "" $s "$c" Bash "{\"command\":\"cat $SB/{Own,Acme}/alpha/.env\"}"
+  assert_lets "a glob of the own folder" $s "$c" Bash '{"command":"ls */package.json"}'
+  assert_lets "an ordinary command in the own folder" $s "$c" Bash '{"command":"pnpm install && pnpm test 2>&1 | tail -5"}'
+  assert_stops "front desk: a folder-bound crux command" "enter one first" desk8 "$SB/desk" Bash '{"command":"crux task show web/login"}'
+}

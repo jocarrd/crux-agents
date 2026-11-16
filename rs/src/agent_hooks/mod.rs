@@ -178,7 +178,7 @@ impl Hook {
             Hook::ScopeGuard => r(
                 "PreToolUse",
                 "scope-guard",
-                "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Glob|Grep|LS|mcp__.*",
+                "Bash|Monitor|Read|Edit|Write|MultiEdit|NotebookEdit|Glob|Grep|LS|mcp__.*",
                 "hook that keeps a session inside its work scope (ADR-025)",
             ),
             Hook::ProposalGuard => r(
