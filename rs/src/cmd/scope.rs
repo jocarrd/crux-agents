@@ -329,7 +329,14 @@ fn apply_git(all: &Scopes) -> Result<Vec<String>, String> {
 /// offered only when ssh runs from inside the scope. Written at the top of the
 /// file, before any `Host *` that would otherwise answer first.
 fn apply_ssh(all: &Scopes) -> Result<Vec<String>, String> {
-    let crux = env::crux_home().map(|h| h.join("bin/crux")).unwrap_or_else(|| PathBuf::from("crux"));
+    // The launcher on the PATH, which follows every upgrade; a versioned
+    // kernel's binary would stay behind after the next one.
+    let launcher = env::home().join(".local/bin/crux");
+    let crux = if launcher.exists() {
+        launcher
+    } else {
+        env::crux_home().map(|h| h.join("bin/crux")).unwrap_or_else(|| PathBuf::from("crux"))
+    };
     let mut block = vec![];
     let mut done = vec![];
     for s in all.list.iter().filter(|s| ssh_keys_dir(s).is_dir()) {
