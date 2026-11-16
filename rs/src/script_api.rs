@@ -37,6 +37,13 @@ pub fn run(argv: &[String]) -> Res {
         "find_docs_repo" => print(project::find_docs_repo(&p(1)).map(|d| d.display().to_string())),
         "preference" => print(Some(env::preference(&a(1), &a(2)))),
         "projects_root" => print(Some(env::projects_root().display().to_string())),
+        // The browser profile the browser skill copies in the current scope.
+        "scope_browser_profile" => print(crate::scope::load().ok().and_then(|all| {
+            all.current(&std::env::current_dir().unwrap_or_default())
+                .ok()
+                .flatten()
+                .and_then(|s| s.browser_profile.as_ref().map(|p| p.display().to_string()))
+        })),
         // For ssh's `Match exec`: whether the folder ssh runs from is in that scope.
         "scope_of_cwd" => yes(crate::scope::load().ok().is_some_and(|all| {
             all.of_path(&std::env::current_dir().unwrap_or_default()).is_some_and(|s| s.name == a(1))

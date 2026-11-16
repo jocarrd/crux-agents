@@ -910,6 +910,11 @@ nothing changes (ADR-025).
   markers: the profile per root, git identity (`includeIf`), ssh keys
   (`~/.ssh/<scope>/<host>`, offered only from inside the scope) and the agent's
   sandbox and `gh` account per repo.
+- **A scope can name its browser profile** (`BROWSER_PROFILE`): the browser
+  skill copies that one, and another scope's profile is its secret.
+- **`crux scope check`** also names a repo whose remote is an owner of another
+  scope (move it with `crux scope move`) and recent commits signed with
+  another scope's email.
 
 The wall stops the agent and mistakes, not a person at the keyboard: the temporary
 folder, `~/Downloads`, the clipboard and shell history are shared, and two people on

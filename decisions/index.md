@@ -1140,9 +1140,10 @@
     the repo's local agent settings. In `~/.ssh/config`, one
     `Match exec "crux __fn scope-of-cwd <name>"` block per scope with
     `IdentityFile ~/.ssh/<name>/%h` and `IdentitiesOnly yes`: a key named
-    after its host, offered only from its scope. A browser profile per scope
-    for the browser skill is left for later: today that skill copies the
-    person's own browser profile, whatever the scope.
+    after its host, offered only from its scope. `BROWSER_PROFILE` names the
+    browser profile the browser skill copies in a scope; another scope's is
+    one of that scope's secrets, so the guard and the sandbox keep it out of
+    reach.
   - Usage lines (ADR-024) of a non-primary scope do not travel to the
     person's profile repo with project or skill names: they count as project
     `scope` and only kernel skills are named, as `client` already does.
@@ -1158,10 +1159,10 @@
     Every command but `scope`, `hook` and `doctor` stops while the scopes
     cannot be used. `crux scope check` names overlapping roots, a missing or
     doubled primary, one owner in two scopes, a secret inside another root and
-    any value it cannot read, and warns on a root that does not exist and on
-    `CRUX_PROJECTS_DIR` pointing outside every scope. Commits with another
-    scope's email and a project whose remote belongs to another scope are not
-    checked yet. `crux sync`, `crux machine` and `crux workspace gc` walk every
+    any value it cannot read, and a repo whose remote is an owner of another
+    scope; it warns on recent commits with another scope's email, on a root
+    that does not exist and on `CRUX_PROJECTS_DIR` pointing outside every
+    scope. `crux sync`, `crux machine` and `crux workspace gc` walk every
     root; sync replays its pass per scope with `CRUX_SCOPE` set, so each
     scope's tasks reach its own docs repos.
 - **Consequences**: a person can keep an employer, clients and their own

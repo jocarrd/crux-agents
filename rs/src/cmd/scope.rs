@@ -88,6 +88,7 @@ fn show(all: &Scopes, name: Option<&str>) -> Res {
     let secrets: Vec<String> = s.secrets.iter().map(|p| p.display().to_string()).collect();
     println!("secrets    {}", if secrets.is_empty() { "-".into() } else { secrets.join(" ") });
     println!("mcp deny   {}", if s.mcp_deny.is_empty() { "-".into() } else { s.mcp_deny.join(" ") });
+    println!("browser    {}", s.browser_profile.as_ref().map_or("-".into(), |p| p.display().to_string()));
     println!("tasks      {}", s.tasks_dir().display());
     Ok(())
 }
@@ -122,6 +123,20 @@ fn check() -> Res {
             ));
         }
     }
+    let mut wrong = 0;
+    for s in &all.list {
+        for (repo, warn) in placement(&all, s) {
+            if warn {
+                ui::warn(repo);
+            } else {
+                wrong += 1;
+                ui::err(repo);
+            }
+        }
+    }
+    if wrong > 0 {
+        return Err(crate::error::Exit(1));
+    }
     if all.list.len() > 1 && all.unpinned_default().ok().flatten().is_none() {
         ui::info(format!(
             "sessions opened outside every root start at the front desk ({} names a scope instead)",
@@ -130,6 +145,54 @@ fn check() -> Res {
     }
     ui::ok(format!("{} usable", ui::count(all.list.len(), "scope", "scopes")));
     Ok(())
+}
+
+fn github_owner(url: &str) -> Option<String> {
+    crate::regex!(r"github\.com[:/]([A-Za-z0-9_.-]+)/").captures(url).map(|c| c[1].to_string())
+}
+
+/// What lives in one scope and belongs to another: a repo whose remote is an
+/// owner another scope declares is in the wrong root (an error: move it), and
+/// recent commits with another scope's email were signed with the wrong
+/// identity (a warning: history is not rewritten).
+fn placement(all: &Scopes, s: &Scope) -> Vec<(String, bool)> {
+    let mut out = vec![];
+    let others: Vec<&Scope> = all.list.iter().filter(|o| o.name != s.name).collect();
+    for repo in repos_under(&s.root) {
+        let shown = repo.strip_prefix(&s.root).unwrap_or(&repo).display().to_string();
+        if let Some(owner) = crate::git::remote_url(&repo, crate::names::git::REMOTE).and_then(|u| github_owner(&u)) {
+            if let Some(o) = others.iter().find(|o| o.owners.iter().any(|x| x.eq_ignore_ascii_case(&owner))) {
+                let project = shown.split('/').next().unwrap_or(&shown).to_string();
+                out.push((
+                    format!(
+                        "{shown} (scope '{}') pushes to '{owner}', an owner of scope '{}': crux scope move {project} {}",
+                        s.name, o.name, o.name
+                    ),
+                    false,
+                ));
+            }
+        }
+        let emails: Vec<(&str, &str)> =
+            others.iter().filter_map(|o| o.git_email.as_deref().map(|e| (e, o.name.as_str()))).collect();
+        if emails.is_empty() {
+            continue;
+        }
+        let log = crate::git::out(&repo, &["log", "-n", "30", "--format=%ae"]).unwrap_or_default();
+        for (email, other) in emails {
+            let n = log.lines().filter(|l| l.eq_ignore_ascii_case(email)).count();
+            if n > 0 {
+                out.push((
+                    format!(
+                        "{shown} (scope '{}'): {} with {email}, the email of scope '{other}' — run crux scope apply",
+                        s.name,
+                        ui::count(n, "recent commit", "recent commits")
+                    ),
+                    true,
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// The front desk's map: enough to tell where a request belongs, and only
@@ -390,7 +453,7 @@ pub fn apply_repo(all: &Scopes, repo: &Path) -> Result<bool, String> {
         let mut deny: Vec<String> = vec![];
         for o in all.list.iter().filter(|o| o.name != s.name) {
             deny.push(o.real_root.display().to_string());
-            deny.extend(o.secrets.iter().map(|x| x.display().to_string()));
+            deny.extend(o.secret_paths().iter().map(|x| x.display().to_string()));
             deny.push(ssh_keys_dir(o).display().to_string());
             if let Some(d) = &o.dir {
                 deny.push(d.display().to_string());

@@ -2,7 +2,9 @@ crux scope — the work scopes of this machine (ADR-025).
 
   crux scope                       the scopes, with a * on the one this folder is in
   crux scope show [<name>]         what a scope declares
-  crux scope check                 whether the scopes can be used, and why not
+  crux scope check                 whether the scopes can be used, and why not; also a
+                                   repo whose remote is another scope's owner, and
+                                   recent commits with another scope's email
   crux scope of <path>             the scope a path belongs to (exit 1 if none)
   crux scope map                   each scope and its projects, by name only
   crux scope enter <name> | --project <p>
@@ -31,6 +33,7 @@ may not use. Each one is a folder with a config file:
     SECRETS="~/.ssh/acme ~/.config/acme"    paths no other scope may read
     MCP_DENY="mcp__gmail__*"                connectors this scope may not use
     ENFORCE="guard"                         guard | sandbox
+    BROWSER_PROFILE="~/.config/chrome/Work" the browser profile the browser skill uses
     PRIMARY="true"                          the person's own scope (one of them)
 
 Without scopes nothing changes. A session opened inside a root stays in its

@@ -58,6 +58,9 @@ pub struct Scope {
     pub gh_config_dir: Option<PathBuf>,
     pub person: Person,
     pub secrets: Vec<PathBuf>,
+    /// The browser profile the browser skill copies in this scope: its
+    /// cookies are a secret of the scope like any key.
+    pub browser_profile: Option<PathBuf>,
     pub mcp_deny: Vec<String>,
     pub enforce: Enforce,
     pub primary: bool,
@@ -79,9 +82,15 @@ impl Scope {
         }
     }
 
+    /// Every path that is this scope's secret: what it declares, and its
+    /// browser profile.
+    pub fn secret_paths(&self) -> Vec<PathBuf> {
+        self.secrets.iter().cloned().chain(self.browser_profile.clone()).collect()
+    }
+
     pub fn owns_secret(&self, path: &Path) -> bool {
         let p = real_lenient(path);
-        self.secrets.iter().any(|s| inside(&p, &real_lenient(s)))
+        self.secret_paths().iter().any(|s| inside(&p, &real_lenient(s)))
     }
 }
 
@@ -201,6 +210,7 @@ pub fn parse(name: &str, folder: &Path) -> Result<Scope, String> {
         // unless it says otherwise. Any other sees what is shared.
         person: person.unwrap_or(if primary { Person::Full } else { Person::Shared }),
         secrets: words(get("SECRETS")).iter().map(|s| expand(s)).collect(),
+        browser_profile: get("BROWSER_PROFILE").map(|v| expand(&v)),
         mcp_deny: words(get("MCP_DENY")),
         enforce,
         primary,
@@ -222,6 +232,7 @@ pub fn implicit() -> Scope {
         gh_config_dir: None,
         person: Person::Full,
         secrets: vec![],
+        browser_profile: None,
         mcp_deny: vec![],
         enforce: Enforce::Guard,
         primary: true,
@@ -265,8 +276,22 @@ pub fn problems(list: &[Scope]) -> Vec<String> {
             format!("only one scope can be primary, and {} are: {}", primaries.len(), primaries.join(", "))
         });
     }
+    for (i, a) in list.iter().enumerate() {
+        for b in &list[i + 1..] {
+            if let (Some(x), Some(y)) = (&a.browser_profile, &b.browser_profile) {
+                if real_lenient(x) == real_lenient(y) {
+                    out.push(format!(
+                        "scopes '{}' and '{}' share one browser profile: {}",
+                        a.name,
+                        b.name,
+                        x.display()
+                    ));
+                }
+            }
+        }
+    }
     for s in list {
-        for secret in &s.secrets {
+        for secret in &s.secret_paths() {
             for other in list.iter().filter(|o| o.name != s.name) {
                 if other.contains(secret) {
                     out.push(format!(

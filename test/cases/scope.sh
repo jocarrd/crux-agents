@@ -476,3 +476,34 @@ test_what_is_only_written_about_does_not_move_the_wall() {
   assert_stops "a quoted remote of another scope is still a remote" "owner of scope 'own'" in-acme "$ACME/web" Bash '{"command":"git clone \"https://github.com/me/blog\""}'
   assert_stops "a Glob pattern over another scope" "" in-acme "$ACME/web" Glob "{\"pattern\":\"$OWN/**/*.env\"}"
 }
+
+test_scope_check_finds_what_lives_in_the_wrong_scope() {
+  sandbox >/dev/null
+  two_scopes
+  printf 'GIT_EMAIL="me@own.test"\nOWNERS="me"\n' >> "$CRUX_SCOPES_DIR/own/config"
+  mkdir -p "$OWN/shop"
+  git init -q "$OWN/shop/api"
+  git -C "$OWN/shop/api" remote add origin git@github.com:acme/api.git
+  local out rc=0; out="$(crux scope check 2>&1)" || rc=$?
+  assert_eq 1 "$rc" "a repo of the person's scope pushing to the company's owner fails the check"
+  assert_contains "$out" "crux scope move shop acme" "and says how to fix it"
+  git -C "$OWN/shop/api" remote set-url origin git@github.com:me/api.git
+  git init -q "$ACME/web"
+  GIT_AUTHOR_EMAIL=me@own.test git -C "$ACME/web" commit -q --allow-empty -m "x"
+  rc=0; out="$(crux scope check 2>&1)" || rc=$?
+  assert_eq 0 "$rc" "commits with the wrong email do not fail it"
+  assert_contains "$out" "the email of scope 'own'" "but they are named"
+}
+
+test_each_scope_has_its_browser_profile_and_the_others_are_closed() {
+  wall_setup
+  mkdir -p "$SB/chrome/Own" "$SB/chrome/Acme"
+  printf 'BROWSER_PROFILE="%s"\n' "$SB/chrome/Own" >> "$CRUX_SCOPES_DIR/own/config"
+  printf 'BROWSER_PROFILE="%s"\n' "$SB/chrome/Acme" >> "$CRUX_SCOPES_DIR/acme/config"
+  assert_eq "$SB/chrome/Acme" "$(in_dir "$ACME/web" "$CRUX_HOME/bin/crux" __fn scope_browser_profile)" \
+    "the browser skill gets its scope's profile"
+  assert_stops "copying another scope's profile" "scope 'own'" in-acme "$ACME/web" Bash "{\"command\":\"cp -R $SB/chrome/Own /tmp/cdp\"}"
+  assert_lets "copying its own" in-acme "$ACME/web" Bash "{\"command\":\"cp -R $SB/chrome/Acme /tmp/cdp\"}"
+  printf 'BROWSER_PROFILE="%s"\n' "$SB/chrome/Own" >> "$CRUX_SCOPES_DIR/acme/config"
+  assert_contains "$(crux scope check 2>&1)" "share one browser profile" "two scopes cannot share one"
+}
