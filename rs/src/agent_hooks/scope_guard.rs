@@ -66,7 +66,8 @@ fn steps(command: &str, start: &Path) -> Vec<Step> {
             .collect();
         let (mut program, mut wrapped) = (0, false);
         while let Some(w) = words.get(program) {
-            let wrapper = matches!(w.as_str(), "env" | "sudo" | "command" | "exec" | "nice" | "nohup" | "time");
+            let name = w.rsplit('/').next().unwrap_or(w);
+            let wrapper = matches!(name, "env" | "sudo" | "command" | "exec" | "nice" | "nohup" | "time");
             let assignment = w.contains('=') && !w.starts_with('-') && !w.starts_with('/');
             let wrapper_option = wrapped && w.starts_with('-');
             if !(wrapper || assignment || wrapper_option) {
@@ -638,7 +639,11 @@ mod tests {
 
     #[test]
     fn the_program_is_found_past_wrappers_and_paths() {
-        let s = steps(r#"env "CRUX_SCOPE=x" /opt/bin/crux scope enter acme; sudo -E grep -r a /w"#, Path::new("/"));
+        let s = steps(
+            r#"env "CRUX_SCOPE=x" /opt/bin/crux scope enter acme; sudo -E grep -r a /w; /usr/bin/env crux scope"#,
+            Path::new("/"),
+        );
+        assert_eq!(s[2].program(), "crux", "a wrapper named by its path is still a wrapper");
         assert_eq!(s[0].program(), "crux");
         assert_eq!(s[0].args().first().map(String::as_str), Some("scope"));
         assert_eq!(s[1].program(), "grep");

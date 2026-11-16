@@ -543,6 +543,7 @@ test_the_review_bypasses_are_closed() {
   assert_stops "8: reading another scope's declaration" "is not this session's" $s "$c" Bash '{"command":"crux scope show own"}'
   assert_stops "8: entering another scope through a path to crux" "already in 'acme'" $s "$c" Bash '{"command":"/usr/local/bin/crux scope enter own"}'
   assert_stops "8: or through env" "already in 'acme'" $s "$c" Bash '{"command":"env crux scope enter own"}'
+  assert_stops "8: or through env named by its path" "already in 'acme'" $s "$c" Bash '{"command":"/usr/bin/env crux scope enter own"}'
   assert_stops "9: the variable set inside quotes" "decides which scope" $s "$c" Bash '{"command":"env \"CRUX_SCOPE=own\" crux task list"}'
   assert_stops "10: gh with the owner as a bare argument" "owner of scope 'own'" $s "$c" Bash '{"command":"gh repo list me"}'
   assert_stops "10: gh api with the owner in the path" "" $s "$c" Bash '{"command":"gh api repos/me/blog/contents/x"}'
