@@ -95,7 +95,8 @@ pub fn load_into_claude(dir: Option<&Path>, note: Option<&Path>) -> std::io::Res
 /// a machine holds (`machines/`) stay private, and how they want to work is
 /// shared.
 pub fn is_shared(dir: &Path, rel: &str) -> bool {
-    let text = crate::files::read_or_empty(&dir.join(rel));
+    // A note that cannot be read is not known to be shareable.
+    let Some(text) = crate::files::read_optional(&dir.join(rel)) else { return false };
     let mut lines = text.lines();
     if lines.next() == Some("---") {
         for l in lines.by_ref() {
@@ -202,6 +203,11 @@ pub fn projects_named_in(text: &str, projects: &[String]) -> Vec<String> {
         .iter()
         .filter(|p| {
             let p = p.to_lowercase();
+            // A short name like `web` is an ordinary word: it would claim
+            // every correction that mentions one.
+            if p.chars().count() < 4 {
+                return false;
+            }
             let word = regex::Regex::new(&format!(r"(^|[^a-z0-9]){}($|[^a-z0-9])", regex::escape(&p)))
                 .is_ok_and(|r| r.is_match(&lower));
             let flat: String = p.chars().filter(|c| c.is_alphanumeric()).collect();

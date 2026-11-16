@@ -204,6 +204,7 @@ pub fn run(argv: &[String]) -> Res {
         // by its type alone, it landed in the person's preferences.
         let project_rule = (m.kind == "feedback").then(|| named_project(&m.path, &projects)).flatten();
         if let Some(p) = project_rule {
+            n_feedback += 1;
             unpromoted.push((m.kind.clone(), name, format!("{p}-docs (a rule of that project)")));
             continue;
         }

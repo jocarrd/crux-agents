@@ -360,6 +360,7 @@ pub fn reminder_for_session(
     maximum: usize,
     all: &crate::scope::Scopes,
     pinned: Option<&crate::scope::Scope>,
+    only_project: Option<&str>,
 ) -> Option<Value> {
     if !all.declared {
         return reminder(cwd, maximum);
@@ -370,7 +371,31 @@ pub fn reminder_for_session(
         let Some(r) = reminder_in(&s.tasks_dir(), cwd, maximum) else { continue };
         user.push(format!("[{}] {}", s.name, text(&r, "user")));
         match pinned {
-            Some(p) if p.name == s.name => agent = text(&r, "agent"),
+            // An isolated project's session gets its own project's tasks and
+            // none of the rest of its scope.
+            Some(p) if p.name == s.name => match only_project {
+                Some(proj) => {
+                    let mine: Vec<&Value> = r
+                        .get("tasks")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter(|t| {
+                            t.get("task").and_then(Value::as_str).is_some_and(|n| n.starts_with(&format!("{proj}/")))
+                        })
+                        .collect();
+                    if !mine.is_empty() {
+                        agent = format!(
+                            "Open tasks of this project (already shown to the person):\n{}",
+                            mine.iter()
+                                .map(|t| format!("· {}", t.get("task").and_then(Value::as_str).unwrap_or("")))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        );
+                    }
+                }
+                None => agent = text(&r, "agent"),
+            },
             Some(_) => {}
             None => {
                 for t in r.get("tasks").and_then(Value::as_array).into_iter().flatten() {

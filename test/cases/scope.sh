@@ -342,9 +342,9 @@ test_private_notes_of_the_profile_stay_where_the_full_profile_applies() {
   mkdir -p "$OWN/client/app"
 
   assert_lets "a shared note from another scope" in-acme "$ACME/web" Read "{\"file_path\":\"$dir/preferences/short.md\"}"
-  assert_stops "a private one" "private note" in-acme "$ACME/web" Read "{\"file_path\":\"$dir/about/jobs.md\"}"
+  assert_stops "a private one" "private to" in-acme "$ACME/web" Read "{\"file_path\":\"$dir/about/jobs.md\"}"
   session_start in-client "$OWN/client/app" >/dev/null
-  assert_stops "nor from a client's project of the person's own scope" "private note" in-client "$OWN/client/app" Read "{\"file_path\":\"$dir/about/jobs.md\"}"
+  assert_stops "nor from a client's project of the person's own scope" "private to" in-client "$OWN/client/app" Read "{\"file_path\":\"$dir/about/jobs.md\"}"
   local out; out="$(session_start in-alpha "$OWN/alpha")"
   assert_contains "$out" "about/jobs.md" "the person's own projects get the full index"
   assert_lets "and may read every note" in-alpha "$OWN/alpha" Read "{\"file_path\":\"$dir/about/jobs.md\"}"
@@ -516,4 +516,70 @@ test_a_session_entered_from_the_front_desk_runs_crux_inside_its_scope() {
   assert_stops "a task created from the desk folder" "Run it from inside: \`cd $ACME" $s "$c" Bash '{"command":"crux task new web/login"}'
   assert_lets "from inside its root" $s "$c" Bash "{\"command\":\"cd $ACME/web && crux task new web/login\"}"
   assert_lets "commands that do not depend on the folder" $s "$c" Bash '{"command":"crux scope show"}'
+}
+
+# --- What the independent review found (each line is one way through) ----------
+
+test_the_review_bypasses_are_closed() {
+  wall_setup
+  local s=in-acme c="$ACME/web"
+  in_dir "$OWN" "$CRUX_HOME/bin/crux" init client --no-remote --profile client-repo >/dev/null 2>&1
+  mkdir -p "$OWN/client/app" "$OWN/agent-profile/about" "$OWN/agent-profile/preferences"
+  printf -- '---\n---\n- [Jobs](about/jobs.md)\n' > "$OWN/agent-profile/PROFILE.md"
+  printf 'Interviewing.\n' > "$OWN/agent-profile/about/jobs.md"
+  printf 'Short answers.\n' > "$OWN/agent-profile/preferences/short.md"
+  assert_stops "1: entering its own scope does not open the rest of the line" "" $s "$c" Bash "{\"command\":\"crux scope enter acme; cat $OWN/alpha/.env\"}"
+  assert_stops "2: walking there with bare cds" "" $s "$c" Bash '{"command":"cd .. && cd .. && cd Own && grep -r secret ."}'
+  assert_stops "2: a search with no path from a foreign folder" "" $s "$OWN/alpha" Grep '{"pattern":"secret"}'
+  assert_stops "3: a recursive read of a folder that holds another scope" "reading it whole" $s "$c" Bash "{\"command\":\"grep -r token $SB\"}"
+  assert_lets "3: a plain listing of it is not a tree read" $s "$c" Bash "{\"command\":\"ls $SB\"}"
+  assert_stops "4: the whole transcripts folder" "" $s "$c" Bash "{\"command\":\"grep -r secret $CLAUDE_CONFIG_DIR/projects\"}"
+  session_start in-client "$OWN/client/app" >/dev/null
+  assert_stops "6: an isolated project reading its scope's root whole" "reading it whole" in-client "$OWN/client/app" Bash "{\"command\":\"grep -r . $OWN\"}"
+  assert_stops "7: a private part of the profile that is not a note" "" $s "$c" Bash "{\"command\":\"grep -r . $OWN/agent-profile/about\"}"
+  assert_stops "7: the full index is private too" "" $s "$c" Read "{\"file_path\":\"$OWN/agent-profile/PROFILE.md\"}"
+  assert_stops "7: the profile is not written from another scope" "not written from" $s "$c" Write "{\"file_path\":\"$OWN/agent-profile/preferences/new.md\",\"content\":\"x\"}"
+  assert_stops "8: moving a project between scopes is the person's" "person's decision" $s "$c" Bash '{"command":"crux scope move alpha acme"}'
+  assert_stops "8: reading another scope's declaration" "is not this session's" $s "$c" Bash '{"command":"crux scope show own"}'
+  assert_stops "8: entering another scope through a path to crux" "already in 'acme'" $s "$c" Bash '{"command":"/usr/local/bin/crux scope enter own"}'
+  assert_stops "8: or through env" "already in 'acme'" $s "$c" Bash '{"command":"env crux scope enter own"}'
+  assert_stops "9: the variable set inside quotes" "decides which scope" $s "$c" Bash '{"command":"env \"CRUX_SCOPE=own\" crux task list"}'
+  assert_stops "10: gh with the owner as a bare argument" "owner of scope 'own'" $s "$c" Bash '{"command":"gh repo list me"}'
+  assert_stops "10: gh api with the owner in the path" "" $s "$c" Bash '{"command":"gh api repos/me/blog/contents/x"}'
+  assert_stops "11: a connector with a path into another scope" "" $s "$c" mcp__fs__read_file "{\"path\":\"$OWN/alpha/.env\"}"
+}
+
+test_review_findings_outside_the_wall() {
+  sandbox >/dev/null
+  two_scopes
+  mkdir -p "$ACME/web" "$OWN/web"
+  assert_contains "$(crux scope open --project web 2>&1)" "is in several scopes" "14: a project name in two scopes is said, not guessed"
+  printf 'SECRETS="keys/acme"\n' >> "$CRUX_SCOPES_DIR/acme/config"
+  assert_contains "$(crux scope check 2>&1)" "must be an absolute path" "18: a relative secret is refused"
+  two_scopes
+  printf 'ENFORCE="sandbox"\nGH_CONFIG_DIR="%s/gh dir"\n' "$SB" >> "$CRUX_SCOPES_DIR/acme/config"
+  mkdir -p "$ACME/web"; git init -q "$ACME/web/api"
+  local gc="$SB/gitconfig"; : > "$gc"
+  GIT_CONFIG_GLOBAL="$gc" crux scope apply >/dev/null 2>&1
+  assert_contains "$(cat "$CRUX_SCOPES_DIR/acme/gitconfig")" "GH_CONFIG_DIR='$SB/gh dir'" "16: a gh folder with a space is quoted"
+  assert_contains "$(json_get "$ACME/web/api/.claude/settings.local.json" sandbox.filesystem.denyRead)" "/projects" "17: the sandbox also denies the transcripts"
+  printf 'ROOT="%s"\nREMOTE="git@github.com:acme/{repo}.git"\n' "$ACME" > "$CRUX_SCOPES_DIR/acme/config"
+  GIT_CONFIG_GLOBAL="$gc" crux scope apply >/dev/null 2>&1
+  assert_eq "" "$(json_get "$ACME/web/api/.claude/settings.local.json" sandbox 2>/dev/null)" "15: going back to the guard takes the sandbox out"
+  rm -rf "$CRUX_SCOPES_DIR"
+  GIT_CONFIG_GLOBAL="$gc" CRUX_PROJECTS_DIR="$SB" crux scope apply >/dev/null 2>&1
+  assert_not_contains "$(cat "$gc")" "crux:scopes" "15: without scopes the git block is gone"
+  two_scopes
+  assert_contains "$(CRUX_UNPINNED_SESSIONS=nope crux status 2>&1)" "no scope 'nope'" "20: an unknown scope name stops the command"
+}
+
+test_an_isolated_project_session_gets_only_its_tasks() {
+  wall_setup
+  in_dir "$OWN" "$CRUX_HOME/bin/crux" init client --no-remote --profile client-repo >/dev/null 2>&1
+  in_dir "$OWN" "$CRUX_HOME/bin/crux" init alpha2 --no-remote >/dev/null 2>&1
+  mkdir -p "$OWN/client/app"
+  in_dir "$OWN/alpha2" "$CRUX_HOME/bin/crux" task new alpha2/secret-plan --goal "x" >/dev/null 2>&1
+  local out agent; out="$(session_start in-client9 "$OWN/client/app")"
+  agent="$(printf '%s' "$out" | "$CRUX_BIN" __fn json_get /dev/stdin hookSpecificOutput.additionalContext 2>/dev/null)"
+  assert_not_contains "$agent" "secret-plan" "13: the rest of its scope's tasks stay out"
 }

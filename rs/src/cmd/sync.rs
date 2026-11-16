@@ -43,7 +43,7 @@ fn parallel<T: Sync, R: Send>(items: &[T], n: usize, f: impl Fn(&T) -> R + Sync)
 
 /// The session's project is brought up to date before the agent starts; the
 /// rest, after, so that one slow remote does not hold every session up.
-enum Scope {
+enum Reach {
     All,
     Only(Vec<PathBuf>),
     Except(Vec<PathBuf>),
@@ -52,7 +52,7 @@ enum Scope {
 struct Ctx {
     root: PathBuf,
     mode: &'static str,
-    scope: Scope,
+    scope: Reach,
 }
 
 impl Ctx {
@@ -66,13 +66,13 @@ impl Ctx {
         let d = project::real(d);
         let under = |dirs: &[PathBuf]| dirs.iter().any(|x| d.starts_with(x));
         match &self.scope {
-            Scope::All => true,
-            Scope::Only(dirs) => under(dirs),
-            Scope::Except(dirs) => !under(dirs),
+            Reach::All => true,
+            Reach::Only(dirs) => under(dirs),
+            Reach::Except(dirs) => !under(dirs),
         }
     }
     fn whole(&self) -> bool {
-        !matches!(self.scope, Scope::Only(_))
+        !matches!(self.scope, Reach::Only(_))
     }
     fn repos(&self) -> (Vec<PathBuf>, Vec<PathBuf>) {
         let mut candidates = vec![];
@@ -929,7 +929,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
     let Some(lock) = take_lock(state, true) else { return Ok(()) };
     crate::files::touch_marker(&marker, "");
     let here = session_dirs(&ctx.root);
-    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Scope::Only(here.clone()) };
+    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Reach::Only(here.clone()) };
     let (mut lines, offline, mut repos) = arrival_lines(&first);
     let mut offline = offline.len();
     if rest_in_background() {
@@ -940,7 +940,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
             sh::detach(c);
         }
     } else {
-        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Scope::Except(here) };
+        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Reach::Except(here) };
         let (more, more_offline, more_repos) = arrival_lines(&rest);
         lines.extend(more);
         offline += more_offline.len();
@@ -1020,10 +1020,10 @@ pub fn run(argv: &[String]) -> Res {
     let _ = files::mkdir_private(&state);
     if argv.first().map(String::as_str) == Some(REST) {
         let except = argv[1..].iter().map(PathBuf::from).collect();
-        rest(&Ctx { root: root.clone(), mode, scope: Scope::Except(except) }, &state)?;
-        return in_other_scopes(&root, |r| rest(&Ctx { root: r, mode, scope: Scope::All }, &state));
+        rest(&Ctx { root: root.clone(), mode, scope: Reach::Except(except) }, &state)?;
+        return in_other_scopes(&root, |r| rest(&Ctx { root: r, mode, scope: Reach::All }, &state));
     }
-    let ctx = Ctx { root: root.clone(), mode, scope: Scope::All };
+    let ctx = Ctx { root: root.clone(), mode, scope: Reach::All };
     match mode {
         "hook" => {
             // By hand and in a terminal, reading stdin would wait for a Ctrl-D.
@@ -1034,14 +1034,14 @@ pub fn run(argv: &[String]) -> Res {
         }
         "leave" => {
             departure(&ctx)?;
-            in_other_scopes(&root, |r| departure(&Ctx { root: r, mode, scope: Scope::All }))
+            in_other_scopes(&root, |r| departure(&Ctx { root: r, mode, scope: Reach::All }))
         }
         _ => {
             let _lock = take_lock(&state, false);
             // A report left by the hook would repeat what this run says now.
             let _ = std::fs::remove_file(report_file(&state));
             arrival(&ctx)?;
-            in_other_scopes(&root, |r| arrival(&Ctx { root: r, mode, scope: Scope::All }))
+            in_other_scopes(&root, |r| arrival(&Ctx { root: r, mode, scope: Reach::All }))
         }
     }
 }
@@ -1049,7 +1049,10 @@ pub fn run(argv: &[String]) -> Res {
 /// The same pass over every other scope's root (ADR-025), each with its own
 /// tasks and remote: CRUX_SCOPE makes every path the pass resolves its scope's.
 fn in_other_scopes(done: &Path, mut pass: impl FnMut(PathBuf) -> Res) -> Res {
-    let Ok(all) = crate::scope::load() else { return Ok(()) };
+    let all = match crate::scope::load() {
+        Ok(a) => a,
+        Err(e) => die!("the scopes cannot be used: {e}"),
+    };
     if !all.declared {
         return Ok(());
     }

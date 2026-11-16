@@ -1095,7 +1095,8 @@
     person.
   - The profile is the person's, not the scope's: `person::dir` resolves in the
     primary scope. Each note declares `visibility: shared | private` in its
-    frontmatter (`about/` and `machines/` default to private). With scopes
+    frontmatter (`about/` and `machines/` default to private; the full index,
+    folders and git's objects count as private too). With scopes
     declared the global agent file imports nothing of the profile, and every
     root imports the shared index, generated in crux's state. The full index
     is not imported by any file: a root's file reaches every project under it,
@@ -1116,7 +1117,14 @@
     reuses the parsing `destructive-guard` already has and resolves absolute,
     `~`, `$HOME` and relative paths against the cwd. With one scope it does
     nothing; when it cannot read the scopes it stops (fails closed). Its
-    message says how to go on: open a session in that scope.
+    message says how to go on: open a session in that scope. For `Bash` it
+    reads each command of the line with the folder it runs from (following
+    every `cd`) and the program it runs (past `env`, `sudo`, assignments and a
+    path), and counts that folder as touched: `grep -r .` reads where it
+    stands. A tool or command that reads a tree (`Grep`, `Glob`, `grep -r`,
+    `find`, `rg`, `tar`, `cp -r`, `ls -R`...) is stopped on a folder that
+    holds another scope, a project its isolation leaves out, the profile where
+    only its shared part applies, or the agents' transcripts.
   - Changing scope means **a new session**, never switching the current one:
     what leaks is the conversation as much as the files. `crux scope open
     <name> [--task <id>] [--prompt <text>]` opens the agent in the scope's
@@ -1129,7 +1137,9 @@
   - Parsing a shell command is never complete (`find /`, a script that reads
     on its own). `ENFORCE="sandbox"` makes `crux link` write the agent's
     sandbox settings in each repo of the scope, with the other roots denied for
-    reading, so the operating system enforces it. Where the sandbox is missing
+    reading (and the agents' transcripts, the primary scope's tasks and the
+    profile where only its shared part applies), so the operating system
+    enforces it. Where the sandbox is missing
     (bubblewrap on Linux), crux says so and stays on the guard.
   - `is_secret` also covers everything under `~/.ssh/` except `*.pub`,
     `config` and `known_hosts`, and every declared secret path.
@@ -1138,7 +1148,7 @@
     and, when `GH_CONFIG_DIR` is set, a credential helper bound to it; crux's
     own `gh` calls run with it, and the agent's get it through the `env` of
     the repo's local agent settings. In `~/.ssh/config`, one
-    `Match exec "crux __fn scope-of-cwd <name>"` block per scope with
+    `Match exec "crux __fn scope_of_cwd <name>"` block per scope with
     `IdentityFile ~/.ssh/<name>/%h` and `IdentitiesOnly yes`: a key named
     after its host, offered only from its scope. `BROWSER_PROFILE` names the
     browser profile the browser skill copies in a scope; another scope's is
@@ -1149,13 +1159,20 @@
     `scope` and only kernel skills are named, as `client` already does.
   - The wall cannot be moved from inside: `scope-guard` stops writing the
     scopes' folder or the pins, setting `CRUX_SCOPE`, `CRUX_SCOPES_DIR`,
-    `CRUX_STATE_DIR`, `CRUX_TASKS_DIR` or `CRUX_UNPINNED_SESSIONS` on a
-    command, and `crux task|workspace ... --all`, whose list of every scope is
-    for the person.
+    `CRUX_STATE_DIR`, `CRUX_TASKS_DIR` or `CRUX_UNPINNED_SESSIONS` where an
+    assignment takes effect, `crux task|workspace ... --all`, whose list of
+    every scope is for the person, `crux scope move` and `crux scope show` of
+    another scope. A pin is created only if absent, so two calls racing cannot
+    pin two scopes, and is refreshed while the session works so the monthly
+    sweep never takes a live one. A folder-bound `crux` command run outside
+    the pinned scope (a session pinned from the front desk stands outside
+    every root) is stopped with the `cd` that fixes it.
   - New command `crux scope`: `list`, `show`, `check`, `of`, `map`, `enter`,
     `open`, `move <project> <scope>` (moves the folder and its tasks; refused
     while the project has workspaces) and `apply` (profile, git, ssh, agent
-    settings). `crux __fn scope_of_cwd <name>` answers ssh's `Match exec`.
+    settings; with no scopes left it takes out what it wrote, and a scope back
+    on the guard loses the sandbox it had). `crux __fn scope_of_cwd <name>`
+    answers ssh's `Match exec`.
     Every command but `scope`, `hook` and `doctor` stops while the scopes
     cannot be used. `crux scope check` names overlapping roots, a missing or
     doubled primary, one owner in two scopes, a secret inside another root and

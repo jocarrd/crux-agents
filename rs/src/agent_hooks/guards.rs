@@ -145,6 +145,10 @@ fn is_secret(p: &str) -> bool {
     // Everything under ~/.ssh is a key unless it is public or the client's
     // own files: keys named after their host, in a folder per scope
     // (ADR-025), say nothing in their name.
+    // The declared secrets only, not a scope's browser profile: that one is
+    // copied (`cp -R`) by the browser skill inside its own scope, and the
+    // scope guard keeps the other scopes' out. Scopes that cannot be read
+    // count as none here because the scope guard stops every call then.
     let declared = crate::scope::load().map(|all| {
         let real = crate::scope::real_lenient(Path::new(&p));
         all.list.iter().any(|s| s.secrets.iter().any(|x| crate::scope::inside(&real, &crate::scope::real_lenient(x))))

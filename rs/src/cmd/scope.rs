@@ -16,7 +16,7 @@
 
 use crate::args::Parser;
 use crate::error::Res;
-use crate::scope::{self, Scope, Scopes};
+use crate::scope::{self, context_text, map_text, Scope, Scopes};
 use crate::{die, env, person, project, ui};
 use std::path::{Path, PathBuf};
 
@@ -29,21 +29,6 @@ fn loaded() -> Result<Scopes, crate::error::Exit> {
 
 fn cwd() -> PathBuf {
     std::env::current_dir().unwrap_or_default()
-}
-
-/// The projects of a scope, by folder: what hangs from its root, without
-/// workspaces, hidden folders or the person's profile.
-pub fn projects(s: &Scope) -> Vec<String> {
-    let profile = person::repo_name();
-    project::subdirs(&s.root)
-        .into_iter()
-        .filter(|n| !n.starts_with('.') && !n.contains("-ws-") && *n != profile)
-        .collect()
-}
-
-/// The scope a project lives in, by its folder in each root.
-pub fn scope_of_project<'a>(all: &'a Scopes, name: &str) -> Option<&'a Scope> {
-    all.list.iter().find(|s| s.root.join(name).is_dir())
 }
 
 fn list(all: &Scopes) -> Res {
@@ -195,60 +180,10 @@ fn placement(all: &Scopes, s: &Scope) -> Vec<(String, bool)> {
     out
 }
 
-/// The front desk's map: enough to tell where a request belongs, and only
-/// names. What is inside a scope is loaded once the session enters it.
-pub fn map_text(all: &Scopes) -> String {
-    let mut out = vec!["Scopes on this machine and their projects (names only):".to_string()];
-    for s in &all.list {
-        let ps = projects(s);
-        out.push(format!(
-            "· {}{}: {}",
-            s.name,
-            if s.primary { " (the person's own)" } else { "" },
-            if ps.is_empty() { "no projects yet".into() } else { ps.join(", ") }
-        ));
-    }
-    out.join("\n")
-}
-
-/// What a session is told when it is pinned: where it is, the profile it may
-/// see, and how to leave. Also what `crux scope enter` prints, which is how a
-/// session pinned from the front desk gets it.
-pub fn context_text(all: &Scopes, place: &scope::Place) -> String {
-    let Some(s) = all.by_name(&place.scope) else { return String::new() };
-    let here = match &place.project {
-        Some(p) => format!("the isolated project '{p}' of scope '{}'", s.name),
-        None => format!("scope '{}'", s.name),
-    };
-    let mut out = vec![format!(
-        "This session is in {here} (root {}). It stays there: work that belongs to another scope or isolated \
-         project is done in a new session, opened with `crux scope open <scope>` or `crux scope open --project \
-         <name>`. Say so to the person instead of trying.",
-        s.root.display()
-    )];
-    if place.project.is_none() {
-        let ps = projects(s);
-        if !ps.is_empty() {
-            out.push(format!("Its projects: {}.", ps.join(", ")));
-        }
-    }
-    if all.person_at(place) == scope::Person::Full {
-        if let Some(d) = person::dir() {
-            let index = crate::files::read_or_empty(&d.join("PROFILE.md"));
-            out.push(format!(
-                "The person's full profile applies here (paths relative to {}):\n{}",
-                d.display(),
-                index.trim_end()
-            ));
-        }
-    }
-    out.join("\n\n")
-}
-
 fn resolve<'a>(all: &'a Scopes, name: Option<&str>, project_name: Option<&str>) -> Result<&'a Scope, String> {
     match (name, project_name) {
         (Some(n), _) => all.by_name(n).ok_or_else(|| format!("no scope '{n}'")),
-        (None, Some(p)) => scope_of_project(all, p).ok_or_else(|| format!("no scope has a project '{p}'")),
+        (None, Some(p)) => all.scope_of_project(p),
         (None, None) => Err("which scope: <name> or --project <name>".into()),
     }
 }
@@ -362,10 +297,12 @@ fn apply_git(all: &Scopes) -> Result<Vec<String>, String> {
             }
         }
         if let Some(gh) = &s.gh_config_dir {
+            // Quoted for the shell git hands the helper to: macOS folders
+            // often carry spaces (`Application Support`).
             body.push_str(&format!(
-                "[credential \"https://github.com\"]\n\thelper =\n\thelper = !{}={} gh auth git-credential\n",
+                "[credential \"https://github.com\"]\n\thelper =\n\thelper = !{}='{}' gh auth git-credential\n",
                 crate::names::agents::GH_CONFIG_DIR,
-                gh.display()
+                gh.display().to_string().replace('\'', "'\\''")
             ));
         }
         if body.is_empty() {
@@ -440,42 +377,89 @@ fn repos_under(root: &Path) -> Vec<PathBuf> {
 /// The agent settings a repo of a scope gets: the sandbox with every other
 /// scope out of reach when the scope asks for it, and the gh account when it
 /// has one of its own. Merged into what the file already holds.
+/// Whether a sandbox block is the one `apply` writes: it always denies writing
+/// the scopes' folder, which nobody else would think to name.
+fn sandbox_is_ours(v: &serde_json::Value) -> bool {
+    let guarded = scope::dir().display().to_string();
+    v.pointer("/sandbox/filesystem/denyWrite")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|a| a.iter().any(|x| x.as_str() == Some(guarded.as_str())))
+}
+
+/// What the sandbox denies a repo of scope `s`: everything `scope-guard`
+/// stops, so a shell command the guard's parsing misses still hits a wall.
+fn sandbox_denied(all: &Scopes, s: &Scope) -> Vec<String> {
+    let mut deny: Vec<PathBuf> = vec![env::claude_transcripts_dir()];
+    for o in all.list.iter().filter(|o| o.name != s.name) {
+        deny.push(o.real_root.clone());
+        deny.extend(o.secret_paths());
+        deny.push(ssh_keys_dir(o));
+        deny.extend(o.dir.clone());
+        if o.primary {
+            deny.push(env::machine_tasks_dir());
+        }
+    }
+    if s.person != scope::Person::Full {
+        deny.extend(person::dir());
+    }
+    deny.iter().map(|p| p.display().to_string()).collect()
+}
+
+/// The agent settings a repo of a scope gets: the sandbox with every other
+/// scope out of reach when the scope asks for it, and the gh account when it
+/// has one of its own. Merged into what the file already holds, and taken out
+/// again when the scope no longer asks for it.
 pub fn apply_repo(all: &Scopes, repo: &Path) -> Result<bool, String> {
-    let Some(s) = all.of_path(repo) else { return Ok(false) };
-    let sandbox = s.enforce == scope::Enforce::Sandbox;
-    if !sandbox && s.gh_config_dir.is_none() {
+    let s = all.of_path(repo).filter(|_| all.declared);
+    let sandbox = s.filter(|s| s.enforce == scope::Enforce::Sandbox);
+    let gh = s.and_then(|s| s.gh_config_dir.clone());
+    let file = repo.join(crate::names::CLAUDE_LOCAL_SETTINGS);
+    if !file.exists() && sandbox.is_none() && gh.is_none() {
         return Ok(false);
     }
-    let file = repo.join(crate::names::CLAUDE_LOCAL_SETTINGS);
     let mut v = if file.exists() { crate::files::read_json(&file)? } else { serde_json::json!({}) };
+    let before = v.clone();
+    let ours = sandbox_is_ours(&v);
     let obj = v.as_object_mut().ok_or_else(|| format!("{}: not a JSON object", file.display()))?;
-    if sandbox {
-        let mut deny: Vec<String> = vec![];
-        for o in all.list.iter().filter(|o| o.name != s.name) {
-            deny.push(o.real_root.display().to_string());
-            deny.extend(o.secret_paths().iter().map(|x| x.display().to_string()));
-            deny.push(ssh_keys_dir(o).display().to_string());
-            if let Some(d) = &o.dir {
-                deny.push(d.display().to_string());
+    match sandbox {
+        Some(s) => {
+            obj.insert(
+                "sandbox".into(),
+                serde_json::json!({
+                    "enabled": true,
+                    "allowUnsandboxedCommands": false,
+                    "filesystem": {
+                        "denyRead": sandbox_denied(all, s),
+                        "denyWrite": [scope::dir().display().to_string(), scope::pins_dir().display().to_string()],
+                    },
+                }),
+            );
+        }
+        None if ours => {
+            obj.shift_remove("sandbox");
+        }
+        None => {}
+    }
+    let key = crate::names::agents::GH_CONFIG_DIR;
+    match &gh {
+        Some(dir) => {
+            let env_obj = obj.entry("env").or_insert_with(|| serde_json::json!({}));
+            if let Some(e) = env_obj.as_object_mut() {
+                e.insert(key.into(), serde_json::json!(dir.display().to_string()));
             }
         }
-        obj.insert(
-            "sandbox".into(),
-            serde_json::json!({
-                "enabled": true,
-                "allowUnsandboxedCommands": false,
-                "filesystem": {
-                    "denyRead": deny,
-                    "denyWrite": [scope::dir().display().to_string(), scope::pins_dir().display().to_string()],
-                },
-            }),
-        );
-    }
-    if let Some(gh) = &s.gh_config_dir {
-        let env_obj = obj.entry("env").or_insert_with(|| serde_json::json!({}));
-        if let Some(e) = env_obj.as_object_mut() {
-            e.insert(crate::names::agents::GH_CONFIG_DIR.into(), serde_json::json!(gh.display().to_string()));
+        None => {
+            let declared: Vec<String> =
+                all.list.iter().filter_map(|o| o.gh_config_dir.as_ref().map(|d| d.display().to_string())).collect();
+            if let Some(e) = obj.get_mut("env").and_then(serde_json::Value::as_object_mut) {
+                if e.get(key).and_then(serde_json::Value::as_str).is_some_and(|d| declared.iter().any(|x| x == d)) {
+                    e.shift_remove(key);
+                }
+            }
         }
+    }
+    if v == before {
+        return Ok(false);
     }
     if let Some(d) = file.parent() {
         std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
@@ -485,10 +469,35 @@ pub fn apply_repo(all: &Scopes, repo: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Without scopes, what apply generated earlier is taken out: the blocks in
+/// git's and ssh's configs and the sandbox it wrote into repos.
+fn unapply(all: &Scopes) -> Res {
+    if let Err(e) = crate::template::replace_or_append_block(&git_config_file(), BEGIN, END, "") {
+        die!("git: {e}");
+    }
+    if ssh_config_file().exists() {
+        if let Err(e) = crate::template::write_marked_block(&ssh_config_file(), BEGIN, END, "") {
+            die!("ssh: {e}");
+        }
+    }
+    let mut n = 0;
+    for root in env::all_projects_roots() {
+        for r in repos_under(&root) {
+            if apply_repo(all, &r).unwrap_or(false) {
+                n += 1;
+            }
+        }
+    }
+    ui::ok(format!(
+        "no scopes declared: removed what scopes had written (git, ssh{})",
+        if n > 0 { format!(", {}", ui::count(n, "repo", "repos")) } else { String::new() }
+    ));
+    Ok(())
+}
+
 fn apply(all: &Scopes) -> Res {
     if !all.declared {
-        ui::info("no scopes declared: nothing to apply");
-        return Ok(());
+        return unapply(all);
     }
     if person::dir().is_some() {
         crate::cmd::profile::link()?;
@@ -525,7 +534,10 @@ fn apply(all: &Scopes) -> Res {
 /// one not moved.
 fn move_project(all: &Scopes, argv: &[String]) -> Res {
     let (Some(name), Some(to)) = (argv.first(), argv.get(1)) else { die!("usage: crux scope move <project> <scope>") };
-    let Some(from) = scope_of_project(all, name) else { die!("no scope has a project '{name}'") };
+    let from = match all.scope_of_project(name) {
+        Ok(s) => s,
+        Err(e) => die!("{e}"),
+    };
     let Some(target) = all.by_name(to) else { die!("no scope '{to}'") };
     if from.name == target.name {
         ui::ok(format!("'{name}' is already in scope '{to}'"));

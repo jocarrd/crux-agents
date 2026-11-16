@@ -58,7 +58,8 @@ pub fn dispatch(argv: &[String]) -> i32 {
     // switch isolation off without a word. `scope` stays usable to see why,
     // and hooks decide for themselves how to fail.
     if !standalone && !matches!(name, "scope" | "hook" | "doctor") {
-        if let Err(e) = crate::scope::load() {
+        let here = std::env::current_dir().unwrap_or_default();
+        if let Err(e) = crate::scope::load().and_then(|all| all.current(&here).map(|_| ())) {
             crate::ui::err(format!("the scopes cannot be used: {e}"));
             crate::ui::info("crux scope check    shows what is wrong");
             return 1;

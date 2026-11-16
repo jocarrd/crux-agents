@@ -197,6 +197,21 @@ pub fn parse(name: &str, folder: &Path) -> Result<Scope, String> {
         Some("true") => true,
         Some(v) => return Err(format!("{}: '{v}' is not true or false", where_("PRIMARY"))),
     };
+    // A relative path would be resolved against whatever folder each command
+    // runs in, and name a different place every time.
+    let absolute = |key: &str, values: Vec<PathBuf>| -> Result<Vec<PathBuf>, String> {
+        match values.iter().find(|p| !p.is_absolute()) {
+            Some(p) => Err(format!("{}: '{}' must be an absolute path", where_(key), p.display())),
+            None => Ok(values),
+        }
+    };
+    let secrets = absolute("SECRETS", words(get("SECRETS")).iter().map(|s| expand(s)).collect())?;
+    let browser_profile =
+        absolute("BROWSER_PROFILE", get("BROWSER_PROFILE").map(|v| expand(&v)).into_iter().collect())?
+            .into_iter()
+            .next();
+    let gh_config_dir =
+        absolute("GH_CONFIG_DIR", get("GH_CONFIG_DIR").map(|v| expand(&v)).into_iter().collect())?.into_iter().next();
     Ok(Scope {
         name: name.to_string(),
         real_root: real_lenient(&root),
@@ -205,12 +220,12 @@ pub fn parse(name: &str, folder: &Path) -> Result<Scope, String> {
         owners: words(get("OWNERS")),
         git_name: get("GIT_NAME"),
         git_email: get("GIT_EMAIL"),
-        gh_config_dir: get("GH_CONFIG_DIR").map(|v| expand(&v)),
+        gh_config_dir,
         // The primary scope is the person's own: it sees the whole profile
         // unless it says otherwise. Any other sees what is shared.
         person: person.unwrap_or(if primary { Person::Full } else { Person::Shared }),
-        secrets: words(get("SECRETS")).iter().map(|s| expand(s)).collect(),
-        browser_profile: get("BROWSER_PROFILE").map(|v| expand(&v)),
+        secrets,
+        browser_profile,
         mcp_deny: words(get("MCP_DENY")),
         enforce,
         primary,
@@ -539,6 +554,85 @@ impl Scopes {
     }
 }
 
+// --- What a session is told -------------------------------------------------
+
+/// The projects of a scope, by folder: what hangs from its root, without
+/// workspaces, hidden folders or the person's profile.
+pub fn projects(s: &Scope) -> Vec<String> {
+    let profile = crate::person::repo_name();
+    project::subdirs(&s.root)
+        .into_iter()
+        .filter(|n| !n.starts_with('.') && !n.contains("-ws-") && *n != profile)
+        .collect()
+}
+
+impl Scopes {
+    /// The scope a project lives in, by its folder in each root. Two scopes
+    /// may hold a project with the same name: then the name alone does not
+    /// say which, and it is an error rather than a guess.
+    pub fn scope_of_project(&self, name: &str) -> Result<&Scope, String> {
+        let found: Vec<&Scope> = self.list.iter().filter(|s| s.root.join(name).is_dir()).collect();
+        match found.as_slice() {
+            [one] => Ok(one),
+            [] => Err(format!("no scope has a project '{name}'")),
+            many => Err(format!(
+                "project '{name}' is in several scopes ({}): name the scope instead",
+                many.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", ")
+            )),
+        }
+    }
+}
+
+/// The front desk's map: enough to tell where a request belongs, and only
+/// names. What is inside a scope is loaded once the session enters it.
+pub fn map_text(all: &Scopes) -> String {
+    let mut out = vec!["Scopes on this machine and their projects (names only):".to_string()];
+    for s in &all.list {
+        let ps = projects(s);
+        out.push(format!(
+            "· {}{}: {}",
+            s.name,
+            if s.primary { " (the person's own)" } else { "" },
+            if ps.is_empty() { "no projects yet".into() } else { ps.join(", ") }
+        ));
+    }
+    out.join("\n")
+}
+
+/// What a session is told when it is pinned: where it is, the profile it may
+/// see, and how to leave. Also what `crux scope enter` prints, which is how a
+/// session pinned from the front desk gets it.
+pub fn context_text(all: &Scopes, place: &Place) -> String {
+    let Some(s) = all.by_name(&place.scope) else { return String::new() };
+    let here = match &place.project {
+        Some(p) => format!("the isolated project '{p}' of scope '{}'", s.name),
+        None => format!("scope '{}'", s.name),
+    };
+    let mut out = vec![format!(
+        "This session is in {here} (root {}). It stays there: work that belongs to another scope or isolated \
+         project is done in a new session, opened with `crux scope open <scope>` or `crux scope open --project \
+         <name>`. Say so to the person instead of trying. Run crux commands from inside that root.",
+        s.root.display()
+    )];
+    if place.project.is_none() {
+        let ps = projects(s);
+        if !ps.is_empty() {
+            out.push(format!("Its projects: {}.", ps.join(", ")));
+        }
+    }
+    if all.person_at(place) == Person::Full {
+        if let Some(d) = crate::person::dir() {
+            let index = files::read_or_empty(&d.join("PROFILE.md"));
+            out.push(format!(
+                "The person's full profile applies here (paths relative to {}):\n{}",
+                d.display(),
+                index.trim_end()
+            ));
+        }
+    }
+    out.join("\n\n")
+}
+
 // --- Pins --------------------------------------------------------------------
 //
 // A session is pinned to one scope and the pin never moves: what leaks
@@ -571,19 +665,43 @@ pub enum Pin {
 }
 
 /// Pins a session. Refused when it is pinned elsewhere: that is the whole
-/// point of a pin.
+/// point of a pin. The file is created only if absent, so two tool calls of
+/// one session racing to pin it cannot leave it in the scope of the later.
 pub fn pin(session: &str, scope: &str) -> Result<Pin, String> {
     if session.is_empty() {
         return Err("no session id to pin".into());
     }
-    match pinned(session) {
-        Some(s) if s == scope => Ok(Pin::Same),
-        Some(s) => Err(format!("this session is already in '{s}'; '{scope}' needs a new session")),
-        None => {
-            let f = pin_file(session);
-            files::mkdir_private(&pins_dir()).map_err(|e| format!("{}: {e}", pins_dir().display()))?;
-            files::write(&f, &format!("{scope}\n"))?;
+    let f = pin_file(session);
+    files::mkdir_private(&pins_dir()).map_err(|e| format!("{}: {e}", pins_dir().display()))?;
+    let created = std::fs::OpenOptions::new().write(true).create_new(true).open(&f);
+    match created {
+        Ok(mut file) => {
+            std::io::Write::write_all(&mut file, format!("{scope}\n").as_bytes())
+                .map_err(|e| format!("{}: {e}", f.display()))?;
             Ok(Pin::New)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => match pinned(session) {
+            Some(s) if s == scope => Ok(Pin::Same),
+            Some(s) => Err(format!("this session is already in '{s}'; '{scope}' needs a new session")),
+            None => Err(format!("{}: exists and cannot be read", f.display())),
+        },
+        Err(e) => Err(format!("{}: {e}", f.display())),
+    }
+}
+
+/// Marks a pin as alive. Pins older than a month are swept, and a session
+/// resumed after that would otherwise be pinned again wherever it stands,
+/// with the earlier scope's conversation in it. Rewritten at most once a day.
+pub fn refresh_pin(session: &str) {
+    let f = pin_file(session);
+    let stale = std::fs::metadata(&f)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age > std::time::Duration::from_secs(86400));
+    if stale {
+        if let Some(content) = files::read_optional(&f) {
+            let _ = files::write(&f, &content);
         }
     }
 }

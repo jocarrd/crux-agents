@@ -80,9 +80,10 @@ fn synced_and_reminder(cwd: &str, session: &str) -> (String, Option<Value>) {
     let synced = crate::sh::capture_cmd(&mut sync).out();
     let reminder = match crate::scope::load() {
         Ok(all) if all.declared => {
-            let pinned =
-                crate::scope::pinned(session).and_then(|n| all.by_name(&crate::scope::Place::parse(&n).scope).cloned());
-            remind::reminder_for_session(&dir, 6, &all, pinned.as_ref())
+            let place = crate::scope::pinned(session).map(|n| crate::scope::Place::parse(&n));
+            let pinned = place.as_ref().and_then(|p| all.by_name(&p.scope).cloned());
+            let only = place.as_ref().and_then(|p| p.project.clone());
+            remind::reminder_for_session(&dir, 6, &all, pinned.as_ref(), only.as_deref())
         }
         _ => remind::reminder(&dir, 6),
     };
@@ -106,16 +107,20 @@ fn scope_context(session: &str, cwd: &str) -> (Option<String>, Option<String>) {
     let dir = if cwd.is_empty() { self::cwd() } else { PathBuf::from(cwd) };
     let target = match crate::scope::pinned(session) {
         Some(p) => Some(crate::scope::Place::parse(&p)),
-        None => all.pin_place(&dir).or_else(|| {
-            all.unpinned_default().ok().flatten().map(|s| crate::scope::Place { scope: s.name.clone(), project: None })
-        }),
+        None => match all.pin_place(&dir) {
+            Some(p) => Some(p),
+            None => match all.unpinned_default() {
+                Ok(s) => s.map(|s| crate::scope::Place { scope: s.name.clone(), project: None }),
+                Err(e) => return (Some(e.clone()), Some(e)),
+            },
+        },
     };
     match target {
         Some(place) => {
             if let Err(e) = crate::scope::pin(session, &place.as_pin()) {
                 return (Some(e.clone()), Some(e));
             }
-            (Some(format!("scope: {}", place.as_pin())), Some(crate::cmd::scope::context_text(&all, &place)))
+            (Some(format!("scope: {}", place.as_pin())), Some(crate::scope::context_text(&all, &place)))
         }
         None => {
             let shared = crate::files::read_optional(&crate::person::shared_index_file())
@@ -126,7 +131,7 @@ fn scope_context(session: &str, cwd: &str) -> (Option<String>, Option<String>) {
                  `crux scope enter --project <name>` before touching it; that pins the session there for good.";
             (
                 Some("front desk: no scope yet, the first task decides it".into()),
-                Some(format!("{shared}{desk}\n{}", crate::cmd::scope::map_text(&all))),
+                Some(format!("{shared}{desk}\n{}", crate::scope::map_text(&all))),
             )
         }
     }
