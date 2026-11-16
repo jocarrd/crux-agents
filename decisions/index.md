@@ -1124,7 +1124,9 @@
     stands. A tool or command that reads a tree (`Grep`, `Glob`, `grep -r`,
     `find`, `rg`, `tar`, `cp -r`, `ls -R`...) is stopped on a folder that
     holds another scope, a project its isolation leaves out, the profile where
-    only its shared part applies, or the agents' transcripts (so a tree
+    only its shared part applies, another scope's secrets, or the agents'
+    session stores (Claude's transcripts, Codex's sessions and any folder
+    `CRUX_SESSION_STORES` names; so a tree
     read of the agent's own config folder is stopped too: name the file).
     Commands are split as the shell does, quotes and `bash -c` included, and
     any `scope enter` a command runs that is not the session's own place is
@@ -1145,8 +1147,9 @@
     profile where only its shared part applies), so the operating system
     enforces it. Where the sandbox is missing
     (bubblewrap on Linux), crux says so and stays on the guard.
-  - `is_secret` also covers everything under `~/.ssh/` except `*.pub`,
-    `config` and `known_hosts`, and every declared secret path.
+  - With scopes declared, `is_secret` also covers everything under `~/.ssh/`
+    except `*.pub`, `config` and `known_hosts`, and every declared secret
+    path; without scopes it knows the names it always knew.
   - Identity per scope, generated between markers: an `includeIf
     "gitdir:<real root>/"` (`gitdir/i:` on macOS) with the scope's name, email
     and, when `GH_CONFIG_DIR` is set, a credential helper bound to it; crux's
@@ -1161,12 +1164,18 @@
   - Usage lines (ADR-024) of a non-primary scope do not travel to the
     person's profile repo with project or skill names: they count as project
     `scope` and only kernel skills are named, as `client` already does.
-  - The wall cannot be moved from inside: `scope-guard` stops writing the
-    scopes' folder or the pins, setting `CRUX_SCOPE`, `CRUX_SCOPES_DIR`,
+  - The wall cannot be moved from inside: `scope-guard` stops writing what
+    holds it up (the scopes' folder, the pins, `~/.crux` with the kernel and
+    the guard itself, the agents' settings, a repo's local agent settings,
+    `~/.gitconfig` and `~/.ssh/config`) or any folder that holds one, setting `CRUX_SCOPE`, `CRUX_SCOPES_DIR`,
     `CRUX_STATE_DIR`, `CRUX_TASKS_DIR` or `CRUX_UNPINNED_SESSIONS` where an
     assignment takes effect, `crux task|workspace ... --all`, whose list of
-    every scope is for the person, `crux scope move` and `crux scope show` of
-    another scope. A pin is created only if absent, so two calls racing cannot
+    every scope is for the person, `crux scope move` and `apply`, and `crux
+    scope show` of another scope. A pinned session whose scopes are gone is
+    stopped, not set free; a project whose contract cannot be read, or says
+    an isolation it does not know, is isolated. With one scope there is no
+    front desk: every session is in it. A call is pinned only after it passes
+    every check. A pin is created only if absent, so two calls racing cannot
     pin two scopes, and is refreshed while the session works so the monthly
     sweep never takes a live one. A folder-bound `crux` command run outside
     the pinned scope (a session pinned from the front desk stands outside

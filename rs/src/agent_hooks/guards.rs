@@ -142,22 +142,27 @@ conversation.
 fn is_secret(p: &str) -> bool {
     let home = env::home().to_string_lossy().into_owned();
     let p = if p.starts_with("~/") { format!("{home}{}", &p[1..]) } else { p.to_string() };
-    // Everything under ~/.ssh is a key unless it is public or the client's
-    // own files: keys named after their host, in a folder per scope
-    // (ADR-025), say nothing in their name.
-    // The declared secrets only, not a scope's browser profile: that one is
-    // copied (`cp -R`) by the browser skill inside its own scope, and the
-    // scope guard keeps the other scopes' out. Scopes that cannot be read
-    // count as none here because the scope guard stops every call then.
-    let declared = crate::scope::load().map(|all| {
+    // With scopes (ADR-025), a declared secret, and everything under ~/.ssh
+    // that is not public or the client's own files: keys named after their
+    // host, in a folder per scope, say nothing in their name. Not a scope's
+    // browser profile: the browser skill copies it (`cp -R`) inside its own
+    // scope, and the scope guard keeps the other scopes' out. Without scopes,
+    // the names it always knew, so nothing changes for whoever has none.
+    // Scopes that cannot be read count as none here: the scope guard stops
+    // every call then.
+    if let Ok(Some(all)) = crate::scope::load().map(|a| a.declared.then_some(a)) {
         let real = crate::scope::real_lenient(Path::new(&p));
-        all.list.iter().any(|s| s.secrets.iter().any(|x| crate::scope::inside(&real, &crate::scope::real_lenient(x))))
-    });
-    if declared.unwrap_or(false) {
-        return true;
+        let declared = all
+            .list
+            .iter()
+            .any(|s| s.secrets.iter().any(|x| crate::scope::inside(&real, &crate::scope::real_lenient(x))));
+        let ssh = r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|known_hosts\.old|authorized_keys|environment)$)[^/]+(/[^/]+)*$";
+        if declared || is_match(&fancy(ssh), &p) {
+            return true;
+        }
     }
     [
-        r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|known_hosts\.old|authorized_keys|environment)$)[^/]+(/[^/]+)*$",
+        r"(^|/)\.ssh/(?!.*\.pub$)(id_[^/]*|[^/]*_key|identity)$",
         r"\.(pem|p12|pfx)$",
         r"(^|/)[^/]*private[^/]*\.key$",
         r"(^|/)\.aws/credentials$",

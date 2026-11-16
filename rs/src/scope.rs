@@ -170,11 +170,19 @@ fn words(v: Option<String>) -> Vec<String> {
 /// switch off what the person asked for.
 pub fn parse(name: &str, folder: &Path) -> Result<Scope, String> {
     let file = folder.join(CONFIG_FILE);
-    files::read_if_exists(&file)?;
     if !file.is_file() {
         return Err(format!("{}: missing", file.display()));
     }
-    let get = |k: &str| env::config_value_in(&file, k);
+    // Read once: the same rule as `env::config_value_in`, the last `KEY=`
+    // line wins and quotes are dropped.
+    let text = files::read_if_exists(&file)?;
+    let get = |k: &str| {
+        let prefix = format!("{k}=");
+        text.lines()
+            .rfind(|l| l.starts_with(&prefix))
+            .map(|l| l[prefix.len()..].replace('"', ""))
+            .filter(|v| !v.is_empty())
+    };
     let where_ = |k: &str| format!("{} ({k})", file.display());
     let root = get("ROOT").ok_or_else(|| format!("{}: ROOT is required", file.display()))?;
     let root = expand(&root);
@@ -325,6 +333,24 @@ pub fn problems(list: &[Scope]) -> Vec<String> {
 /// The scopes of this machine. An error when one cannot be read or they
 /// contradict each other.
 pub fn load() -> Result<Scopes, String> {
+    // The scopes do not change while one command or hook runs, and the guard
+    // asks for them many times per tool call: read once per process and
+    // folder. A command that changes them (`scope move`) reads `load_fresh`.
+    static CACHE: std::sync::Mutex<Option<(PathBuf, Result<Scopes, String>)>> = std::sync::Mutex::new(None);
+    let d = dir();
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((cached, r)) = cache.as_ref() {
+        if *cached == d {
+            return r.clone();
+        }
+    }
+    let r = load_fresh();
+    *cache = Some((d, r.clone()));
+    r
+}
+
+/// The scopes as they are on disk now.
+pub fn load_fresh() -> Result<Scopes, String> {
     let d = dir();
     let mut names = match std::fs::read_dir(&d) {
         Ok(entries) => entries
@@ -458,17 +484,24 @@ pub struct ProjectRules {
     pub person: Option<Person>,
 }
 
+/// It fails closed: a contract that is there and cannot be read, or an
+/// `isolation` it does not understand, makes the project isolated and its
+/// profile shared. A client's contract half-merged must not open the client's
+/// project to every session of the scope.
 pub fn project_rules(scope: &Scope, project: &str) -> ProjectRules {
     let docs = scope.root.join(project).join(format!("{project}-docs"));
-    let Some(c) = project::contract_lenient(&docs) else {
+    let closed = ProjectRules { isolated: true, person: Some(Person::Shared) };
+    if !project::contract_file(&docs).is_file() {
         return ProjectRules { isolated: false, person: None };
-    };
+    }
+    let Ok(c) = project::read_contract(&docs) else { return closed };
     let profile = files::get_str(&c, "profile").unwrap_or_default();
     let foreign = crate::policy::code_is_foreign(&profile, Some(&docs));
     let isolated = match files::get_str(&c, "isolation").as_deref() {
         Some("isolated") => true,
         Some("shared") => false,
-        _ => foreign,
+        None => foreign,
+        Some(_) => return closed,
     };
     let person = files::get_str(&c, "person").and_then(|p| Person::parse(&p)).or(if foreign {
         Some(Person::Shared)
@@ -500,6 +533,11 @@ impl Place {
             None => self.scope.clone(),
         }
     }
+}
+
+/// The project a path belongs to inside its scope.
+pub fn project_of_path(scope: &Scope, path: &Path) -> Option<String> {
+    project_in(scope, path)
 }
 
 fn project_in(scope: &Scope, path: &Path) -> Option<String> {
@@ -631,6 +669,19 @@ pub fn context_text(all: &Scopes, place: &Place) -> String {
         }
     }
     out.join("\n\n")
+}
+
+/// Where agents keep their sessions' conversations: Claude's transcripts,
+/// Codex's sessions, and whatever else the machine names in
+/// CRUX_SESSION_STORES (paths separated by `:`), such as an agent app's own
+/// store. They hold every scope's conversations at once.
+pub fn session_stores() -> Vec<PathBuf> {
+    let mut out = vec![env::claude_transcripts_dir(), env::codex_home_dir().join("sessions")];
+    let key = crate::names::vars::SESSION_STORES;
+    if let Some(v) = env::var(key).or_else(|| env::config_value_in(&env::config_file(), key)) {
+        out.extend(v.split(':').filter(|p| !p.is_empty()).map(expand));
+    }
+    out
 }
 
 // --- Pins --------------------------------------------------------------------

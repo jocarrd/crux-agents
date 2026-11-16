@@ -2,13 +2,16 @@
 //! the call touches and the place each belongs to, and stops what crosses
 //! from the place the session is pinned to into another: another scope,
 //! another project when either is isolated, a secret declared elsewhere, a
-//! private note of the profile where only the shared part applies.
+//! private part of the profile where only the shared part applies, the
+//! agents' conversations, and what holds the wall up.
 //!
 //! At the front desk nothing is pinned yet: the first call that touches a
 //! scope is stopped with the command that enters it, so the session gets the
-//! scope's context and the pin before it reads anything.
+//! scope's context and the pin before it reads anything. With one scope there
+//! is no front desk: every session is in it.
 //!
-//! It fails closed: scopes that cannot be read stop every call.
+//! It fails closed: scopes that cannot be read stop every call, and so does a
+//! pinned session whose scopes are gone.
 
 use super::guards::{drop_heredocs, segments};
 use super::{cwd, field, input, session_or_parent, stop};
@@ -25,18 +28,29 @@ const VARS_THAT_MOVE_THE_WALL: [&str; 5] =
 /// Options of a wrapper that take a value: `nice -n 10 crux`.
 const WRAPPER_OPTIONS_WITH_VALUE: [&str; 6] = ["-n", "-u", "-g", "-C", "-U", "-p"];
 
-/// Programs that write the paths they are given; for the copy family, only the
-/// last one.
-const WRITERS: [&str; 9] = ["tee", "rm", "touch", "mkdir", "rmdir", "truncate", "chmod", "chown", "dd"];
-const COPIERS: [&str; 5] = ["cp", "mv", "ln", "install", "rsync"];
-
-/// Programs that read a whole tree when given a folder: given an ancestor of
-/// another scope, they read it too.
+/// Programs that write every path they are given; `mv` takes its sources away.
+const WRITERS: [&str; 10] = ["tee", "rm", "touch", "mkdir", "rmdir", "truncate", "chmod", "chown", "dd", "mv"];
+/// Programs that write only the last path they are given.
+const COPIERS: [&str; 4] = ["cp", "ln", "install", "rsync"];
+/// Programs that read a whole tree when given a folder.
 const RECURSIVE: [&str; 12] = ["grep", "egrep", "rg", "ag", "find", "fd", "tar", "zip", "rsync", "du", "tree", "cp"];
+/// Arguments of git and gh that are text, not paths.
+const MESSAGE_OPTIONS: [&str; 6] = ["-m", "--message", "--body", "--title", "--subject", "--notes"];
 
-/// One command of a shell line: its words without quotes, the program it
-/// runs (past `env`, `sudo`, assignments and a path), and the folder it runs
-/// from after the `cd`s before it.
+fn resolve(base: &Path, word: &str) -> PathBuf {
+    let p = scope::expand(word);
+    if p.is_absolute() {
+        p
+    } else {
+        base.join(p)
+    }
+}
+
+// --- Reading a shell line ---------------------------------------------------
+
+/// One command of a shell line: its words as the shell splits them, the
+/// program it runs (past `env`, `sudo`, assignments and a path), and the
+/// folder it runs from after the `cd`s before it.
 struct Step {
     words: Vec<String>,
     program: usize,
@@ -52,13 +66,25 @@ impl Step {
         self.words.get(self.program + 1..).unwrap_or(&[])
     }
 
-    fn resolve(&self, w: &str) -> PathBuf {
-        let p = scope::expand(w);
-        if p.is_absolute() {
-            p
-        } else {
-            self.here.join(p)
+    fn assignments(&self) -> &[String] {
+        &self.words[..self.program.min(self.words.len())]
+    }
+
+    /// The arguments without the text of a message (`git commit -m "..."`).
+    fn args_without_messages(&self) -> Vec<&String> {
+        let message = matches!(self.program(), "git" | "gh");
+        let mut out = vec![];
+        let mut skip = false;
+        for a in self.args() {
+            if skip {
+                skip = false;
+            } else if message && MESSAGE_OPTIONS.contains(&a.as_str()) {
+                skip = true;
+            } else {
+                out.push(a);
+            }
         }
+        out
     }
 }
 
@@ -99,6 +125,19 @@ fn shell_words(seg: &str) -> Vec<String> {
     out
 }
 
+/// The line another shell runs: `bash -c`, `bash -lc`, `zsh -ic`, `eval`.
+fn inner_line(step: &Step) -> Option<String> {
+    let args = step.args();
+    match step.program() {
+        "eval" => Some(args.join(" ")),
+        "bash" | "sh" | "zsh" | "dash" | "ksh" => {
+            let i = args.iter().position(|a| a.starts_with('-') && !a.starts_with("--") && a.contains('c'))?;
+            args.get(i + 1).cloned()
+        }
+        _ => None,
+    }
+}
+
 fn steps(command: &str, start: &Path) -> Vec<Step> {
     let text = drop_heredocs(command);
     let mut here = start.to_path_buf();
@@ -114,8 +153,6 @@ fn steps(command: &str, start: &Path) -> Vec<Step> {
             if !(wrapper || assignment || wrapper_option) {
                 break;
             }
-            // `nice -n 10`, `sudo -u root`, `env -u X`: the option's value is
-            // not the program either.
             if wrapper_option && WRAPPER_OPTIONS_WITH_VALUE.contains(&w.as_str()) {
                 program += 1;
             }
@@ -123,17 +160,14 @@ fn steps(command: &str, start: &Path) -> Vec<Step> {
             program += 1;
         }
         let step = Step { words, program, here: here.clone() };
-        // `bash -c '...'` runs another line: it is read as one, from here.
-        if matches!(step.program(), "bash" | "sh" | "zsh" | "dash" | "ksh") {
-            if let Some(inner) = step.args().iter().position(|a| a == "-c").and_then(|i| step.args().get(i + 1)) {
-                out.extend(steps(inner, &here));
-            }
+        if let Some(inner) = inner_line(&step) {
+            out.extend(steps(&inner, &here));
         }
         if step.program() == "cd" {
             here = match step.args().first().map(String::as_str) {
                 None | Some("~") => env::home(),
                 Some("-") => here,
-                Some(d) => step.resolve(d),
+                Some(d) => resolve(&step.here, d),
             };
         }
         out.push(step);
@@ -150,83 +184,78 @@ fn looks_like_path(w: &str) -> bool {
         || (w.contains('/') && !w.contains("://") && !w.starts_with('-'))
 }
 
-/// A path a step touches: whether it may write it, and whether it is read as
-/// a whole tree (a shell glob reads every folder its fixed part holds).
+/// A path a call touches: whether it may write it, and whether it is read as
+/// a whole tree.
 struct Touch {
     path: PathBuf,
     writes: bool,
     tree: bool,
 }
 
-/// Every path a step touches: the folder it runs in, and each word that names
-/// one. `grep -r .` reads the folder it stands in. What follows `-m` and its
-/// kin in git and gh is a message, not a path.
+/// Whether a step reads a tree. `grep`, `cp` and `ls` only when recursive.
+fn reads_a_tree(step: &Step) -> bool {
+    let p = step.program();
+    let flag = |c: char| step.args().iter().any(|a| a.starts_with('-') && !a.starts_with("--") && a.contains(c));
+    let long = step.args().iter().any(|a| a == "--recursive");
+    match p {
+        "grep" | "egrep" => flag('r') || flag('R') || long,
+        "cp" => flag('r') || flag('R') || flag('a') || long,
+        "ls" => flag('R'),
+        _ => RECURSIVE.contains(&p),
+    }
+}
+
+/// Every path a step touches. The folder it runs in counts, and is read whole
+/// by a tree reader that names no path (`grep -r x` reads where it stands). A
+/// redirection writes (`> f`, `2>f`, `&>> f`); a shell glob is a tree read of
+/// its fixed part; an assignment before the program can name a path too.
 fn step_paths(step: &Step) -> Vec<Touch> {
-    let mut out = vec![Touch { path: step.here.clone(), writes: false, tree: false }];
     let program = step.program();
+    let tree = reads_a_tree(step);
     let in_place = matches!(program, "sed" | "perl") && step.args().iter().any(|a| a.starts_with("-i"));
-    let message = matches!(program, "git" | "gh");
-    let mut skip = false;
-    let mut redirect = false;
-    let args = step.args();
-    let last_path = args.iter().rposition(|w| looks_like_path(w));
-    for (i, w) in args.iter().enumerate() {
-        if skip {
-            skip = false;
+    let args = step.args_without_messages();
+    let redirect = crate::regex!(r"^\d*&?(>>?|<)");
+    let last_path = args.iter().rposition(|w| looks_like_path(&redirect.replace(w, "")));
+    let mut out = vec![];
+    let mut pending_redirect = None::<bool>;
+    let words = step.assignments().iter().map(|w| (w, None)).chain(args.iter().enumerate().map(|(i, w)| (*w, Some(i))));
+    for (w, index) in words {
+        let op = redirect.find(w).map(|m| m.as_str().to_string());
+        let rest = redirect.replace(w, "").into_owned();
+        if op.is_some() && rest.is_empty() {
+            pending_redirect = op.map(|o| o.contains('>'));
             continue;
         }
-        if message && matches!(w.as_str(), "-m" | "--message" | "--body" | "--title" | "--subject" | "--notes") {
-            skip = true;
-            continue;
-        }
-        if w == ">" || w == ">>" {
-            redirect = true;
-            continue;
-        }
-        let into = w.starts_with('>');
-        let w = w.rsplit_once('=').map_or(w.as_str(), |(_, v)| v);
-        let w = w.trim_start_matches(['<', '>']);
+        let w = rest.rsplit_once('=').map_or(rest.as_str(), |(_, v)| v);
         if !looks_like_path(w) {
-            redirect = false;
+            pending_redirect = None;
             continue;
         }
+        let redirected = op.map(|o| o.contains('>')).or(pending_redirect.take());
         let glob = w.find(['*', '?', '[']);
         let fixed = match glob {
             Some(at) => w[..at].rsplit_once('/').map_or("", |(d, _)| d),
             None => w,
         };
-        let writes = redirect
-            || into
-            || in_place
-            || WRITERS.contains(&program)
-            || (COPIERS.contains(&program) && Some(i) == last_path);
+        let writes = index.is_some()
+            && (redirected == Some(true)
+                || in_place
+                || WRITERS.contains(&program)
+                || (COPIERS.contains(&program) && index == last_path));
         out.push(Touch {
-            path: step.resolve(if fixed.is_empty() { "." } else { fixed }),
+            path: resolve(&step.here, if fixed.is_empty() { "/" } else { fixed }),
             writes,
-            tree: glob.is_some(),
+            tree: tree || glob.is_some(),
         });
-        redirect = false;
     }
     if program == "cd" {
-        if let Some(d) = args.first() {
-            out.push(Touch { path: step.resolve(d), writes: false, tree: false });
+        if let Some(d) = step.args().first() {
+            out.push(Touch { path: resolve(&step.here, d), writes: false, tree: false });
         }
     }
+    let named = !out.is_empty();
+    out.push(Touch { path: step.here.clone(), writes: false, tree: tree && !named });
     out
-}
-
-/// Whether a step reads a tree. `grep` and `cp` only with their recursive flag.
-fn reads_a_tree(step: &Step) -> bool {
-    let p = step.program();
-    if !RECURSIVE.contains(&p) {
-        return p == "ls" && step.args().iter().any(|a| a.starts_with('-') && !a.starts_with("--") && a.contains('R'));
-    }
-    let flag = |c: char| step.args().iter().any(|a| a.starts_with('-') && !a.starts_with("--") && a.contains(c));
-    match p {
-        "grep" | "egrep" => flag('r') || flag('R') || step.args().iter().any(|a| a == "--recursive"),
-        "cp" => flag('r') || flag('R') || flag('a') || step.args().iter().any(|a| a == "--recursive"),
-        _ => true,
-    }
 }
 
 /// Paths named in an `apply_patch` body (Codex): the files it adds, updates,
@@ -235,46 +264,44 @@ fn patch_paths(patch: &str, start: &Path) -> Vec<PathBuf> {
     let rx = crate::regex!(r"(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$");
     rx.captures_iter(patch)
         .filter_map(|c| c.get(1).or(c.get(2)).map(|m| m.as_str().trim().to_string()))
-        .map(|p| {
-            let p = scope::expand(&p);
-            if p.is_absolute() {
-                p
-            } else {
-                start.join(p)
-            }
-        })
+        .map(|p| resolve(start, &p))
         .collect()
 }
 
-/// The paths a non-shell tool reads or writes: its path fields, the fixed
-/// part of a Glob pattern, and for a search with no path, the folder it runs
-/// in.
-fn tool_paths(tool: &str, params: &Value, start: &Path) -> Vec<PathBuf> {
-    if tool == "apply_patch" {
+/// The paths a non-shell tool touches: its path fields, the fixed part of a
+/// Glob pattern, and for a search with no path, the folder it runs in.
+fn tool_touches(tool: &str, params: &Value, start: &Path) -> Vec<Touch> {
+    let writes = matches!(tool, "Write" | "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch");
+    let tree = matches!(tool, "Grep" | "Glob" | "LS");
+    let mut paths: Vec<PathBuf> = if tool == "apply_patch" {
         let body = ["patch", "input", "command"].iter().map(|k| field(params, k)).find(|v| !v.is_empty());
-        return patch_paths(&body.unwrap_or_default(), start);
+        patch_paths(&body.unwrap_or_default(), start)
+    } else {
+        let pattern = field(params, "pattern");
+        let fixed = pattern.split(['*', '?', '[', '{']).next().unwrap_or("").to_string();
+        let pattern_path = (fixed.starts_with('/') || fixed.starts_with('~')).then_some(fixed);
+        ["file_path", "notebook_path", "path"]
+            .iter()
+            .map(|k| field(params, k))
+            .chain(pattern_path)
+            .filter(|p| !p.is_empty())
+            .map(|p| resolve(start, &p))
+            .collect()
+    };
+    if paths.is_empty() && tree {
+        paths.push(start.to_path_buf());
     }
-    let pattern = field(params, "pattern");
-    let fixed = pattern.split(['*', '?', '[', '{']).next().unwrap_or("").to_string();
-    let pattern_path = (fixed.starts_with('/') || fixed.starts_with('~')).then_some(fixed);
-    let mut out: Vec<PathBuf> = ["file_path", "notebook_path", "path"]
-        .iter()
-        .map(|k| field(params, k))
-        .chain(pattern_path)
-        .filter(|p| !p.is_empty())
-        .map(|p| {
-            let p = scope::expand(&p);
-            if p.is_absolute() {
-                p
-            } else {
-                start.join(p)
-            }
-        })
-        .collect();
-    if out.is_empty() && matches!(tool, "Grep" | "Glob" | "LS") {
-        out.push(start.to_path_buf());
-    }
-    out
+    paths.into_iter().map(|path| Touch { path, writes, tree }).collect()
+}
+
+// --- Places -----------------------------------------------------------------
+
+/// What a path belongs to, for the wall: a place, or the agents' session
+/// stores, which hold every scope's conversations at once.
+#[derive(Clone)]
+enum Zone {
+    Place(Place),
+    Sessions,
 }
 
 fn enter_hint(place: &Place) -> String {
@@ -298,6 +325,13 @@ fn describe(p: &Place) -> String {
     }
 }
 
+fn describe_zone(z: &Zone) -> String {
+    match z {
+        Zone::Place(p) => describe(p),
+        Zone::Sessions => "other sessions' conversations".into(),
+    }
+}
+
 /// A place counts its project only when the project is isolated.
 fn isolated_place(all: &Scopes, place: &Place) -> Place {
     let isolated = place
@@ -308,205 +342,251 @@ fn isolated_place(all: &Scopes, place: &Place) -> Place {
     Place { scope: place.scope.clone(), project: if isolated { place.project.clone() } else { None } }
 }
 
-const UNKNOWN: &str = "?";
+/// Folder names in Claude's transcripts are paths with every character that
+/// is not a letter or a digit turned into `-`.
+fn encoded(p: &Path) -> String {
+    p.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+}
 
-/// The agent's transcripts and memory live under one folder per starting
-/// path, named with every `/` and `.` turned into `-`. A folder named after a
-/// root (or a project in it) is that scope's; the longest name wins, since
-/// `acme-old` and `acme/old` read the same. Any other folder holds front-desk
-/// sessions, each file the scope its session was pinned to. The folder as a
-/// whole, or one that cannot be placed, holds conversations of any scope.
-fn transcript_place(all: &Scopes, path: &Path, own_session: &str) -> Option<Option<Place>> {
-    let base = scope::real_lenient(&env::claude_transcripts_dir());
+/// Where a path inside a session store belongs. A folder of Claude's named
+/// after a root (or a project in it) is that scope's; the longest name wins,
+/// since `acme-old` and `acme/old` read the same. A file of a front-desk
+/// folder is the scope its session was pinned to; any other store, the store
+/// as a whole, or anything it cannot place holds conversations of any scope.
+/// The session's own files are its own.
+fn session_zone(all: &Scopes, path: &Path, own_session: &str) -> Option<Option<Zone>> {
     let real = scope::real_lenient(path);
-    let rel = real.strip_prefix(&base).ok()?;
-    let unknown = || Some(Some(Place { scope: UNKNOWN.into(), project: None }));
-    let Some(folder) = rel.components().next().map(|c| c.as_os_str().to_string_lossy().into_owned()) else {
-        return unknown();
-    };
-    let encode = |p: &Path| p.to_string_lossy().replace(['/', '.'], "-");
-    let matches = |e: &str| folder == e || folder.starts_with(&format!("{e}-"));
-    let best = all.list.iter().filter(|s| matches(&encode(&s.real_root))).max_by_key(|s| encode(&s.real_root).len());
-    if let Some(s) = best {
-        let project =
-            scope::projects(s).into_iter().filter(|p| matches(&encode(&s.real_root.join(p)))).max_by_key(String::len);
-        return Some(Some(isolated_place(all, &Place { scope: s.name.clone(), project })));
-    }
-    let file = rel.components().nth(1).map(|c| c.as_os_str().to_string_lossy().into_owned()).unwrap_or_default();
-    let session = file.trim_end_matches(".jsonl");
-    if !session.is_empty() && session == own_session {
+    let claude = scope::real_lenient(&env::claude_transcripts_dir());
+    let (store, rel) = scope::session_stores().into_iter().find_map(|s| {
+        let s = scope::real_lenient(&s);
+        real.strip_prefix(&s).ok().map(|r| (s.clone(), r.to_path_buf()))
+    })?;
+    let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    if !own_session.is_empty() && parts.iter().any(|p| p.trim_end_matches(".jsonl") == own_session) {
         return Some(None);
     }
-    match scope::pinned(session) {
-        Some(p) => Some(Some(Place::parse(&p))),
-        None => unknown(),
+    if store != claude {
+        return Some(Some(Zone::Sessions));
     }
+    let Some(folder) = parts.first().map(|f| encoded(Path::new(f))) else { return Some(Some(Zone::Sessions)) };
+    let matches = |e: &str| folder == e || folder.starts_with(&format!("{e}-"));
+    let best = all.list.iter().filter(|s| matches(&encoded(&s.real_root))).max_by_key(|s| encoded(&s.real_root).len());
+    if let Some(s) = best {
+        let project =
+            scope::projects(s).into_iter().filter(|p| matches(&encoded(&s.real_root.join(p)))).max_by_key(String::len);
+        return Some(Some(Zone::Place(isolated_place(all, &Place { scope: s.name.clone(), project }))));
+    }
+    let session = parts.get(1).map(|f| f.trim_end_matches(".jsonl").to_string()).unwrap_or_default();
+    Some(Some(match scope::pinned(&session) {
+        Some(p) => Zone::Place(Place::parse(&p)),
+        None => Zone::Sessions,
+    }))
 }
 
 /// Where a path falls in the person's profile: `Some(true)` for a shared note,
 /// `Some(false)` for anything else in it (private notes, the full index,
 /// folders, git's objects), `None` outside it.
-fn profile_part(path: &Path) -> Option<bool> {
-    let dir = person::dir()?;
+fn profile_part(profile: Option<&Path>, path: &Path) -> Option<bool> {
+    let dir = profile?;
     let real = scope::real_lenient(path);
-    let rel = real.strip_prefix(scope::real_lenient(&dir)).ok()?.to_string_lossy().into_owned();
-    Some(rel.ends_with(".md") && rel != "PROFILE.md" && person::is_shared(&dir, &rel))
+    let rel = real.strip_prefix(scope::real_lenient(dir)).ok()?.to_string_lossy().into_owned();
+    Some(rel.ends_with(".md") && rel != "PROFILE.md" && person::is_shared(dir, &rel))
 }
 
-/// The folders a session at a place must not reach into: other scopes' roots
-/// and, inside its own scope, the projects its isolation leaves out. A path
-/// that holds one of them (an ancestor) is as closed as the folder itself
-/// when a tool reads it whole.
-fn foreign_folders(all: &Scopes, pinned: Option<&Place>) -> Vec<(PathBuf, Place)> {
-    let mut out = vec![];
-    for s in &all.list {
-        let mine = pinned.is_some_and(|p| p.scope == s.name);
-        if !mine {
-            out.push((s.real_root.clone(), Place { scope: s.name.clone(), project: None }));
-            continue;
-        }
-        let pin = pinned.unwrap();
-        for p in scope::projects(s) {
-            let closed = match &pin.project {
-                Some(own) => own != &p,
-                None => scope::project_rules(s, &p).isolated,
+/// What holds the wall up: the scopes and the pins, crux itself (the guard is
+/// its binary), the agents' settings where the hooks and the sandbox are
+/// written, and the git and ssh configs `apply` writes. A session writes none
+/// of them, nor a folder that holds one (`rm -rf ~/.crux`).
+fn wall_paths() -> Vec<PathBuf> {
+    let mut out = vec![scope::dir(), scope::pins_dir(), env::crux_dir()];
+    out.extend(env::crux_home());
+    out.push(env::claude_settings());
+    out.push(env::claude_config_dir().join("settings.local.json"));
+    out.push(env::codex_home_dir().join("hooks.json"));
+    out.push(env::home().join(".gitconfig"));
+    out.push(env::home().join(".ssh/config"));
+    out.into_iter().map(|p| scope::real_lenient(&p)).collect()
+}
+
+fn writes_the_wall(path: &Path) -> Option<String> {
+    let real = scope::real_lenient(path);
+    let hit = real.ends_with(crate::names::CLAUDE_LOCAL_SETTINGS)
+        || wall_paths().iter().any(|w| scope::inside(&real, w) || scope::inside(w, &real));
+    hit.then(|| {
+        format!(
+            "'{}' holds up the scope wall (scopes, pins, crux, the agents' settings): a session does not write it. \
+             Changes to scopes go through `crux scope`, run by the person.",
+            real.display()
+        )
+    })
+}
+
+// --- The checks -------------------------------------------------------------
+
+/// What a session is checked against, loaded once per call.
+struct Wall<'a> {
+    all: &'a Scopes,
+    pinned: Option<Place>,
+    profile: Option<PathBuf>,
+    session: &'a str,
+}
+
+impl Wall<'_> {
+    fn person(&self) -> Person {
+        self.pinned.as_ref().map_or(Person::Shared, |p| self.all.person_at(p))
+    }
+
+    /// The folders this session must not read whole: other scopes' roots and
+    /// secrets, inside its own scope the projects its isolation leaves out,
+    /// the profile where only its shared part applies, and the session stores
+    /// when they can hold anything this session may not see.
+    fn foreign(&self) -> Vec<(PathBuf, Zone)> {
+        let mut out = vec![];
+        for s in &self.all.list {
+            let Some(pin) = self.pinned.as_ref().filter(|p| p.scope == s.name) else {
+                let zone = Zone::Place(Place { scope: s.name.clone(), project: None });
+                out.push((s.real_root.clone(), zone.clone()));
+                out.extend(s.secret_paths().iter().map(|p| (scope::real_lenient(p), zone.clone())));
+                continue;
             };
-            if closed {
-                out.push((s.real_root.join(&p), Place { scope: s.name.clone(), project: Some(p) }));
+            for p in scope::projects(s) {
+                let closed = match &pin.project {
+                    Some(own) => own != &p,
+                    None => scope::project_rules(s, &p).isolated,
+                };
+                if closed {
+                    out.push((s.real_root.join(&p), Zone::Place(Place { scope: s.name.clone(), project: Some(p) })));
+                }
             }
         }
-        if all.person_at(pin) != Person::Full {
-            if let Some(d) = person::dir() {
-                out.push((scope::real_lenient(&d), Place { scope: s.name.clone(), project: None }));
+        if self.person() != Person::Full {
+            if let Some(d) = &self.profile {
+                let owner = Place { scope: self.all.primary().name.clone(), project: None };
+                out.push((scope::real_lenient(d), Zone::Place(owner)));
             }
         }
+        if !out.is_empty() {
+            out.extend(scope::session_stores().iter().map(|s| (scope::real_lenient(s), Zone::Sessions)));
+        }
+        out
     }
-    out.push((scope::real_lenient(&env::claude_transcripts_dir()), Place { scope: UNKNOWN.into(), project: None }));
-    out
-}
 
-fn crossing(all: &Scopes, pinned: Option<&Place>, path: &Path, own_session: &str, writes: bool) -> Option<String> {
-    let real = scope::real_lenient(path);
-    // Said resolved: `web/../../Own/x` is read as the folder it reaches.
-    let path = real.as_path();
-    for guarded in [scope::dir(), scope::pins_dir()] {
-        if scope::inside(&real, &scope::real_lenient(&guarded)) {
-            return Some(format!(
-                "'{}' is where crux keeps the scopes and the sessions' pins: it is changed with `crux scope`, \
-                 never by hand, and a session cannot move its own pin.",
-                path.display()
-            ));
-        }
+    fn holds_foreign(&self, foreign: &[(PathBuf, Zone)], path: &Path) -> Option<String> {
+        let real = scope::real_lenient(path);
+        let (f, zone) = foreign.iter().find(|(f, _)| scope::inside(f, &real) && *f != real)?;
+        Some(format!(
+            "'{}' holds {} ({}): reading it whole reads that too. Name a folder of this scope instead.",
+            real.display(),
+            describe_zone(zone),
+            f.display()
+        ))
     }
-    if let Some(shared) = profile_part(path) {
-        let person = pinned.map_or(Person::Shared, |p| all.person_at(p));
-        let primary = pinned.is_none_or(|p| p.scope == all.primary().name);
+
+    fn profile_crossing(&self, path: &Path, shared: bool, writes: bool) -> Option<String> {
+        let primary = self.pinned.as_ref().is_none_or(|p| p.scope == self.all.primary().name);
         if writes && !primary {
             return Some(format!(
                 "'{}' is the person's profile, which travels under their own account: it is not written from \
                  scope '{}'. Tell the person what to note instead.",
                 path.display(),
-                pinned.map_or("", |p| p.scope.as_str())
+                self.pinned.as_ref().map_or("", |p| p.scope.as_str())
             ));
         }
+        let person = self.person();
         if person == Person::Full || (shared && person == Person::Shared) {
             return None;
         }
-        return Some(match pinned {
+        Some(match &self.pinned {
             None => format!(
                 "'{}' is private to the person's profile. Enter the person's own scope first: `crux scope enter {}`.",
                 path.display(),
-                all.primary().name
+                self.all.primary().name
             ),
             Some(_) => format!(
                 "'{}' is private to the person's profile, and this session only sees its shared part. \
                  If something should be noted there, tell the person instead of writing it.",
                 path.display()
             ),
-        });
+        })
     }
-    let place = match transcript_place(all, path, own_session) {
-        Some(None) => return None,
-        Some(Some(p)) => p,
-        None => all.place_of(path)?,
-    };
-    let Some(pin) = pinned else {
-        if place.scope == UNKNOWN {
-            return Some(format!("'{}' holds other sessions' conversations.", path.display()));
-        }
-        let rules_place = isolated_place(all, &place);
-        return Some(format!(
-            "'{}' belongs to {}. This session is at the front desk: enter it first with `{}`. \
-             That pins the session there for good and gives it that context.",
-            path.display(),
-            describe(&rules_place),
-            enter_hint(&rules_place)
-        ));
-    };
-    if place.scope != pin.scope {
-        if place.scope == UNKNOWN {
-            return Some(format!("'{}' holds other sessions' conversations.", path.display()));
-        }
-        let other = Place { scope: place.scope.clone(), project: None };
-        return Some(format!(
-            "'{}' belongs to {}, and this session is in {}. Work there needs a new session: `{}`, \
-             or in an agent app a new thread in that folder. Tell the person instead of trying.",
-            path.display(),
-            describe(&other),
-            describe(pin),
-            open_hint(&other)
-        ));
-    }
-    let target = place.project.as_deref()?;
-    let target_place = Place { scope: place.scope.clone(), project: Some(target.into()) };
-    match pin.project.as_deref() {
-        Some(own) if own == target => None,
-        Some(own) => Some(format!(
-            "'{}' belongs to project '{target}', and this session is in the isolated project '{own}'. \
-             Work there needs a new session: `{}`.",
-            path.display(),
-            open_hint(&target_place)
-        )),
-        None => {
-            let s = all.by_name(&place.scope)?;
-            (scope::project_rules(s, target).isolated && person::repo_name() != target).then(|| {
-                format!(
-                    "'{}' belongs to the isolated project '{target}'. It is worked on in a session of its own: `{}`.",
-                    path.display(),
-                    open_hint(&target_place)
-                )
-            })
-        }
-    }
-}
 
-/// A folder read whole that holds what this session may not reach.
-fn holds_foreign(foreign: &[(PathBuf, Place)], path: &Path) -> Option<String> {
-    let real = scope::real_lenient(path);
-    let (f, place) = foreign.iter().find(|(f, _)| scope::inside(f, &real) && *f != real)?;
-    Some(format!(
-        "'{}' holds {} ({}): reading it whole reads that too. Name a folder of this scope instead.",
-        real.display(),
-        if place.scope == UNKNOWN { "other sessions' conversations".to_string() } else { describe(place) },
-        f.display()
-    ))
-}
+    fn crossing(&self, touch: &Touch) -> Option<String> {
+        let real = scope::real_lenient(&touch.path);
+        let path = real.as_path();
+        if touch.writes {
+            if let Some(why) = writes_the_wall(path) {
+                return Some(why);
+            }
+        }
+        if let Some(shared) = profile_part(self.profile.as_deref(), path) {
+            return self.profile_crossing(path, shared, touch.writes);
+        }
+        let zone = match session_zone(self.all, path, self.session) {
+            Some(None) => return None,
+            Some(Some(z)) => z,
+            None => Zone::Place(self.all.place_of(path)?),
+        };
+        let place = match zone {
+            Zone::Sessions => return Some(format!("'{}' holds other sessions' conversations.", path.display())),
+            Zone::Place(p) => p,
+        };
+        let Some(pin) = &self.pinned else {
+            let rules_place = isolated_place(self.all, &place);
+            return Some(format!(
+                "'{}' belongs to {}. This session is at the front desk: enter it first with `{}`. \
+                 That pins the session there for good and gives it that context.",
+                path.display(),
+                describe(&rules_place),
+                enter_hint(&rules_place)
+            ));
+        };
+        if place.scope != pin.scope {
+            let other = Place { scope: place.scope.clone(), project: None };
+            return Some(format!(
+                "'{}' belongs to {}, and this session is in {}. Work there needs a new session: `{}`, \
+                 or in an agent app a new thread in that folder. Tell the person instead of trying.",
+                path.display(),
+                describe(&other),
+                describe(pin),
+                open_hint(&other)
+            ));
+        }
+        let target = place.project.as_deref()?;
+        let target_place = Place { scope: place.scope.clone(), project: Some(target.into()) };
+        match pin.project.as_deref() {
+            Some(own) if own == target => None,
+            Some(own) => Some(format!(
+                "'{}' belongs to project '{target}', and this session is in the isolated project '{own}'. \
+                 Work there needs a new session: `{}`.",
+                path.display(),
+                open_hint(&target_place)
+            )),
+            None => {
+                let s = self.all.by_name(&place.scope)?;
+                (scope::project_rules(s, target).isolated && person::repo_name() != target).then(|| {
+                    format!(
+                        "'{}' belongs to the isolated project '{target}'. It is worked on in a session of its own: `{}`.",
+                        path.display(),
+                        open_hint(&target_place)
+                    )
+                })
+            }
+        }
+    }
 
-/// Network reach: one account can read every scope's repos, which no
-/// filesystem rule sees. For `gh`, the owner can be a bare argument
-/// (`gh repo list acme`) or part of an API path (`repos/acme/x`).
-fn other_owner(all: &Scopes, pinned: Option<&Place>, command: &str, steps: &[Step]) -> Option<String> {
-    for s in all.list.iter().filter(|s| pinned.is_none_or(|p| p.scope != s.name)) {
-        for o in &s.owners {
-            let lo = o.to_lowercase();
-            let web = regex::Regex::new(&format!(
-                r"(?i)(github\.com[:/]{0}/|api\.github\.com/(repos|orgs|users)/{0}(/|\b))",
-                regex::escape(o)
-            ))
-            .ok()?;
-            let by_gh = steps.iter().filter(|st| st.program() == "gh").any(|st| {
-                st.args().iter().any(|a| {
-                    let a = a.to_lowercase();
+    /// Network reach: one account can read every scope's repos, which no
+    /// filesystem rule sees. Messages are left out: citing a repo in a commit
+    /// message reaches nothing.
+    fn other_owner(&self, steps: &[Step]) -> Option<String> {
+        for s in self.all.list.iter().filter(|s| self.pinned.as_ref().is_none_or(|p| p.scope != s.name)) {
+            for o in &s.owners {
+                let lo = o.to_lowercase();
+                let web = regex::Regex::new(&format!(
+                    r"(?i)(github\.com[:/]{0}/|api\.github\.com/(repos|orgs|users)/{0}(/|$))",
+                    regex::escape(o)
+                ))
+                .ok()?;
+                let by_gh = |a: &str| {
                     a == lo
                         || a.starts_with(&format!("{lo}/"))
                         || a.contains(&format!("={lo}/"))
@@ -514,37 +594,41 @@ fn other_owner(all: &Scopes, pinned: Option<&Place>, command: &str, steps: &[Ste
                             let at = format!("{k}{lo}");
                             a.ends_with(&at) || a.contains(&format!("{at}/"))
                         })
-                })
-            });
-            if web.is_match(command) || by_gh {
-                return Some(format!(
-                    "this reaches '{o}', an owner of scope '{}'. {}",
-                    s.name,
-                    match pinned {
-                        Some(_) => format!(
-                            "Work there needs a new session: `{}`.",
-                            open_hint(&Place { scope: s.name.clone(), project: None })
-                        ),
-                        None => format!("Enter it first: `crux scope enter {}`.", s.name),
-                    }
-                ));
+                };
+                let hit = steps.iter().any(|st| {
+                    let gh = st.program() == "gh";
+                    st.args_without_messages().iter().any(|a| {
+                        let a = a.to_lowercase();
+                        web.is_match(&a) || (gh && by_gh(&a))
+                    })
+                });
+                if hit {
+                    return Some(format!(
+                        "this reaches '{o}', an owner of scope '{}'. {}",
+                        s.name,
+                        match &self.pinned {
+                            Some(_) => format!(
+                                "Work there needs a new session: `{}`.",
+                                open_hint(&Place { scope: s.name.clone(), project: None })
+                            ),
+                            None => format!("Enter it first: `crux scope enter {}`.", s.name),
+                        }
+                    ));
+                }
             }
         }
+        None
     }
-    None
 }
 
-/// What a `crux` step asks of the wall: entering a scope pins the session
-/// before the command prints that scope's context; some subcommands are the
-/// person's to run.
+/// What a `crux` command of the line asks of the wall.
 enum CruxStep {
-    Enter(Place),
     Refused(String),
     FolderBound,
     Free,
 }
 
-fn crux_step(all: &Scopes, pinned: Option<&Place>, step: &Step) -> CruxStep {
+fn crux_step(wall: &Wall, step: &Step) -> CruxStep {
     let args = step.args();
     let sub = args.first().map(String::as_str).unwrap_or("");
     if matches!(sub, "task" | "workspace") && args.iter().any(|a| a == "--all") {
@@ -559,26 +643,12 @@ fn crux_step(all: &Scopes, pinned: Option<&Place>, step: &Step) -> CruxStep {
             CruxStep::FolderBound
         };
     }
-    let verb = args.get(1).map(String::as_str).unwrap_or("");
     let rest = args.get(2..).unwrap_or(&[]);
-    let named = rest.iter().position(|a| a == "--project").and_then(|i| rest.get(i + 1));
-    match verb {
-        "enter" => {
-            let place = match (named, rest.iter().find(|a| !a.starts_with('-'))) {
-                (Some(p), _) => match all.scope_of_project(p) {
-                    Ok(s) => isolated_place(all, &Place { scope: s.name.clone(), project: Some(p.clone()) }),
-                    Err(e) => return CruxStep::Refused(e),
-                },
-                (None, Some(n)) if all.by_name(n).is_some() => Place { scope: n.clone(), project: None },
-                (None, Some(n)) => return CruxStep::Refused(format!("no scope '{n}'")),
-                (None, None) => return CruxStep::Refused("which scope: crux scope enter <name>".into()),
-            };
-            CruxStep::Enter(place)
-        }
-        "move" => CruxStep::Refused(
-            "a project changes scope by the person's decision: ask them to run `crux scope move` themselves.".into(),
-        ),
-        "show" => match (pinned, rest.first()) {
+    match args.get(1).map(String::as_str).unwrap_or("") {
+        verb @ ("move" | "apply") => CruxStep::Refused(format!(
+            "`crux scope {verb}` changes the scopes on this machine: the person runs it themselves."
+        )),
+        "show" => match (&wall.pinned, rest.first()) {
             (Some(p), Some(n)) if *n != p.scope => {
                 CruxStep::Refused(format!("scope '{n}' is not this session's: what it declares is not read from here."))
             }
@@ -617,52 +687,105 @@ fn named_entries(all: &Scopes, steps: &[Step]) -> Vec<Result<Place, String>> {
     out
 }
 
+/// The shell line, command by command: what it asks of the wall and every
+/// path it touches. Returns the place it enters, if it enters one.
+fn check_bash(wall: &Wall, command: &str, start: &Path, touches: &mut Vec<Touch>) -> Result<Option<Place>, String> {
+    let steps = steps(command, start);
+    // Where an assignment takes effect: before the program (`X=1 cmd`,
+    // `env "X=1" cmd`) or as what export and its kin set. A commit message
+    // that mentions one sets nothing.
+    for st in &steps {
+        let setters = matches!(st.program(), "export" | "unset" | "declare" | "typeset" | "local" | "readonly");
+        let words: &[String] = if setters { &st.words } else { st.assignments() };
+        if let Some(v) =
+            VARS_THAT_MOVE_THE_WALL.iter().find(|v| words.iter().any(|w| w == *v || w.starts_with(&format!("{v}="))))
+        {
+            return Err(format!("{v} decides which scope a command works in; a session does not set it."));
+        }
+    }
+    if let Some(why) = wall.other_owner(&steps) {
+        return Err(why);
+    }
+    let mut enters = None;
+    for r in named_entries(wall.all, &steps) {
+        let place = r?;
+        match (&wall.pinned, &enters) {
+            (Some(p), _) if *p != place => {
+                return Err(format!(
+                    "this session is in {}, and this line enters {}. Tell the person: `{}`.",
+                    describe(p),
+                    describe(&place),
+                    open_hint(&place)
+                ))
+            }
+            (None, Some(e)) if *e != place => return Err("one line enters one scope at most.".into()),
+            _ => enters = Some(place),
+        }
+    }
+    let scope_of_line = enters.as_ref().or(wall.pinned.as_ref()).and_then(|p| wall.all.by_name(&p.scope));
+    for st in &steps {
+        if st.program() == "crux" {
+            match crux_step(wall, st) {
+                CruxStep::Refused(why) => return Err(why),
+                CruxStep::FolderBound => {
+                    if let Some(s) = scope_of_line {
+                        if wall.all.of_path(&st.here).is_none_or(|x| x.name != s.name) {
+                            return Err(format!(
+                                "crux works in the scope of the folder it runs from, and {} is outside scope '{}'. \
+                                 Run it from inside: `cd {} && {}`.",
+                                st.here.display(),
+                                s.name,
+                                s.root.display(),
+                                st.words.join(" ")
+                            ));
+                        }
+                    }
+                }
+                CruxStep::Free => {}
+            }
+        }
+        touches.extend(step_paths(st));
+    }
+    Ok(enters)
+}
+
 fn stop_with(reason: &str) -> Res {
     stop(&format!("Stopped by the scope wall (ADR-025): {reason}\n"))
 }
 
-/// The pin's file is touched while the session lives, so the sweep of old
-/// pins never takes one from a session that is still working.
-fn keep_alive(session: &str) {
-    scope::refresh_pin(session);
-}
-
 pub(super) fn scope_guard() -> Res {
     let event = input();
+    let session = session_or_parent(&event);
     let all = match scope::load() {
         Ok(a) if a.declared => a,
+        // A pinned session whose scopes are gone has lost its wall, not
+        // gained a free machine.
+        Ok(_) if scope::pinned(&session).is_some() => {
+            return stop_with("this session is pinned to a scope, and the scopes are gone. The person restores them.")
+        }
         Ok(_) => return Ok(()),
         Err(e) => return stop_with(&format!("the scopes cannot be read, so nothing runs until they are fixed: {e}")),
     };
-    let session = session_or_parent(&event);
     let tool = field(&event, "tool_name");
     let params = event.get("tool_input").cloned().unwrap_or(Value::Null);
     let start = match field(&event, "cwd") {
         c if c.is_empty() => cwd(),
         c => PathBuf::from(c),
     };
-    // A session that opened inside a root without going through session
-    // start (one already open when the scopes were declared) is pinned where
-    // it stands. A front-desk session cannot stand in a root: the command that
-    // would take it there names the path and is stopped first.
-    let mut pinned = match scope::pinned(&session) {
-        Some(p) => Some(Place::parse(&p)),
+    // A session that opened inside a root without going through session start
+    // is in that root's place; with one scope, every session is in it.
+    let (pinned, pin_now) = match scope::pinned(&session) {
+        Some(p) => (Some(Place::parse(&p)), false),
         None => match all.pin_place(&start) {
-            Some(place) => {
-                if let Err(e) = scope::pin(&session, &place.as_pin()) {
-                    return stop_with(&e);
-                }
-                Some(place)
-            }
-            None => None,
+            Some(place) => (Some(place), true),
+            None if all.list.len() == 1 => (Some(Place { scope: all.list[0].name.clone(), project: None }), true),
+            None => (None, false),
         },
     };
-    if pinned.is_some() {
-        keep_alive(&session);
-    }
+    let mut wall = Wall { all: &all, pinned, profile: person::dir(), session: &session };
 
     if let Some(rest) = tool.strip_prefix("mcp__") {
-        if let Some(s) = pinned.as_ref().and_then(|p| all.by_name(&p.scope)) {
+        if let Some(s) = wall.pinned.as_ref().and_then(|p| all.by_name(&p.scope)) {
             if s.mcp_deny.iter().any(|pat| crate::files::glob_match(pat, &tool)) {
                 return stop_with(&format!(
                     "the connector '{rest}' is not used in scope '{}'. Tell the person; it belongs to another scope.",
@@ -672,98 +795,42 @@ pub(super) fn scope_guard() -> Res {
         }
     }
 
-    let writes = matches!(tool.as_str(), "Write" | "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch");
-    let mut paths: Vec<(PathBuf, bool)> = vec![];
-    let foreign_reads: Vec<PathBuf>;
+    let mut touches = vec![];
+    let mut enters = None;
     if tool == "Bash" {
-        let raw = field(&params, "command");
-        let text = drop_heredocs(&raw);
-        let steps = steps(&raw, &start);
-        // Where an assignment takes effect: before the program (`X=1 cmd`,
-        // `env "X=1" cmd`) or as what export and its kin set. A commit message
-        // that mentions one sets nothing.
-        for st in &steps {
-            let setters = matches!(st.program(), "export" | "unset" | "declare" | "typeset" | "local" | "readonly");
-            let words = if setters { &st.words[..] } else { &st.words[..st.program.min(st.words.len())] };
-            if let Some(v) = VARS_THAT_MOVE_THE_WALL
-                .iter()
-                .find(|v| words.iter().any(|w| w == *v || w.starts_with(&format!("{v}="))))
-            {
-                return stop_with(&format!("{v} decides which scope a command works in; a session does not set it."));
-            }
+        match check_bash(&wall, &field(&params, "command"), &start, &mut touches) {
+            Ok(e) => enters = e,
+            Err(why) => return stop_with(&why),
         }
-        if let Some(why) = other_owner(&all, pinned.as_ref(), &text, &steps) {
-            return stop_with(&why);
+        // What the line runs after `crux scope enter` already stands inside
+        // the scope it enters.
+        if wall.pinned.is_none() {
+            wall.pinned.clone_from(&enters);
         }
-        let mut trees = vec![];
-        for st in &steps {
-            if st.program() == "crux" {
-                match crux_step(&all, pinned.as_ref(), st) {
-                    CruxStep::Refused(why) => return stop_with(&why),
-                    CruxStep::Enter(place) => match scope::pin(&session, &place.as_pin()) {
-                        Ok(_) => pinned = Some(place),
-                        Err(e) => return stop_with(&format!("{e}. Tell the person: `{}`.", open_hint(&place))),
-                    },
-                    CruxStep::FolderBound => {
-                        if let Some(s) = pinned.as_ref().and_then(|p| all.by_name(&p.scope)) {
-                            if !s.contains(&st.here) {
-                                return stop_with(&format!(
-                                    "crux works in the scope of the folder it runs from, and {} is outside scope '{}'. \
-                                     Run it from inside: `cd {} && {}`.",
-                                    st.here.display(),
-                                    s.name,
-                                    s.root.display(),
-                                    st.words.join(" ")
-                                ));
-                            }
-                        }
-                    }
-                    CruxStep::Free => {}
-                }
-            }
-            let tree = reads_a_tree(st);
-            for t in step_paths(st) {
-                if tree || t.tree {
-                    trees.push(t.path.clone());
-                }
-                paths.push((t.path, t.writes));
-            }
-        }
-        let entered = pinned.clone();
-        for r in named_entries(&all, &steps) {
-            let place = match r {
-                Ok(p) => p,
-                Err(e) => return stop_with(&e),
-            };
-            if entered.as_ref() != Some(&place) {
-                return stop_with(&match &entered {
-                    Some(p) => format!(
-                        "this session is in {}, and this line enters {}. Tell the person: `{}`.",
-                        describe(p),
-                        describe(&place),
-                        open_hint(&place)
-                    ),
-                    None => format!("run `{}` as a command of its own, not inside another.", enter_hint(&place)),
-                });
-            }
-        }
-        foreign_reads = trees;
     } else {
-        let ps = tool_paths(&tool, &params, &start);
-        foreign_reads = if matches!(tool.as_str(), "Grep" | "Glob" | "LS") { ps.clone() } else { vec![] };
-        paths.extend(ps.into_iter().map(|p| (p, writes)));
+        touches = tool_touches(&tool, &params, &start);
     }
 
-    let foreign = foreign_folders(&all, pinned.as_ref());
-    for p in &foreign_reads {
-        if let Some(why) = holds_foreign(&foreign, p) {
+    let foreign = wall.foreign();
+    for t in touches.iter().filter(|t| t.tree) {
+        if let Some(why) = wall.holds_foreign(&foreign, &t.path) {
             return stop_with(&why);
         }
     }
-    for (p, w) in &paths {
-        if let Some(why) = crossing(&all, pinned.as_ref(), p, &session, *w) {
+    for t in &touches {
+        if let Some(why) = wall.crossing(t) {
             return stop_with(&why);
         }
+    }
+    // Pinned only once the whole call has passed: a call stopped, or refused
+    // by the person, leaves the session where it was.
+    if let Some(place) = enters.as_ref().or(wall.pinned.as_ref().filter(|_| pin_now)) {
+        if let Err(e) = scope::pin(&session, &place.as_pin()) {
+            return stop_with(&format!("{e}. Tell the person: `{}`.", open_hint(place)));
+        }
+    }
+    if scope::pinned(&session).is_some() {
+        scope::refresh_pin(&session);
     }
     Ok(())
 }
@@ -774,31 +841,6 @@ mod tests {
 
     fn paths(cmd: &str, start: &str) -> Vec<PathBuf> {
         steps(cmd, Path::new(start)).iter().flat_map(step_paths).map(|t| t.path).collect()
-    }
-
-    #[test]
-    fn wrapper_values_and_shells_are_seen_through() {
-        let s = steps(
-            "nice -n 10 crux scope enter x; sudo -u root crux task; bash -c 'crux scope enter y'",
-            Path::new("/"),
-        );
-        let mut programs: Vec<&str> = s.iter().map(Step::program).collect();
-        programs.sort_unstable();
-        assert_eq!(programs, vec!["bash", "crux", "crux", "crux"], "{programs:?}");
-    }
-
-    #[test]
-    fn messages_are_not_paths_and_only_writers_write() {
-        let s = steps(r#"git commit -m "/w/acme/x"; cat /w/a; cp /w/a /w/b; echo x > /w/c"#, Path::new("/w"));
-        let t: Vec<(String, bool)> = s
-            .iter()
-            .flat_map(step_paths)
-            .filter(|t| t.path != Path::new("/w"))
-            .map(|t| (t.path.display().to_string(), t.writes))
-            .collect();
-        assert!(!t.iter().any(|(p, _)| p.contains("acme")), "{t:?}");
-        assert!(t.contains(&("/w/a".into(), false)) && t.contains(&("/w/b".into(), true)), "{t:?}");
-        assert!(t.contains(&("/w/c".into(), true)), "{t:?}");
     }
 
     #[test]
@@ -817,22 +859,54 @@ mod tests {
     }
 
     #[test]
-    fn the_program_is_found_past_wrappers_and_paths() {
+    fn the_program_is_found_past_wrappers_paths_and_values() {
         let s = steps(
-            r#"env "CRUX_SCOPE=x" /opt/bin/crux scope enter acme; sudo -E grep -r a /w; /usr/bin/env crux scope"#,
+            r#"env "CRUX_SCOPE=x" /opt/bin/crux scope enter acme; sudo -E grep -r a /w; /usr/bin/env crux scope; nice -n 10 crux x"#,
             Path::new("/"),
         );
-        assert_eq!(s[2].program(), "crux", "a wrapper named by its path is still a wrapper");
-        assert_eq!(s[0].program(), "crux");
-        assert_eq!(s[0].args().first().map(String::as_str), Some("scope"));
-        assert_eq!(s[1].program(), "grep");
+        let programs: Vec<&str> = s.iter().map(Step::program).collect();
+        assert_eq!(programs, vec!["crux", "grep", "crux", "crux"], "{programs:?}");
         assert!(reads_a_tree(&s[1]));
+    }
+
+    #[test]
+    fn other_shells_are_read_as_lines() {
+        let s = steps("bash -lc 'cat /w/b/x'; zsh -ic \"crux scope enter y\"; eval cat /w/c", Path::new("/"));
+        let p: Vec<PathBuf> = s.iter().flat_map(step_paths).map(|t| t.path).collect();
+        assert!(p.contains(&PathBuf::from("/w/b/x")) && p.contains(&PathBuf::from("/w/c")), "{p:?}");
+        assert!(s.iter().any(|st| st.program() == "crux"));
     }
 
     #[test]
     fn only_recursive_reads_are_tree_reads() {
         let s = steps("grep a f; cp a b; cp -r a b; ls -la; ls -R x", Path::new("/"));
         assert_eq!(s.iter().map(reads_a_tree).collect::<Vec<_>>(), vec![false, false, true, false, true]);
+    }
+
+    #[test]
+    fn messages_are_not_paths_and_only_writers_write() {
+        let s = steps(
+            r#"git commit -m "/w/acme/x"; cat /w/a; cp /w/a /w/b; echo x > /w/c; echo y 2>/w/d; F=/w/e cat"#,
+            Path::new("/w"),
+        );
+        let t: Vec<(String, bool)> = s
+            .iter()
+            .flat_map(step_paths)
+            .filter(|t| t.path != Path::new("/w"))
+            .map(|t| (t.path.display().to_string(), t.writes))
+            .collect();
+        assert!(!t.iter().any(|(p, _)| p.contains("acme")), "{t:?}");
+        assert!(t.contains(&("/w/a".into(), false)) && t.contains(&("/w/b".into(), true)), "{t:?}");
+        assert!(t.contains(&("/w/c".into(), true)) && t.contains(&("/w/d".into(), true)), "{t:?}");
+        assert!(t.iter().any(|(p, _)| p == "/w/e"), "an assignment names a path: {t:?}");
+    }
+
+    #[test]
+    fn the_folder_is_a_tree_read_only_when_no_path_is_named() {
+        let named = steps("rg foo /w/a/src", Path::new("/home"));
+        assert!(!step_paths(&named[0]).iter().any(|t| t.tree && t.path == Path::new("/home")));
+        let bare = steps("rg foo", Path::new("/home"));
+        assert!(step_paths(&bare[0]).iter().any(|t| t.tree && t.path == Path::new("/home")));
     }
 
     #[test]

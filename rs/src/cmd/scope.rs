@@ -388,7 +388,7 @@ fn sandbox_is_ours(v: &serde_json::Value) -> bool {
 
 /// What the sandbox denies a repo of scope `s`: everything `scope-guard`
 /// stops, so a shell command the guard's parsing misses still hits a wall.
-fn sandbox_denied(all: &Scopes, s: &Scope) -> Vec<String> {
+fn sandbox_denied(all: &Scopes, s: &Scope, repo: &Path) -> Vec<String> {
     let mut deny: Vec<PathBuf> = vec![env::claude_transcripts_dir()];
     for o in all.list.iter().filter(|o| o.name != s.name) {
         deny.push(o.real_root.clone());
@@ -401,6 +401,16 @@ fn sandbox_denied(all: &Scopes, s: &Scope) -> Vec<String> {
     }
     if s.person != scope::Person::Full {
         deny.extend(person::dir());
+    }
+    // Inside its own scope: the projects its isolation leaves out.
+    let own = scope::project_of_path(s, repo);
+    let own_isolated = own.as_deref().is_some_and(|p| scope::project_rules(s, p).isolated);
+    for p in scope::projects(s) {
+        let closed =
+            if own_isolated { own.as_deref() != Some(p.as_str()) } else { scope::project_rules(s, &p).isolated };
+        if closed && own.as_deref() != Some(p.as_str()) {
+            deny.push(s.root.join(p));
+        }
     }
     deny.iter().map(|p| p.display().to_string()).collect()
 }
@@ -429,7 +439,7 @@ pub fn apply_repo(all: &Scopes, repo: &Path) -> Result<bool, String> {
                     "enabled": true,
                     "allowUnsandboxedCommands": false,
                     "filesystem": {
-                        "denyRead": sandbox_denied(all, s),
+                        "denyRead": sandbox_denied(all, s, repo),
                         "denyWrite": [scope::dir().display().to_string(), scope::pins_dir().display().to_string()],
                     },
                 }),
@@ -585,7 +595,7 @@ fn move_project(all: &Scopes, argv: &[String]) -> Res {
             ui::ok(format!("its tasks → {}", t_dst.display()));
         }
     }
-    let fresh = match scope::load() {
+    let fresh = match scope::load_fresh() {
         Ok(a) => a,
         Err(e) => die!("{e}"),
     };

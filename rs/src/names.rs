@@ -173,6 +173,8 @@ pub mod vars {
     pub const SCOPE: &str = "CRUX_SCOPE";
     /// The ssh client config `crux scope apply` writes its block into.
     pub const SSH_CONFIG: &str = "CRUX_SSH_CONFIG";
+    /// More folders where agents keep their conversations, `:`-separated.
+    pub const SESSION_STORES: &str = "CRUX_SESSION_STORES";
     /// Where the scopes are declared, one folder each (ADR-025).
     pub const SCOPES_DIR: &str = "CRUX_SCOPES_DIR";
     /// The scope a session opened outside every root is pinned to from the

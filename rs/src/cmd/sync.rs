@@ -52,7 +52,7 @@ enum Reach {
 struct Ctx {
     root: PathBuf,
     mode: &'static str,
-    scope: Reach,
+    reach: Reach,
 }
 
 impl Ctx {
@@ -65,14 +65,14 @@ impl Ctx {
     fn in_scope(&self, d: &Path) -> bool {
         let d = project::real(d);
         let under = |dirs: &[PathBuf]| dirs.iter().any(|x| d.starts_with(x));
-        match &self.scope {
+        match &self.reach {
             Reach::All => true,
             Reach::Only(dirs) => under(dirs),
             Reach::Except(dirs) => !under(dirs),
         }
     }
     fn whole(&self) -> bool {
-        !matches!(self.scope, Reach::Only(_))
+        !matches!(self.reach, Reach::Only(_))
     }
     fn repos(&self) -> (Vec<PathBuf>, Vec<PathBuf>) {
         let mut candidates = vec![];
@@ -929,7 +929,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
     let Some(lock) = take_lock(state, true) else { return Ok(()) };
     crate::files::touch_marker(&marker, "");
     let here = session_dirs(&ctx.root);
-    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Reach::Only(here.clone()) };
+    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, reach: Reach::Only(here.clone()) };
     let (mut lines, offline, mut repos) = arrival_lines(&first);
     let mut offline = offline.len();
     if rest_in_background() {
@@ -940,7 +940,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
             sh::detach(c);
         }
     } else {
-        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Reach::Except(here) };
+        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, reach: Reach::Except(here) };
         let (more, more_offline, more_repos) = arrival_lines(&rest);
         lines.extend(more);
         offline += more_offline.len();
@@ -1020,10 +1020,10 @@ pub fn run(argv: &[String]) -> Res {
     let _ = files::mkdir_private(&state);
     if argv.first().map(String::as_str) == Some(REST) {
         let except = argv[1..].iter().map(PathBuf::from).collect();
-        rest(&Ctx { root: root.clone(), mode, scope: Reach::Except(except) }, &state)?;
-        return in_other_scopes(&root, |r| rest(&Ctx { root: r, mode, scope: Reach::All }, &state));
+        rest(&Ctx { root: root.clone(), mode, reach: Reach::Except(except) }, &state)?;
+        return in_other_scopes(&root, |r| rest(&Ctx { root: r, mode, reach: Reach::All }, &state));
     }
-    let ctx = Ctx { root: root.clone(), mode, scope: Reach::All };
+    let ctx = Ctx { root: root.clone(), mode, reach: Reach::All };
     match mode {
         "hook" => {
             // By hand and in a terminal, reading stdin would wait for a Ctrl-D.
@@ -1034,14 +1034,14 @@ pub fn run(argv: &[String]) -> Res {
         }
         "leave" => {
             departure(&ctx)?;
-            in_other_scopes(&root, |r| departure(&Ctx { root: r, mode, scope: Reach::All }))
+            in_other_scopes(&root, |r| departure(&Ctx { root: r, mode, reach: Reach::All }))
         }
         _ => {
             let _lock = take_lock(&state, false);
             // A report left by the hook would repeat what this run says now.
             let _ = std::fs::remove_file(report_file(&state));
             arrival(&ctx)?;
-            in_other_scopes(&root, |r| arrival(&Ctx { root: r, mode, scope: Reach::All }))
+            in_other_scopes(&root, |r| arrival(&Ctx { root: r, mode, reach: Reach::All }))
         }
     }
 }

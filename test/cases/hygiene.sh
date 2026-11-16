@@ -357,6 +357,19 @@ test_the_guard_does_not_let_private_keys_be_read() {
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.pub")" "Read of the public one"
   assert_eq "0" "$(_tool Read file_path "/repo/.env")" "carry-env moves the .env and it is allowed"
   assert_eq "0" "$(_tool Read file_path "/repo/src/keys.ts")" "a file with key in the name"
+}
+
+test_with_scopes_a_key_named_after_its_host_is_a_secret() {
+  local hook="$CRUX_HOME/adapters/claude/hooks/destructive-guard.sh"
+  sandbox >/dev/null
+  _tool() {
+    printf '{"tool_name":"%s","tool_input":{"%s":%s}}' "$1" "$2" \
+      "$(json_quote "$3")" | bash "$hook" >/dev/null 2>&1
+    echo $?
+  }
+  # Without scopes, what it always knew: nothing changes for whoever has none.
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/allowed_signers")" "without scopes, an unknown name is not a key"
+  mkdir -p "$SB/Own" "$CRUX_SCOPES_DIR/own"; printf 'ROOT="%s"\n' "$SB/Own" > "$CRUX_SCOPES_DIR/own/config"
   # A key named after its host, in a folder per scope (ADR-025): the name does
   # not say it is a key, the folder does.
   assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/personal/vps_host")" "a key with a name of its own"

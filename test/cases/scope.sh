@@ -295,11 +295,11 @@ test_the_wall_stops_every_way_into_another_scope() {
 test_the_wall_cannot_be_moved_from_inside() {
   wall_setup
   local s=in-acme c="$ACME/web"
-  assert_stops "rewriting its own pin" "cannot move its own pin" $s "$c" Write "{\"file_path\":\"$CRUX_STATE_DIR/scope-pins/in-acme\",\"content\":\"own\"}"
+  assert_stops "rewriting its own pin" "holds up the scope wall" $s "$c" Write "{\"file_path\":\"$CRUX_STATE_DIR/scope-pins/in-acme\",\"content\":\"own\"}"
   assert_stops "editing a scope's config" "" $s "$c" Bash "{\"command\":\"echo ROOT=/ > $CRUX_SCOPES_DIR/acme/config\"}"
   assert_stops "CRUX_SCOPE on a command" "decides which scope" $s "$c" Bash '{"command":"CRUX_SCOPE=own crux status"}'
   assert_stops "exporting it" "" $s "$c" Bash '{"command":"export CRUX_SCOPES_DIR=/tmp/none"}'
-  assert_stops "entering another scope" "already in 'acme'" $s "$c" Bash '{"command":"crux scope enter own"}'
+  assert_stops "entering another scope" "and this line enters" $s "$c" Bash '{"command":"crux scope enter own"}'
   assert_stops "asking for every scope's tasks" "for the person" $s "$c" Bash '{"command":"crux task list --all"}'
   assert_eq "acme" "$(cat "$CRUX_STATE_DIR/scope-pins/in-acme")" "and the pin is still where it was"
 }
@@ -315,7 +315,7 @@ test_the_front_desk_enters_one_scope_and_stays() {
   assert_eq "acme" "$(cat "$CRUX_STATE_DIR/scope-pins/desk")" "pins the session"
   assert_lets "then the scope is open" $s "$c" Read "{\"file_path\":\"$ACME/web/api/x\"}"
   assert_stops "and the other one closed" "" $s "$c" Read "{\"file_path\":\"$OWN/alpha/.env\"}"
-  assert_stops "for good" "already in 'acme'" $s "$c" Bash '{"command":"crux scope enter own"}'
+  assert_stops "for good" "and this line enters" $s "$c" Bash '{"command":"crux scope enter own"}'
   assert_stops "a command over two scopes from the desk" "" desk2 "$c" Bash "{\"command\":\"diff $ACME/web/x $OWN/alpha/x\"}"
 }
 
@@ -541,11 +541,11 @@ test_the_review_bypasses_are_closed() {
   assert_stops "7: a private part of the profile that is not a note" "" $s "$c" Bash "{\"command\":\"grep -r . $OWN/agent-profile/about\"}"
   assert_stops "7: the full index is private too" "" $s "$c" Read "{\"file_path\":\"$OWN/agent-profile/PROFILE.md\"}"
   assert_stops "7: the profile is not written from another scope" "not written from" $s "$c" Write "{\"file_path\":\"$OWN/agent-profile/preferences/new.md\",\"content\":\"x\"}"
-  assert_stops "8: moving a project between scopes is the person's" "person's decision" $s "$c" Bash '{"command":"crux scope move alpha acme"}'
+  assert_stops "8: moving a project between scopes is the person's" "the person runs it themselves" $s "$c" Bash '{"command":"crux scope move alpha acme"}'
   assert_stops "8: reading another scope's declaration" "is not this session's" $s "$c" Bash '{"command":"crux scope show own"}'
-  assert_stops "8: entering another scope through a path to crux" "already in 'acme'" $s "$c" Bash '{"command":"/usr/local/bin/crux scope enter own"}'
-  assert_stops "8: or through env" "already in 'acme'" $s "$c" Bash '{"command":"env crux scope enter own"}'
-  assert_stops "8: or through env named by its path" "already in 'acme'" $s "$c" Bash '{"command":"/usr/bin/env crux scope enter own"}'
+  assert_stops "8: entering another scope through a path to crux" "and this line enters" $s "$c" Bash '{"command":"/usr/local/bin/crux scope enter own"}'
+  assert_stops "8: or through env" "and this line enters" $s "$c" Bash '{"command":"env crux scope enter own"}'
+  assert_stops "8: or through env named by its path" "and this line enters" $s "$c" Bash '{"command":"/usr/bin/env crux scope enter own"}'
   assert_stops "9: the variable set inside quotes" "decides which scope" $s "$c" Bash '{"command":"env \"CRUX_SCOPE=own\" crux task list"}'
   assert_stops "10: gh with the owner as a bare argument" "owner of scope 'own'" $s "$c" Bash '{"command":"gh repo list me"}'
   assert_stops "10: gh api with the owner in the path" "" $s "$c" Bash '{"command":"gh api repos/me/blog/contents/x"}'
@@ -593,7 +593,7 @@ test_the_second_review_is_closed_too() {
   mkdir -p "$OWN/agent-profile/preferences"
   printf -- '---\n---\n' > "$OWN/agent-profile/PROFILE.md"
   printf 'Short answers.\n' > "$OWN/agent-profile/preferences/short.md"
-  assert_stops "1: entering another scope behind nice -n" "already in 'acme'" $s "$c" Bash '{"command":"nice -n 10 crux scope enter own"}'
+  assert_stops "1: entering another scope behind nice -n" "and this line enters" $s "$c" Bash '{"command":"nice -n 10 crux scope enter own"}'
   assert_stops "1: behind sudo -u" "" $s "$c" Bash '{"command":"sudo -u root crux scope enter own"}'
   assert_stops "1: inside bash -c" "" $s "$c" Bash "{\"command\":\"bash -c 'crux scope enter own'\"}"
   assert_stops "9: a variable set inside bash -c" "decides which scope" $s "$c" Bash "{\"command\":\"bash -c 'CRUX_SCOPE=own crux task list'\"}"
@@ -612,4 +612,52 @@ test_apply_without_scopes_leaves_files_that_never_had_the_block_alone() {
   GIT_CONFIG_GLOBAL="$gc" crux scope apply >/dev/null 2>&1
   GIT_CONFIG_GLOBAL="$gc" crux scope apply >/dev/null 2>&1
   assert_eq "$before" "$(cksum < "$gc")" "5: byte for byte as it was"
+}
+
+test_the_final_audit_is_closed() {
+  wall_setup
+  local s=in-acme c="$ACME/web"
+  assert_stops "1: removing the folder that holds the pins" "holds up the scope wall" $s "$c" Bash "{\"command\":\"rm -rf $CRUX_STATE_DIR\"}"
+  assert_stops "1: moving the scopes away" "holds up the scope wall" $s "$c" Bash "{\"command\":\"mv $CRUX_SCOPES_DIR $SB/elsewhere\"}"
+  assert_stops "2: writing the guard's own script" "holds up the scope wall" $s "$c" Write "{\"file_path\":\"$CRUX_HOME/adapters/claude/hooks/scope-guard.sh\",\"content\":\"exit 0\"}"
+  assert_stops "2: writing the repo's agent settings" "holds up the scope wall" $s "$c" Write "{\"file_path\":\"$ACME/web/.claude/settings.local.json\",\"content\":\"{}\"}"
+  assert_lets "2: reading crux's own files is fine" $s "$c" Read "{\"file_path\":\"$CRUX_HOME/STANDARD.md\"}"
+  assert_stops "4: a tree that holds another scope's secret" "reading it whole" $s "$c" Bash "{\"command\":\"tar czf /tmp/k.tgz $SB/keys\"}"
+  assert_stops "bash -lc" "" $s "$c" Bash "{\"command\":\"bash -lc 'cat $OWN/alpha/.env'\"}"
+  assert_stops "eval" "" $s "$c" Bash "{\"command\":\"eval cat $OWN/alpha/.env\"}"
+  assert_stops "an assignment that names a path" "" $s "$c" Bash "{\"command\":\"F=$OWN/alpha/.env cat \\\"\$F\\\"\"}"
+  assert_stops "a redirection of stderr" "" $s "$c" Bash "{\"command\":\"echo x 2>$OWN/alpha/f\"}"
+  assert_lets "FS1: a tree read of an own folder from an unrelated cwd" $s "$HOME" Bash "{\"command\":\"rg token $ACME/web\"}"
+  assert_lets "FS5: a commit message that cites another scope's repo" $s "$c" Bash '{"command":"git commit -m \"port from github.com/me/x\""}'
+  mkdir -p "$CRUX_SCOPES_DIR/acme/tasks/web"; printf 'x\n' > "$CRUX_SCOPES_DIR/acme/tasks/web/t.md"
+  assert_lets "FS6: the scope's own tasks are readable" $s "$c" Read "{\"file_path\":\"$CRUX_SCOPES_DIR/acme/tasks/web/t.md\"}"
+}
+
+test_a_stopped_call_pins_nothing() {
+  wall_setup
+  local s=desk7 c="$SB/desk"
+  assert_stops "entering and crossing on one line" "" $s "$c" Bash "{\"command\":\"crux scope enter acme; cat $OWN/alpha/.env\"}"
+  assert_no_file "$CRUX_STATE_DIR/scope-pins/desk7" "the session is left where it was"
+}
+
+test_a_pinned_session_whose_scopes_are_gone_is_stopped() {
+  wall_setup
+  rm -rf "$CRUX_SCOPES_DIR"
+  assert_stops "it fails closed" "scopes are gone" in-acme "$ACME/web" Read "{\"file_path\":\"$ACME/web/x\"}"
+}
+
+test_a_broken_contract_isolates_its_project() {
+  wall_setup
+  in_dir "$OWN" "$CRUX_HOME/bin/crux" init client --no-remote >/dev/null 2>&1
+  printf '{ broken <<<<<<< HEAD\n' > "$OWN/client/client-docs/crux.json"
+  session_start in-own2 "$OWN/alpha" >/dev/null
+  assert_stops "a half-merged contract fails closed" "isolated project 'client'" in-own2 "$OWN/alpha" Read "{\"file_path\":\"$OWN/client/x\"}"
+}
+
+test_one_scope_has_no_front_desk() {
+  sandbox >/dev/null
+  mkdir -p "$SB/Only/p" "$CRUX_SCOPES_DIR/only" "$SB/desk"
+  printf 'ROOT="%s"\n' "$SB/Only" > "$CRUX_SCOPES_DIR/only/config"
+  assert_lets "a session outside the root works in the only scope" single "$SB/desk" Read "{\"file_path\":\"$SB/Only/p/x\"}"
+  assert_lets "and searches its home without the stores in the way" single "$SB/desk" Bash "{\"command\":\"grep -r hook $CLAUDE_CONFIG_DIR\"}"
 }
