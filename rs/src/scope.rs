@@ -675,11 +675,14 @@ pub fn pin(session: &str, scope: &str) -> Result<Pin, String> {
     files::mkdir_private(&pins_dir()).map_err(|e| format!("{}: {e}", pins_dir().display()))?;
     let created = std::fs::OpenOptions::new().write(true).create_new(true).open(&f);
     match created {
-        Ok(mut file) => {
-            std::io::Write::write_all(&mut file, format!("{scope}\n").as_bytes())
-                .map_err(|e| format!("{}: {e}", f.display()))?;
-            Ok(Pin::New)
-        }
+        Ok(mut file) => match std::io::Write::write_all(&mut file, format!("{scope}\n").as_bytes()) {
+            Ok(()) => Ok(Pin::New),
+            Err(e) => {
+                // A pin left empty would stop the session for good.
+                let _ = std::fs::remove_file(&f);
+                Err(format!("{}: {e}", f.display()))
+            }
+        },
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => match pinned(session) {
             Some(s) if s == scope => Ok(Pin::Same),
             Some(s) => Err(format!("this session is already in '{s}'; '{scope}' needs a new session")),

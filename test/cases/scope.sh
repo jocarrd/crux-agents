@@ -586,3 +586,30 @@ test_an_isolated_project_session_gets_only_its_tasks() {
   agent="$(printf '%s' "$out" | "$CRUX_BIN" __fn json_get /dev/stdin hookSpecificOutput.additionalContext 2>/dev/null)"
   assert_not_contains "$agent" "secret-plan" "13: the rest of its scope's tasks stay out"
 }
+
+test_the_second_review_is_closed_too() {
+  wall_setup
+  local s=in-acme c="$ACME/web"
+  mkdir -p "$OWN/agent-profile/preferences"
+  printf -- '---\n---\n' > "$OWN/agent-profile/PROFILE.md"
+  printf 'Short answers.\n' > "$OWN/agent-profile/preferences/short.md"
+  assert_stops "1: entering another scope behind nice -n" "already in 'acme'" $s "$c" Bash '{"command":"nice -n 10 crux scope enter own"}'
+  assert_stops "1: behind sudo -u" "" $s "$c" Bash '{"command":"sudo -u root crux scope enter own"}'
+  assert_stops "1: inside bash -c" "" $s "$c" Bash "{\"command\":\"bash -c 'crux scope enter own'\"}"
+  assert_stops "9: a variable set inside bash -c" "decides which scope" $s "$c" Bash "{\"command\":\"bash -c 'CRUX_SCOPE=own crux task list'\"}"
+  assert_lets "2: reading a shared note of the profile from the shell" $s "$c" Bash "{\"command\":\"cat $OWN/agent-profile/preferences/short.md\"}"
+  assert_stops "2: but not writing it" "not written from" $s "$c" Bash "{\"command\":\"echo x > $OWN/agent-profile/preferences/short.md\"}"
+  assert_lets "4: a commit message that names another scope's path" $s "$c" Bash "{\"command\":\"git commit -m \\\"docs: mention $OWN/alpha\\\"\"}"
+  assert_stops "3: a shell glob across scopes" "" $s "$c" Bash "{\"command\":\"cat $SB/*/alpha/.env\"}"
+  assert_stops "10: the API host with another scope's owner" "owner of scope 'own'" $s "$c" Bash '{"command":"curl https://api.github.com/repos/me/blog/contents/x"}'
+  assert_lets "10: an owner that only starts the same" $s "$c" Bash '{"command":"gh api repos/meteo/x"}'
+}
+
+test_apply_without_scopes_leaves_files_that_never_had_the_block_alone() {
+  sandbox >/dev/null
+  local gc="$SB/gitconfig"; printf '[user]\n\tname = me\n' > "$gc"
+  local before; before="$(cksum < "$gc")"
+  GIT_CONFIG_GLOBAL="$gc" crux scope apply >/dev/null 2>&1
+  GIT_CONFIG_GLOBAL="$gc" crux scope apply >/dev/null 2>&1
+  assert_eq "$before" "$(cksum < "$gc")" "5: byte for byte as it was"
+}

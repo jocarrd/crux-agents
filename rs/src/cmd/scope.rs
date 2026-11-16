@@ -472,19 +472,22 @@ pub fn apply_repo(all: &Scopes, repo: &Path) -> Result<bool, String> {
 /// Without scopes, what apply generated earlier is taken out: the blocks in
 /// git's and ssh's configs and the sandbox it wrote into repos.
 fn unapply(all: &Scopes) -> Res {
-    if let Err(e) = crate::template::replace_or_append_block(&git_config_file(), BEGIN, END, "") {
-        die!("git: {e}");
-    }
-    if ssh_config_file().exists() {
-        if let Err(e) = crate::template::write_marked_block(&ssh_config_file(), BEGIN, END, "") {
-            die!("ssh: {e}");
+    // Only a file that holds the block is rewritten: one that never had it is
+    // left byte for byte as it was.
+    for (what, file) in [("git", git_config_file()), ("ssh", ssh_config_file())] {
+        if crate::files::read_optional(&file).is_some_and(|t| t.contains(BEGIN)) {
+            if let Err(e) = crate::template::write_marked_block(&file, BEGIN, END, "") {
+                die!("{what}: {e}");
+            }
         }
     }
     let mut n = 0;
     for root in env::all_projects_roots() {
         for r in repos_under(&root) {
-            if apply_repo(all, &r).unwrap_or(false) {
-                n += 1;
+            match apply_repo(all, &r) {
+                Ok(true) => n += 1,
+                Ok(false) => {}
+                Err(e) => ui::warn(format!("{}: {e}", r.display())),
             }
         }
     }

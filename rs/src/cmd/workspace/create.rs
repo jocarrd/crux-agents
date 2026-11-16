@@ -147,7 +147,7 @@ pub fn create(a: NewArgs) -> Res {
         ));
     }
     exclude_local_state(&path, &config.env_file);
-    if let Ok(all) = crate::scope::load() {
+    if let Ok(Some(all)) = crate::scope::load().map(|a| a.declared.then_some(a)) {
         if let Err(e) = crate::cmd::scope::apply_repo(&all, &path) {
             ui::warn(format!("the scope's agent settings: {e}"));
         }

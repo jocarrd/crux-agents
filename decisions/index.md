@@ -1124,7 +1124,11 @@
     stands. A tool or command that reads a tree (`Grep`, `Glob`, `grep -r`,
     `find`, `rg`, `tar`, `cp -r`, `ls -R`...) is stopped on a folder that
     holds another scope, a project its isolation leaves out, the profile where
-    only its shared part applies, or the agents' transcripts.
+    only its shared part applies, or the agents' transcripts (so a tree
+    read of the agent's own config folder is stopped too: name the file).
+    Commands are split as the shell does, quotes and `bash -c` included, and
+    any `scope enter` a command runs that is not the session's own place is
+    stopped, whatever wraps it.
   - Changing scope means **a new session**, never switching the current one:
     what leaks is the conversation as much as the files. `crux scope open
     <name> [--task <id>] [--prompt <text>]` opens the agent in the scope's

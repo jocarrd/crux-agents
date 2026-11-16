@@ -126,7 +126,11 @@ pub fn projects_root_for(cwd: &Path) -> PathBuf {
     match crate::scope::load() {
         Ok(s) if s.declared => match s.current(cwd) {
             Ok(Some(scope)) => scope.root.clone(),
-            _ => s.primary().root.clone(),
+            Ok(None) => s.primary().root.clone(),
+            Err(e) => {
+                crate::ui::warn_stderr(format!("{e}: working in the person's own scope"));
+                s.primary().root.clone()
+            }
         },
         _ => implicit_projects_root(),
     }
@@ -176,7 +180,11 @@ pub fn tasks_dir() -> PathBuf {
     match crate::scope::load() {
         Ok(s) if s.declared => match s.current(&std::env::current_dir().unwrap_or_default()) {
             Ok(Some(scope)) => scope.tasks_dir(),
-            _ => s.primary().tasks_dir(),
+            Ok(None) => s.primary().tasks_dir(),
+            Err(e) => {
+                crate::ui::warn_stderr(format!("{e}: the person's own tasks"));
+                s.primary().tasks_dir()
+            }
         },
         _ => machine_tasks_dir(),
     }

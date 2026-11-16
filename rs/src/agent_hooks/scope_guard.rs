@@ -22,6 +22,14 @@ use std::path::{Path, PathBuf};
 const VARS_THAT_MOVE_THE_WALL: [&str; 5] =
     [vars::SCOPE, vars::SCOPES_DIR, vars::STATE_DIR, vars::UNPINNED_SESSIONS, vars::TASKS_DIR];
 
+/// Options of a wrapper that take a value: `nice -n 10 crux`.
+const WRAPPER_OPTIONS_WITH_VALUE: [&str; 6] = ["-n", "-u", "-g", "-C", "-U", "-p"];
+
+/// Programs that write the paths they are given; for the copy family, only the
+/// last one.
+const WRITERS: [&str; 9] = ["tee", "rm", "touch", "mkdir", "rmdir", "truncate", "chmod", "chown", "dd"];
+const COPIERS: [&str; 5] = ["cp", "mv", "ln", "install", "rsync"];
+
 /// Programs that read a whole tree when given a folder: given an ancestor of
 /// another scope, they read it too.
 const RECURSIVE: [&str; 12] = ["grep", "egrep", "rg", "ag", "find", "fd", "tar", "zip", "rsync", "du", "tree", "cp"];
@@ -54,29 +62,73 @@ impl Step {
     }
 }
 
+/// The words of a command as the shell splits them: what is quoted is one
+/// word, with its quotes taken off. `-m "fix /w/x"` is two words, not three.
+fn shell_words(seg: &str) -> Vec<String> {
+    let (mut out, mut cur, mut quote, mut any) = (vec![], String::new(), None::<char>, false);
+    let mut chars = seg.chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (None, '\\') => {
+                if let Some(n) = chars.next() {
+                    cur.push(n);
+                    any = true;
+                }
+            }
+            (None, '"' | '\'') => {
+                quote = Some(c);
+                any = true;
+            }
+            (Some(q), _) if c == q => quote = None,
+            (None, c) if c.is_whitespace() => {
+                if any {
+                    out.push(std::mem::take(&mut cur));
+                    any = false;
+                }
+            }
+            (None, '(' | ')' | '`') => {}
+            _ => {
+                cur.push(c);
+                any = true;
+            }
+        }
+    }
+    if any {
+        out.push(cur);
+    }
+    out
+}
+
 fn steps(command: &str, start: &Path) -> Vec<Step> {
     let text = drop_heredocs(command);
     let mut here = start.to_path_buf();
     let mut out = vec![];
     for seg in segments(&text) {
-        let words: Vec<String> = seg
-            .split_whitespace()
-            .map(|w| w.trim_matches(|c| c == '"' || c == '\'' || c == '(' || c == ')' || c == '`').to_string())
-            .filter(|w| !w.is_empty())
-            .collect();
+        let words = shell_words(&seg);
         let (mut program, mut wrapped) = (0, false);
         while let Some(w) = words.get(program) {
             let name = w.rsplit('/').next().unwrap_or(w);
-            let wrapper = matches!(name, "env" | "sudo" | "command" | "exec" | "nice" | "nohup" | "time");
+            let wrapper = matches!(name, "env" | "sudo" | "command" | "exec" | "nice" | "nohup" | "time" | "doas");
             let assignment = w.contains('=') && !w.starts_with('-') && !w.starts_with('/');
             let wrapper_option = wrapped && w.starts_with('-');
             if !(wrapper || assignment || wrapper_option) {
                 break;
             }
+            // `nice -n 10`, `sudo -u root`, `env -u X`: the option's value is
+            // not the program either.
+            if wrapper_option && WRAPPER_OPTIONS_WITH_VALUE.contains(&w.as_str()) {
+                program += 1;
+            }
             wrapped |= wrapper;
             program += 1;
         }
         let step = Step { words, program, here: here.clone() };
+        // `bash -c '...'` runs another line: it is read as one, from here.
+        if matches!(step.program(), "bash" | "sh" | "zsh" | "dash" | "ksh") {
+            if let Some(inner) = step.args().iter().position(|a| a == "-c").and_then(|i| step.args().get(i + 1)) {
+                out.extend(steps(inner, &here));
+            }
+        }
         if step.program() == "cd" {
             here = match step.args().first().map(String::as_str) {
                 None | Some("~") => env::home(),
@@ -98,20 +150,66 @@ fn looks_like_path(w: &str) -> bool {
         || (w.contains('/') && !w.contains("://") && !w.starts_with('-'))
 }
 
+/// A path a step touches: whether it may write it, and whether it is read as
+/// a whole tree (a shell glob reads every folder its fixed part holds).
+struct Touch {
+    path: PathBuf,
+    writes: bool,
+    tree: bool,
+}
+
 /// Every path a step touches: the folder it runs in, and each word that names
-/// one. `grep -r .` reads the folder it stands in.
-fn step_paths(step: &Step) -> Vec<PathBuf> {
-    let mut out = vec![step.here.clone()];
-    for w in &step.words {
+/// one. `grep -r .` reads the folder it stands in. What follows `-m` and its
+/// kin in git and gh is a message, not a path.
+fn step_paths(step: &Step) -> Vec<Touch> {
+    let mut out = vec![Touch { path: step.here.clone(), writes: false, tree: false }];
+    let program = step.program();
+    let in_place = matches!(program, "sed" | "perl") && step.args().iter().any(|a| a.starts_with("-i"));
+    let message = matches!(program, "git" | "gh");
+    let mut skip = false;
+    let mut redirect = false;
+    let args = step.args();
+    let last_path = args.iter().rposition(|w| looks_like_path(w));
+    for (i, w) in args.iter().enumerate() {
+        if skip {
+            skip = false;
+            continue;
+        }
+        if message && matches!(w.as_str(), "-m" | "--message" | "--body" | "--title" | "--subject" | "--notes") {
+            skip = true;
+            continue;
+        }
+        if w == ">" || w == ">>" {
+            redirect = true;
+            continue;
+        }
+        let into = w.starts_with('>');
         let w = w.rsplit_once('=').map_or(w.as_str(), |(_, v)| v);
         let w = w.trim_start_matches(['<', '>']);
-        if looks_like_path(w) {
-            out.push(step.resolve(w));
+        if !looks_like_path(w) {
+            redirect = false;
+            continue;
         }
+        let glob = w.find(['*', '?', '[']);
+        let fixed = match glob {
+            Some(at) => w[..at].rsplit_once('/').map_or("", |(d, _)| d),
+            None => w,
+        };
+        let writes = redirect
+            || into
+            || in_place
+            || WRITERS.contains(&program)
+            || (COPIERS.contains(&program) && Some(i) == last_path);
+        out.push(Touch {
+            path: step.resolve(if fixed.is_empty() { "." } else { fixed }),
+            writes,
+            tree: glob.is_some(),
+        });
+        redirect = false;
     }
-    if step.program() == "cd" {
-        if let Some(d) = step.args().first() {
-            out.push(step.resolve(d));
+    if program == "cd" {
+        if let Some(d) = args.first() {
+            out.push(Touch { path: step.resolve(d), writes: false, tree: false });
         }
     }
     out
@@ -401,14 +499,21 @@ fn other_owner(all: &Scopes, pinned: Option<&Place>, command: &str, steps: &[Ste
     for s in all.list.iter().filter(|s| pinned.is_none_or(|p| p.scope != s.name)) {
         for o in &s.owners {
             let lo = o.to_lowercase();
-            let web = regex::Regex::new(&format!(r"(?i)github\.com[:/]{}/", regex::escape(o))).ok()?;
+            let web = regex::Regex::new(&format!(
+                r"(?i)(github\.com[:/]{0}/|api\.github\.com/(repos|orgs|users)/{0}(/|\b))",
+                regex::escape(o)
+            ))
+            .ok()?;
             let by_gh = steps.iter().filter(|st| st.program() == "gh").any(|st| {
                 st.args().iter().any(|a| {
                     let a = a.to_lowercase();
                     a == lo
                         || a.starts_with(&format!("{lo}/"))
                         || a.contains(&format!("={lo}/"))
-                        || ["repos/", "orgs/", "users/"].iter().any(|k| a.contains(&format!("{k}{lo}")))
+                        || ["repos/", "orgs/", "users/"].iter().any(|k| {
+                            let at = format!("{k}{lo}");
+                            a.ends_with(&at) || a.contains(&format!("{at}/"))
+                        })
                 })
             });
             if web.is_match(command) || by_gh {
@@ -481,6 +586,35 @@ fn crux_step(all: &Scopes, pinned: Option<&Place>, step: &Step) -> CruxStep {
         },
         _ => CruxStep::Free,
     }
+}
+
+/// Every `scope enter <target>` a line runs, behind whatever wrapper: the
+/// words in sequence in any of its commands, nested shells included. A
+/// sentence that only mentions it is one quoted word and does not count.
+fn named_entries(all: &Scopes, steps: &[Step]) -> Vec<Result<Place, String>> {
+    let mut out = vec![];
+    for st in steps {
+        for (i, w) in st.words.iter().enumerate() {
+            if w != "scope" || st.words.get(i + 1).map(String::as_str) != Some("enter") {
+                continue;
+            }
+            let rest = st.words.get(i + 2..).unwrap_or(&[]);
+            let (project, name) = match rest.first().map(String::as_str) {
+                Some("--project") => (true, rest.get(1)),
+                _ => (false, rest.first()),
+            };
+            let Some(name) = name.cloned() else { continue };
+            out.push(if project {
+                all.scope_of_project(&name)
+                    .map(|s| isolated_place(all, &Place { scope: s.name.clone(), project: Some(name) }))
+            } else if all.by_name(&name).is_some() {
+                Ok(Place { scope: name, project: None })
+            } else {
+                Err(format!("no scope '{name}'"))
+            });
+        }
+    }
+    out
 }
 
 fn stop_with(reason: &str) -> Res {
@@ -587,11 +721,31 @@ pub(super) fn scope_guard() -> Res {
                     CruxStep::Free => {}
                 }
             }
-            let ps = step_paths(st);
-            if reads_a_tree(st) {
-                trees.extend(ps.iter().cloned());
+            let tree = reads_a_tree(st);
+            for t in step_paths(st) {
+                if tree || t.tree {
+                    trees.push(t.path.clone());
+                }
+                paths.push((t.path, t.writes));
             }
-            paths.extend(ps.into_iter().map(|p| (p, true)));
+        }
+        let entered = pinned.clone();
+        for r in named_entries(&all, &steps) {
+            let place = match r {
+                Ok(p) => p,
+                Err(e) => return stop_with(&e),
+            };
+            if entered.as_ref() != Some(&place) {
+                return stop_with(&match &entered {
+                    Some(p) => format!(
+                        "this session is in {}, and this line enters {}. Tell the person: `{}`.",
+                        describe(p),
+                        describe(&place),
+                        open_hint(&place)
+                    ),
+                    None => format!("run `{}` as a command of its own, not inside another.", enter_hint(&place)),
+                });
+            }
         }
         foreign_reads = trees;
     } else {
@@ -619,7 +773,32 @@ mod tests {
     use super::*;
 
     fn paths(cmd: &str, start: &str) -> Vec<PathBuf> {
-        steps(cmd, Path::new(start)).iter().flat_map(step_paths).collect()
+        steps(cmd, Path::new(start)).iter().flat_map(step_paths).map(|t| t.path).collect()
+    }
+
+    #[test]
+    fn wrapper_values_and_shells_are_seen_through() {
+        let s = steps(
+            "nice -n 10 crux scope enter x; sudo -u root crux task; bash -c 'crux scope enter y'",
+            Path::new("/"),
+        );
+        let mut programs: Vec<&str> = s.iter().map(Step::program).collect();
+        programs.sort_unstable();
+        assert_eq!(programs, vec!["bash", "crux", "crux", "crux"], "{programs:?}");
+    }
+
+    #[test]
+    fn messages_are_not_paths_and_only_writers_write() {
+        let s = steps(r#"git commit -m "/w/acme/x"; cat /w/a; cp /w/a /w/b; echo x > /w/c"#, Path::new("/w"));
+        let t: Vec<(String, bool)> = s
+            .iter()
+            .flat_map(step_paths)
+            .filter(|t| t.path != Path::new("/w"))
+            .map(|t| (t.path.display().to_string(), t.writes))
+            .collect();
+        assert!(!t.iter().any(|(p, _)| p.contains("acme")), "{t:?}");
+        assert!(t.contains(&("/w/a".into(), false)) && t.contains(&("/w/b".into(), true)), "{t:?}");
+        assert!(t.contains(&("/w/c".into(), true)), "{t:?}");
     }
 
     #[test]
