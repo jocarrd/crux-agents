@@ -184,6 +184,7 @@ pub fn run(argv: &[String]) -> Res {
     let profile_name = profile.as_ref().map(|p| crate::files::name(p)).unwrap_or_default();
     let (mut total, mut scopes, mut n_ignored, mut n_user, mut n_feedback) = (0, vec![], 0, 0, 0);
     let (mut unpromoted, mut personal, mut untyped, mut unreadable) = (vec![], vec![], vec![], vec![]);
+    let projects = person::known_projects();
     for m in claude_memories() {
         if is_ignored(&m.scope) {
             n_ignored += 1;
@@ -207,6 +208,12 @@ pub fn run(argv: &[String]) -> Res {
                     format!("scope {}", m.scope)
                 };
                 unpromoted.push((m.kind.clone(), name, target));
+            }
+            // A correction about one project is that project's convention:
+            // routed by its type alone, it landed in the person's preferences.
+            "feedback" if !person::projects_named_in(&crate::files::read_or_empty(&m.path), &projects).is_empty() => {
+                let named = person::projects_named_in(&crate::files::read_or_empty(&m.path), &projects);
+                unpromoted.push((m.kind.clone(), name, format!("{}-docs (a rule of that project)", named[0])));
             }
             "user" | "feedback" => {
                 if profile.is_some() {

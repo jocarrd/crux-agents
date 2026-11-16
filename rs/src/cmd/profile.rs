@@ -30,7 +30,8 @@ here and not in the agent's local memory: one note per fact in `preferences/`
 accounts), one line in this index, then `git commit` and `git push` right away.
 What only holds on one computer goes in `machines/<machine>.md`, named after
 the short hostname, which does not change with the network. A project's
-knowledge goes to its `-docs` repo; keys and passwords go nowhere in git.
+knowledge goes to its `-docs` repo, and so does a rule that only holds for one
+project; keys and passwords go nowhere in git.
 
 ## Preferences
 
@@ -132,7 +133,7 @@ fn link_into_scopes(dir: &Path, note: Option<&Path>, all: &crate::scope::Scopes)
     }
     let codex = env::codex_home_dir();
     if codex.is_dir() {
-        let shared = std::fs::read_to_string(person::shared_index_file()).unwrap_or_default();
+        let shared = crate::files::read_or_empty(&person::shared_index_file());
         let block = format!("<!-- crux:profile:begin -->\n{}\n<!-- crux:profile:end -->", shared.trim_end());
         if let Err(e) = crate::template::write_marked_block(
             &codex.join(names::AGENTS),
@@ -154,6 +155,12 @@ fn status() -> Res {
         return Ok(());
     };
     println!("profile in {}", dir.display());
+    for (note, projects) in person::preferences_naming_projects(&dir) {
+        ui::warn(format!(
+            "{note} names {}: a rule of one project goes to its docs repo, not to the person's preferences",
+            projects.join(", ")
+        ));
+    }
     match person::field(&dir, "reminder").filter(|r| !r.is_empty()) {
         Some(r) => ui::info(format!("reminder on every message: {r}")),
         None => ui::info("no reminder on every message (reminder: in PROFILE.md)"),

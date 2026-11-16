@@ -166,6 +166,70 @@ pub fn load_into_scopes(dir: &Path, note: Option<&Path>, all: &crate::scope::Sco
     Ok(written)
 }
 
+/// Every project on this machine, by folder: what has a docs repo next to it
+/// in any root. Neither the profile repo nor the kernel's own clone count: one
+/// is the person's, the other the tool they work with, and a preference about
+/// how to use it is still theirs.
+pub fn known_projects() -> Vec<String> {
+    let profile = repo_name();
+    let mut out: Vec<String> = env::all_projects_roots()
+        .iter()
+        .flat_map(|root| {
+            let kernel = env::kernel_clone(root).and_then(|k| {
+                k.strip_prefix(root)
+                    .ok()
+                    .and_then(|r| r.components().next())
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            });
+            crate::project::subdirs(root)
+                .into_iter()
+                .filter(|n| *n != profile && Some(n) != kernel.as_ref())
+                .filter(|n| !n.contains("-ws-") && root.join(n).join(format!("{n}-docs")).is_dir())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The projects a text names: by their folder name as a word, and a long
+/// name also written apart (`lariojameteo` as "La Rioja Meteo").
+pub fn projects_named_in(text: &str, projects: &[String]) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let squeezed: String = lower.chars().filter(|c| c.is_alphanumeric()).collect();
+    projects
+        .iter()
+        .filter(|p| {
+            let p = p.to_lowercase();
+            let word = regex::Regex::new(&format!(r"(^|[^a-z0-9]){}($|[^a-z0-9])", regex::escape(&p)))
+                .is_ok_and(|r| r.is_match(&lower));
+            let flat: String = p.chars().filter(|c| c.is_alphanumeric()).collect();
+            word || (flat.len() >= 6 && squeezed.contains(&flat))
+        })
+        .cloned()
+        .collect()
+}
+
+/// Notes in `preferences/` that name a project. A preference is how the person
+/// works anywhere; a rule of one project is that project's convention and goes
+/// to its docs repo. Routing memories by their type alone sent every
+/// correction there, project rules included.
+pub fn preferences_naming_projects(dir: &Path) -> Vec<(String, Vec<String>)> {
+    let projects = known_projects();
+    let mut out = vec![];
+    for f in crate::project::files_under(&dir.join("preferences")) {
+        if f.extension().is_none_or(|e| e != "md") {
+            continue;
+        }
+        let named = projects_named_in(&crate::files::read_or_empty(&f), &projects);
+        if !named.is_empty() {
+            out.push((format!("preferences/{}", crate::files::name(&f)), named));
+        }
+    }
+    out
+}
+
 fn without_frontmatter(text: &str) -> String {
     let mut out = vec![];
     let mut fm = false;

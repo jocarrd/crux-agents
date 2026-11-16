@@ -610,7 +610,10 @@ proper nouns are covered, there is a pattern.
 Four types: `user`, `feedback`, `project`, `reference`.
 
 - `user` and `feedback` are about the person, not the project: they go to the
-  **person's profile** (see below), not to a docs repo.
+  **person's profile** (see below), not to a docs repo. A correction about one
+  project is the exception: it is that project's convention and goes to its
+  docs repo. `crux memory` sends a `feedback` that names a project there, and
+  `crux profile` warns on a preference that names one.
 - `project` and `reference` are **promoted to git** in the same turn:
   - Operations and gotchas → `operations/`
   - Pointers to external resources → `operations/` or the relevant README
