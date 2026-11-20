@@ -149,8 +149,7 @@ fn steps(command: &str, start: &Path) -> Vec<Step> {
     let text = drop_heredocs(command);
     let text = crate::regex!(r"&>>").replace_all(&text, " >> ");
     let text = crate::regex!(r"&>|>\|").replace_all(&text, " > ");
-    let text = crate::regex!(r">&([^\d\-\s])").replace_all(&text, " > $1");
-    let text = crate::regex!(r">&([\d\-])").replace_all(&text, ">@$1").into_owned();
+    let text = crate::regex!(r">&([^\d\-\s])").replace_all(&text, " > $1").into_owned();
     let mut here = start.to_path_buf();
     let mut out = vec![];
     for seg in segments(&text) {
@@ -898,16 +897,7 @@ fn check_bash(wall: &Wall, command: &str, start: &Path, touches: &mut Vec<Touch>
 fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
     // Heredoc bodies only count when a shell reads them; quotes inside a
     // path (`"$HOME"/x`) and `/./` are spelled away; macOS folds case.
-    // Quoted text is a sentence unless the line hands it to something that
-    // runs it: a shell fed through a pipe, `xargs`, `eval`, `$(...)`.
-    let raw = drop_heredocs(command);
-    let runs_text = crate::regex!(
-        r"\|\s*(sh|bash|zsh|dash|ksh|xargs|eval|source)\b|\$\(|`|<<<|\b(eval|source)\b|\b(sh|bash|zsh|dash|ksh)\s+-\w*c"
-    )
-    .is_match(&raw);
-    let raw =
-        if runs_text { raw } else { crate::regex!(r#""(?:[^"\\]|\\.)*"|'[^']*'"#).replace_all(&raw, " ").into_owned() };
-    let mut text = raw.replace(['"', '\''], "").replace("/./", "/");
+    let mut text = drop_heredocs(command).replace(['"', '\''], "").replace("/./", "/");
     for st in steps {
         let message = matches!(st.program(), "git" | "gh");
         for pair in st.args().windows(2) {
@@ -929,6 +919,9 @@ fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
         }
         out
     };
+    // A line that writes anywhere may write what it names.
+    let writes =
+        text.contains('>') || steps.iter().any(|st| WRITERS.contains(&st.program()) || COPIERS.contains(&st.program()));
     let end = |c: char| c.is_whitespace() || "'\";)|&`<>".contains(c);
     let mut out = vec![];
     let mut zones: Vec<PathBuf> = wall.foreign().into_iter().map(|(f, _)| f).collect();
@@ -949,8 +942,6 @@ fn named_in_text(wall: &Wall, command: &str, steps: &[Step]) -> Vec<Touch> {
                 // another root is judged as itself, not as the root.
                 let tail: String = after.chars().take_while(|ch| !end(*ch)).collect();
                 let named = format!("{}{tail}", folder.display());
-                // Written when a redirection points at it: `> f`, `>> f`, `&> f`.
-                let writes = text[..i].trim_end().ends_with('>');
                 out.push(Touch {
                     path: PathBuf::from(named),
                     writes,

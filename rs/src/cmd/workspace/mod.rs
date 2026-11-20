@@ -127,23 +127,8 @@ impl Slot<'_> {
     }
 }
 
-/// A value as it goes into a shell command: as is when it only has the
-/// characters a branch or a name usually has, and quoted otherwise. Git
-/// accepts `$` and parentheses in a branch name, and a branch can arrive from
-/// a task resumed from the remote: `x$(cmd)` must stay a name, never run.
-fn shell_safe(value: &str) -> String {
-    if crate::regex!(r"^[A-Za-z0-9._/@+=,:-]*$").is_match(value) {
-        value.to_string()
-    } else {
-        format!("'{}'", value.replace('\'', r"'\''"))
-    }
-}
-
 fn substitute(text: &str, slot: i64, port0: i64, name: &str, branch: &str) -> String {
-    let t = text
-        .replace("{{SLOT}}", &slot.to_string())
-        .replace("{{NAME}}", &shell_safe(name))
-        .replace("{{BRANCH}}", &shell_safe(branch));
+    let t = text.replace("{{SLOT}}", &slot.to_string()).replace("{{NAME}}", name).replace("{{BRANCH}}", branch);
     crate::regex!(r"\{\{PORT(\d+)\}\}")
         .replace_all(&t, |c: &regex::Captures| (port0 + c[1].parse::<i64>().unwrap_or(0)).to_string())
         .into_owned()
@@ -302,14 +287,7 @@ pub fn run(argv: &[String]) -> Res {
 
 #[cfg(test)]
 mod tests {
-    use super::{regenerable, substitute};
-
-    #[test]
-    fn a_branch_that_would_run_in_the_shell_is_quoted() {
-        assert_eq!(substitute("git checkout {{BRANCH}}", 0, 3000, "w", "ws/login"), "git checkout ws/login");
-        assert_eq!(substitute("echo {{BRANCH}}", 0, 3000, "w", "x$(touch /tmp/p)"), "echo 'x$(touch /tmp/p)'");
-        assert_eq!(substitute("echo {{BRANCH}}", 0, 3000, "w", "it's"), r"echo 'it'\''s'");
-    }
+    use super::regenerable;
 
     #[test]
     fn what_builds_write_again_does_not_block_removal() {

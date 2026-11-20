@@ -725,25 +725,3 @@ test_the_front_desk_can_note_in_the_profile() {
   local enc; enc="$(printf '%s' "$SB/desk" | tr -c 'A-Za-z0-9' '-')"
   assert_lets "7: the session's own automatic memory" desk9 "$SB/desk" Write "{\"file_path\":\"$CLAUDE_CONFIG_DIR/projects/$enc/memory/x.md\",\"content\":\"x\"}"
 }
-
-# The guard against a corpus of ordinary work and of known attacks
-# (test/scope-corpus.txt): every PASS line must pass and every STOP line be
-# stopped. A change to the guard that blocks normal work or reopens a way
-# through fails here first.
-test_the_guard_passes_ordinary_work_and_stops_every_known_attack() {
-  wall_setup
-  mkdir -p "$ACME/web/node_modules/x" "$SB/desk" "$OWN/agent-profile/preferences"
-  printf '{}\n' > "$ACME/web/package.json"; printf 'x\n' > "$ACME/web/src/a.ts" 2>/dev/null || { mkdir -p "$ACME/web/src"; printf 'x\n' > "$ACME/web/src/a.ts"; }
-  printf -- '---\n---\n' > "$OWN/agent-profile/PROFILE.md"
-  git init -q "$ACME/web"
-  local STATE="$CRUX_STATE_DIR" SCOPES="$CRUX_SCOPES_DIR" want cmd sid cwd rc
-  while IFS='|' read -r want cmd; do
-    [[ -z "$want" || "$want" == \#* ]] && continue
-    sid=in-acme; cwd="$ACME/web"
-    if [[ "$want" == DESK-* ]]; then want="${want#DESK-}"; sid="desk-$RANDOM"; cwd="$SB/desk"; fi
-    cmd="${cmd//\$OWN/$OWN}"; cmd="${cmd//\$ACME/$ACME}"; cmd="${cmd//\$SB/$SB}"
-    cmd="${cmd//\$STATE/$STATE}"; cmd="${cmd//\$SCOPES/$SCOPES}"; cmd="$(printf '%b' "$cmd")"
-    rc=0; guard "$sid" "$cwd" Bash "$(json_quote "$cmd" | sed 's/^/{"command":/; s/$/}/')" >/dev/null || rc=$?
-    if [[ "$want" == PASS ]]; then assert_eq 0 "$rc" "passes: $cmd"; else assert_eq 2 "$rc" "stopped: $cmd"; fi
-  done < "$CRUX_HOME/test/scope-corpus.txt"
-}

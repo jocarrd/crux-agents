@@ -156,8 +156,7 @@ fn is_secret(p: &str) -> bool {
             .list
             .iter()
             .any(|s| s.secrets.iter().any(|x| crate::scope::inside(&real, &crate::scope::real_lenient(x))));
-        let ssh =
-            r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|authorized_keys|environment)([.~-][^/]*)?$)[^/]+(/[^/]+)*$";
+        let ssh = r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|known_hosts\.old|authorized_keys|environment)$)[^/]+(/[^/]+)*$";
         if declared || is_match(&fancy(ssh), &p) {
             return true;
         }
