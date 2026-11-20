@@ -147,11 +147,6 @@ pub fn create(a: NewArgs) -> Res {
         ));
     }
     exclude_local_state(&path, &config.env_file);
-    if let Ok(Some(all)) = crate::scope::load().map(|a| a.declared.then_some(a)) {
-        if let Err(e) = crate::cmd::scope::apply_repo(&all, &path) {
-            ui::warn(format!("the scope's agent settings: {e}"));
-        }
-    }
     // An unversioned file does not travel with `git worktree add`.
     if let Some(d) = docs.as_deref() {
         if policy::writes_in_code_repos(&profile, Some(d)) {
@@ -173,13 +168,17 @@ pub fn create(a: NewArgs) -> Res {
         install_dependencies(&path)?;
     }
     if !config.setup.is_empty() {
-        let code =
-            signals::run_interruptible(Command::new("bash").args(["-c", &slot.fill(&config.setup)]).current_dir(&path));
-        interrupted()?;
-        if code == 0 {
-            ui::ok("setup executed");
-        } else {
-            ui::warn("the setup failed — the workspace exists, but check its resources");
+        match slot.fill(&config.setup) {
+            Ok(cmd) => {
+                let code = signals::run_interruptible(Command::new("bash").args(["-c", &cmd]).current_dir(&path));
+                interrupted()?;
+                if code == 0 {
+                    ui::ok("setup executed");
+                } else {
+                    ui::warn("the setup failed — the workspace exists, but check its resources");
+                }
+            }
+            Err(e) => ui::warn(format!("setup not run: {e} — the workspace exists without it")),
         }
     }
     interrupted()?;
@@ -423,8 +422,17 @@ fn install_dependencies(path: &Path) -> Res {
 fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo_name: &str) {
     let key_re = crate::regex!(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=");
     let key_of = |l: &str| key_re.captures(l).map(|c| c[1].to_string());
-    let tmpl: Vec<(String, String)> =
-        config.env_template.iter().map(|(k, v)| (k.clone(), slot.fill(&files::value_text(v)))).collect();
+    let tmpl: Vec<(String, String)> = config
+        .env_template
+        .iter()
+        .filter_map(|(k, v)| match slot.fill(&files::value_text(v)) {
+            Ok(value) => Some((k.clone(), value)),
+            Err(e) => {
+                ui::warn(format!("{k} left out of the .env: {e}"));
+                None
+            }
+        })
+        .collect();
     let base = repo.join(&config.env_file);
     let lines: Vec<String> = if base.is_file() {
         match files::read_if_exists(&base) {

@@ -992,7 +992,7 @@
 ### ADR-025: Work scopes: one person, several isolated contexts on one machine
 
 - **Date**: 2026-11-16
-- **Status**: Proposed
+- **Status**: Superseded by ADR-026 (2026-11-20)
 - **Context**: crux assumed one person with one context. Seven places hold
   that assumption: one projects root (`env::projects_root`, read from 21
   files), one remote template and owner (`project::remote_template`,
@@ -1243,3 +1243,68 @@
   The tasks of non-primary scopes stay in their folder until moved.
 - **Related**: `ADR-001`, `ADR-008`, `ADR-011`, `ADR-014`, `ADR-018`,
   `ADR-023`, `ADR-024`
+
+---
+
+### ADR-026: No work scopes: the agent account and the folder separate contexts
+
+- **Date**: 2026-11-20
+- **Status**: Accepted
+- **Context**: ADR-025 built work scopes so that one person could keep their
+  own projects, an employer's and clients' on one machine without the agent
+  mixing them. It took about 3,400 lines (`scope.rs`, `cmd/scope.rs`, a
+  1,141-line `scope_guard.rs`, 749 lines of tests) and five rounds of review,
+  and it still failed in daily use. The guard has to tell from the text of a
+  shell line what a command reads and writes, which cannot be done exactly:
+  on 2026-11-16 five false stops were noted (`2>&1` read as a write, quoted
+  text read as paths, a copy of the ssh config taken for a key, a cut stop
+  message, an ssh rule tied to a versioned binary), and in one session on
+  2026-11-20 it stopped six ordinary actions: reading and deleting a
+  one-use secret file the agent app had written, listing the agent's own
+  config folders, reading the folder of a project in the same scope, and two
+  reads of the Desktop. It prevented no real problem in that time. Meanwhile
+  the agent apps solved the part that mattered: T3 Code runs one provider
+  instance per account, each with its own `CLAUDE_CONFIG_DIR` (or
+  `CODEX_HOME`) and environment, so the employer's account brings its own
+  login, memory, conversations and connectors, and its own GitHub session
+  with `GH_CONFIG_DIR` if it ever needs one.
+- **Decision**: remove work scopes. A context is the agent account the
+  person picks for a thread plus the folder the thread works in; crux is the
+  method and acts only where it is installed. The person keeps each context in
+  its folder and accepts that nothing technical stops a session from reading
+  another folder. What scopes configured goes back to the standard tools: the
+  git identity by folder with `includeIf "gitdir:..."`, an ssh key per host in
+  `~/.ssh/config`. Two changes that came with ADR-025 and are not about
+  scopes stay: a feedback memory that names a project is routed to that
+  project's docs, and any file under `~/.ssh` that is not a public half or one
+  of ssh's own files is a secret.
+- **Consequences**: crux is back to one projects root and one person's
+  profile loaded whole, as before ADR-025. `crux scope`, `scope-guard`, the
+  front desk, `~/.crux/scopes/` and the contract fields `isolation`, `person`
+  and `secrets` are gone. Working for a client keeps its guarantees from the
+  account and the folder, not from crux. Projects under a root other than
+  `CRUX_PROJECTS_DIR` stop being seen by `sync`, `memory`, `machine` and
+  `workspace gc`. Installing removes the `scope-guard` hook from the agents'
+  settings, as it does with any hook a version stops shipping.
+- **Upgrading a machine that used scopes**: `crux scope apply` wrote blocks
+  that call a command 0.88 no longer has, so they go first, with 0.87 still
+  installed:
+  1. Move the tasks of every scope that is not the primary one from
+     `~/.crux/scopes/<scope>/tasks/<project>` to `~/.crux/tasks/<project>`.
+  2. Set the whole folder aside (`mv ~/.crux/scopes ~/.crux/scopes.old`: 0.87
+     counts every folder in it as a scope, with or without its `config`) and
+     run `crux scope apply`. With no scopes left it takes out the
+     `~/.ssh/config` and `~/.gitconfig` blocks and the sandbox it wrote into
+     the repos under `CRUX_PROJECTS_DIR`.
+  3. By hand: remove the `crux:profile` block from each root's `CLAUDE.md`
+     (it imports a shared part of the profile that is no longer updated); in
+     each repo's `.claude/settings.local.json`, remove `env.GH_CONFIG_DIR`
+     everywhere and the `sandbox` block under any other root; and put back an
+     ssh key per host (`Host <host>` with `IdentityFile` and
+     `IdentitiesOnly yes`) and, if a folder needs another git identity, an
+     `includeIf "gitdir:<folder>/"`.
+  4. Install 0.88, then remove `~/.crux/scopes.old` and the
+     `CRUX_SESSION_STORES` line of `~/.crux/config`.
+- **Reversibility**: medium. ADR-025's code is in git (#45, #46) and could be
+  brought back, but the reasons to remove it would still hold.
+- **Related**: `ADR-018`, `ADR-024`, `ADR-025`

@@ -88,13 +88,6 @@ pub fn link() -> Res {
     };
     union_index(&dir);
     let note = person::machine_note(&dir);
-    let all = match crate::scope::load() {
-        Ok(a) => a,
-        Err(e) => die!("the scopes cannot be used: {e}"),
-    };
-    if all.declared {
-        return link_into_scopes(&dir, note.as_deref(), &all);
-    }
     if let Err(e) = person::load_into_claude(Some(&dir), note.as_deref()) {
         die!("cannot write Claude's context: {e}");
     }
@@ -119,35 +112,6 @@ pub fn link() -> Res {
     Ok(())
 }
 
-/// With scopes (ADR-025): each root gets what its scope may see, and Codex,
-/// which only reads its global file, only what is shared.
-fn link_into_scopes(dir: &Path, note: Option<&Path>, all: &crate::scope::Scopes) -> Res {
-    match person::load_into_scopes(dir, note, all) {
-        Ok(files) => {
-            ui::ok("Claude: the global file no longer imports the profile; each scope's root does");
-            for f in files {
-                ui::info(format!("  {}", f.display()));
-            }
-        }
-        Err(e) => die!("cannot write the profile into the scopes: {e}"),
-    }
-    let codex = env::codex_home_dir();
-    if codex.is_dir() {
-        let shared = crate::files::read_or_empty(&person::shared_index_file());
-        let block = format!("<!-- crux:profile:begin -->\n{}\n<!-- crux:profile:end -->", shared.trim_end());
-        if let Err(e) = crate::template::write_marked_block(
-            &codex.join(names::AGENTS),
-            "<!-- crux:profile:begin -->",
-            "<!-- crux:profile:end -->",
-            &block,
-        ) {
-            die!("cannot write Codex's context: {e}");
-        }
-        ui::ok(format!("Codex: {}/AGENTS.md carries the shared part only", codex.display()));
-    }
-    Ok(())
-}
-
 fn status() -> Res {
     let Some(dir) = person::dir() else {
         ui::warn(format!("no profile on this machine ({})", person::expected_dir().display()));
@@ -155,11 +119,14 @@ fn status() -> Res {
         return Ok(());
     };
     println!("profile in {}", dir.display());
-    for (note, projects) in person::preferences_naming_projects(&dir) {
-        ui::warn(format!(
-            "{note} names {}: a rule of one project goes to its docs repo, not to the person's preferences",
-            projects.join(", ")
-        ));
+    for (note, named) in person::preferences_naming_projects(&dir) {
+        match named {
+            Ok(projects) => ui::warn(format!(
+                "{note} names {}: a rule of one project goes to its docs repo, not to the person's preferences",
+                projects.join(", ")
+            )),
+            Err(e) => ui::err(format!("{note} cannot be read: {e}")),
+        }
     }
     match person::field(&dir, "reminder").filter(|r| !r.is_empty()) {
         Some(r) => ui::info(format!("reminder on every message: {r}")),

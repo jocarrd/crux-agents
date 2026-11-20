@@ -142,28 +142,12 @@ conversation.
 fn is_secret(p: &str) -> bool {
     let home = env::home().to_string_lossy().into_owned();
     let p = if p.starts_with("~/") { format!("{home}{}", &p[1..]) } else { p.to_string() };
-    // With scopes (ADR-025), a declared secret, and everything under ~/.ssh
-    // that is not public or the client's own files: keys named after their
-    // host, in a folder per scope, say nothing in their name. Not a scope's
-    // browser profile: the browser skill copies it (`cp -R`) inside its own
-    // scope, and the scope guard keeps the other scopes' out. Without scopes,
-    // the names it always knew, so nothing changes for whoever has none.
-    // Scopes that cannot be read count as none here: the scope guard stops
-    // every call then.
-    if let Ok(Some(all)) = crate::scope::load().map(|a| a.declared.then_some(a)) {
-        let real = crate::scope::real_lenient(Path::new(&p));
-        let declared = all
-            .list
-            .iter()
-            .any(|s| s.secrets.iter().any(|x| crate::scope::inside(&real, &crate::scope::real_lenient(x))));
-        let ssh =
-            r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|authorized_keys|environment)([.~-][^/]*)?$)[^/]+(/[^/]+)*$";
-        if declared || is_match(&fancy(ssh), &p) {
-            return true;
-        }
-    }
     [
-        r"(^|/)\.ssh/(?!.*\.pub$)(id_[^/]*|[^/]*_key|identity)$",
+        // Any file under ~/.ssh is a key unless it is a public half, one of
+        // ssh's own files (or a copy of one, in any folder), an included
+        // config or a socket: keys are often named after the host they open,
+        // in a folder of their own.
+        r"(^|/)\.ssh/(?!.*\.pub$)(?!(.*/)?(config|known_hosts2?|authorized_keys2?|allowed_signers|environment)([.~-][^/]*)?$)(?!(.*/)?rc$)(?!(config\.d|sockets?|control)/)(?!.*\.sock$)[^/]+(/[^/]+)*$",
         r"\.(pem|p12|pfx)$",
         r"(^|/)[^/]*private[^/]*\.key$",
         r"(^|/)\.aws/credentials$",

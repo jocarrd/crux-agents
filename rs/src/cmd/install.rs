@@ -108,6 +108,9 @@ fn move_hooks(file: &Path, kernels: &Path, target: &Path, plugin_dirs: bool) -> 
             }
         }
     }
+    if crate::cmd::hooks::strip_retired(&mut s) {
+        n += 1;
+    }
     if n > 0 {
         files::write(file, &files::json_pretty(&s))?;
     }
@@ -342,4 +345,32 @@ pub fn run(argv: &[String]) -> Res {
     println!("Next step: on a new machine, 'crux bootstrap'; on one you already used, 'crux sync'.");
     println!("For a new project: 'crux init <project>'; for a docs repo that exists, 'crux adopt'.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::move_hooks;
+    use std::path::Path;
+
+    #[test]
+    fn moving_the_hooks_takes_out_the_ones_this_version_no_longer_ships() {
+        let dir = std::env::temp_dir().join(format!("crux-move-hooks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("settings.json");
+        let old = "/k/0.87.1/adapters/claude/hooks";
+        std::fs::write(
+            &file,
+            format!(
+                r#"{{"hooks":{{"PreToolUse":[{{"matcher":"Bash","hooks":[
+                    {{"type":"command","command":"{old}/scope-guard.sh"}},
+                    {{"type":"command","command":"{old}/destructive-guard.sh"}}]}}]}}}}"#
+            ),
+        )
+        .unwrap();
+        move_hooks(&file, Path::new("/k"), Path::new("/k/0.88.0"), false).unwrap();
+        let after = std::fs::read_to_string(&file).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!after.contains("scope-guard"), "{after}");
+        assert!(after.contains("/k/0.88.0/adapters/claude/hooks/destructive-guard.sh"), "{after}");
+    }
 }

@@ -129,10 +129,6 @@ sandbox() {
   # And the local state —marks, locks, the base of the task replica—, which
   # would otherwise be written to the ~/.crux of whoever runs the suite.
   export CRUX_STATE_DIR="$SB/state"
-  # And the scopes of whoever runs the suite: a case that declares none must
-  # see a machine without scopes, whatever the real one has.
-  export CRUX_SCOPES_DIR="$SB/scopes"
-  unset CRUX_SCOPE CRUX_UNPINNED_SESSIONS
   mkdir -p "$CRUX_PROJECTS_DIR" "$CLAUDE_SKILLS_DIR" "$CODEX_PROMPTS_DIR"
   echo "$SB"
 }

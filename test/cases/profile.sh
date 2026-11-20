@@ -238,7 +238,7 @@ test_a_correction_about_one_project_goes_to_its_docs_not_to_the_profile() {
   sandbox >/dev/null
   new_project weather >/dev/null
   profile_here >/dev/null
-  local dir="$CLAUDE_CONFIG_DIR/projects/-desk/memory"
+  local dir="$CLAUDE_CONFIG_DIR/projects/-work/memory"
   mkdir -p "$dir"
   printf -- '---\nname: no-provider-names\nmetadata:\n  type: feedback\n---\nIn weather pages never name the data provider.\n' > "$dir/no-provider-names.md"
   printf -- '---\nname: short-answers\nmetadata:\n  type: feedback\n---\nShort answers, always.\n' > "$dir/short-answers.md"
@@ -265,4 +265,33 @@ test_a_preference_about_the_kernel_itself_is_the_persons() {
   : > "$CRUX_PROJECTS_DIR/crux/crux/install.sh"; echo 0.0.1 > "$CRUX_PROJECTS_DIR/crux/crux/VERSION"
   printf -- '---\nname: z\n---\nPending work is a crux task.\n' > "$dir/preferences/tasks.md"
   assert_not_contains "$(crux profile 2>&1)" "preferences/tasks.md names" "the tool the person works with is not a project"
+}
+
+test_without_a_profile_a_correction_about_a_project_is_counted_once() {
+  sandbox >/dev/null
+  new_project weather >/dev/null
+  local dir="$CLAUDE_CONFIG_DIR/projects/-work/memory"
+  mkdir -p "$dir"
+  printf -- '---\nname: no-provider-names\nmetadata:\n  type: feedback\n---\nIn weather pages never name the data provider.\n' > "$dir/no-provider-names.md"
+  local out; out="$(crux memory 2>&1)"
+  assert_contains "$out" "weather-docs (a rule of that project)" "it goes to the project's docs"
+  assert_not_contains "$out" "1 feedback" "and is not also counted as a local preference"
+}
+
+test_a_project_named_only_in_the_frontmatter_does_not_count() {
+  sandbox >/dev/null
+  new_project weather >/dev/null
+  local dir; dir="$(profile_here)"
+  printf -- '---\nname: weather-voice\n---\nShort answers.\n' > "$dir/preferences/voice.md"
+  assert_not_contains "$(crux profile 2>&1)" "preferences/voice.md names" "a name in the frontmatter is not the rule's text"
+}
+
+test_a_correction_that_names_its_project_in_the_description_goes_to_its_docs() {
+  sandbox >/dev/null
+  new_project weather >/dev/null
+  profile_here >/dev/null
+  local dir="$CLAUDE_CONFIG_DIR/projects/-work/memory"
+  mkdir -p "$dir"
+  printf -- '---\nname: plural\ndescription: Weather blog posts use the plural voice\nmetadata:\n  type: feedback\n---\nAlways plural.\n' > "$dir/plural.md"
+  assert_contains "$(crux memory 2>&1)" "weather-docs (a rule of that project)" "the description says which project it is"
 }

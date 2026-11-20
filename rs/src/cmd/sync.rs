@@ -43,7 +43,7 @@ fn parallel<T: Sync, R: Send>(items: &[T], n: usize, f: impl Fn(&T) -> R + Sync)
 
 /// The session's project is brought up to date before the agent starts; the
 /// rest, after, so that one slow remote does not hold every session up.
-enum Reach {
+enum Scope {
     All,
     Only(Vec<PathBuf>),
     Except(Vec<PathBuf>),
@@ -52,7 +52,7 @@ enum Reach {
 struct Ctx {
     root: PathBuf,
     mode: &'static str,
-    reach: Reach,
+    scope: Scope,
 }
 
 impl Ctx {
@@ -65,14 +65,14 @@ impl Ctx {
     fn in_scope(&self, d: &Path) -> bool {
         let d = project::real(d);
         let under = |dirs: &[PathBuf]| dirs.iter().any(|x| d.starts_with(x));
-        match &self.reach {
-            Reach::All => true,
-            Reach::Only(dirs) => under(dirs),
-            Reach::Except(dirs) => !under(dirs),
+        match &self.scope {
+            Scope::All => true,
+            Scope::Only(dirs) => under(dirs),
+            Scope::Except(dirs) => !under(dirs),
         }
     }
     fn whole(&self) -> bool {
-        !matches!(self.reach, Reach::Only(_))
+        !matches!(self.scope, Scope::Only(_))
     }
     fn repos(&self) -> (Vec<PathBuf>, Vec<PathBuf>) {
         let mut candidates = vec![];
@@ -901,14 +901,8 @@ fn rest_in_background() -> bool {
     }
 }
 
-/// One report per scope: a report holds project names, and a session reads
-/// only its own scope's (ADR-025).
 fn report_file(state: &Path) -> PathBuf {
-    let here = std::env::current_dir().unwrap_or_default();
-    match crate::scope::load().ok().filter(|a| a.declared).and_then(|a| a.current(&here).ok().flatten().cloned()) {
-        Some(s) => state.join(format!("sync-report-{}", s.name)),
-        None => state.join("sync-report"),
-    }
+    state.join("sync-report")
 }
 
 fn take_report(state: &Path) -> String {
@@ -935,7 +929,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
     let Some(lock) = take_lock(state, true) else { return Ok(()) };
     crate::files::touch_marker(&marker, "");
     let here = session_dirs(&ctx.root);
-    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, reach: Reach::Only(here.clone()) };
+    let first = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Scope::Only(here.clone()) };
     let (mut lines, offline, mut repos) = arrival_lines(&first);
     let mut offline = offline.len();
     if rest_in_background() {
@@ -946,7 +940,7 @@ fn hook(ctx: &Ctx, state: &Path) -> Res {
             sh::detach(c);
         }
     } else {
-        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, reach: Reach::Except(here) };
+        let rest = Ctx { root: ctx.root.clone(), mode: ctx.mode, scope: Scope::Except(here) };
         let (more, more_offline, more_repos) = arrival_lines(&rest);
         lines.extend(more);
         offline += more_offline.len();
@@ -1026,10 +1020,9 @@ pub fn run(argv: &[String]) -> Res {
     let _ = files::mkdir_private(&state);
     if argv.first().map(String::as_str) == Some(REST) {
         let except = argv[1..].iter().map(PathBuf::from).collect();
-        rest(&Ctx { root: root.clone(), mode, reach: Reach::Except(except) }, &state)?;
-        return in_other_scopes(&root, |r| rest(&Ctx { root: r, mode, reach: Reach::All }, &state));
+        return rest(&Ctx { root, mode, scope: Scope::Except(except) }, &state);
     }
-    let ctx = Ctx { root: root.clone(), mode, reach: Reach::All };
+    let ctx = Ctx { root, mode, scope: Scope::All };
     match mode {
         "hook" => {
             // By hand and in a terminal, reading stdin would wait for a Ctrl-D.
@@ -1038,42 +1031,12 @@ pub fn run(argv: &[String]) -> Res {
             }
             hook(&ctx, &state)
         }
-        "leave" => {
-            departure(&ctx)?;
-            in_other_scopes(&root, |r| departure(&Ctx { root: r, mode, reach: Reach::All }))
-        }
+        "leave" => departure(&ctx),
         _ => {
             let _lock = take_lock(&state, false);
             // A report left by the hook would repeat what this run says now.
             let _ = std::fs::remove_file(report_file(&state));
-            arrival(&ctx)?;
-            in_other_scopes(&root, |r| arrival(&Ctx { root: r, mode, reach: Reach::All }))
+            arrival(&ctx)
         }
     }
-}
-
-/// The same pass over every other scope's root (ADR-025), each with its own
-/// tasks and remote: CRUX_SCOPE makes every path the pass resolves its scope's.
-fn in_other_scopes(done: &Path, mut pass: impl FnMut(PathBuf) -> Res) -> Res {
-    let all = match crate::scope::load() {
-        Ok(a) => a,
-        Err(e) => die!("the scopes cannot be used: {e}"),
-    };
-    if !all.declared {
-        return Ok(());
-    }
-    let key = crate::names::vars::SCOPE;
-    let before = env::var(key);
-    let mut result = Ok(());
-    for s in all.list.iter().filter(|s| s.root != done && s.root.is_dir()) {
-        std::env::set_var(key, &s.name);
-        if let Err(e) = pass(s.root.clone()) {
-            result = Err(e);
-        }
-    }
-    match before {
-        Some(v) => std::env::set_var(key, v),
-        None => std::env::remove_var(key),
-    }
-    result
 }

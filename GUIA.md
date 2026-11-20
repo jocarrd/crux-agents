@@ -587,13 +587,10 @@ commits by category and a final report.
 
 A rule that runs through it all: **memories of type `project` and `reference`
 go to the project's docs repo, and `user` and `feedback` to the person's
-profile** (`crux profile`, ADR-018). Both have to survive a change of machine
-and of agent; the agent's local memory is only a draft.
-
-When one person works for several people on one machine, the profile is
-split: what describes how they work is shared, who they are stays private, and
-each work scope sees only what it may (`crux scope`, ADR-025). A session is
-pinned to the scope it works in, and another scope is another session.
+profile** (`crux profile`, ADR-018), except a correction about one project,
+which is that project's convention and goes to its docs repo. Both have to
+survive a change of machine and of agent; the agent's local memory is only a
+draft.
 
 That part no longer depends on the ritual being invoked. `crux memory` lists
 what is still only local, and a hook reminds you at session close. It was
