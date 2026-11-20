@@ -1281,11 +1281,27 @@
 - **Consequences**: crux is back to one projects root and one person's
   profile loaded whole, as before ADR-025. `crux scope`, `scope-guard`, the
   front desk, `~/.crux/scopes/` and the contract fields `isolation`, `person`
-  and `secrets` are gone. A machine that ran `crux scope apply` keeps blocks in
-  `~/.ssh/config` and `~/.gitconfig` that call a command no longer there: they
-  are replaced by hand before upgrading (the release notes say how). Working
-  for a client keeps its guarantees from the account and the folder, not from
-  crux.
+  and `secrets` are gone. Working for a client keeps its guarantees from the
+  account and the folder, not from crux. Projects under a root other than
+  `CRUX_PROJECTS_DIR` stop being seen by `sync`, `memory`, `machine` and
+  `workspace gc`. Installing removes the `scope-guard` hook from the agents'
+  settings, as it does with any hook a version stops shipping.
+- **Upgrading a machine that used scopes**: `crux scope apply` wrote blocks
+  that call a command 0.88 no longer has, so they go first, with 0.87 still
+  installed:
+  1. Move the tasks of every scope that is not the primary one from
+     `~/.crux/scopes/<scope>/tasks/<project>` to `~/.crux/tasks/<project>`.
+  2. Remove `~/.crux/scopes/*/config` and run `crux scope apply`: with no
+     scopes left it takes out the `~/.ssh/config` and `~/.gitconfig` blocks and
+     the sandbox and `GH_CONFIG_DIR` it wrote into each repo's
+     `.claude/settings.local.json`.
+  3. Remove by hand the `crux:profile` block from each root's `CLAUDE.md`
+     (it imports a shared part of the profile that is no longer updated), and
+     put back what step 2 leaves without a home: an ssh key per host
+     (`Host <host>` with `IdentityFile` and `IdentitiesOnly yes`) and, if a
+     folder needs another git identity, an `includeIf "gitdir:<folder>/"`.
+  4. Install 0.88, then remove `~/.crux/scopes/` and the
+     `CRUX_SESSION_STORES` line of `~/.crux/config`.
 - **Reversibility**: medium. ADR-025's code is in git (#45, #46) and could be
   brought back, but the reasons to remove it would still hold.
 - **Related**: `ADR-018`, `ADR-024`, `ADR-025`
