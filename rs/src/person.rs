@@ -131,23 +131,25 @@ pub fn projects_named_in(text: &str, projects: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// The projects a note names in its body; its frontmatter does not count.
+pub fn projects_named_in_note(note: &Path, projects: &[String]) -> Result<Vec<String>, String> {
+    let text = crate::files::read_if_exists(note)?;
+    Ok(projects_named_in(&without_frontmatter(&text), projects))
+}
+
 /// Notes in `preferences/` that name a project. A preference is how the person
 /// works anywhere; a rule of one project is that project's convention and goes
 /// to its docs repo. Routing memories by their type alone sent every
-/// correction there, project rules included.
-pub fn preferences_naming_projects(dir: &Path) -> Vec<(String, Vec<String>)> {
+/// correction there, project rules included. A note that cannot be read is an
+/// error, not a note that names nothing.
+pub fn preferences_naming_projects(dir: &Path) -> Vec<(String, Result<Vec<String>, String>)> {
     let projects = known_projects();
-    let mut out = vec![];
-    for f in crate::project::files_under(&dir.join("preferences")) {
-        if f.extension().is_none_or(|e| e != "md") {
-            continue;
-        }
-        let named = projects_named_in(&crate::files::read_or_empty(&f), &projects);
-        if !named.is_empty() {
-            out.push((format!("preferences/{}", crate::files::name(&f)), named));
-        }
-    }
-    out
+    crate::project::files_under(&dir.join("preferences"))
+        .into_iter()
+        .filter(|f| f.extension().is_some_and(|e| e == "md"))
+        .map(|f| (format!("preferences/{}", crate::files::name(&f)), projects_named_in_note(&f, &projects)))
+        .filter(|(_, named)| named.as_ref().map_or(true, |n| !n.is_empty()))
+        .collect()
 }
 
 fn without_frontmatter(text: &str) -> String {

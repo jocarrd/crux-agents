@@ -30,7 +30,8 @@ here and not in the agent's local memory: one note per fact in `preferences/`
 accounts), one line in this index, then `git commit` and `git push` right away.
 What only holds on one computer goes in `machines/<machine>.md`, named after
 the short hostname, which does not change with the network. A project's
-knowledge goes to its `-docs` repo; keys and passwords go nowhere in git.
+knowledge goes to its `-docs` repo, and so does a rule that only holds for one
+project; keys and passwords go nowhere in git.
 
 ## Preferences
 
@@ -118,11 +119,14 @@ fn status() -> Res {
         return Ok(());
     };
     println!("profile in {}", dir.display());
-    for (note, projects) in person::preferences_naming_projects(&dir) {
-        ui::warn(format!(
-            "{note} names {}: a rule of one project goes to its docs repo, not to the person's preferences",
-            projects.join(", ")
-        ));
+    for (note, named) in person::preferences_naming_projects(&dir) {
+        match named {
+            Ok(projects) => ui::warn(format!(
+                "{note} names {}: a rule of one project goes to its docs repo, not to the person's preferences",
+                projects.join(", ")
+            )),
+            Err(e) => ui::err(format!("{note} cannot be read: {e}")),
+        }
     }
     match person::field(&dir, "reminder").filter(|r| !r.is_empty()) {
         Some(r) => ui::info(format!("reminder on every message: {r}")),

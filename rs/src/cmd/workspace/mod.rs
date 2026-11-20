@@ -121,29 +121,30 @@ pub struct Slot<'a> {
 }
 
 impl Slot<'_> {
-    /// {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}.
+    /// {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}, as values: for the `.env`,
+    /// where nothing is run.
     pub fn fill(&self, text: &str) -> String {
         substitute(text, self.number, self.first_port, self.name, self.branch)
     }
-}
 
-/// A value as it goes into a shell command: as is when it only has the
-/// characters a branch or a name usually has, and quoted otherwise. Git
-/// accepts `$` and parentheses in a branch name, and a branch can arrive from
-/// a task resumed from the remote: `x$(cmd)` must stay a name, never run.
-fn shell_safe(value: &str) -> String {
-    if crate::regex!(r"^[A-Za-z0-9._/@+=,:-]*$").is_match(value) {
-        value.to_string()
-    } else {
-        format!("'{}'", value.replace('\'', r"'\''"))
+    /// The same for a command the shell runs (setup, teardown). Git accepts
+    /// `$` and parentheses in a branch name, and a branch can arrive from a
+    /// task resumed from the remote: a name or branch the shell would read as
+    /// code is refused instead of quoted, because a template that already
+    /// quotes the placeholder would undo the quoting.
+    pub fn fill_command(&self, text: &str) -> Result<String, String> {
+        let plain = crate::regex!(r"^[A-Za-z0-9._/@+=,:-]*$");
+        for (mark, value) in [("{{NAME}}", self.name), ("{{BRANCH}}", self.branch)] {
+            if text.contains(mark) && !plain.is_match(value) {
+                return Err(format!("'{value}' has characters the shell would run: not put into {mark}"));
+            }
+        }
+        Ok(self.fill(text))
     }
 }
 
 fn substitute(text: &str, slot: i64, port0: i64, name: &str, branch: &str) -> String {
-    let t = text
-        .replace("{{SLOT}}", &slot.to_string())
-        .replace("{{NAME}}", &shell_safe(name))
-        .replace("{{BRANCH}}", &shell_safe(branch));
+    let t = text.replace("{{SLOT}}", &slot.to_string()).replace("{{NAME}}", name).replace("{{BRANCH}}", branch);
     crate::regex!(r"\{\{PORT(\d+)\}\}")
         .replace_all(&t, |c: &regex::Captures| (port0 + c[1].parse::<i64>().unwrap_or(0)).to_string())
         .into_owned()
@@ -302,13 +303,23 @@ pub fn run(argv: &[String]) -> Res {
 
 #[cfg(test)]
 mod tests {
-    use super::{regenerable, substitute};
+    use super::{regenerable, Slot};
+
+    fn slot(branch: &str) -> Slot<'_> {
+        Slot { number: 0, first_port: 3000, name: "w", branch }
+    }
 
     #[test]
-    fn a_branch_that_would_run_in_the_shell_is_quoted() {
-        assert_eq!(substitute("git checkout {{BRANCH}}", 0, 3000, "w", "ws/login"), "git checkout ws/login");
-        assert_eq!(substitute("echo {{BRANCH}}", 0, 3000, "w", "x$(touch /tmp/p)"), "echo 'x$(touch /tmp/p)'");
-        assert_eq!(substitute("echo {{BRANCH}}", 0, 3000, "w", "it's"), r"echo 'it'\''s'");
+    fn a_branch_that_would_run_in_the_shell_is_refused_in_a_command() {
+        assert_eq!(slot("ws/login").fill_command("git checkout {{BRANCH}}").unwrap(), "git checkout ws/login");
+        assert!(slot("x$(touch /tmp/p)").fill_command("echo {{BRANCH}}").is_err());
+        assert!(slot("x$(touch /tmp/p)").fill_command(r#"echo "{{BRANCH}}""#).is_err(), "quoted by the template too");
+        assert_eq!(slot("x$(touch /tmp/p)").fill_command("echo {{PORT0}}").unwrap(), "echo 3000", "unused, it is fine");
+    }
+
+    #[test]
+    fn a_value_for_the_env_file_is_written_as_it_is() {
+        assert_eq!(slot("it's").fill("app_{{BRANCH}}"), "app_it's");
     }
 
     #[test]

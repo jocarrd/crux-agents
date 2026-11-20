@@ -363,6 +363,13 @@ test_the_guard_does_not_let_private_keys_be_read() {
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/config")" "the ssh config"
   assert_eq "0" "$(_tool Bash command "cat ~/.ssh/config.bak")" "a copy of the ssh config"
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/known_hosts.old")" "an old known hosts"
+  assert_eq "0" "$(_tool Edit file_path "$HOME/.ssh/config.d/work")" "a config it includes"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/work/config")" "a config in a folder of its own"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/known_hosts2")" "the second known hosts"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/allowed_signers")" "the allowed signers"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/rc")" "ssh's rc"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/sockets/git@github.com-22")" "a control socket"
+  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.bak")" "a copy of a private key"
   assert_eq "0" "$(_tool Bash command "ssh -i ~/.ssh/personal/vps_host host")" "using a host key without dumping it"
 }
 
@@ -375,6 +382,18 @@ test_hooks_install_hooks_the_destructive_guard() {
   assert_contains "$pre" '"matcher":"Bash|Read|Edit|Write|MultiEdit|NotebookEdit"' "on the shell and files"
   "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
   assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "destructive-guard" "and remove takes it off"
+}
+
+test_a_hook_this_version_no_longer_ships_is_taken_out() {
+  sandbox >/dev/null
+  local retired='{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/k/0.87.1/adapters/claude/hooks/scope-guard.sh"}]},{"matcher":"Bash","hooks":[{"type":"command","command":"my-own-check.sh"}]}]}}'
+  echo "$retired" > "$CLAUDE_SETTINGS"
+  "$CRUX_HOME/bin/crux" hooks install >/dev/null 2>&1
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "scope-guard" "install takes out a hook whose script is gone"
+  assert_contains "$(cat "$CLAUDE_SETTINGS")" "my-own-check.sh" "and leaves the person's own hooks"
+  echo "$retired" > "$CLAUDE_SETTINGS"
+  "$CRUX_HOME/bin/crux" hooks remove >/dev/null 2>&1
+  assert_not_contains "$(cat "$CLAUDE_SETTINGS")" "scope-guard" "remove takes it out too"
 }
 
 test_the_proposal_guard_sends_to_finish() {

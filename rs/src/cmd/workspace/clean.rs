@@ -108,11 +108,15 @@ pub fn rm(argv: &[String]) -> Res {
         }
         if !config.teardown.is_empty() {
             let slot = Slot { number: w.slot, first_port: w.ports.0, name: &name, branch: &w.branch };
-            let cmd = slot.fill(&config.teardown);
-            if sh::status(Command::new("bash").args(["-c", &cmd]).current_dir(&path)) == 0 {
-                ui::ok("teardown executed");
-            } else {
-                ui::warn(format!("the teardown failed — check whether resources of slot {} were left behind", w.slot));
+            match slot.fill_command(&config.teardown) {
+                Ok(cmd) if sh::status(Command::new("bash").args(["-c", &cmd]).current_dir(&path)) == 0 => {
+                    ui::ok("teardown executed");
+                }
+                Ok(_) => ui::warn(format!(
+                    "the teardown failed — check whether resources of slot {} were left behind",
+                    w.slot
+                )),
+                Err(e) => ui::warn(format!("teardown not run: {e} — free the resources of slot {} by hand", w.slot)),
             }
         }
         let p = path.to_string_lossy();

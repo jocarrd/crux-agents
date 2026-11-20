@@ -168,13 +168,17 @@ pub fn create(a: NewArgs) -> Res {
         install_dependencies(&path)?;
     }
     if !config.setup.is_empty() {
-        let code =
-            signals::run_interruptible(Command::new("bash").args(["-c", &slot.fill(&config.setup)]).current_dir(&path));
-        interrupted()?;
-        if code == 0 {
-            ui::ok("setup executed");
-        } else {
-            ui::warn("the setup failed — the workspace exists, but check its resources");
+        match slot.fill_command(&config.setup) {
+            Ok(cmd) => {
+                let code = signals::run_interruptible(Command::new("bash").args(["-c", &cmd]).current_dir(&path));
+                interrupted()?;
+                if code == 0 {
+                    ui::ok("setup executed");
+                } else {
+                    ui::warn("the setup failed — the workspace exists, but check its resources");
+                }
+            }
+            Err(e) => ui::warn(format!("setup not run: {e} — the workspace exists without it")),
         }
     }
     interrupted()?;

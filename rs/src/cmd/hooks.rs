@@ -20,6 +20,10 @@ use std::path::{Path, PathBuf};
 
 const MARK: &str = "crux/adapters";
 const CRUX_HOOKS: &str = "doc-sync|cycle-guard|memory-guard|task-context|worktree-guard|destructive-guard|proposal-guard|wait-guard|session-sync|session-idle|profile-reminder";
+/// Hooks an earlier version registered and this one no longer ships (ADR-026).
+/// Left in the settings, they point at a script the kernel does not have and
+/// fail on every tool call.
+const RETIRED_HOOKS: &str = "scope-guard";
 pub const GIT_HOOK_NAMES: [&str; 15] = [
     "applypatch-msg",
     "pre-applypatch",
@@ -450,6 +454,13 @@ fn plugin_claude(settings: &mut Value, add: bool, dir: &Path) {
     }
 }
 
+/// Takes out the hooks this version no longer ships. Says whether it took any.
+pub fn strip_retired(s: &mut Value) -> bool {
+    let before = s.clone();
+    strip_crux(s, RETIRED_HOOKS);
+    *s != before
+}
+
 fn strip_crux(s: &mut Value, pattern: &str) {
     let re = regex::Regex::new(pattern).unwrap();
     let Some(hooks) = s.get_mut("hooks").and_then(Value::as_object_mut) else { return };
@@ -490,7 +501,7 @@ fn codex_hooks(p: &Paths, add: bool) -> Result<(), String> {
     if !s.get("hooks").is_some_and(Value::is_object) {
         s.as_object_mut().unwrap().insert("hooks".into(), json!({}));
     }
-    strip_crux(&mut s, &format!("{CRUX_HOOKS}|contexto\\.sh"));
+    strip_crux(&mut s, &format!("{CRUX_HOOKS}|{RETIRED_HOOKS}|contexto\\.sh"));
     if add {
         let q = |x: String| serde_json::to_string(&x).unwrap();
         let ctx = p.home.join("adapters/codex/hooks/contexto.sh").to_string_lossy().into_owned();
@@ -710,6 +721,9 @@ fn install_agent_hooks(p: &Paths) -> Res {
         Ok(v) if v.is_object() => v,
         Ok(_) | Err(_) => die!("{} cannot be read as JSON: fix it before installing hooks", p.settings.display()),
     };
+    if strip_retired(&mut s) {
+        ui::ok("hooks this version no longer ships removed");
+    }
     for h in Hook::ALL {
         let r = h.registration();
         hook_up(&mut s, r.event, &p.s(h.name()), r.previous, r.matcher);
@@ -903,7 +917,7 @@ fn remove(p: &Paths) -> Res {
         Ok(v) => v,
         Err(e) => die!("{} cannot be read: {e}", p.settings.display()),
     };
-    strip_crux(&mut s, CRUX_HOOKS);
+    strip_crux(&mut s, &format!("{CRUX_HOOKS}|{RETIRED_HOOKS}"));
     plugin_claude(&mut s, false, &p.home.join("adapters/claude/plugin"));
     if let Err(e) = write_settings(&p.settings, &s) {
         die!("{e}");
