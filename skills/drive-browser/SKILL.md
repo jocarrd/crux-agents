@@ -36,7 +36,7 @@ Where the profiles are:
 
 ## Procedure
 
-1. **The profile with the session**: `crux __fn scope_browser_profile`, or find it:
+1. **The profile with the session** (it is usually not `Default`):
 
    ```bash
    python3 - <<'PY'

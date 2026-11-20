@@ -31,7 +31,7 @@ Each layer uses only the ones below it.
 | Layer | Modules | What lives there |
 | ----- | ------- | ---------------- |
 | Entry points | `cmd/`, `agent_hooks/`, `script_api` | What a person, an agent or a script calls |
-| Domain | `project`, `policy`, `checks`, `mcp`, `person`, `scope`, `registry`, `task/`, `template`, `skills`, `secrets` | The contract, the profile, work scopes, workspaces, tasks, and what crux writes into other people's files |
+| Domain | `project`, `policy`, `checks`, `mcp`, `person`, `registry`, `task/`, `template`, `skills`, `secrets` | The contract, the profile, workspaces, tasks, and what crux writes into other people's files |
 | Foundation | `env`, `files`, `git`, `sh`, `signals`, `args`, `ui`, `help`, `error` | Paths, files, processes, arguments and output |
 
 Entry points:
@@ -53,11 +53,6 @@ Domain, the parts that are not obvious from their names:
   and the reminder a session gets.
 - `template` — the blocks crux owns inside files that are otherwise the
   person's: regenerated between markers, the rest left as written.
-- `scope` — work scopes (ADR-025): declared scopes, where a path belongs
-  (scope, project, worktree), the rules a project declares and the pins that
-  keep a session in one place. `env::projects_root` and `env::tasks_dir`
-  answer for the current scope; `env::all_projects_roots` is for what walks
-  the whole machine. The wall itself is the `scope-guard` hook.
 - `checks` — what `doctor` verifies, each usable alone (`crux __check`).
 
 ## Conventions in the code

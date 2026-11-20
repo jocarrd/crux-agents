@@ -610,10 +610,7 @@ proper nouns are covered, there is a pattern.
 Four types: `user`, `feedback`, `project`, `reference`.
 
 - `user` and `feedback` are about the person, not the project: they go to the
-  **person's profile** (see below), not to a docs repo. A correction about one
-  project is the exception: it is that project's convention and goes to its
-  docs repo. `crux memory` sends a `feedback` that names a project there, and
-  `crux profile` warns on a preference that names one.
+  **person's profile** (see below), not to a docs repo.
 - `project` and `reference` are **promoted to git** in the same turn:
   - Operations and gotchas → `operations/`
   - Pointers to external resources → `operations/` or the relevant README
@@ -877,51 +874,6 @@ them creates ambiguity, not clarity.
 **A project whose code or whose counterparts are in another language declares
 it and is written entirely in that language.** It is a property of the project,
 not a decision to be taken again in every file.
-
----
-
-## Work scopes
-
-One person can keep several contexts on one machine: their own projects, an
-employer, clients. A **scope** is who the work is for: a root folder with its
-remote, the owners its projects live under, a git identity, its secrets and
-the connectors it may not use. It is declared in
-`~/.crux/scopes/<name>/config`, and one of them is the person's own
-(`PRIMARY="true"`). Without scopes declared there is one implicit scope and
-nothing changes (ADR-025).
-
-- **A folder belongs to the scope whose root holds it**; a worktree, to the
-  scope of its repo, wherever it was created.
-- **A session is pinned to one scope and stays there.** Opened inside a root it
-  is pinned at once; opened elsewhere it starts at the front desk with a map of
-  scopes and project names, and enters one with `crux scope enter`. Another
-  scope always means another session: `crux scope open`.
-- **A project can be isolated inside its scope** with `"isolation": "isolated"`
-  in `crux.json`; the `client-repo` profile implies it. An isolated project is
-  a scope of its own to the guard, and sees only the shared part of the
-  person's profile.
-- **The person's profile is split** by each note's `visibility: shared |
-  private`; `about/` and `machines/` are private unless they say otherwise.
-  Every root imports the shared part, and the full index reaches a session only
-  where its scope and project allow it.
-- **`scope-guard`** stops, before a tool runs, reading or writing another
-  scope, an isolated project, a secret declared elsewhere, a private note where
-  only the shared part applies, a connector the scope denies, and `gh`/`git`
-  against another scope's owners. It fails closed. `ENFORCE="sandbox"` adds the
-  agent's own sandbox, written by `crux scope apply`.
-- **`crux scope apply`** writes what each scope needs on the machine, between
-  markers: the profile per root, git identity (`includeIf`), ssh keys
-  (`~/.ssh/<scope>/<host>`, offered only from inside the scope) and the agent's
-  sandbox and `gh` account per repo.
-- **A scope can name its browser profile** (`BROWSER_PROFILE`): the browser
-  skill copies that one, and another scope's profile is its secret.
-- **`crux scope check`** also names a repo whose remote is an owner of another
-  scope (move it with `crux scope move`) and recent commits signed with
-  another scope's email.
-
-The wall stops the agent and mistakes, not a person at the keyboard: the temporary
-folder, `~/Downloads`, the clipboard and shell history are shared, and two people on
-one machine still need two users.
 
 ---
 
@@ -1206,7 +1158,6 @@ the session. See ADR-012.
 | `crux skill test <skill>` | — | Tests a skill with its scenarios; `--against <ref>` flags regressions |
 | `crux memory [--check]` | `search <text>` | Agent memories that should be in git; searches the profile and the docs repos |
 | `crux profile` | `init`, `link`, `clone` | The person's profile: a repo of its own that every agent loads |
-| `crux scope` | `check`, `show`, `of`, `map`, `enter`, `open`, `move`, `apply` | Work scopes: one person, several isolated contexts on one machine |
 | `crux status` | `--check` | Projects, workspaces and unpublished work |
 | `crux sync` | `--leave`, `--hook` | On arrival, advances what is behind and brings in what is new without deciding anything; on leaving, fails if something stays only on the machine |
 

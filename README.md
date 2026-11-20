@@ -279,7 +279,6 @@ A rule written in a file is advice. These are installed by
 | `crux skill test <skill>` | Runs a skill's scenarios and flags what changed against another version |
 | `crux memory` | Agent memories still only local, and where each one belongs |
 | `crux profile` | The person's profile repo: `init`, `link`, `clone` |
-| `crux scope` | Work scopes on one machine: `check`, `enter`, `open`, `move`, `apply` |
 | `crux status` | What is open right now across all projects |
 | `crux sync` | Up to date on arrival; `--leave` checks nothing stays trapped |
 | `crux upgrade` | Re-materializes a project at the current kernel version |

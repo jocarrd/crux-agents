@@ -98,10 +98,3 @@ cookies, and a page the agent drives does not need the passwords at hand.
 Full Disk Access is granted to a whole app, and everything that app runs
 inherits it. It is what lets the copy be read on macOS; once the task is done,
 switching it off in System Settings returns the machine to how it was.
-
-## Which profile
-
-The profile that holds the session is usually not `Default`. On a machine with
-work scopes (ADR-025), each scope can name its own with `BROWSER_PROFILE`, and
-`crux __fn scope_browser_profile` prints the one of the scope you are in.
-Another scope's profile holds another scope's sessions: copying it is stopped.

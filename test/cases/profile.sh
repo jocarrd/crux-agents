@@ -233,36 +233,3 @@ test_profile_works_with_a_remote_that_is_not_github() {
   out="$(CRUX_CONFIG="$cfg" "$CRUX_HOME/bin/crux" profile clone 2>&1)"
   assert_file "$CRUX_PROJECTS_DIR/agent-profile/PROFILE.md" "clone brings it back from that remote"
 }
-
-test_a_correction_about_one_project_goes_to_its_docs_not_to_the_profile() {
-  sandbox >/dev/null
-  new_project weather >/dev/null
-  profile_here >/dev/null
-  local dir="$CLAUDE_CONFIG_DIR/projects/-desk/memory"
-  mkdir -p "$dir"
-  printf -- '---\nname: no-provider-names\nmetadata:\n  type: feedback\n---\nIn weather pages never name the data provider.\n' > "$dir/no-provider-names.md"
-  printf -- '---\nname: short-answers\nmetadata:\n  type: feedback\n---\nShort answers, always.\n' > "$dir/short-answers.md"
-  local out; out="$(crux memory 2>&1)"
-  assert_contains "$out" "weather-docs (a rule of that project)" "a correction that names a project goes to its docs"
-  assert_contains "$out" "agent-profile/preferences" "while one about how the person works goes to the profile"
-}
-
-test_profile_warns_on_a_preference_that_names_a_project() {
-  sandbox >/dev/null
-  new_project weather >/dev/null
-  local dir; dir="$(profile_here)"
-  printf -- '---\nname: x\n---\nIn the Weather blog, plural voice.\n' > "$dir/preferences/blog.md"
-  printf -- '---\nname: y\n---\nShort answers.\n' > "$dir/preferences/short.md"
-  local out; out="$(crux profile 2>&1)"
-  assert_contains "$out" "preferences/blog.md names weather" "a preference naming a project is flagged"
-  assert_not_contains "$out" "preferences/short.md" "one about the person is not"
-}
-
-test_a_preference_about_the_kernel_itself_is_the_persons() {
-  sandbox >/dev/null
-  local dir; dir="$(profile_here)"
-  mkdir -p "$CRUX_PROJECTS_DIR/crux/crux-docs" "$CRUX_PROJECTS_DIR/crux/crux"
-  : > "$CRUX_PROJECTS_DIR/crux/crux/install.sh"; echo 0.0.1 > "$CRUX_PROJECTS_DIR/crux/crux/VERSION"
-  printf -- '---\nname: z\n---\nPending work is a crux task.\n' > "$dir/preferences/tasks.md"
-  assert_not_contains "$(crux profile 2>&1)" "preferences/tasks.md names" "the tool the person works with is not a project"
-}

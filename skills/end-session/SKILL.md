@@ -46,8 +46,8 @@ it only applies to one.
 
 **4. User preferences about how to work.**
 Signals: "I prefer X", "I don't like Y", corrections of style or pace.
-Destination: the person's profile (`preferences/`). A rule of one project is
-not a preference: it goes to that project's docs.
+Destination: the agent's local memory, type `user` or `feedback`. These stay
+local by design: they are about the person, not the project.
 
 ## Flow
 

@@ -25,19 +25,20 @@ pub struct OpenTask {
 
 /// The open tasks, most recently updated first.
 pub fn open_tasks(project: Option<&str>) -> Vec<OpenTask> {
-    load(&env::tasks_dir(), project, false)
+    load(project, false)
 }
 
 /// The open tasks plus the ones whose proposal was merged with steps still to
 /// do: they leave the reminder, and those are exactly the leftovers to gather.
 pub fn unfinished_tasks(project: Option<&str>) -> Vec<OpenTask> {
-    load(&env::tasks_dir(), project, true)
+    load(project, true)
 }
 
-fn load(dt: &Path, project: Option<&str>, leftovers: bool) -> Vec<OpenTask> {
+fn load(project: Option<&str>, leftovers: bool) -> Vec<OpenTask> {
+    let dt = env::tasks_dir();
     let projects: Vec<String> = match project {
         Some(p) => vec![p.to_string()],
-        None => fs::read_dir(dt)
+        None => fs::read_dir(&dt)
             .map(|e| e.flatten().map(|x| x.file_name().to_string_lossy().into_owned()).collect())
             .unwrap_or_default(),
     };
@@ -193,19 +194,14 @@ fn cut(t: &str, n: usize) -> String {
 }
 
 pub fn reminder(cwd: &Path, maximum: usize) -> Option<Value> {
-    reminder_in(&env::tasks_dir(), cwd, maximum)
-}
-
-/// The reminder over one scope's tasks folder.
-pub fn reminder_in(dt: &Path, cwd: &Path, maximum: usize) -> Option<Value> {
     let project = project_of(cwd);
-    let scope = project.as_deref().filter(|p| dt.join(p).exists());
-    let list = load(dt, scope, false);
+    let scope = project.as_deref().filter(|p| env::tasks_dir().join(p).exists());
+    let list = open_tasks(scope);
     if list.is_empty() {
         return None;
     }
     let live = live_workspaces();
-    let leftovers = load(dt, scope, true);
+    let leftovers = unfinished_tasks(scope);
     let states = super::stall::workspace_states(&leftovers, &live);
     let survey = super::stall::survey(&leftovers, &live, &states);
     // The survey says what to do with a stalled task; its line does not repeat it.
@@ -291,7 +287,7 @@ pub fn reminder_in(dt: &Path, cwd: &Path, maximum: usize) -> Option<Value> {
     let mut conflicts = vec![];
     let projects: BTreeSet<&str> = list.iter().map(|t| t.project.as_str()).collect();
     for p in projects {
-        let dir = dt.join(p);
+        let dir = env::tasks_dir().join(p);
         if let Ok(entries) = fs::read_dir(&dir) {
             let mut names: Vec<String> =
                 entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
@@ -348,73 +344,6 @@ pub fn reminder_in(dt: &Path, cwd: &Path, maximum: usize) -> Option<Value> {
         "more": list.len().saturating_sub(maximum),
         "conflicts": conflicts.len(),
     }))
-}
-
-/// With scopes (ADR-025) the two outputs part ways. The person sees every
-/// scope's open tasks, each under its scope: it is how they know what they
-/// left open anywhere. The agent gets the full reminder only for the scope its
-/// session is in, and at the front desk the task names and their scopes, with
-/// none of their text: enough to resume one, which enters its scope.
-pub fn reminder_for_session(
-    cwd: &Path,
-    maximum: usize,
-    all: &crate::scope::Scopes,
-    pinned: Option<&crate::scope::Scope>,
-    only_project: Option<&str>,
-) -> Option<Value> {
-    if !all.declared {
-        return reminder(cwd, maximum);
-    }
-    let text = |r: &Value, k: &str| r.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
-    let (mut user, mut agent, mut desk) = (vec![], String::new(), vec![]);
-    for s in &all.list {
-        let Some(r) = reminder_in(&s.tasks_dir(), cwd, maximum) else { continue };
-        user.push(format!("[{}] {}", s.name, text(&r, "user")));
-        match pinned {
-            // An isolated project's session gets its own project's tasks and
-            // none of the rest of its scope.
-            Some(p) if p.name == s.name => match only_project {
-                Some(proj) => {
-                    let mine: Vec<&Value> = r
-                        .get("tasks")
-                        .and_then(Value::as_array)
-                        .into_iter()
-                        .flatten()
-                        .filter(|t| {
-                            t.get("task").and_then(Value::as_str).is_some_and(|n| n.starts_with(&format!("{proj}/")))
-                        })
-                        .collect();
-                    if !mine.is_empty() {
-                        agent = format!(
-                            "Open tasks of this project (already shown to the person):\n{}",
-                            mine.iter()
-                                .map(|t| format!("· {}", t.get("task").and_then(Value::as_str).unwrap_or("")))
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        );
-                    }
-                }
-                None => agent = text(&r, "agent"),
-            },
-            Some(_) => {}
-            None => {
-                for t in r.get("tasks").and_then(Value::as_array).into_iter().flatten() {
-                    desk.push(format!("· {} · {}", s.name, t.get("task").and_then(Value::as_str).unwrap_or("")));
-                }
-            }
-        }
-    }
-    if user.is_empty() {
-        return None;
-    }
-    if pinned.is_none() && !desk.is_empty() {
-        agent = format!(
-            "Open tasks of this person by scope, names only (already shown to them). Resuming one enters \
-             its scope; do not resume or propose any on your own:\n{}",
-            desk.join("\n")
-        );
-    }
-    Some(json!({"user": user.join("\n\n"), "agent": agent}))
 }
 
 #[cfg(test)]

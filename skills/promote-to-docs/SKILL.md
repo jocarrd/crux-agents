@@ -16,8 +16,8 @@ It moves information from the local, ephemeral scope to the durable one: git.
 
 ## When not to use
 
-- For how the person works anywhere: that goes to their profile. A correction
-  about one project does belong here, as that project's convention.
+- For memories of type `user` or `feedback`: those stay local, they are about the
+  person and not the project.
 - For implementation details the code itself already explains.
 - For everything that occurs to you. Promoting is selective: if in six months it
   won't help anyone, it isn't worth it.
