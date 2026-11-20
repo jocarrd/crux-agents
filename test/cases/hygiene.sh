@@ -357,6 +357,13 @@ test_the_guard_does_not_let_private_keys_be_read() {
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.pub")" "Read of the public one"
   assert_eq "0" "$(_tool Read file_path "/repo/.env")" "carry-env moves the .env and it is allowed"
   assert_eq "0" "$(_tool Read file_path "/repo/src/keys.ts")" "a file with key in the name"
+  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/personal/vps_host")" "a key named after its host, in a folder"
+  assert_eq "2" "$(_tool Bash command "cat ~/.ssh/work/10.0.0.1")" "cat of a key named after its host"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/personal/vps_host.pub")" "its public half"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/config")" "the ssh config"
+  assert_eq "0" "$(_tool Bash command "cat ~/.ssh/config.bak")" "a copy of the ssh config"
+  assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/known_hosts.old")" "an old known hosts"
+  assert_eq "0" "$(_tool Bash command "ssh -i ~/.ssh/personal/vps_host host")" "using a host key without dumping it"
 }
 
 test_hooks_install_hooks_the_destructive_guard() {

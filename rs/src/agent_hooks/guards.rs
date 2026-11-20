@@ -143,7 +143,10 @@ fn is_secret(p: &str) -> bool {
     let home = env::home().to_string_lossy().into_owned();
     let p = if p.starts_with("~/") { format!("{home}{}", &p[1..]) } else { p.to_string() };
     [
-        r"(^|/)\.ssh/(?!.*\.pub$)(id_[^/]*|[^/]*_key|identity)$",
+        // Any file under ~/.ssh is a key unless it is a public half or one of
+        // ssh's own files (or a copy of one): keys are often named after the
+        // host they open, in a folder of their own.
+        r"(^|/)\.ssh/(?!.*\.pub$)(?!(config|known_hosts|authorized_keys|environment)([.~-][^/]*)?$)[^/]+(/[^/]+)*$",
         r"\.(pem|p12|pfx)$",
         r"(^|/)[^/]*private[^/]*\.key$",
         r"(^|/)\.aws/credentials$",
