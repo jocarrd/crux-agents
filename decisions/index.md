@@ -1291,16 +1291,19 @@
   installed:
   1. Move the tasks of every scope that is not the primary one from
      `~/.crux/scopes/<scope>/tasks/<project>` to `~/.crux/tasks/<project>`.
-  2. Remove `~/.crux/scopes/*/config` and run `crux scope apply`: with no
-     scopes left it takes out the `~/.ssh/config` and `~/.gitconfig` blocks and
-     the sandbox and `GH_CONFIG_DIR` it wrote into each repo's
-     `.claude/settings.local.json`.
-  3. Remove by hand the `crux:profile` block from each root's `CLAUDE.md`
-     (it imports a shared part of the profile that is no longer updated), and
-     put back what step 2 leaves without a home: an ssh key per host
-     (`Host <host>` with `IdentityFile` and `IdentitiesOnly yes`) and, if a
-     folder needs another git identity, an `includeIf "gitdir:<folder>/"`.
-  4. Install 0.88, then remove `~/.crux/scopes/` and the
+  2. Set the whole folder aside (`mv ~/.crux/scopes ~/.crux/scopes.old`: 0.87
+     counts every folder in it as a scope, with or without its `config`) and
+     run `crux scope apply`. With no scopes left it takes out the
+     `~/.ssh/config` and `~/.gitconfig` blocks and the sandbox it wrote into
+     the repos under `CRUX_PROJECTS_DIR`.
+  3. By hand: remove the `crux:profile` block from each root's `CLAUDE.md`
+     (it imports a shared part of the profile that is no longer updated); in
+     each repo's `.claude/settings.local.json`, remove `env.GH_CONFIG_DIR`
+     everywhere and the `sandbox` block under any other root; and put back an
+     ssh key per host (`Host <host>` with `IdentityFile` and
+     `IdentitiesOnly yes`) and, if a folder needs another git identity, an
+     `includeIf "gitdir:<folder>/"`.
+  4. Install 0.88, then remove `~/.crux/scopes.old` and the
      `CRUX_SESSION_STORES` line of `~/.crux/config`.
 - **Reversibility**: medium. ADR-025's code is in git (#45, #46) and could be
   brought back, but the reasons to remove it would still hold.

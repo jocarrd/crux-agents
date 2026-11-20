@@ -588,8 +588,9 @@ commits by category and a final report.
 A rule that runs through it all: **memories of type `project` and `reference`
 go to the project's docs repo, and `user` and `feedback` to the person's
 profile** (`crux profile`, ADR-018), except a correction about one project,
-which is that project's convention and goes to its docs repo. Both have to survive a change of machine
-and of agent; the agent's local memory is only a draft.
+which is that project's convention and goes to its docs repo. Both have to
+survive a change of machine and of agent; the agent's local memory is only a
+draft.
 
 That part no longer depends on the ritual being invoked. `crux memory` lists
 what is still only local, and a hook reminds you at session close. It was
