@@ -108,7 +108,7 @@ pub fn rm(argv: &[String]) -> Res {
         }
         if !config.teardown.is_empty() {
             let slot = Slot { number: w.slot, first_port: w.ports.0, name: &name, branch: &w.branch };
-            match slot.fill_command(&config.teardown) {
+            match slot.fill(&config.teardown) {
                 Ok(cmd) if sh::status(Command::new("bash").args(["-c", &cmd]).current_dir(&path)) == 0 => {
                     ui::ok("teardown executed");
                 }

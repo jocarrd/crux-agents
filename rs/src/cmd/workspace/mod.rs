@@ -121,25 +121,20 @@ pub struct Slot<'a> {
 }
 
 impl Slot<'_> {
-    /// {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}, as values: for the `.env`,
-    /// where nothing is run.
-    pub fn fill(&self, text: &str) -> String {
-        substitute(text, self.number, self.first_port, self.name, self.branch)
-    }
-
-    /// The same for a command the shell runs (setup, teardown). Git accepts
-    /// `$` and parentheses in a branch name, and a branch can arrive from a
-    /// task resumed from the remote: a name or branch the shell would read as
-    /// code is refused instead of quoted, because a template that already
-    /// quotes the placeholder would undo the quoting.
-    pub fn fill_command(&self, text: &str) -> Result<String, String> {
+    /// {{SLOT}}, {{PORTn}}, {{NAME}}, {{BRANCH}}. Git accepts `$` and
+    /// parentheses in a branch name, and a branch can arrive from a task
+    /// resumed from the remote. What is filled ends up run by a shell (setup,
+    /// teardown, or a `.env` that a setup sources), so a name or branch the
+    /// shell would read as code is refused rather than quoted: a template
+    /// that already quotes the placeholder would undo the quoting.
+    pub fn fill(&self, text: &str) -> Result<String, String> {
         let plain = crate::regex!(r"^[A-Za-z0-9._/@+=,:-]*$");
         for (mark, value) in [("{{NAME}}", self.name), ("{{BRANCH}}", self.branch)] {
             if text.contains(mark) && !plain.is_match(value) {
                 return Err(format!("'{value}' has characters the shell would run: not put into {mark}"));
             }
         }
-        Ok(self.fill(text))
+        Ok(substitute(text, self.number, self.first_port, self.name, self.branch))
     }
 }
 
@@ -310,16 +305,12 @@ mod tests {
     }
 
     #[test]
-    fn a_branch_that_would_run_in_the_shell_is_refused_in_a_command() {
-        assert_eq!(slot("ws/login").fill_command("git checkout {{BRANCH}}").unwrap(), "git checkout ws/login");
-        assert!(slot("x$(touch /tmp/p)").fill_command("echo {{BRANCH}}").is_err());
-        assert!(slot("x$(touch /tmp/p)").fill_command(r#"echo "{{BRANCH}}""#).is_err(), "quoted by the template too");
-        assert_eq!(slot("x$(touch /tmp/p)").fill_command("echo {{PORT0}}").unwrap(), "echo 3000", "unused, it is fine");
-    }
-
-    #[test]
-    fn a_value_for_the_env_file_is_written_as_it_is() {
-        assert_eq!(slot("it's").fill("app_{{BRANCH}}"), "app_it's");
+    fn a_branch_the_shell_would_run_is_refused() {
+        assert_eq!(slot("ws/login").fill("git checkout {{BRANCH}}").unwrap(), "git checkout ws/login");
+        assert!(slot("x$(touch /tmp/p)").fill("echo {{BRANCH}}").is_err());
+        assert!(slot("x$(touch /tmp/p)").fill(r#"echo "{{BRANCH}}""#).is_err(), "quoted by the template too");
+        assert!(slot("x$(touch /tmp/p)").fill("DB=app_{{BRANCH}}").is_err(), "a .env a setup sources");
+        assert_eq!(slot("x$(touch /tmp/p)").fill("echo {{PORT0}}").unwrap(), "echo 3000", "unused, it is fine");
     }
 
     #[test]

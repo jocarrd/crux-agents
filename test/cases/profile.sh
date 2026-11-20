@@ -285,3 +285,13 @@ test_a_project_named_only_in_the_frontmatter_does_not_count() {
   printf -- '---\nname: weather-voice\n---\nShort answers.\n' > "$dir/preferences/voice.md"
   assert_not_contains "$(crux profile 2>&1)" "preferences/voice.md names" "a name in the frontmatter is not the rule's text"
 }
+
+test_a_correction_that_names_its_project_in_the_description_goes_to_its_docs() {
+  sandbox >/dev/null
+  new_project weather >/dev/null
+  profile_here >/dev/null
+  local dir="$CLAUDE_CONFIG_DIR/projects/-work/memory"
+  mkdir -p "$dir"
+  printf -- '---\nname: plural\ndescription: Weather blog posts use the plural voice\nmetadata:\n  type: feedback\n---\nAlways plural.\n' > "$dir/plural.md"
+  assert_contains "$(crux memory 2>&1)" "weather-docs (a rule of that project)" "the description says which project it is"
+}

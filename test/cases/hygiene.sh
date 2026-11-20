@@ -370,6 +370,7 @@ test_the_guard_does_not_let_private_keys_be_read() {
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/rc")" "ssh's rc"
   assert_eq "0" "$(_tool Read file_path "$HOME/.ssh/sockets/git@github.com-22")" "a control socket"
   assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/id_ed25519.bak")" "a copy of a private key"
+  assert_eq "2" "$(_tool Read file_path "$HOME/.ssh/rc-staging")" "a key whose name starts like one of ssh's files"
   assert_eq "0" "$(_tool Bash command "ssh -i ~/.ssh/personal/vps_host host")" "using a host key without dumping it"
 }
 

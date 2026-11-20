@@ -131,10 +131,16 @@ pub fn projects_named_in(text: &str, projects: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The projects a note names in its body; its frontmatter does not count.
+/// The projects a note names in its body or its description. The rest of the
+/// frontmatter does not count: a note's `name` is a slug, not its rule.
 pub fn projects_named_in_note(note: &Path, projects: &[String]) -> Result<Vec<String>, String> {
     let text = crate::files::read_if_exists(note)?;
-    Ok(projects_named_in(&without_frontmatter(&text), projects))
+    let description = text
+        .strip_prefix("---")
+        .and_then(|rest| rest.split_once("\n---"))
+        .and_then(|(fm, _)| crate::regex!(r"(?m)^description:\s*(.+)$").captures(fm).map(|c| c[1].to_string()))
+        .unwrap_or_default();
+    Ok(projects_named_in(&format!("{description}\n{}", without_frontmatter(&text)), projects))
 }
 
 /// Notes in `preferences/` that name a project. A preference is how the person

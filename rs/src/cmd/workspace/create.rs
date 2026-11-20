@@ -168,7 +168,7 @@ pub fn create(a: NewArgs) -> Res {
         install_dependencies(&path)?;
     }
     if !config.setup.is_empty() {
-        match slot.fill_command(&config.setup) {
+        match slot.fill(&config.setup) {
             Ok(cmd) => {
                 let code = signals::run_interruptible(Command::new("bash").args(["-c", &cmd]).current_dir(&path));
                 interrupted()?;
@@ -422,8 +422,17 @@ fn install_dependencies(path: &Path) -> Res {
 fn write_env(config: &super::Config, repo: &Path, path: &Path, slot: &Slot, repo_name: &str) {
     let key_re = crate::regex!(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=");
     let key_of = |l: &str| key_re.captures(l).map(|c| c[1].to_string());
-    let tmpl: Vec<(String, String)> =
-        config.env_template.iter().map(|(k, v)| (k.clone(), slot.fill(&files::value_text(v)))).collect();
+    let tmpl: Vec<(String, String)> = config
+        .env_template
+        .iter()
+        .filter_map(|(k, v)| match slot.fill(&files::value_text(v)) {
+            Ok(value) => Some((k.clone(), value)),
+            Err(e) => {
+                ui::warn(format!("{k} left out of the .env: {e}"));
+                None
+            }
+        })
+        .collect();
     let base = repo.join(&config.env_file);
     let lines: Vec<String> = if base.is_file() {
         match files::read_if_exists(&base) {

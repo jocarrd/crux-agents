@@ -147,7 +147,7 @@ fn is_secret(p: &str) -> bool {
         // ssh's own files (or a copy of one, in any folder), an included
         // config or a socket: keys are often named after the host they open,
         // in a folder of their own.
-        r"(^|/)\.ssh/(?!.*\.pub$)(?!(.*/)?(config|known_hosts2?|authorized_keys2?|allowed_signers|rc|environment)([.~-][^/]*)?$)(?!(config\.d|sockets?|control)/)(?!.*\.sock$)[^/]+(/[^/]+)*$",
+        r"(^|/)\.ssh/(?!.*\.pub$)(?!(.*/)?(config|known_hosts2?|authorized_keys2?|allowed_signers|environment)([.~-][^/]*)?$)(?!(.*/)?rc$)(?!(config\.d|sockets?|control)/)(?!.*\.sock$)[^/]+(/[^/]+)*$",
         r"\.(pem|p12|pfx)$",
         r"(^|/)[^/]*private[^/]*\.key$",
         r"(^|/)\.aws/credentials$",
