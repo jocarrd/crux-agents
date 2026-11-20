@@ -118,6 +118,12 @@ fn status() -> Res {
         return Ok(());
     };
     println!("profile in {}", dir.display());
+    for (note, projects) in person::preferences_naming_projects(&dir) {
+        ui::warn(format!(
+            "{note} names {}: a rule of one project goes to its docs repo, not to the person's preferences",
+            projects.join(", ")
+        ));
+    }
     match person::field(&dir, "reminder").filter(|r| !r.is_empty()) {
         Some(r) => ui::info(format!("reminder on every message: {r}")),
         None => ui::info("no reminder on every message (reminder: in PROFILE.md)"),
