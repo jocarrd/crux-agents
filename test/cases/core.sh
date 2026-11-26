@@ -2791,7 +2791,7 @@ test_two_installations_each_serve_their_own_agents_side_by_side() {
     "from the second one's Codex too"
   assert_contains "$(_install_as "$h" CRUX_DIR="$h/.crux-b" "$shared" status 2>&1)" "$h/theirs" \
     "and when CRUX_DIR names it"
-  assert_contains "$(_install_as "$h" "$shared" status 2>&1)" "$h/mine" "~/.crux from anywhere else"
+  assert_contains "$(_install_as "$h" "$shared" status 2>&1)" "$h/mine" "the default installation from anywhere else"
 }
 
 test_an_installation_does_not_take_over_another_ones_agent() {
