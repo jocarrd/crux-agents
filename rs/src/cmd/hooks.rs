@@ -716,6 +716,9 @@ fn install_agent_hooks(p: &Paths) -> Res {
             die!("{e}");
         }
     }
+    if let Err(e) = crate::installation::claim_agents() {
+        die!("{e}");
+    }
     let _ = std::fs::copy(&p.settings, p.settings.with_extension("json.bak"));
     let mut s = match files::read_json(&p.settings) {
         Ok(v) if v.is_object() => v,
@@ -911,6 +914,9 @@ fn add(argv: &[String]) -> Res {
 fn remove(p: &Paths) -> Res {
     if !p.settings.is_file() {
         die!("no {}", p.settings.display());
+    }
+    if let Err(e) = crate::installation::claim_agents() {
+        die!("{e}");
     }
     let _ = std::fs::copy(&p.settings, p.settings.with_extension("json.bak"));
     let mut s = match files::read_json(&p.settings) {

@@ -33,6 +33,7 @@ pub mod files;
 pub mod gh;
 pub mod git;
 pub mod help;
+pub mod installation;
 pub mod lock;
 pub mod mcp;
 pub mod names;

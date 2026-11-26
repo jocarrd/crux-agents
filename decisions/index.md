@@ -1308,3 +1308,61 @@
 - **Reversibility**: medium. ADR-025's code is in git (#45, #46) and could be
   brought back, but the reasons to remove it would still hold.
 - **Related**: `ADR-018`, `ADR-024`, `ADR-025`
+
+### ADR-027: Several installations on one machine, each serving its own agents
+
+- **Date**: 2026-11-26
+- **Status**: Accepted
+- **Context**: ADR-026 left a context as the agent account plus the folder,
+  and crux as one installation per machine: `~/.crux` for its config,
+  kernels, tasks and state, `~/.local/bin/crux` as its command. Two cases do
+  not fit. One person keeps two ways of working on one machine, each with its
+  own crux (a fork with its own skills and conventions, its own projects root
+  and remote) and its own agent accounts; installing the second one rewrote
+  the first one's config and command and loaded its skills into the first
+  one's agents. And a server that runs agents for several organisations needs
+  one clean crux per organisation, side by side. In both, what has to stay
+  apart is not a project but a whole installation, and an installation is
+  used by more than one agent: Claude, Codex, and whichever comes next.
+- **Decision**:
+  - An **installation** is one folder: `~/.crux` by default, or the one
+    `CRUX_DIR` names. Everything crux writes for itself lives there: config,
+    kernels, tasks, state and its own command (`<dir>/bin/crux`). Deleting the
+    folder removes the installation.
+  - An installation **serves a set of agents**, each one through its folder
+    (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). The installation's config records
+    those folders, so reinstalling from a plain terminal keeps serving the
+    same ones. A new agent is one more entry in `installation::agents`.
+  - **An agent folder belongs to exactly one installation.** The installation
+    leaves a `crux-installation` file in each agent folder it serves, naming
+    itself. Installing into an agent folder another installation already
+    serves stops before anything is written, kernel copy included, and says
+    whose it is. A folder set up before the mark existed belongs to the
+    installation whose kernels its hooks run.
+  - One `crux` on the PATH, shared by every installation, runs the one
+    `CRUX_DIR` names; inside an agent, the one that agent's folder belongs
+    to, read from the mark; otherwise `~/.crux`. It reads no agent's settings
+    format, so every agent is routed the same way, and no agent's settings
+    are written for it.
+  - An installed kernel belongs to the installation it sits in
+    (`<dir>/kernel/<version>`), whatever the environment says, so one
+    installation's code never runs on another's state. Every crux, git and gh
+    a command starts inherits its `CRUX_DIR`.
+  - An installation may carry an identity, `--git-name`, `--git-email` and
+    `--gh-config-dir` at install time, applied to every git and gh crux runs
+    unless the environment already sets one. The agent's own git commands
+    keep taking theirs from git (`includeIf` by folder, as in ADR-026).
+  - Nothing watches commands or blocks reads between installations. Strong
+    isolation, as several organisations on one server need, comes from the
+    operating system: an OS user or a container per installation. This keeps
+    what ADR-026 removed out.
+- **Consequences**: a machine with one installation behaves as before, with
+  one visible change: `~/.local/bin/crux` is a small script that hands over
+  instead of a link to the kernel, and the link is now `~/.crux/bin/crux`.
+  A second installation is `CRUX_DIR=<dir> CLAUDE_CONFIG_DIR=<agent dir>
+  CODEX_HOME=<agent dir> install.sh`. Two cases in the suite that simulated
+  two machines on one set of agent folders now give each machine its own, as
+  real machines have.
+- **Reversibility**: high. Without `CRUX_DIR` every path is the one before
+  this decision; the marks are one-line files.
+- **Related**: `ADR-024`, `ADR-026`

@@ -343,11 +343,40 @@ action, not who runs it.
 | What | Where | What for |
 | ---- | ----- | -------- |
 | The kernel version | `~/.crux/kernel/<version>/` | The copy your projects run, with its binary in `bin/crux-core` |
-| The command | `~/.local/bin/crux` | `crux` from any directory |
+| The command | `~/.crux/bin/crux`, run through `~/.local/bin/crux` | `crux` from any directory |
 | The skills | `~/.claude/skills/`, `~/.codex/prompts/` | `/<name>` in the agent |
-| Machine config | `~/.crux/config` | Where the kernel and the projects live, and your preferences |
+| The agents' mark | `crux-installation` in each agent's folder | Which installation that agent belongs to |
+| Machine config | `~/.crux/config` | Where the kernel and the projects live, which agent folders it serves, and your preferences |
 
 Make sure `~/.local/bin` is in your `PATH`.
+
+### Several installations on one machine
+
+A machine can hold several crux installations side by side, each with its
+own kernel, projects, tasks, remote and agents: your own work and an
+organisation's, or one clean installation per organisation on a server
+([ADR-027](decisions/index.md)).
+
+An installation is one folder, `~/.crux` unless `CRUX_DIR` names another. It
+serves a set of agents (Claude, Codex…), each through its own folder, and an
+agent folder belongs to one installation only. To add one:
+
+```bash
+CRUX_DIR=~/.crux-acme CLAUDE_CONFIG_DIR=~/.claude-acme CODEX_HOME=~/.codex-acme \
+  ./install.sh --projects-dir ~/acme --remote 'git@github.com:acme/{repo}.git'
+```
+
+From then on, any session of those agents runs that installation, `crux`
+included: the one on the PATH reads which installation the calling agent
+belongs to. From a plain terminal, `CRUX_DIR=~/.crux-acme crux …`. Installing
+onto an agent folder another installation serves stops, and says whose it is.
+
+The installation can also carry its own git identity and GitHub account
+(`--git-name`, `--git-email`, `--gh-config-dir`), used by everything crux runs.
+
+This separates how crux works; it does not stop one installation's agent from
+reading another's files. Where that matters, as with several organisations on
+one server, give each installation its own OS user or container.
 
 ### Release and dev modes
 
@@ -392,9 +421,13 @@ In `~/.crux/config`. They belong to the machine, not to the project:
 ### Uninstalling
 
 ```bash
-rm -rf ~/.crux ~/.local/bin/crux
+rm -rf ~/.crux ~/.local/bin/crux ~/.claude/crux-installation ~/.codex/crux-installation
 find ~/.claude/skills ~/.codex/prompts -maxdepth 1 -type l ! -exec test -e {} \; -delete
 ```
+
+With several installations, remove only that installation's folder and the
+mark in its agents' folders, and keep `~/.local/bin/crux` while another one
+remains.
 
 Docs repos and code repos are not touched.
 

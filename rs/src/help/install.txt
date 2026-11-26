@@ -1,12 +1,20 @@
 crux install — lays out the kernel on this machine and hooks it into the agents.
 
   crux install [--projects-dir <dir>] [--remote <template>] [--dry-run]
+               [--git-name <name>] [--git-email <email>] [--gh-config-dir <dir>]
 
 The binary carries the whole kernel: skills, templates, adapters and hooks.
 With the binary alone —downloaded, or from a package manager— this is all a
 machine needs: it lays the kernel out in ~/.crux/kernel/<version>, leaves
-`crux` in ~/.local/bin, loads the skills into Claude and Codex and moves the
-agent hooks to this version.
+`crux` in ~/.crux/bin, run through ~/.local/bin/crux, loads the skills into
+Claude and Codex and moves the agent hooks to this version.
+
+Several installations can live on one machine, each serving its own agents:
+CRUX_DIR names the installation's folder (~/.crux by default), and
+CLAUDE_CONFIG_DIR and CODEX_HOME the folders of the agents it serves. An agent
+folder belongs to one installation; installing onto one another installation
+serves stops before writing anything. --git-name, --git-email and
+--gh-config-dir give the installation its own identity for what crux runs.
 
 From a clone, install.sh runs the same thing and copies the kernel from the
 clone instead; `install.sh --dev` links the clone itself, to develop crux.
