@@ -19,9 +19,41 @@ pub fn home() -> PathBuf {
     var("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from)
 }
 
-/// The folder of this machine's crux state: config, kernels, tasks.
+/// The folder of this installation: config, kernels, tasks, state and its
+/// command. A machine can hold several installations side by side, each bound
+/// to its own agent folders (ADR-027). A kernel installed under
+/// `<dir>/kernel/<version>` belongs to `<dir>` whatever the environment says,
+/// so one installation's code never runs on another's state; a clone or a
+/// loose binary takes the one CRUX_DIR names, and ~/.crux without it.
 pub fn crux_dir() -> PathBuf {
+    let kernel = var(crate::names::vars::HOME).map(PathBuf::from).or_else(own_kernel);
+    kernel
+        .and_then(|k| installation_of_kernel(&k))
+        .or_else(|| var(crate::names::vars::DIR).map(PathBuf::from))
+        .unwrap_or_else(default_crux_dir)
+}
+
+/// The installation a machine has when nobody names another one.
+pub fn default_crux_dir() -> PathBuf {
     home().join(".crux")
+}
+
+/// `<dir>` for a kernel installed in `<dir>/kernel/<version>`; a clone
+/// belongs to no installation by its location.
+pub fn installation_of_kernel(kernel: &Path) -> Option<PathBuf> {
+    let kernels = kernel.parent()?;
+    (kernels.file_name()? == "kernel").then(|| kernels.parent().map(Path::to_path_buf)).flatten()
+}
+
+/// Where the installation leaves its own command, which the shared one on
+/// the PATH hands over to.
+pub fn installation_bin_dir() -> PathBuf {
+    crux_dir().join("bin")
+}
+
+/// The one command on the PATH, shared by every installation of the machine.
+pub fn command_dir() -> PathBuf {
+    home().join(".local/bin")
 }
 
 /// The machine config, `~/.crux/config`: shell-style `KEY="value"` lines.
@@ -169,7 +201,9 @@ pub fn user_profiles_dir() -> PathBuf {
 // did not look.
 
 pub fn claude_config_dir() -> PathBuf {
-    var(crate::names::agents::CLAUDE_CONFIG_DIR).map_or_else(|| home().join(".claude"), PathBuf::from)
+    var(crate::names::agents::CLAUDE_CONFIG_DIR)
+        .or_else(|| config_value_in(&config_file(), crate::names::agents::CLAUDE_CONFIG_DIR))
+        .map_or_else(|| home().join(".claude"), PathBuf::from)
 }
 
 pub fn claude_skills_dir() -> PathBuf {
@@ -187,6 +221,7 @@ pub fn claude_transcripts_dir() -> PathBuf {
 pub fn codex_home_dir() -> PathBuf {
     var(crate::names::agents::CODEX_HOME_DIR)
         .or_else(|| var(crate::names::agents::CODEX_HOME))
+        .or_else(|| config_value_in(&config_file(), crate::names::agents::CODEX_HOME))
         .map_or_else(|| home().join(".codex"), PathBuf::from)
 }
 
@@ -219,6 +254,15 @@ pub fn hostname() -> String {
     String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
+/// The identity an installation gives the git and GitHub it runs, as the
+/// variables git and gh read. Empty unless the installation declares one.
+pub fn installation_identity() -> Vec<(&'static str, String)> {
+    let v = crate::names::vars::IDENTITY
+        .iter()
+        .filter_map(|(key, targets)| config_value_in(&config_file(), key).map(|value| (*targets, value)));
+    v.flat_map(|(targets, value)| targets.iter().map(move |t| (*t, value.clone()))).collect()
+}
+
 pub fn dry_run() -> bool {
     var(crate::names::vars::DRY_RUN).as_deref() == Some("1")
 }
@@ -230,6 +274,13 @@ pub fn in_tests() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_installed_kernel_belongs_to_the_folder_above_its_kernels() {
+        assert_eq!(installation_of_kernel(Path::new("/h/.crux/kernel/1.0.0")), Some(PathBuf::from("/h/.crux")));
+        assert_eq!(installation_of_kernel(Path::new("/srv/a/kernel/1.0.0")), Some(PathBuf::from("/srv/a")));
+        assert_eq!(installation_of_kernel(Path::new("/r/crux")), None, "a clone belongs to none");
+    }
 
     #[test]
     fn root_of_clone_in_either_layout() {

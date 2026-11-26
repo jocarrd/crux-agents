@@ -1812,7 +1812,7 @@ test_install_leaves_one_copy_per_version() {
 
   local version; version="$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")"
   assert_file "$matches/.crux/kernel/$version/bin/crux" "the version's copy exists"
-  assert_contains "$(readlink "$matches/.local/bin/crux")" ".crux/kernel/$version" "the command points to the copy"
+  assert_contains "$(readlink "$matches/.crux/bin/crux")" ".crux/kernel/$version" "the command points to the copy"
   assert_contains "$(readlink "$CLAUDE_SKILLS_DIR/ship")" ".crux/kernel/$version" "and so do the skills"
   assert_contains "$(cat "$matches/.crux/config")" 'CRUX_MODE="release"' "the mode is recorded"
 }
@@ -1842,7 +1842,7 @@ test_install_dev_links_to_the_working_copy() {
 
   env HOME="$matches" bash "$kernel/install.sh" --dev --projects-dir "$matches/projects" >/dev/null 2>&1
 
-  assert_eq "$kernel/bin/crux" "$(readlink "$matches/.local/bin/crux")" "the command points to the repo"
+  assert_eq "$kernel/bin/crux" "$(readlink "$matches/.crux/bin/crux")" "the command points to the repo"
   assert_contains "$(cat "$matches/.crux/config")" 'CRUX_MODE="dev"' "and the mode says so"
 }
 
@@ -2747,4 +2747,88 @@ GH
   assert_contains "$out" "kit-extra is on the remote and not declared" "a repo missing from the contract is named"
   assert_not_contains "$out" "kit-agents is on the remote" "not the declared repo under its other name"
   assert_not_contains "$out" "kit-old is on the remote" "nor one archived on GitHub"
+}
+
+# --- Several installations on one machine (ADR-027) ---------------------------
+
+# Runs as a fresh machine would, with only the variables named.
+_install_as() {
+  local h="$1"; shift
+  env -u CRUX_HOME -u CLAUDE_CONFIG_DIR -u CLAUDE_SETTINGS -u CLAUDE_SKILLS_DIR -u CODEX_HOME_DIR \
+    -u CODEX_HOME -u CODEX_PROMPTS_DIR -u CRUX_REGISTRY -u CRUX_STATE_DIR -u CRUX_PROJECTS_DIR -u CRUX_DIR \
+    HOME="$h" "$@"
+}
+
+# What a folder holds, contents included, without dates.
+_tree() { find "$@" -type f -exec cksum {} + 2>/dev/null | sort; find "$@" -type l -exec readlink {} + | sort; }
+
+test_two_installations_each_serve_their_own_agents_side_by_side() {
+  sandbox >/dev/null
+  local h="$SB/machine"; mkdir -p "$h/.claude" "$h/.codex" "$h/.claude-b" "$h/.codex-b"
+  _install_as "$h" bash "$CRUX_HOME/install.sh" --projects-dir "$h/mine" >/dev/null 2>&1
+  local before; before="$(cat "$h/.crux/config"; _tree "$h/.claude" "$h/.codex")"
+
+  _install_as "$h" CRUX_DIR="$h/.crux-b" CLAUDE_CONFIG_DIR="$h/.claude-b" CODEX_HOME="$h/.codex-b" \
+    bash "$CRUX_HOME/install.sh" --projects-dir "$h/theirs" --git-email b@example.org >/dev/null 2>&1
+
+  assert_eq "$before" "$(cat "$h/.crux/config"; _tree "$h/.claude" "$h/.codex")" \
+    "the first installation and both its agents are left as they were"
+  assert_eq "$h/.crux" "$(cat "$h/.claude/crux-installation")" "the first one's Claude is marked as its"
+  assert_eq "$h/.crux" "$(cat "$h/.codex/crux-installation")" "and so is its Codex"
+  assert_eq "$h/.crux-b" "$(cat "$h/.claude-b/crux-installation")" "the second one's Claude is marked as its"
+  assert_eq "$h/.crux-b" "$(cat "$h/.codex-b/crux-installation")" "and so is its Codex"
+  assert_file "$h/.claude-b/skills/ship/SKILL.md" "its Claude gets the skills"
+  assert_contains "$(cat "$h/.crux-b/config")" "CRUX_PROJECTS_DIR=\"$h/theirs\"" "the second keeps its own config"
+  assert_contains "$(cat "$h/.crux-b/config")" "CRUX_GIT_EMAIL=\"b@example.org\"" "with its identity"
+  assert_symlink "$h/.crux-b/bin/crux" "$h/.crux-b/kernel/$(tr -d '[:space:]' < "$CRUX_HOME/VERSION")/bin/crux" \
+    "and its own command inside its folder, on its own kernel"
+
+  # The one command on the PATH runs the installation of whichever agent calls it.
+  local shared="$h/.local/bin/crux"
+  assert_contains "$(_install_as "$h" CLAUDE_CONFIG_DIR="$h/.claude-b" "$shared" status 2>&1)" "$h/theirs" \
+    "from the second one's Claude, the second installation"
+  assert_contains "$(_install_as "$h" CODEX_HOME="$h/.codex-b" "$shared" status 2>&1)" "$h/theirs" \
+    "from the second one's Codex too"
+  assert_contains "$(_install_as "$h" CRUX_DIR="$h/.crux-b" "$shared" status 2>&1)" "$h/theirs" \
+    "and when CRUX_DIR names it"
+  assert_contains "$(_install_as "$h" "$shared" status 2>&1)" "$h/mine" "~/.crux from anywhere else"
+}
+
+test_an_installation_does_not_take_over_another_ones_agent() {
+  sandbox >/dev/null
+  local h="$SB/machine2"; mkdir -p "$h/.claude" "$h/.codex-b"
+  _install_as "$h" bash "$CRUX_HOME/install.sh" --projects-dir "$h/mine" >/dev/null 2>&1
+  local before; before="$(_tree "$h/.claude" "$h/.codex-b")"
+
+  local out
+  out="$(_install_as "$h" CRUX_DIR="$h/.crux-b" CODEX_HOME="$h/.codex-b" \
+    bash "$CRUX_HOME/install.sh" --projects-dir "$h/theirs" 2>&1)"
+  assert_eq "1" "$?" "installing a second one onto the first one's Claude stops"
+  assert_contains "$out" "belongs to the crux installation in $h/.crux" "and says whose it is"
+  assert_eq "$before" "$(_tree "$h/.claude" "$h/.codex-b")" \
+    "before writing anything: neither that agent nor the free one is touched"
+  assert_no_file "$h/.crux-b" "and the second installation is not left half made"
+}
+
+test_an_agent_set_up_before_marks_existed_still_belongs_to_its_installation() {
+  sandbox >/dev/null
+  local h="$SB/machine3"; mkdir -p "$h/.claude"
+  printf '{"hooks":{"Stop":[{"hooks":[{"command":"%s/.crux/kernel/0.1.0/adapters/claude/hooks/x.sh"}]}]}}\n' "$h" \
+    > "$h/.claude/settings.json"
+  local out
+  out="$(_install_as "$h" CRUX_DIR="$h/.crux-b" bash "$CRUX_HOME/install.sh" --projects-dir "$h/theirs" 2>&1)"
+  assert_eq "1" "$?" "its hooks say which installation it is"
+  assert_contains "$out" "belongs to the crux installation in $h/.crux" "and that one keeps it"
+}
+
+test_reinstalling_from_a_plain_terminal_keeps_the_installations_agents() {
+  sandbox >/dev/null
+  local h="$SB/machine4"; mkdir -p "$h/.claude" "$h/.claude-b"
+  _install_as "$h" CRUX_DIR="$h/.crux-b" CLAUDE_CONFIG_DIR="$h/.claude-b" \
+    bash "$CRUX_HOME/install.sh" --projects-dir "$h/theirs" >/dev/null 2>&1
+  # Again, without saying which agent: the ones it already serves.
+  _install_as "$h" CRUX_DIR="$h/.crux-b" bash "$CRUX_HOME/install.sh" >/dev/null 2>&1
+
+  assert_eq "" "$(ls -A "$h/.claude")" "the default agent folder is not touched"
+  assert_contains "$(cat "$h/.crux-b/config")" "CLAUDE_CONFIG_DIR=\"$h/.claude-b\"" "the installation keeps its agent"
 }

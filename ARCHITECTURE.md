@@ -31,7 +31,7 @@ Each layer uses only the ones below it.
 | Layer | Modules | What lives there |
 | ----- | ------- | ---------------- |
 | Entry points | `cmd/`, `agent_hooks/`, `script_api` | What a person, an agent or a script calls |
-| Domain | `project`, `policy`, `checks`, `mcp`, `person`, `registry`, `task/`, `template`, `skills`, `secrets` | The contract, the profile, workspaces, tasks, and what crux writes into other people's files |
+| Domain | `installation`, `project`, `policy`, `checks`, `mcp`, `person`, `registry`, `task/`, `template`, `skills`, `secrets` | The contract, the profile, workspaces, tasks, and what crux writes into other people's files |
 | Foundation | `env`, `files`, `git`, `sh`, `signals`, `args`, `ui`, `help`, `error` | Paths, files, processes, arguments and output |
 
 Entry points:
@@ -54,6 +54,10 @@ Domain, the parts that are not obvious from their names:
 - `template` — the blocks crux owns inside files that are otherwise the
   person's: regenerated between markers, the rest left as written.
 - `checks` — what `doctor` verifies, each usable alone (`crux __check`).
+- `installation` — which agents this installation serves and the mark that
+  says so in each agent's folder; a machine can hold several installations,
+  and an agent folder belongs to one (ADR-027). The folder of the
+  installation itself is `env::crux_dir`.
 
 ## Conventions in the code
 

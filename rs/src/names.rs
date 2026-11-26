@@ -15,6 +15,8 @@ pub const README: &str = "README.md";
 pub const SKILL: &str = "SKILL.md";
 /// Where an agent looks for the skills of the repo a session opens in.
 pub const CLAUDE_SKILLS: &str = ".claude/skills";
+/// In each agent folder an installation serves: the installation's folder.
+pub const INSTALLATION_MARK: &str = "crux-installation";
 /// Where a docs repo keeps its project's skills.
 pub const PROJECT_SKILLS: &str = ".claude/skills/project";
 /// The file of the usage log, one line per session.
@@ -149,9 +151,21 @@ pub mod vars {
     pub const COMMIT_MSG_SCOPE: &str = "CRUX_COMMIT_MSG_SCOPE";
     pub const CONFIG: &str = "CRUX_CONFIG";
     pub const DEFER_CD: &str = "CRUX_DEFER_CD";
+    /// The folder of the installation to run; ~/.crux when unset (ADR-027).
+    pub const DIR: &str = "CRUX_DIR";
     pub const DRY_RUN: &str = "CRUX_DRY_RUN";
     pub const GATE_ASSUME_YES: &str = "CRUX_GATE_ASSUME_YES";
+    pub const GH_CONFIG: &str = "CRUX_GH_CONFIG_DIR";
+    pub const GIT_EMAIL: &str = "CRUX_GIT_EMAIL";
+    pub const GIT_NAME: &str = "CRUX_GIT_NAME";
     pub const HOME: &str = "CRUX_HOME";
+    /// An installation's identity keys, and the variables each one becomes
+    /// for the agent and for every git and gh that crux runs.
+    pub const IDENTITY: [(&str, &[&str]); 3] = [
+        (GIT_NAME, &["GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"]),
+        (GIT_EMAIL, &["GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"]),
+        (GH_CONFIG, &["GH_CONFIG_DIR"]),
+    ];
     pub const IDLE_TASK_DAYS: &str = "CRUX_IDLE_TASK_DAYS";
     pub const IN_TESTS: &str = "CRUX_IN_TESTS";
     pub const MACHINE_CHECKS: &str = "CRUX_MACHINE_CHECKS";

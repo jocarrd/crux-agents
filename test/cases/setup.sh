@@ -172,7 +172,9 @@ test_setup_brings_only_the_projects_picked() {
 
   local home2="$SB/h2"; mkdir -p "$home2/.crux"
   cp "$home/.crux/config" "$home2/.crux/"; cp "$home/.gitconfig" "$home2/"
-  out="$(setup_as "$home2" 'n\nnone\n' --projects-dir "$home2/p")"
+  # Another machine, so other agents: the first install claimed the sandbox's.
+  out="$(CLAUDE_CONFIG_DIR="$SB/h2/.claude" CLAUDE_SETTINGS="$SB/h2/.claude/settings.json" \
+    CODEX_HOME_DIR="$SB/h2/.codex" setup_as "$home2" 'n\nnone\n' --projects-dir "$home2/p")"
   assert_contains "$out" "crux clone <project> brings one later" "none is an answer, and it says how to bring one later"
   assert_no_file "$home2/p/shop" "nothing is brought"
 }
