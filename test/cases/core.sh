@@ -2821,6 +2821,15 @@ test_an_agent_set_up_before_marks_existed_still_belongs_to_its_installation() {
   assert_contains "$out" "belongs to the crux installation in $h/.crux" "and that one keeps it"
 }
 
+test_an_agent_folder_the_install_creates_is_marked_as_its_own() {
+  sandbox >/dev/null
+  local h="$SB/machine5"; mkdir -p "$h/.claude-b"
+  _install_as "$h" CRUX_DIR="$h/.crux-b" CLAUDE_CONFIG_DIR="$h/.claude-b" CODEX_HOME="$h/.codex-b" \
+    bash "$CRUX_HOME/install.sh" --projects-dir "$h/theirs" >/dev/null 2>&1
+  assert_eq "$h/.crux-b" "$(cat "$h/.codex-b/crux-installation" 2>/dev/null)" \
+    "Codex's folder, created by the install, belongs to it"
+}
+
 test_reinstalling_from_a_plain_terminal_keeps_the_installations_agents() {
   sandbox >/dev/null
   local h="$SB/machine4"; mkdir -p "$h/.claude" "$h/.claude-b"
