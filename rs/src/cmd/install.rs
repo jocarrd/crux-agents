@@ -391,6 +391,14 @@ pub fn run(argv: &[String]) -> Res {
     if skills::codex_global(&kernel) {
         ui::ok("global Codex context in ~/.codex/AGENTS.md");
     }
+    // An agent folder this install created itself (Codex's prompts, on a
+    // machine without Codex yet) is this installation's too: marked now, the
+    // shared command routes that agent here from its first session.
+    if !dry {
+        if let Err(e) = crate::installation::claim_agents() {
+            die!("{e}");
+        }
+    }
     if !dry && super::call_quiet(&home, "profile", &["link"]).ok() {
         ui::ok("person's profile loaded into the agents");
     }
